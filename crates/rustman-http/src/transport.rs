@@ -2,6 +2,7 @@
 //! and timing logic around each request.
 
 use std::error::Error as _;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -40,16 +41,31 @@ pub(crate) struct Transport {
 /// connection (fresh or pooled), `response` after. Kept per request, since
 /// requests share the connector.
 #[derive(Default)]
-pub(crate) struct PhaseProbe(Mutex<Option<CaptureConnection>>);
+pub(crate) struct PhaseProbe {
+    capture: Mutex<Option<CaptureConnection>>,
+    /// Set once a response head arrived. The captured connection alone is
+    /// not enough: on some platforms it is not yet visible when the body
+    /// stalls, which would misreport a body timeout as a connect timeout.
+    responded: AtomicBool,
+}
 
 impl PhaseProbe {
     /// Follow `request` (the latest hop) from now on.
     fn watch(&self, request: &mut Request<Full<Bytes>>) {
-        *self.0.lock().unwrap_or_else(PoisonError::into_inner) = Some(capture_connection(request));
+        self.responded.store(false, Ordering::Release);
+        *self.capture.lock().unwrap_or_else(PoisonError::into_inner) =
+            Some(capture_connection(request));
+    }
+
+    fn mark_responded(&self) {
+        self.responded.store(true, Ordering::Release);
     }
 
     pub fn phase(&self) -> Phase {
-        let captured = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        if self.responded.load(Ordering::Acquire) {
+            return Phase::Response;
+        }
+        let captured = self.capture.lock().unwrap_or_else(PoisonError::into_inner);
         match captured.as_ref() {
             Some(capture) if capture.connection_metadata().is_some() => Phase::Response,
             _ => Phase::Connect,
@@ -100,6 +116,7 @@ impl Transport {
         probe.watch(&mut request);
         let started = Instant::now();
         let response = self.client.request(request).await.map_err(client_error)?;
+        probe.mark_responded();
         let head_at = Instant::now();
         let fresh = response
             .extensions()
@@ -171,6 +188,19 @@ pub(crate) fn network_error(err: &dyn std::error::Error) -> RequestError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_timeout_after_the_response_head_is_in_the_response_phase() {
+        let probe = PhaseProbe::default();
+        assert_eq!(probe.phase(), Phase::Connect);
+        // No captured connection metadata, as seen on Windows: the head
+        // having arrived is enough.
+        probe.mark_responded();
+        assert_eq!(probe.phase(), Phase::Response);
+        let mut next_hop = Request::new(Full::new(Bytes::new()));
+        probe.watch(&mut next_hop);
+        assert_eq!(probe.phase(), Phase::Connect);
+    }
 
     #[test]
     fn a_reused_connection_has_no_connection_phases() {
