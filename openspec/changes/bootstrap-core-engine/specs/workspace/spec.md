@@ -33,7 +33,7 @@ The system SHALL treat a directory containing `rustman.toml` as a workspace. Com
 - **THEN** it SHALL fail with the newer-version error and exit code 2
 
 ### Requirement: Request file schema
-Each saved request SHALL be one UTF-8 YAML file named `*.rman.yaml`. It SHALL contain `version: 1`, `kind` (`http`, `graphql` or `mcp`) and `name`. Optional fields SHALL be `description`, `tags`, `assertions` and `captures`, plus the kind-specific fields. Files whose kind is missing or unknown SHALL fail to load with an error naming the file and line.
+Each saved request SHALL be one UTF-8 YAML file named `*.rman.yaml`. It SHALL contain `version: 1`, `kind` and `name`. Optional fields SHALL be `description`, `tags`, `assertions` and `captures`, plus the kind-specific fields. Kinds come from a registry: this change registers `http`, `graphql` and `mcp`, and later capabilities register more. A missing or unregistered kind SHALL fail to load with an error naming the file, line and registered kinds.
 
 #### Scenario: Minimal HTTP request
 - **GIVEN** a file `get-user.rman.yaml` containing `version: 1`, `kind: http`, `name: Get user`, `method: GET`, `url: "{{base_url}}/users/1"`
@@ -43,7 +43,7 @@ Each saved request SHALL be one UTF-8 YAML file named `*.rman.yaml`. It SHALL co
 #### Scenario: Unknown kind
 - **GIVEN** a request file with `kind: soap`
 - **WHEN** the workspace loads
-- **THEN** loading SHALL report `<path>:2: unknown request kind 'soap' (expected http, graphql, mcp)`
+- **THEN** loading SHALL report `<path>:2: unknown request kind 'soap' (expected one of: <registered kinds>)`, e.g. `http, graphql, mcp` when only this change is present
 
 ### Requirement: HTTP request fields
 A `kind: http` file SHALL support these fields: `method` (any RFC 9110 token, so custom methods are allowed; defaults to `GET`), `url`, `query` (an ordered list of name/value pairs, where repeats are allowed), `headers` (an ordered list of name/value pairs) and `body`. `auth` and `settings` (overrides for timeout, redirects and TLS) SHALL also be supported. Header and query order SHALL be preserved when sending.
@@ -85,12 +85,25 @@ Files with `kind: graphql` or `kind: mcp` SHALL be parsed and listed. Until the 
 - **THEN** that request SHALL be reported as skipped with the unsupported-kind reason and SHALL NOT count as a failure
 
 ### Requirement: Collections and ordering
-Every directory under the workspace root SHALL be a collection, except `.rustman/` and `environments/`. Directories can nest. Execution and display order SHALL follow an optional `_collection.yaml` `order:` list. Entries not in that list SHALL follow, sorted by file name. A `_collection.yaml` MAY also define `name`, `description`, and collection-level `headers`, `auth` and `variables` that are inherited by the requests inside.
+Every directory under the workspace root SHALL be a collection, except `environments/`, directories whose name starts with `.` or `_` (e.g. `.rustman/`, `__snapshots__/`, `_removed/`), and directories with no request file at any depth (e.g. `mocks/`). Directories can nest. Order SHALL follow an optional `_collection.yaml` `order:` list, then remaining entries by file name.
 
 #### Scenario: Explicit order
 - **GIVEN** a folder with `login.rman.yaml`, `list.rman.yaml`, `delete.rman.yaml` and `_collection.yaml` with `order: [login, list]`
 - **WHEN** the folder is run
 - **THEN** the order SHALL be `login`, `list`, `delete`
+
+#### Scenario: Tool directories are not collections
+- **GIVEN** a workspace with `users/get.rman.yaml`, `users/__snapshots__/get.default.snap.yaml`, and `mocks/users.rman-mock.yaml`
+- **WHEN** the workspace loads
+- **THEN** `users` SHALL be the only collection
+
+### Requirement: Collection metadata
+A `_collection.yaml` MAY define `name`, `description`, and collection-level `headers`, `auth` and `variables`, which SHALL be inherited by the requests inside; a request's own value SHALL override the inherited one.
+
+#### Scenario: Inherited header
+- **GIVEN** `_collection.yaml` with header `X-Team: core` and a request that sets no `X-Team`
+- **WHEN** the request is sent
+- **THEN** it SHALL carry `X-Team: core`
 
 #### Scenario: Inherited auth
 - **GIVEN** `_collection.yaml` defines bearer auth and a child request has no `auth`
