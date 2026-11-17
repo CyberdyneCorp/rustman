@@ -50,6 +50,7 @@ Each change lives in `openspec/changes/<id>/`. Archive it once it's implemented.
 | 23 | `add-plugin-system` | `plugins` (WASM) | 1 |
 | 24 | `add-secret-providers` | `secret-providers` | 1 |
 | 25 | `add-runner-parity` | extends `cli-runner` (data-driven runs), `http-requests` (Digest, AWS SigV4, JWT auth; snippet export), `tui` (Copy as…), `collection-import` (script migration) | 1 (TUI parts: 2; script migration: 11) |
+| 26 | `add-stress-testing` | `stress-testing` (breakpoint, spike, soak, fuzz under load, malformed and wire faults) | 1, 5, 18 (live charts: 8) |
 
 Milestones:
 - **M1 "usable"** = 1 + 2. A REST client with workspace, environments, TUI and CLI runner.
@@ -59,7 +60,7 @@ Milestones:
 - **M5 "chain"** = 9 + 10. JSON-RPC, plus an ABI-aware, read-only-by-default Ethereum console.
 - **M6 "adoption"** = 11 + 12 + 13 + 25. Importers, mock server, snapshot tests, and Postman/Newman parity (data-driven runs, Digest/SigV4/JWT auth, code snippets, script migration). The data-run and auth parts of 25 depend only on 1, so they can land right after M1.
 - **M7 "protocols"** = 14 + 15 + 16. gRPC, WebSocket/SSE, message brokers.
-- **M8 "pro"** = 17 to 24. Recorder, load tests, tracing, contracts, docs, monitors, plugins, secret providers.
+- **M8 "pro"** = 17 to 24, plus 26. Recorder, load tests, tracing, contracts, docs, monitors, plugins, secret providers, and stress testing (find where a backend breaks).
 
 ## Request kinds
 
@@ -104,6 +105,8 @@ Milestones:
 | **Plugin** | A sandboxed WASM module that adds auth schemes, assertions, request kinds or importers. |
 | **Secret provider** | An external store for secrets (1Password, Vault, a cloud secret manager, SOPS). Referenced as `{{secret:provider/path}}`. |
 | **Monitor** | A collection run on a schedule, with alert rules. |
+| **Stress run** | A load run that pushes a target toward failure on purpose (breakpoint, spike, soak or fuzz mode), optionally mixing in malformed input. Targets come only from `rustman.toml [stress]`. |
+| **Breaking point** | The lowest offered rate at which an SLO fails in 2 consecutive windows. Reported with `max_sustainable_rps`, the highest rate that held. |
 
 ## Crate layout (target)
 
@@ -127,7 +130,7 @@ crates/
   rustman-realtime/  WebSocket and SSE sessions
   rustman-messaging/ Kafka, MQTT, AMQP clients
   rustman-proxy/     traffic recorder (hyper, local CA)
-  rustman-bench/     load testing engine
+  rustman-bench/     load testing engine, stress modes, raw wire-fault writer
   rustman-plugin/    WASM plugin host
 ```
 
@@ -141,12 +144,12 @@ These are defined once, in the capability named, and every other change reuses t
 |----------|------------------|-------|
 | Redaction of secrets | `environments` | Covers every output path: TUI, history, reports, viz, MCP tool results. |
 | Safety policy (host allowlist, methods, rate, destructive opt-in, production guard) | `api-exploration` | `agent-mcp-interface` reuses it. Implemented once in `rustman-core`, and every automated sender goes through it. |
-| Report format `rustman.report/v1` (`kind: run \| exploration \| bench \| contract`, optional `subject`, optional per-exchange `trace`) | `test-reports` | `cli-runner` emits `kind: run` from day one. `load-testing` adds `bench`, `contract-testing` adds `contract`, `chain-exploration` adds `subject: evm-rpc`, and `trace-propagation` adds `trace`. Every extension is additive. |
+| Report format `rustman.report/v1` (`kind: run \| exploration \| bench \| contract \| stress`, optional `subject`, optional per-exchange `trace`) | `test-reports` | `cli-runner` emits `kind: run` from day one. `load-testing` adds `bench`, `contract-testing` adds `contract`, `stress-testing` adds `stress`, `chain-exploration` adds `subject: evm-rpc`, and `trace-propagation` adds `trace`. Every extension is additive. |
 | Viz protocol `rustman-viz/1` | `visual-dashboards` | JSON lines over the companion's stdin. Read-only consumer. |
 | `rmcp` SDK version | `mcp-client` | `agent-mcp-interface` shares the same crate (`rustman-mcp`) and pin. |
 | Request-kind registry | `workspace` | New kinds plug in without changing the core loader. |
 | Workspace trust (`.rustman/trust.yaml`) | `mcp-client` | `plugins` reuses it. Spawning a stdio MCP server or loading plugins needs one-time trust; headless runs need `--trust` / `--trust-plugins`. |
-| Things agents can never do | `agent-mcp-interface` | Sign transactions, start load tests, install plugins, read secret values. There are no tools for these. |
+| Things agents can never do | `agent-mcp-interface` | Sign transactions, start load tests or stress runs, send malformed or wire-fault traffic, install plugins, read secret values. There are no tools for these. |
 | Signing gate (explicit opt-in, decoded confirmation, chain-id match, agents can never sign) | `evm-signing` | No other capability may send a signed transaction. |
 | Snippet engine (code samples per language, redacted; placeholder mode) | `http-requests` | `tui` (Copy as…) and `api-docs-generation` reuse it. One template per language. |
 | Data-row reader (CSV/JSON) | `cli-runner` | `load-testing`'s `--data` uses the same reader. |
@@ -157,8 +160,8 @@ These are defined once, in the capability named, and every other change reuses t
 | Code | Meaning | Used by |
 |------|---------|---------|
 | 0 | Success: all checks passed | all |
-| 1 | Checks failed: an assertion, a finding at or above `--fail-on`, a tool error, or a new finding in `report diff` | run, send, explore, graphql, mcp-client, report diff |
+| 1 | Checks failed: an assertion, a finding at or above `--fail-on`, a tool error, a new finding in `report diff`, or capacity below `--require-rps` | run, send, explore, graphql, mcp-client, report diff, bench, stress |
 | 2 | Usage or configuration error: bad flag, invalid file, unsupported spec version, or unknown report version | all |
 | 3 | A request errored: network, TLS, timeout, unresolved variable. It wins over 1. | run, send |
-| 4 | Refused by the safety policy or the signing gate | explore, evm, agent-triggered CLI paths |
+| 4 | Refused by the safety policy, the stress gate or the signing gate | explore, bench, stress, evm, agent-triggered CLI paths |
 | 130 | Interrupted (SIGINT) | all |
