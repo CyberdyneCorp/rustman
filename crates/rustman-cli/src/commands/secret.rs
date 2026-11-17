@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use clap::{Args, Subcommand};
 use rustman_core::environment::ENV_VAR;
+use rustman_core::redact::MIN_SECRET_PIECE;
 use rustman_core::secrets::{BACKEND_VAR, SECRETS_FILE, StoredIn};
 use rustman_core::{
     ConfigError, Environment, Secret, SecretBackend, SecretError, SecretStore, Workspace,
@@ -100,6 +101,9 @@ fn run_set(args: &NameArgs) -> Result<(), ConfigError> {
         .into());
     }
     let value = read_value(&args.name, &env.name)?;
+    if let Some(warning) = short_secret_warning(&args.name, &value) {
+        super::print_warnings(&[warning]);
+    }
     let stored = ctx.store.set(&env.name, &Secret::new(&args.name, value));
     ctx.flush_warnings();
     let place = match stored? {
@@ -111,6 +115,19 @@ fn run_set(args: &NameArgs) -> Result<(), ConfigError> {
         args.name, env.name
     );
     Ok(())
+}
+
+/// A warning for a non-empty value shorter than [`MIN_SECRET_PIECE`]
+/// characters: it is still redacted, but every occurrence of such a short
+/// string is, and captures holding a piece of it are not recognized.
+fn short_secret_warning(name: &str, value: &str) -> Option<String> {
+    let short = !value.is_empty() && value.chars().count() < MIN_SECRET_PIECE;
+    short.then(|| {
+        format!(
+            "secret '{name}' is shorter than {MIN_SECRET_PIECE} characters: every occurrence \
+             of it is redacted, even in unrelated text"
+        )
+    })
 }
 
 fn run_rm(args: &NameArgs) -> Result<(), ConfigError> {

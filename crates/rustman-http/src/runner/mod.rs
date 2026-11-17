@@ -116,6 +116,9 @@ pub struct Sent {
     resolved: Option<ResolvedRequest>,
     /// The spill file of the response when no history entry keeps it.
     discard: Option<SpillFile>,
+    /// Every secret of the run, and the credentials of this exchange: what
+    /// printing the response must redact.
+    pub redactor: Redactor,
 }
 
 impl Sent {

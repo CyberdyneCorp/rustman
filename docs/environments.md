@@ -191,7 +191,12 @@ Secret values never appear in any artifact Rustman produces: terminal output, lo
 Authorization: «redacted:Authorization»
 ```
 
-Rustman tracks which bytes of a request came from a secret, and also scans every output for the secret values themselves (including their JSON-escaped forms, with or without `\uXXXX` escapes for non-ASCII characters, and their URL-encoded forms, in upper- or lowercase hex). That second check catches a server that echoes a secret back in its response.
+Rustman tracks which bytes of a request came from a secret, and also scans every output for the secret values themselves. That second check catches a server that echoes a secret back in its response, as is or in the form a common encoder writes it:
+
+- JSON string escapes (`\"`, `\\`, control characters), each with or without `\/` for `/` (PHP), with or without `\u0026`, `\u003c`, `\u003e` and `\u0027` for `&`, `<`, `>` and `'` (Go), and with non-ASCII characters as is or as `\uXXXX` escapes in upper- or lowercase hex (Python, PHP);
+- Rust `Debug` escapes;
+- percent-encoding in upper- or lowercase hex: every byte but `A-Z a-z 0-9 - . _ ~` encoded, with a space as `%20` or as `+` (form encoding); the same leaving `/` as is (Python's `quote`); or leaving `!'()*` as is (JavaScript's `encodeURIComponent`);
+- HTML escapes of `&`, `<` and `>` as `&amp;`, `&lt;` and `&gt;`, with `"` and `'` as `&quot;` and `&#x27;` (Python), `&quot;` and `&#39;`, or `&#34;` and `&#39;` (Go); or every character but letters and digits as a decimal entity such as `&#47;`.
 
 Redaction happens before anything is quoted or shortened: an assertion message that quotes 200 characters of a body, or the 64 KiB preview of a large body, never ends with the start of a secret, and never splits a `«redacted:<name>»` placeholder.
 
@@ -199,7 +204,20 @@ Two kinds of files are working state rather than artifacts, and hold what the se
 
 A secret the server transforms before echoing it (base64-encodes it, changes its case, hashes it, splits it) is not recognized, and is shown as the server sent it. Only the forms listed above are matched.
 
-The only exception is an explicit, per-command opt-in, `--show-secrets`, which affects terminal output only: history, reports and logs stay redacted. `rustman send` and `rustman history replay` accept it to print the response headers and body as received, and `rustman export curl` accepts it to print the real values in the command. `--body-only` and `-o` always write the body exactly as received, since they exist to save it byte for byte.
+A captured value that holds any piece of a known secret at least 4 characters long (a capture that straddles the secret, or a masked echo such as `****wP3K`) is treated as a secret for the rest of the run and never persisted (see [Captures](assertions.md#captures)). Pieces shorter than 4 characters are too common to tell apart from other text and are not recognized.
+
+Secrets shorter than 4 characters are still redacted, but every occurrence of such a short string is replaced, in unrelated text too (`id` in every key named `id`, say). `rustman secret set` warns when it stores one.
+
+The only exception is an explicit, per-command opt-in, `--show-secrets`, which affects terminal output only: history, reports and logs stay redacted. `rustman send` and `rustman history replay` accept it to print the response headers and body as received, and `rustman export curl` accepts it to print the real values in the command. Without it, `send` and `replay` print the response redacted, a large body streamed from its spill file too:
+
+| Output | Text body | Binary body |
+|--------|-----------|-------------|
+| default (status, headers, body) | redacted | redacted |
+| `--body-only` | redacted | as received, byte for byte |
+| `--show-secrets` (with or without `--body-only`) | as received | as received |
+| `-o <file>` | as received | as received |
+
+`-o` writes the file you named byte for byte, as `curl -o` does: it is how to save a body exactly, so treat that file like the response itself. A binary `--body-only` body is written as received so pipes (`| file -`, `> logo.png`) keep working.
 
 An end-to-end test (`crates/rustman-cli/tests/e2e.rs`) checks this contract: it runs a workspace through `init`, `secret set`, `run` with the json and junit reporters and `-vvv` logs, `export curl`, a failing request, and `history list`, `show` and `replay`, then searches every file it produced and everything it printed for the secret, and finds nothing. Its secret is non-ASCII and contains a `"`, and the server also echoes it JSON-escaped, in a failing assertion message cut mid-secret and across the cut of a spilled body's preview.
 

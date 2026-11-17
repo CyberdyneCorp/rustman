@@ -9,14 +9,16 @@
 //!   second net catches servers that echo a secret back, and secrets that
 //!   reached a structure without provenance (a structured JSON body, auth).
 //!
-//! Secret values are also matched in their JSON-escaped (also with `\uXXXX`
-//! escapes) and percent-encoded (upper- or lowercase hex) forms, the two
-//! ways an echoing server most often re-encodes them, and in their Rust
-//! `Debug`-escaped form, which `Debug` output of any value holding a secret
-//! (a JSON body, auth fields) uses.
+//! Secret values are also matched in the forms common JSON, URL and HTML
+//! encoders write them in, the ways an echoing server most often re-encodes
+//! them, and in their Rust `Debug`-escaped form, which `Debug` output of any
+//! value holding a secret (a JSON body, auth fields) uses (see [`forms`]).
+
+mod forms;
 
 use std::borrow::Cow;
 use std::fmt;
+use std::io::{self, Read, Write};
 use std::ops::Range;
 use std::sync::{OnceLock, PoisonError, RwLock};
 
@@ -27,6 +29,8 @@ use base64::engine::general_purpose::STANDARD;
 use crate::model::Auth;
 use crate::secret::{Secret, placeholder};
 use crate::vars::{Resolved, ResolvedRequest, SecretSpan};
+
+use forms::encoded_forms;
 
 /// Headers whose values are always redacted, in their canonical spelling.
 pub const SENSITIVE_HEADERS: [&str; 4] = [
@@ -52,6 +56,10 @@ pub struct Redactor {
     placeholders: Vec<String>,
     /// A matcher over `needles`, rebuilt when one is added.
     matcher: Option<AhoCorasick>,
+    /// Every [`MIN_SECRET_PIECE`]-character window of every raw value.
+    pieces: Vec<String>,
+    /// A matcher over `pieces`, rebuilt when one is added.
+    piece_matcher: Option<AhoCorasick>,
     names: Vec<String>,
 }
 
@@ -166,6 +174,19 @@ impl Redactor {
             }
         }
         self.matcher = AhoCorasick::new(&self.needles).ok();
+        self.add_pieces(&windows(value));
+    }
+
+    fn add_pieces(&mut self, pieces: &[String]) {
+        let before = self.pieces.len();
+        for piece in pieces {
+            if !self.pieces.contains(piece) {
+                self.pieces.push(piece.clone());
+            }
+        }
+        if self.pieces.len() > before {
+            self.piece_matcher = AhoCorasick::new(&self.pieces).ok();
+        }
     }
 
     /// Also redact every value `other` knows, under the same names.
@@ -186,6 +207,7 @@ impl Redactor {
         if added {
             self.matcher = AhoCorasick::new(&self.needles).ok();
         }
+        self.add_pieces(&other.pieces);
     }
 
     /// The names of the secrets this redactor knows.
@@ -198,15 +220,15 @@ impl Redactor {
         self.occurs_in(text.as_bytes())
     }
 
-    /// Whether `text` holds a known secret value or is a piece of one at
-    /// least [`MIN_SECRET_PIECE`] characters long (a capture that matched
-    /// part of an echoed secret).
+    /// Whether `text` holds a known secret value in any form, or any piece
+    /// of one at least [`MIN_SECRET_PIECE`] characters long (a capture that
+    /// matched part of an echoed secret, straddled one or kept the end of a
+    /// masked one).
     pub fn reveals_secret(&self, text: &str) -> bool {
-        let piece = text.chars().count() >= MIN_SECRET_PIECE
-            && self
-                .needles
-                .iter()
-                .any(|n| n.windows(text.len()).any(|w| w == text.as_bytes()));
+        let piece = self
+            .piece_matcher
+            .as_ref()
+            .is_some_and(|m| m.is_match(text.as_bytes()));
         piece || self.finds_secret(text)
     }
 
@@ -232,6 +254,12 @@ impl Redactor {
     /// the cut never leaves a part of it: pass an `input` that runs at least
     /// [`Redactor::longest`] bytes past `keep` when one exists.
     pub fn bytes_prefix(&self, input: &[u8], keep: usize) -> Vec<u8> {
+        self.redact_prefix(input, keep).0
+    }
+
+    /// [`Redactor::bytes_prefix`], plus how many bytes of `input` it covers:
+    /// `keep`, or more when a secret starting before `keep` runs past it.
+    fn redact_prefix(&self, input: &[u8], keep: usize) -> (Vec<u8>, usize) {
         let keep = keep.min(input.len());
         let mut out = Vec::with_capacity(keep);
         let mut copied = 0;
@@ -244,7 +272,37 @@ impl Redactor {
         if copied < keep {
             out.extend_from_slice(&input[copied..keep]);
         }
-        out
+        (out, copied.max(keep))
+    }
+
+    /// Copy `reader` to `writer` with every known secret value replaced,
+    /// in chunks, holding back the last [`Redactor::longest`] bytes of each
+    /// so a secret split across two chunks is still replaced whole.
+    pub fn copy(&self, mut reader: impl Read, writer: &mut dyn Write) -> io::Result<()> {
+        if self.matcher.is_none() {
+            return io::copy(&mut reader, writer).map(|_| ());
+        }
+        let overlap = self.longest();
+        let mut pending: Vec<u8> = Vec::new();
+        let mut chunk = vec![0; COPY_CHUNK];
+        loop {
+            let read = match reader.read(&mut chunk) {
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                result => result?,
+            };
+            pending.extend_from_slice(&chunk[..read]);
+            let keep = if read == 0 {
+                pending.len()
+            } else {
+                pending.len().saturating_sub(overlap)
+            };
+            let (out, covered) = self.redact_prefix(&pending, keep);
+            writer.write_all(&out)?;
+            pending.drain(..covered);
+            if read == 0 {
+                return Ok(());
+            }
+        }
     }
 
     /// The length in bytes of the longest form of a known secret value.
@@ -322,6 +380,18 @@ impl Redactor {
 /// ones are too common to tell.
 pub const MIN_SECRET_PIECE: usize = 4;
 
+/// How much [`Redactor::copy`] reads at a time.
+const COPY_CHUNK: usize = 64 * 1024;
+
+/// Every window of [`MIN_SECRET_PIECE`] characters of `value`.
+fn windows(value: &str) -> Vec<String> {
+    let chars: Vec<char> = value.chars().collect();
+    chars
+        .windows(MIN_SECRET_PIECE)
+        .map(|w| w.iter().collect())
+        .collect()
+}
+
 /// The shortest header credential (cookie value, token) redacted wherever
 /// it occurs. Shorter ones (`theme=1`) would mangle unrelated text and are
 /// only redacted in the header itself.
@@ -395,72 +465,6 @@ fn merge(matches: Vec<Match>) -> Vec<Run> {
 /// starts with a continuation byte.
 fn into_string(bytes: Vec<u8>) -> String {
     String::from_utf8(bytes).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned())
-}
-
-/// The raw value plus its JSON-escaped, `Debug`-escaped, percent-encoded and
-/// form-encoded forms, without duplicates. Percent-encoding comes in upper-
-/// and lowercase hex, and the JSON form also with every non-ASCII character
-/// as `\uXXXX` (UTF-16, so a surrogate pair beyond the BMP), in both cases.
-fn encoded_forms(value: &str) -> Vec<String> {
-    let json = serde_json::to_string(value).unwrap_or_default();
-    let json = json[1..json.len() - 1].to_owned();
-    let debug = format!("{value:?}");
-    let debug = debug[1..debug.len() - 1].to_owned();
-    let mut forms = vec![value.to_owned()];
-    for upper in [true, false] {
-        for form in [
-            ascii_json(&json, upper),
-            percent_encode(value, "%20", upper),
-            percent_encode(value, "+", upper),
-        ] {
-            if !forms.contains(&form) {
-                forms.push(form);
-            }
-        }
-    }
-    for form in [json, debug] {
-        if !forms.contains(&form) {
-            forms.push(form);
-        }
-    }
-    forms
-}
-
-/// `json` with every non-ASCII character written as `\uXXXX` escapes.
-fn ascii_json(json: &str, upper: bool) -> String {
-    let mut out = String::with_capacity(json.len());
-    let mut units = [0; 2];
-    for ch in json.chars() {
-        if ch.is_ascii() {
-            out.push(ch);
-            continue;
-        }
-        for unit in ch.encode_utf16(&mut units) {
-            out.push_str(&if upper {
-                format!("\\u{unit:04X}")
-            } else {
-                format!("\\u{unit:04x}")
-            });
-        }
-    }
-    out
-}
-
-/// RFC 3986 percent-encoding of everything but unreserved characters, in
-/// upper- or lowercase hex; a space becomes `space`.
-fn percent_encode(value: &str, space: &str, upper: bool) -> String {
-    let mut out = String::with_capacity(value.len());
-    for byte in value.bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
-                out.push(char::from(byte));
-            }
-            b' ' => out.push_str(space),
-            _ if upper => out.push_str(&format!("%{byte:02X}")),
-            _ => out.push_str(&format!("%{byte:02x}")),
-        }
-    }
-    out
 }
 
 /// Every secret value this process has resolved, for sinks that are not
@@ -736,6 +740,64 @@ mod tests {
         assert!(r.reveals_secret("NARY"));
         assert!(!r.reveals_secret("ARY"));
         assert!(!r.reveals_secret("other"));
+    }
+
+    #[test]
+    fn echoes_from_common_encoders_are_replaced() {
+        let r = Redactor::new().with(&Secret::new("pw", "a/b&c<d>'e\"f!(é)*".to_owned()));
+        for echo in [
+            r#"a\/b&c<d>'e\"f!(\u00e9)*"#,
+            r#"a/b\u0026c\u003cd\u003e\u0027e\"f!(é)*"#,
+            "a/b%26c%3Cd%3E%27e%22f%21%28%C3%A9%29%2A",
+            "a%2Fb%26c%3Cd%3E'e%22f!(%C3%A9)*",
+            "a/b&amp;c&lt;d&gt;&#x27;e&quot;f!(é)*",
+            "a/b&amp;c&lt;d&gt;&#39;e&#34;f!(é)*",
+            "a&#47;b&#38;c&#60;d&#62;&#39;e&#34;f&#33;&#40;é&#41;&#42;",
+        ] {
+            assert_eq!(r.text(&format!("[{echo}]")), "[«redacted:pw»]", "{echo}");
+        }
+    }
+
+    #[test]
+    fn captures_straddling_or_masking_a_secret_reveal_it() {
+        let r = Redactor::new().with(&Secret::new("tok", "QJX7vwP3K".to_owned()));
+        assert!(r.reveals_secret(r#"v":"QJX7v"#));
+        assert!(r.reveals_secret("****wP3K"));
+        assert!(!r.reveals_secret("****P3K"));
+        let mut merged = Redactor::new();
+        merged.merge(&r);
+        assert!(merged.reveals_secret("x7vwP"));
+        assert!(!merged.reveals_secret("x7vwp"));
+    }
+
+    #[test]
+    fn copies_are_redacted_across_chunk_boundaries() {
+        let secret = "Kq8é\"Vb-m0nk3y";
+        let r = Redactor::new().with(&Secret::new("tok", secret.to_owned()));
+        let json = r#"Kq8\u00e9\"Vb-m0nk3y"#;
+        for pad in [
+            0,
+            1,
+            COPY_CHUNK - 30,
+            COPY_CHUNK - 7,
+            COPY_CHUNK,
+            3 * COPY_CHUNK - 3,
+        ] {
+            let body = format!(
+                "{}{secret}|{json}|{}",
+                "A".repeat(pad),
+                "B".repeat(pad % 97)
+            );
+            let mut out = Vec::new();
+            r.copy(body.as_bytes(), &mut out).unwrap();
+            let out = String::from_utf8(out).unwrap();
+            let expected = r.text(&body).into_owned();
+            assert_eq!(out, expected, "pad {pad}");
+            assert!(!out.contains("m0nk3y"), "pad {pad}");
+        }
+        let mut out = Vec::new();
+        Redactor::new().copy(&b"plain"[..], &mut out).unwrap();
+        assert_eq!(out, b"plain");
     }
 
     #[test]

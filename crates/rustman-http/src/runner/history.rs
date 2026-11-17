@@ -86,6 +86,7 @@ impl Runner<'_> {
         sent.record.duration_ms = millis(started.elapsed());
         let redactor = self.sink_redactor(&sent);
         redact_error(&mut sent.record, &redactor);
+        sent.redactor = redactor.clone();
         let kept = self.record_history(&mut sent, &redactor, file, cache_key);
         sent.discard_spill_unless(kept);
         log_record(&sent.record);
@@ -108,5 +109,6 @@ fn replayed(mut record: RequestRecord, resolved: &ResolvedRequest, exchange: Exc
         exchange: Some(exchange),
         resolved: None,
         discard: None,
+        redactor: Redactor::new(),
     }
 }

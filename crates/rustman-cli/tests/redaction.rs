@@ -219,3 +219,79 @@ fn a_secret_reaching_a_later_request_through_a_capture_is_redacted() {
     assert!(!replay.contains(CANARY), "{replay}");
     assert!(replay.contains("cannot be replayed"), "{replay}");
 }
+
+const SPILLED: &str = "Sp1llCANARY-é\"q";
+
+/// A workspace whose bodies over 1 KiB spill, with `big` sending the secret
+/// `tok` to `/mirror`, which echoes it escaped across the 64 KiB chunk
+/// boundary of the spill file.
+fn spilled_workspace(server: &Server) -> tempfile::TempDir {
+    let ws = workspace(server);
+    let env = format!(
+        "variables:\n  base_url: {}\nsecrets: [tok]\n",
+        server.url("")
+    );
+    write(ws.path(), "environments/dev.yaml", &env);
+    let toml = fs::read_to_string(ws.path().join("rustman.toml")).unwrap();
+    write(
+        ws.path(),
+        "rustman.toml",
+        &format!("{toml}[http]\nmax_body_bytes = 1024\n"),
+    );
+    rustman(ws.path())
+        .args(["secret", "set", "tok", "--env", "dev"])
+        .write_stdin(SPILLED)
+        .assert()
+        .success();
+    let big = "method: POST\nbody:\n  type: text\n  content: '{{tok}}'\n";
+    write(
+        ws.path(),
+        "big.rman.yaml",
+        &request("big", "{{base_url}}/mirror?pad=65530&tail=5000", big),
+    );
+    ws
+}
+
+#[test]
+fn a_spilled_body_is_printed_redacted_unless_asked() {
+    let server = Server::http();
+    let ws = spilled_workspace(&server);
+    let stdout = |args: &[&str]| {
+        let out = rustman(ws.path()).args(args).output().unwrap();
+        assert_eq!(out.status.code(), Some(0), "{out:?}");
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    };
+    for args in [
+        &["send", "big", "--env", "dev"][..],
+        &["send", "big", "--env", "dev", "--body-only"],
+    ] {
+        let printed = stdout(args);
+        assert!(!printed.contains("CANARY"), "{args:?}: no canary");
+        assert!(printed.contains(r#"AAA"«redacted:tok»"BBB"#), "{args:?}");
+    }
+    let shown = stdout(&[
+        "send",
+        "big",
+        "--env",
+        "dev",
+        "--body-only",
+        "--show-secrets",
+    ]);
+    assert!(
+        shown.contains(r#"Sp1llCANARY-\u00e9\"q"#),
+        "--show-secrets prints it"
+    );
+    stdout(&["send", "big", "--env", "dev", "-o", "out.bin"]);
+    let saved = fs::read_to_string(ws.path().join("out.bin")).unwrap();
+    assert!(
+        saved.contains(r#"Sp1llCANARY-\u00e9\"q"#),
+        "-o saves it as received"
+    );
+
+    let list = stdout(&["history", "list", "--json"]);
+    let rows: serde_json::Value = serde_json::from_str(&list).unwrap();
+    let id = rows[0]["id"].as_str().unwrap().to_owned();
+    let replayed = stdout(&["history", "replay", &id]);
+    assert!(!replayed.contains("CANARY"), "replay: no canary");
+    assert!(replayed.contains(r#"AAA"«redacted:tok»"BBB"#));
+}

@@ -11,7 +11,7 @@ use rustman_core::model::{REQUEST_FILE_SUFFIX, Request};
 use rustman_core::run::{RequestRecord, RequestStatus, SkipReason, Summary};
 use rustman_core::settings::Settings;
 use rustman_core::workspace::RequestRef;
-use rustman_core::{ConfigError, Workspace};
+use rustman_core::{ConfigError, Redactor, Workspace};
 use rustman_http::Exchange;
 use rustman_http::import_curl_words;
 use rustman_http::runner::{RunContext, Runner, Sent};
@@ -57,7 +57,8 @@ pub struct SendArgs {
 /// Where the response goes, shared by `send` and `history replay`.
 #[derive(Debug, Args)]
 pub struct OutputFlags {
-    /// Print only the response body, byte for byte
+    /// Print only the response body: a text body redacted (unless
+    /// --show-secrets), a binary one byte for byte
     #[arg(long)]
     body_only: bool,
     /// Write the response body, byte for byte, to FILE instead of stdout
@@ -195,7 +196,7 @@ pub fn finish(args: &OutputFlags, sent: &Sent) -> Result<u8, CliError> {
         return Err(ConfigError::Usage(message).into());
     }
     if let Some(exchange) = &sent.exchange {
-        print_response(args, record, exchange)?;
+        print_response(args, record, exchange, &sent.redactor)?;
     }
     for reason in failures(record) {
         eprintln!("{reason}");
@@ -223,10 +224,14 @@ fn failures(record: &RequestRecord) -> Vec<String> {
     lines
 }
 
+/// Print the response: redacted on stdout, unless `--show-secrets` (or
+/// `--body-only` with a binary body, which is written as received); `-o`
+/// writes the body as received.
 fn print_response(
     args: &OutputFlags,
     record: &RequestRecord,
     exchange: &Exchange,
+    redactor: &Redactor,
 ) -> Result<(), ConfigError> {
     if let Some(path) = &args.output {
         let io = |source| ConfigError::Io {
@@ -239,45 +244,51 @@ fn print_response(
         return Ok(());
     }
     let mut out = io::stdout().lock();
-    let written = if args.body_only {
-        write_body(exchange, &mut out)
-    } else {
-        write_full(record, exchange, args.show_secrets, &mut out)
+    let written = match (args.body_only, args.show_secrets) {
+        (true, true) => write_body(exchange, &mut out),
+        (true, false) if exchange.binary => write_body(exchange, &mut out),
+        (true, false) => write_redacted_body(exchange, redactor, &mut out),
+        (false, true) => write_unredacted(exchange, &mut out),
+        (false, false) => write_redacted(record, exchange, redactor, &mut out),
     };
     // A closed stdout (`| head`) is not an error worth reporting.
     let _ = written.and_then(|()| out.flush());
     Ok(())
 }
 
-/// The status line, the redacted headers, a blank line and the body; with
-/// `show_secrets`, the headers and body as received.
-fn write_full(
+/// The status line, the redacted headers, a blank line and the redacted
+/// body (a binary one too: it is only shown, not saved).
+fn write_redacted(
     record: &RequestRecord,
     exchange: &Exchange,
-    show_secrets: bool,
+    redactor: &Redactor,
     out: &mut dyn Write,
 ) -> io::Result<()> {
     writeln!(out, "{} {}", exchange.http_version, exchange.status)?;
-    if show_secrets {
-        return write_unredacted(exchange, out);
-    }
     let response = record.exchange.as_ref().map(|e| &e.response);
     for header in response.map(|r| r.headers.as_slice()).unwrap_or_default() {
         writeln!(out, "{}: {}", header.name, header.value)?;
     }
     writeln!(out)?;
-    // A text body shows redacted, like every other sink; a binary or
-    // spilled one is written as received.
-    match response
-        .and_then(|r| r.body.as_deref())
-        .filter(|_| exchange.spill.is_none())
-    {
-        Some(text) => out.write_all(text.as_bytes()),
-        None => write_body(exchange, out),
+    write_redacted_body(exchange, redactor, out)
+}
+
+/// The response body with every secret replaced, a spilled one streamed
+/// from its file.
+fn write_redacted_body(
+    exchange: &Exchange,
+    redactor: &Redactor,
+    out: &mut dyn Write,
+) -> io::Result<()> {
+    match &exchange.spill {
+        Some(path) => redactor.copy(File::open(path)?, out),
+        None => out.write_all(&redactor.bytes(&exchange.body)),
     }
 }
 
+/// The status line, then the headers and body as received.
 fn write_unredacted(exchange: &Exchange, out: &mut dyn Write) -> io::Result<()> {
+    writeln!(out, "{} {}", exchange.http_version, exchange.status)?;
     for (name, value) in &exchange.headers {
         write!(out, "{name}: ")?;
         out.write_all(value.as_bytes())?;
