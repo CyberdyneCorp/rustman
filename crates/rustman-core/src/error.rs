@@ -77,6 +77,10 @@ pub enum ConfigError {
     },
     #[error("no environment selected (pass --env <name> or set RUSTMAN_ENV)")]
     NoActiveEnvironment,
+    #[error("request '{0}' not found (pass a request file, its id or its name)")]
+    RequestNotFound(String),
+    #[error("request name '{name}' is ambiguous: {}", paths.join(", "))]
+    AmbiguousRequest { name: String, paths: Vec<String> },
     #[error(transparent)]
     Secrets(#[from] SecretError),
     #[error("{}: {source}", path.display())]
@@ -152,6 +156,22 @@ mod tests {
         assert_eq!(
             ConfigError::AlreadyWorkspace("proj".into()).to_string(),
             "proj is already a rustman workspace"
+        );
+    }
+
+    #[test]
+    fn request_lookup_errors_name_the_target() {
+        assert_eq!(
+            ConfigError::AmbiguousRequest {
+                name: "List".into(),
+                paths: vec!["a/list.rman.yaml".into(), "b/list.rman.yaml".into()],
+            }
+            .to_string(),
+            "request name 'List' is ambiguous: a/list.rman.yaml, b/list.rman.yaml"
+        );
+        assert_eq!(
+            ConfigError::RequestNotFound("nope".into()).to_string(),
+            "request 'nope' not found (pass a request file, its id or its name)"
         );
     }
 

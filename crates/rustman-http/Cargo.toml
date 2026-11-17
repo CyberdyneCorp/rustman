@@ -12,3 +12,42 @@ workspace = true
 
 [dependencies]
 rustman-core.workspace = true
+async-compression = { workspace = true, features = ["tokio", "gzip", "brotli", "zstd", "zlib"] }
+base64.workspace = true
+bytes.workspace = true
+cookie_store.workspace = true
+form_urlencoded.workspace = true
+hickory-resolver.workspace = true
+http.workspace = true
+http-body-util.workspace = true
+p12-keystore.workspace = true
+ring.workspace = true
+percent-encoding.workspace = true
+hyper = { workspace = true, features = ["client", "http1", "http2"] }
+hyper-util = { workspace = true, features = ["client-legacy", "http1", "http2", "tokio"] }
+rustls.workspace = true
+rustls-pki-types.workspace = true
+rustls-native-certs.workspace = true
+rustls-platform-verifier.workspace = true
+serde.workspace = true
+shell-escape.workspace = true
+shell-words.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["net", "time", "rt", "fs", "io-util", "macros"] }
+tokio-rustls.workspace = true
+tokio-socks.workspace = true
+tower-service.workspace = true
+url.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+async-compression = { workspace = true, features = ["tokio", "gzip", "brotli", "zstd", "zlib"] }
+peak_alloc.workspace = true
+proptest.workspace = true
+http-body.workspace = true
+hyper = { workspace = true, features = ["server"] }
+hyper-util = { workspace = true, features = ["server", "server-auto", "service"] }
+rcgen.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "io-util"] }

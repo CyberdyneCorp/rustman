@@ -9,6 +9,7 @@ publish = false
 
 [dependencies]
 aho-corasick.workspace = true
+base64.workspace = true
 dunce.workspace = true
 rand.workspace = true
 serde.workspace = true

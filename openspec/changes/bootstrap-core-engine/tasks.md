@@ -29,18 +29,18 @@
 
 ## 4. HTTP engine (`http-requests`)
 
-- [ ] 4.1 Build the in-process test server (`tests/support`) supporting h1, h2, h2c, TLS via `rcgen`, mTLS, redirects, delay, echo, gzip/br/zstd and large bodies. Verify: a self-test of the server fixtures passes.
-- [ ] 4.2 Implement the timed connector (DNS, TCP, TLS with ALPN) and hyper client for HTTP/1.1, HTTP/2 and h2c prior knowledge. Verify: tests record `http_version`, all timing phases are non-null on fresh HTTPS, `tls` is null on HTTP, and phases are null on a reused connection.
-- [ ] 4.3 Implement timeouts (total 30 s default, connect 10 s) with phase-specific errors. Verify: the slow-server test gets `timeout after 500 ms (response)` within 600 ms.
-- [ ] 4.4 Implement the redirect policy (10 hops, method rewriting, cross-host auth stripping, `follow_redirects: false`). Verify: tests for the chain record, cross-host stripping, 307 body preservation and the loop error.
-- [ ] 4.5 Implement TLS verification (platform verifier, `ca_bundle`, `--insecure` flagging) and mTLS (PEM, PKCS#12). Verify: self-signed rejection, custom CA success, `insecure: true` flag, and mTLS success/failure tests.
-- [ ] 4.6 Implement proxies (env vars, explicit, `none`, HTTP CONNECT, SOCKS5). Verify: an in-process CONNECT proxy test and a `NO_PROXY` bypass test.
-- [ ] 4.7 Implement cookie jars per environment (`.rustman/cookies/<env>.json`) and `rustman cookies clear`. Verify: login → `/me` cookie test and the environment isolation test.
-- [ ] 4.8 Implement basic, bearer and api_key auth (respecting an explicit `Authorization`). Verify: the header value test for basic and the query placement test for api_key.
-- [ ] 4.9 Implement OAuth2 client_credentials and authorization_code + PKCE (S256, loopback listener), with the token cache in `SecretStore`, refresh, re-acquire on 401, and `rustman auth login`. Verify: a mock token server test shows one token call for two requests; a PKCE test checks `code_challenge_method=S256`; the non-interactive error test.
-- [ ] 4.10 Implement body handling: default headers, computed `Content-Length`/`Host` with a warning on stale values, decompression, the 10 MiB in-memory cap with spill to `.rustman/bodies/`, and binary detection. Verify: a 50 MiB spill test with a memory ceiling (via a counting allocator in tests), the PNG byte-exact test and the stale Content-Length test.
-- [ ] 4.11 Implement `rustman import curl` and `rustman export curl` with redaction. Verify: import tests for the listed flags, the unsupported-flag warning, the redacted export test, and a proptest for the export → import round trip.
-- [ ] 4.12 Document the HTTP settings, auth and curl interop in `docs/http.md`. Verify: the doc snippets are covered by tests from this group.
+- [x] 4.1 Build the in-process test server (`tests/support`) supporting h1, h2, h2c, TLS via `rcgen`, mTLS, redirects, delay, echo, gzip/br/zstd and large bodies. Verify: a self-test of the server fixtures passes.
+- [x] 4.2 Implement the timed connector (DNS, TCP, TLS with ALPN) and hyper client for HTTP/1.1, HTTP/2 and h2c prior knowledge. Verify: tests record `http_version`, all timing phases are non-null on fresh HTTPS, `tls` is null on HTTP, and phases are null on a reused connection.
+- [x] 4.3 Implement timeouts (total 30 s default, connect 10 s) with phase-specific errors. Verify: the slow-server test gets `timeout after 500 ms (response)` within 600 ms. (The `--timeout` override flag arrives with `rustman send`/`run` in 6.1/6.2.)
+- [x] 4.4 Implement the redirect policy (10 hops, method rewriting, cross-host auth stripping, `follow_redirects: false`). Verify: tests for the chain record, cross-host stripping, 307 body preservation and the loop error.
+- [x] 4.5 Implement TLS verification (platform verifier, `ca_bundle`, `--insecure` flagging) and mTLS (PEM, PKCS#12). Verify: self-signed rejection, custom CA success, `insecure: true` flag, and mTLS success/failure tests (request and `rustman.toml [http]` certificates). (The `--insecure` flag arrives with `rustman send`/`run` in 6.1/6.2; until then `verify_tls: false` turns verification off.)
+- [x] 4.6 Implement proxies (env vars, explicit, `none`, HTTP CONNECT, SOCKS5). Verify: an in-process CONNECT proxy test and a `NO_PROXY` bypass test.
+- [x] 4.7 Implement cookie jars per environment (`.rustman/cookies/<env>.json`) and `rustman cookies clear`. Verify: login → `/me` cookie test and the environment isolation test.
+- [x] 4.8 Implement basic, bearer and api_key auth (respecting an explicit `Authorization`). Verify: the header value test for basic and the query placement test for api_key.
+- [x] 4.9 Implement OAuth2 client_credentials and authorization_code + PKCE (S256, loopback listener), with the token cache in `SecretStore`, refresh, re-acquire on 401, and `rustman auth login`. Verify: a mock token server test shows one token call for two requests; a PKCE test checks `code_challenge_method=S256`; the non-interactive error test. (`rustman auth login` is always interactive; mapping a non-TTY stdin to the non-interactive error arrives with `rustman send`/`run` in 6.1/6.2.)
+- [x] 4.10 Implement body handling: default headers, computed `Content-Length`/`Host` with a warning on stale values, decompression, the 10 MiB in-memory cap with spill to `.rustman/bodies/`, and binary detection. Verify: a 50 MiB spill test with a memory ceiling (via a counting allocator in tests), the PNG byte-exact test and the stale Content-Length test.
+- [x] 4.11 Implement `rustman import curl` and `rustman export curl` with redaction. Verify: import tests for the listed flags, the unsupported-flag warning, the redacted export test, and a proptest for the export → import round trip.
+- [x] 4.12 Document the HTTP settings, auth and curl interop in `docs/http.md`. Verify: the doc snippets are covered by tests from this group.
 
 ## 5. Assertions and captures (`assertions`)
 
@@ -52,8 +52,8 @@
 
 ## 6. CLI runner (`cli-runner`)
 
-- [ ] 6.1 Implement `rustman send` (by path or name, `--body-only`, `-o`, the ambiguous-name error) and ad-hoc send outside a workspace. Verify: `assert_cmd` tests, including `--body-only` byte equality and running without a workspace.
-- [ ] 6.2 Implement `rustman run` with `--env`, `--var`, `--bail`, `--filter`, `--iterations`, the folder-sequential/parallel scheduler and ordered results. Verify: bail and filter tests, and a parallel test using server-side timestamps to show folders overlap while in-folder order holds.
+- [ ] 6.1 Implement `rustman send` (by path or name, `--body-only`, `-o`, `--timeout`, `--insecure`, the ambiguous-name error) and ad-hoc send outside a workspace. Verify: `assert_cmd` tests, including `--body-only` byte equality and running without a workspace.
+- [ ] 6.2 Implement `rustman run` with `--env`, `--var`, `--timeout`, `--insecure`, `--bail`, `--filter`, `--iterations`, the folder-sequential/parallel scheduler and ordered results. Verify: bail and filter tests, and a parallel test using server-side timestamps to show folders overlap while in-folder order holds.
 - [ ] 6.3 Implement the reporters in `rustman-report` (pretty, json `rustman.report/v1 (kind: run)` with a published JSON Schema at `docs/schemas/report.schema.json`, junit via `quick-junit`, tap), multi-reporter output and stdout default. Verify: insta snapshots per reporter; the JSON report validates against its published schema; JUnit is checked with an XML parser.
 - [ ] 6.4 Implement the exit-code mapping (0/1/2/3/130) and SIGINT cancellation with partial report flush. Verify: tests per exit code, including "3 wins over 1"; a SIGINT test on Unix (spawn, signal, assert 130 and a valid partial JSON report).
 - [ ] 6.5 Implement terminal behavior (TTY detection, `NO_COLOR`, `TERM=dumb`, `--color`), stderr/stdout separation, and `-v`/`RUST_LOG` with redacting logs. Verify: tests show no ANSI escapes with `NO_COLOR=1` or when piped, and that stdout is valid JSON with `-vv`.

@@ -189,7 +189,9 @@ pub fn resolve_request(
         return Err(ResolveError::Unsupported(reason));
     };
     let mut i = resolver.interpolator();
-    let settings = settings(&mut i, http.settings.as_ref());
+    let mut settings = settings(&mut i, http.settings.as_ref());
+    let mut tls = tls_files(&settings);
+    inherit_client_identity(&mut i, request, &mut settings, &mut tls)?;
     let resolved = ResolvedRequest {
         method: http.effective_method().to_owned(),
         url: i.text(&http.url),
@@ -197,7 +199,7 @@ pub fn resolve_request(
         headers: pairs(&mut i, &request.effective_headers()),
         body: body(&mut i, http.body.as_ref()),
         auth: request.effective_auth().map(|a| auth(&mut i, a)),
-        tls: tls_files(&settings),
+        tls,
         settings,
         secrets: Vec::new(),
     };
@@ -207,15 +209,51 @@ pub fn resolve_request(
     Ok(resolved)
 }
 
+/// The workspace client certificate (`rustman.toml [http]`), for a request
+/// that sets neither `client_cert` nor `client_pkcs12`. Its paths are
+/// relative to the workspace root and contained here.
+fn inherit_client_identity(
+    i: &mut Interpolator<'_, '_>,
+    request: &RequestRef<'_>,
+    settings: &mut RequestSettings,
+    tls: &mut TlsFiles,
+) -> Result<(), ResolveError> {
+    if settings.client_cert.is_some()
+        || settings.client_key.is_some()
+        || settings.client_pkcs12.is_some()
+    {
+        return Ok(());
+    }
+    let http = request.http;
+    let file = |raw: &Option<String>| -> Result<Option<ResolvedFile>, PathEscape> {
+        let Some(raw) = raw else {
+            return Ok(None);
+        };
+        let path = request.contain_workspace_file(raw)?;
+        Ok(Some(ResolvedFile {
+            raw: raw.clone(),
+            path,
+        }))
+    };
+    tls.client_cert = file(&http.client_cert)?;
+    tls.client_key = file(&http.client_key)?;
+    tls.client_pkcs12 = file(&http.client_pkcs12)?;
+    if tls.client_pkcs12.is_some() {
+        settings.client_pkcs12_password = optional(i, http.client_pkcs12_password.as_deref());
+    }
+    Ok(())
+}
+
 /// Check every interpolated file path stays inside the workspace and keep the
-/// contained path. The error shows the resolved path with any secret value
-/// redacted.
+/// contained path. Files already contained (from `rustman.toml`) are kept.
+/// The error shows the resolved path with any secret value redacted.
 fn contain_files(
     request: &RequestRef<'_>,
     resolved: &mut ResolvedRequest,
 ) -> Result<(), ResolveError> {
     let mut escaped = None;
-    for file in resolved.files_mut() {
+    let unchecked = |file: &&mut ResolvedFile| file.path.as_os_str().is_empty();
+    for file in resolved.files_mut().into_iter().filter(unchecked) {
         match request.contain_file(&file.raw) {
             Ok(path) => file.path = path,
             Err(PathEscape(path)) => {

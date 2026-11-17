@@ -41,12 +41,15 @@ default_environment = "local"
 ca_bundle = "certs/dev-ca.pem"   # extra trusted CAs (PEM), relative to the workspace root
 proxy = "http://127.0.0.1:3128"
 max_body_bytes = 10485760         # larger response bodies are spilled to disk
+client_cert = "certs/client.pem" # mutual TLS for requests without their own client certificate
+client_key = "certs/client.key"
+# or: client_pkcs12 = "certs/client.p12" with client_pkcs12_password = "{{p12_password}}"
 
 [variables]
 api_version = "v2"
 ```
 
-Only `[workspace]` with `name` and `version = 1` is required; every other key has the default shown above (`default_environment`, `ca_bundle` and `proxy` are unset by default). Unknown keys produce a warning, not an error. A `version` newer than this build supports fails with `error: rustman.toml version 2 is newer than this rustman supports (1)`.
+Only `[workspace]` with `name` and `version = 1` is required; every other key has the default shown above (`default_environment`, `ca_bundle`, `proxy` and the client certificate keys are unset by default). The `[http]` client certificate (`client_cert` and `client_key`, or `client_pkcs12` and `client_pkcs12_password`) applies to every request that sets none of its own. Unknown keys produce a warning, not an error. A `version` newer than this build supports fails with `error: rustman.toml version 2 is newer than this rustman supports (1)`.
 
 ## Common fields
 
@@ -381,13 +384,13 @@ With this file, `users/get-user.rman.yaml` above is sent with `X-Team: core` and
 
 ## File paths
 
-Paths in `body.path`, multipart `file`, `settings.ca_bundle`, `settings.client_cert`, `settings.client_key`, `settings.client_pkcs12` and schema `file` are relative to the request file. `[http] ca_bundle` in `rustman.toml` is relative to the workspace root. A path that leaves the workspace, through `..`, an absolute path or a symlink, fails to load:
+Paths in `body.path`, multipart `file`, `settings.ca_bundle`, `settings.client_cert`, `settings.client_key`, `settings.client_pkcs12` and schema `file` are relative to the request file. The `[http]` file paths in `rustman.toml` (`ca_bundle`, `client_cert`, `client_key`, `client_pkcs12`) are relative to the workspace root. A path that leaves the workspace, through `..`, an absolute path or a symlink, fails to load:
 
 ```text
 users/upload.rman.yaml:9: file path escapes workspace: ../../etc/passwd
 ```
 
-Paths containing `{{variables}}` are checked after the variables are resolved, before anything is sent, with the same error (any secret value in the path is redacted from it). `rustman.toml` values are not interpolated, so `{{` there is literal.
+Paths containing `{{variables}}` are checked after the variables are resolved, before anything is sent, with the same error (any secret value in the path is redacted from it). `rustman.toml` values are not interpolated, so `{{` there is literal, except `[http] client_pkcs12_password`, which is resolved with the request's variables so that it can reference a secret.
 
 ## Errors
 

@@ -20,7 +20,10 @@ use std::fmt;
 use std::ops::Range;
 
 use aho_corasick::AhoCorasick;
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 
+use crate::model::Auth;
 use crate::secret::{Secret, placeholder};
 use crate::vars::{Resolved, ResolvedRequest, SecretSpan};
 
@@ -72,7 +75,28 @@ impl Redactor {
         for secret in &request.secrets {
             redactor.add(secret);
         }
+        redactor.add_basic_credential(request);
         redactor
+    }
+
+    /// The Basic auth header carries `user:password` base64-encoded, a form
+    /// no secret value matches. When a secret went into it, redact the
+    /// encoded credential under that secret's name, so an echoing server
+    /// cannot leak it.
+    fn add_basic_credential(&mut self, request: &ResolvedRequest) {
+        let Some(Auth::Basic { username, password }) = &request.auth else {
+            return;
+        };
+        let credential = format!("{username}:{password}");
+        let Some(secret) = request
+            .secrets
+            .iter()
+            .find(|s| !s.expose().is_empty() && credential.contains(s.expose()))
+        else {
+            return;
+        };
+        let encoded = STANDARD.encode(&credential);
+        self.add_value(secret.name(), &encoded);
     }
 
     /// Builder form of [`Redactor::add`].

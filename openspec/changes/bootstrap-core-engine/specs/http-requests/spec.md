@@ -28,22 +28,30 @@ The total request timeout SHALL default to 30000 ms. It can be overridden by `ru
 - **THEN** the result SHALL be `error: timeout after 500 ms (response)` within 600 ms
 
 ### Requirement: Redirect policy
-Redirects SHALL be followed by default, up to 10 hops (`max_redirects`). Each hop SHALL be recorded in the exchange. A `301`/`302`/`303` hop SHALL switch a non-GET/HEAD method to `GET` and drop the body. A `307`/`308` hop SHALL keep the method and body. `Authorization` SHALL be dropped when a hop changes host. `follow_redirects: false` SHALL return the 3xx response as is.
+Redirects SHALL be followed by default, up to 10 hops (`max_redirects`). Each hop SHALL be recorded in the exchange. A `301`/`302`/`303` hop SHALL switch a non-GET/HEAD method to `GET` and drop the body. A `307`/`308` hop SHALL keep the method and body. `follow_redirects: false` SHALL return the 3xx response as is.
 
 #### Scenario: Redirect chain recorded
 - **GIVEN** `/a` → 302 → `/b` → 200
 - **WHEN** `/a` is requested
 - **THEN** the exchange SHALL record final status 200 and the redirect list `[302 /a]`
 
+#### Scenario: Too many redirects
+- **GIVEN** a redirect loop
+- **WHEN** the request is sent with defaults
+- **THEN** the result SHALL be `error: too many redirects (10)`
+
+### Requirement: Redirect credential stripping
+Every credential the request carries (`Authorization`, `Proxy-Authorization`, an explicit `Cookie` header, and the `api_key` header or query parameter) SHALL be dropped when a redirect hop changes origin (scheme, host or port).
+
 #### Scenario: Cross-host auth stripping
 - **GIVEN** `https://api.example.com/x` redirects to `https://cdn.other.com/x`
 - **WHEN** the request carries bearer auth
 - **THEN** the second hop SHALL NOT include `Authorization`
 
-#### Scenario: Too many redirects
-- **GIVEN** a redirect loop
-- **WHEN** the request is sent with defaults
-- **THEN** the result SHALL be `error: too many redirects (10)`
+#### Scenario: Cross-origin API key stripping
+- **GIVEN** `http://localhost:8080/x` redirects to `http://127.0.0.1:8080/x`
+- **WHEN** the request carries an `api_key` query parameter
+- **THEN** the second hop SHALL NOT include that parameter
 
 ### Requirement: TLS verification
 TLS certificate and hostname verification SHALL be enabled by default, using the platform trust store plus any `ca_bundle` (PEM) configured in the workspace or request. Disabling it SHALL require `verify_tls: false` or `--insecure`, and every exchange made with verification off SHALL be flagged `insecure: true`.
@@ -145,7 +153,7 @@ Each exchange SHALL record durations in milliseconds, with microsecond precision
 - **THEN** `tls` SHALL be `null`
 
 ### Requirement: Response body handling
-Response bodies up to `max_body_bytes` (default 10 MiB) SHALL be kept in memory. Larger bodies SHALL be streamed to `.rustman/bodies/<exchange-id>.bin`, with the exchange keeping a 64 KiB preview and the full size. Bodies SHALL be decompressed (gzip, br, deflate, zstd) unless `settings.decompress: false`. Bodies that aren't valid UTF-8 SHALL be marked `binary: true` and never decoded lossily.
+Response bodies up to `max_body_bytes` (default 10 MiB) SHALL be kept in memory. Larger bodies SHALL be streamed to `.rustman/bodies/<exchange-id>.bin`, with the exchange keeping a 64 KiB preview and the full size. A spill file SHALL be removed when its body is not read to the end, and redirect hops SHALL keep none. Bodies that aren't valid UTF-8 SHALL be marked `binary: true` and never decoded lossily.
 
 #### Scenario: Large download spilled
 - **GIVEN** a 50 MiB response
@@ -157,6 +165,19 @@ Response bodies up to `max_body_bytes` (default 10 MiB) SHALL be kept in memory.
 - **GIVEN** a `image/png` response
 - **WHEN** it is received
 - **THEN** the exchange SHALL record `binary: true`, and the raw bytes SHALL be preserved exactly
+
+### Requirement: Response decompression
+Bodies SHALL be decompressed (gzip, br, deflate, zstd) unless `settings.decompress: false`. Decoding SHALL use bounded memory whatever the compression ratio, and a body that decodes to more than 1 GiB SHALL fail with `network: the decompressed response body is larger than <n> bytes`.
+
+#### Scenario: Compressed response decoded
+- **GIVEN** a response with `Content-Encoding: gzip`
+- **WHEN** it is received with defaults
+- **THEN** the exchange SHALL hold the decoded body
+
+#### Scenario: Decompression bomb
+- **GIVEN** a compressed response that decodes to more than the limit
+- **WHEN** it is received
+- **THEN** the result SHALL be the decompressed-size error
 
 ### Requirement: Default headers
 The engine SHALL send `User-Agent: rustman/<crate version>` and `Accept: */*`, unless the request sets them. Body types SHALL set a `Content-Type` default (`application/json`, `text/plain; charset=utf-8`, `application/x-www-form-urlencoded`, `multipart/form-data; boundary=…`, `application/octet-stream`) that an explicit header overrides. `Content-Length` and `Host` SHALL always be computed by the engine.

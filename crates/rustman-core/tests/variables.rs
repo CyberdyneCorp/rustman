@@ -442,6 +442,38 @@ settings:
         assert_eq!(resolved.files().len(), 2);
     }
 
+    fn identity_fixture(settings: &str) -> Fixture {
+        let toml = "[http]\nclient_pkcs12 = \"certs/ws.p12\"\nclient_pkcs12_password = \"{{api_token}}\"\n";
+        let f = Fixture::new(toml);
+        f.write("environments/prod.yaml", "secrets: [api_token]\n");
+        f.write(
+            "api/x.rman.yaml",
+            &format!("version: 1\nkind: http\nname: x\nurl: http://x\n{settings}"),
+        );
+        f
+    }
+
+    #[test]
+    fn the_workspace_client_certificate_applies_without_one_of_its_own() {
+        let f = identity_fixture("");
+        let resolved = resolve(&f, "x").unwrap();
+        let p12 = resolved.tls.client_pkcs12.as_ref().unwrap();
+        assert_eq!(p12.raw, "certs/ws.p12");
+        assert_eq!(p12.path, f.root().join("certs/ws.p12"));
+        assert_eq!(
+            resolved.settings.client_pkcs12_password.as_deref(),
+            Some("s3cr3t")
+        );
+        assert!(resolved.secrets.iter().any(|s| s.expose() == "s3cr3t"));
+
+        let own = identity_fixture("settings: {client_cert: c.pem, client_key: k.pem}\n");
+        let resolved = resolve(&own, "x").unwrap();
+        assert_eq!(resolved.tls.client_pkcs12, None);
+        let cert = resolved.tls.client_cert.as_ref().unwrap();
+        assert_eq!(cert.path, own.root().join("api/c.pem"));
+        assert_eq!(resolved.settings.client_pkcs12_password, None);
+    }
+
     #[test]
     fn an_escaping_path_built_from_a_secret_is_redacted_in_the_error() {
         let f = escape_fixture("body: {type: file, path: '../../{{api_token}}'}\n");
