@@ -5,9 +5,11 @@
 //! target, so readers never see a partial or a world-readable file.
 //! - Unix: the file is created with mode `0600` (and its folder, when created,
 //!   with `0700`).
-//! - Windows: inherited permissions are removed and the current user is granted
-//!   full control, using the built-in `icacls` tool. A rename keeps the
-//!   file's own access list.
+//! - Windows: inherited permissions are removed, the broad groups (Everyone,
+//!   Authenticated Users, Users) are removed, and the current user is granted
+//!   full control, using the built-in `icacls` tool. `SYSTEM` and
+//!   `Administrators` may keep access, as root does on Unix. A rename keeps
+//!   the file's own access list.
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
@@ -162,14 +164,26 @@ fn restrict_to_user(_path: &Path) -> io::Result<()> {
     Ok(())
 }
 
+/// Well-known SIDs that must never keep access: Everyone, Authenticated Users, Users.
+#[cfg(windows)]
+const BROAD_GROUPS: [&str; 3] = ["*S-1-1-0", "*S-1-5-11", "*S-1-5-32-545"];
+
 #[cfg(windows)]
 fn restrict_to_user(path: &Path) -> io::Result<()> {
-    use std::process::{Command, Stdio};
     let user = windows_user()?;
+    let grant = format!("{user}:F");
+    icacls(path, &["/inheritance:r", "/grant:r", &grant])?;
+    let mut remove = vec!["/remove:g"];
+    remove.extend(BROAD_GROUPS);
+    icacls(path, &remove)
+}
+
+#[cfg(windows)]
+fn icacls(path: &Path, args: &[&str]) -> io::Result<()> {
+    use std::process::{Command, Stdio};
     let status = Command::new("icacls")
         .arg(path)
-        .args(["/inheritance:r", "/grant:r"])
-        .arg(format!("{user}:F"))
+        .args(args)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()?;
@@ -305,15 +319,22 @@ mod tests {
         let out = Command::new("icacls").arg(&path).output().unwrap();
         let listing = String::from_utf8_lossy(&out.stdout).to_string();
         let user = windows_user().unwrap();
-        let grants: Vec<&str> = listing
+        let principals: Vec<String> = listing
             .lines()
             .map(|l| l.trim_start_matches(path.to_str().unwrap()).trim())
-            .filter(|l| l.contains(":("))
+            .filter_map(|l| l.split_once(":(").map(|(who, _)| who.to_lowercase()))
             .collect();
-        assert_eq!(grants.len(), 1, "{listing}");
-        assert!(
-            grants[0].to_lowercase().starts_with(&user.to_lowercase()),
-            "{listing}"
-        );
+        let allowed = [
+            user.to_lowercase(),
+            "nt authority\\system".to_string(),
+            "builtin\\administrators".to_string(),
+        ];
+        assert!(principals.contains(&user.to_lowercase()), "{listing}");
+        for who in &principals {
+            assert!(
+                allowed.contains(who),
+                "unexpected grant for {who}:\n{listing}"
+            );
+        }
     }
 }
