@@ -560,18 +560,22 @@ graph TD
 
 ## Roadmap
 
-| Milestone | Changes | You get |
-|---|---|---|
-| **M1 - Usable** | `bootstrap-core-engine`, `add-terminal-ui` | REST client with workspace, environments, TUI and CLI runner |
-| **M2 - Multi-protocol** | `add-graphql-client`, `add-mcp-client`, `add-webhook-inspector` | GraphQL, MCP client, webhooks |
-| **M3 - Autonomous** | `add-openapi-explorer`, `add-agent-mcp-server` | OpenAPI exploration, agent interface |
-| **M4 - Visual** | `add-raven-visualizer` | Raven dashboards |
-| **M5 - Chain** | `add-jsonrpc-client`, `add-evm-toolkit` | JSON-RPC, plus an Ethereum console that understands ABIs |
-| **M6 - Adoption** | `add-importers`, `add-openapi-mock-server`, `add-snapshot-testing`, `add-runner-parity` | Migration, mocks, snapshot tests, plus Postman/Newman parity: data-driven runs, Digest/SigV4/JWT, code snippets, script conversion |
-| **M7 - Protocols** | `add-grpc-client`, `add-realtime-client`, `add-messaging-client` | gRPC, WebSocket and SSE, message brokers |
-| **M8 - Pro** | `add-traffic-recorder`, `add-load-testing`, `add-trace-propagation`, `add-contract-testing`, `add-docs-generator`, `add-scheduled-monitors`, `add-plugin-system`, `add-secret-providers`, `add-stress-testing` | Recorder, load tests, tracing, contracts, docs, monitors, plugins, secret providers, stress testing |
+Nothing is implemented yet: all 26 changes are specified in OpenSpec. Releases are ordered by dependency, user value and risk. The full delivery plan, with exit criteria, shared enablers and risks, is in [`ROADMAP.md`](ROADMAP.md).
 
-The order, the glossary and the cross-cutting contracts are in [`openspec/ROADMAP.md`](openspec/ROADMAP.md).
+| Release | Changes | You get |
+|---|---|---|
+| **Phase 0** | — | Open decisions settled (license, MSRV, `rmcp` pin, YAML crate) and spec fixes |
+| **v0.1 - Headless core** | `bootstrap-core-engine`, plus the safety policy from `add-openapi-explorer` | CLI runner with workspace, environments, secrets, HTTP engine, assertions, history |
+| **v0.2 - Usable** (first public release) | `add-terminal-ui`, `add-importers`, `add-runner-parity` | TUI, import from Postman/Insomnia/Bruno/HAR/`.http`, data-driven runs, Digest/SigV4/JWT, code snippets |
+| **v0.3 - Autonomous** | `add-openapi-explorer`, `add-agent-mcp-server` | OpenAPI import and exploration, HTML/SARIF reports, agent interface |
+| **v0.4 - Multi-protocol** | `add-graphql-client`, `add-mcp-client`, `add-webhook-inspector`, `add-snapshot-testing`, `add-openapi-mock-server` | GraphQL, MCP client, webhooks, snapshot tests, mock server |
+| **v0.5 - Protocols** | `add-jsonrpc-client`, `add-grpc-client`, `add-realtime-client` | JSON-RPC, gRPC, WebSocket and SSE |
+| **v0.6 - Pro testing** | `add-contract-testing`, `add-trace-propagation`, `add-load-testing`, `add-docs-generator`, `add-stress-testing` | Breaking-change checks, tracing, load and stress tests, generated docs |
+| **v0.7 - Operate & extend** | `add-secret-providers`, `add-scheduled-monitors`, `add-plugin-system`, `add-traffic-recorder`, `add-messaging-client` | Secret providers, monitors, plugins, traffic recorder, message brokers |
+| **Side tracks** | `add-raven-visualizer`, `add-evm-toolkit` | Raven dashboards, Ethereum console (never block a release) |
+| **v1.0 - Stable** | — | Frozen request-file, report, viz and plugin formats; signed release artifacts |
+
+The glossary, capability map and cross-cutting contracts are in [`openspec/ROADMAP.md`](openspec/ROADMAP.md).
 
 ---
 

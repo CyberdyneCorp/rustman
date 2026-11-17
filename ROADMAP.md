@@ -1,0 +1,215 @@
+# Rustman — Delivery Roadmap
+
+This file is the **delivery plan**: what ships in which release, in what order, and why.
+The **capability map, glossary and cross-cutting contracts** stay in [`openspec/ROADMAP.md`](openspec/ROADMAP.md),
+and the requirements stay in `openspec/changes/<id>/`. Change ids below are the OpenSpec change ids.
+
+## Where we are
+
+- **Specified:** 26 OpenSpec changes, 643 requirements, ~990 scenarios, ~645 implementation tasks.
+- **Implemented:** nothing yet. There is no Cargo workspace, and `openspec/specs/` is empty.
+- **CI:** only `openspec validate --all --strict`.
+
+The order in `openspec/ROADMAP.md` follows the order the specs were written in. This roadmap reorders the work by
+dependency, user value and risk. The main changes:
+
+1. **Extract shared enablers first.** Nine changes depend on parts of other changes that the dependency table
+   doesn't list (see [Dependency corrections](#dependency-corrections)). The biggest is the safety policy:
+   `api-exploration` owns it, but load testing, monitors, plugins, the agent interface, EVM, messaging and stress
+   testing all need it.
+2. **Ship adoption features early.** Importers and the data-run/auth parts of `add-runner-parity` depend only on the
+   core. They are what gets a Postman user to switch, so they move from M6 to the second release.
+3. **Keep high-risk, optional work off the critical path.** The Raven companion (pre-1.0 C library, Vulkan) and the
+   EVM toolkit (49 requirements, a niche audience) run as side tracks and never block a release.
+
+## Phase 0 — Before writing code (≈1 week)
+
+Settle these first. Each one is cheap now and expensive after code exists.
+
+| # | Decision / fix | Source | Recommendation |
+|---|----------------|--------|----------------|
+| 0.1 | Does `ring`'s build-time C compiler satisfy the "no native toolchain" rule? | bootstrap design, Open Questions | Accept it. `rustls-rustcrypto` is still experimental. Write the decision into `openspec/config.yaml`. |
+| 0.2 | License | bootstrap design | `MIT OR Apache-2.0`. Raven (Apache-2.0) is compatible. |
+| 0.3 | Pin the MSRV and the `rmcp` minor version | bootstrap 1.1, mcp-client D1, agent Open Questions | Choose them once. Changes 4 and 6 must share the same `rmcp` pin. |
+| 0.4 | Spike `serde-saphyr`: round-trip, error positions, deterministic emitter | bootstrap D4 | Two-day spike. Fall back to `serde_norway` if it fails. The request format is frozen at `version: 1`, so this has to be right. |
+| 0.5 | Fix: `add-graphql-client` design D4/D5 build SSE and multipart uploads on "reqwest" | graphql design | `rustman-http` is hyper-based, and reqwest was rejected in bootstrap D2. Rewrite both on `rustman-http` byte streams. |
+| 0.6 | Fix: report versioning contradiction | bootstrap 6.3 vs explorer design and task 4.2 | Bootstrap already publishes `rustman.report/v1 (kind: run)`. Change the explorer to say it *extends* v1 instead of introducing it. |
+| 0.7 | Fix: `openspec/ROADMAP.md` dependency table | see below | Update the "Depends on" column. |
+| 0.8 | Pin the OpenSpec CLI in CI | `.github/workflows/openspec-validate.yml` uses `@latest` | Pin an exact version. |
+
+## Shared enablers
+
+Build each of these once, in the release listed, even when its "owner" change comes later.
+
+| Enabler | Spec owner | Needed by | Land in |
+|---------|-----------|-----------|---------|
+| `SafetyPolicy` + `GovernedSender` in `rustman-core` | `api-exploration` (5, tasks 2.1–2.3) | 6, 10, 12, 16, 18, 22, 23, 26 | **v0.1** as a standalone slice. Agent mode and benches can't exist without it. |
+| Request-kind registry, assertion registry, `RequestPane` trait | `workspace`, `assertions`, `tui` | every protocol change | v0.1 / v0.2 |
+| `rustman.report/v1` schema (`schemars`, checked-in JSON Schema) | `test-reports` | every reporter | v0.1 (`kind: run`), extended later |
+| Shared `TlsSettings` → `rustls::ClientConfig` builder | `http-requests` | 3, 9, 14, 15 | v0.1 |
+| One WebSocket stack (`tokio-tungstenite` + rustls + proxy CONNECT) | first protocol to need it (3) | 3, 9, 15 | v0.4 |
+| Data-row reader (CSV/JSON) | `cli-runner` (25) | 18 | v0.2 |
+| Snippet engine | `http-requests` (25) | `tui` "Copy as…", 21 | v0.2 |
+| `rustman-viz-protocol` crate (serde types only) | `visual-dashboards` (8) | TUI `v` key (2), 18, 22, 26 | v0.2: pull the protocol crate forward. The companion itself comes later. |
+| Workspace trust (`.rustman/trust.yaml`) | `mcp-client` (4) | 23 | v0.4 |
+| Exploration runner (scheduling, budgets, findings, journal) | `api-exploration` (5) | 10 probe, 12 stateful, 26 | v0.3 |
+| Replay header hygiene `sanitize_for_replay` | `webhook-inspector` (7) | 12 proxy, 17 | v0.4 |
+| Neutral import IR + secret extraction | `collection-import` (11) | 12 `--record`, 25 script migration | v0.2 |
+
+## Releases
+
+Size is relative, based on task and requirement counts: **S** < 20 tasks, **M** 20–30, **L** 30+, **XL** = bootstrap.
+There are no dates yet; they depend on team capacity.
+
+### v0.1 — "Headless core" (critical path)
+
+A CLI tool that is already useful in CI: a workspace in Git, environments and secrets, an HTTP engine with exact
+timings, assertions, reporters and history.
+
+| Change / slice | Size | Notes |
+|----------------|------|-------|
+| `bootstrap-core-engine` | XL (48 tasks, 59 req) | Split into four PRs: (a) scaffold + CI + `cargo deny`; (b) workspace + environments + secrets + redaction; (c) HTTP engine; (d) assertions + runner + history. |
+| Safety-policy slice of `add-openapi-explorer` (tasks 2.1–2.3) | S | Pulled forward. It has no OpenAPI dependency. |
+
+**Exit criteria:** bootstrap 8.1 (offline e2e on Linux, macOS and Windows) and 8.2 (canary-secret audit finds zero
+matches) pass; `cargo build` works on a clean machine with no system libraries; the request-file `version: 1` and
+the report `v1 (kind: run)` schemas are published. Archive `bootstrap-core-engine`.
+
+### v0.2 — "Usable" (M1, plus what makes people switch)
+
+| Change | Size | Notes |
+|--------|------|-------|
+| `add-terminal-ui` | L (37) | Ship task 8.1 (`v` viz hand-off) against the stub companion only. |
+| `add-importers` | S (17) | Moved up from M6. This is how Postman, Insomnia and Bruno users get their collections in. |
+| `add-runner-parity`: data-driven runs, Digest/SigV4/JWT auth, snippets, "Copy as…" | M | Only depends on 1 and 2. |
+| `add-runner-parity`: script migration | S | Lands right after `add-importers`. |
+
+**Exit criteria:** the TUI pty smoke test passes on all three OSes (TUI 9.1); a real Postman collection imports with
+no secret written to disk; `rustman run --data` works. **This is the first public release.**
+
+### v0.3 — "Autonomous" (M3) — the differentiator
+
+| Change | Size | Notes |
+|--------|------|-------|
+| `add-openapi-explorer` (rest) | L (34, 44 req) | Import + sync, explorer, the full report renderers (HTML, Markdown, SARIF), `report diff`. |
+| `add-agent-mcp-server` | M (23) | Agent tools for later changes plug in as those changes land. |
+
+**Exit criteria:** explorer 5.1 (`bad-api` end to end in under 5 minutes) and agent 5.1 (agent scenario on all
+OSes) pass. A demo shows `claude mcp add rustman -- rustman mcp serve` working read-only by default.
+
+### v0.4 — "Multi-protocol + test confidence" (M2, plus part of M6)
+
+| Change | Size | Notes |
+|--------|------|-------|
+| `add-graphql-client` | M (26) | Introduces the shared WebSocket stack. |
+| `add-mcp-client` | M (25) | Shares `rustman-mcp` and the `rmcp` pin with the agent server. |
+| `add-webhook-inspector` | S (15) | |
+| `add-snapshot-testing` | S (17) | Its e2e task 7.1 needs kinds 3, 4 and 9. Ship it with http and graphql, and add mcp/jsonrpc coverage as those land. |
+| `add-openapi-mock-server` | M (25) | Needs 5 (model, synthesizer, graph), 7 (header hygiene) and 11 (record IR). |
+
+These five changes are independent of each other and can run in parallel.
+
+### v0.5 — "Protocols" (M7, without messaging)
+
+| Change | Size |
+|--------|------|
+| `add-jsonrpc-client` | M (20) |
+| `add-grpc-client` | M (23) |
+| `add-realtime-client` (WebSocket, SSE) | S (18) |
+
+`add-messaging-client` waits until v0.7. Kafka, MQTT and AMQP need broker containers in CI and serve a smaller audience.
+
+### v0.6 — "Pro testing" (M8, first half)
+
+| Change | Size | Notes |
+|--------|------|-------|
+| `add-contract-testing` | M (22) | High value in PR pipelines. |
+| `add-trace-propagation` | S (17) | |
+| `add-load-testing` | M (24) | Live charts degrade to the TUI until the companion ships. |
+| `add-docs-generator` | S (18) | Uses the snippet engine from v0.2. |
+| `add-stress-testing` | L (33) | Comes last in this release, because it builds on load testing. Its wire-fault writer is the one place raw HTTP is allowed, so review it carefully. |
+
+### v0.7 — "Operate & extend" (M8, second half)
+
+| Change | Size | Notes |
+|--------|------|-------|
+| `add-secret-providers` | M (21) | Cloud providers sit behind cargo features. |
+| `add-scheduled-monitors` | S (19) | |
+| `add-plugin-system` | M (25) | Freezes a WIT plugin API, so it should come after the core APIs have had real use. |
+| `add-traffic-recorder` | M (25) | Local CA and keychain. Security-sensitive, so it needs a dedicated review. |
+| `add-messaging-client` | M (21) | |
+
+### v1.0 — Stabilize
+
+- Freeze public contracts: request-file `version: 1`, `rustman.report/v1`, `rustman-viz/1`, the plugin WIT API and
+  the CLI exit codes.
+- Make sure every change is archived and `openspec/specs/` holds the living specs.
+- Release pipeline: signed artifacts per OS, with `hw-wallet` and cloud secret providers enabled in official builds.
+- Full manual terminal matrix (TUI 9.2), a docs site, and a migration guide from Postman.
+
+### Side tracks (never on the critical path)
+
+| Change | Can start after | Why it's separate |
+|--------|-----------------|-------------------|
+| `add-raven-visualizer` | v0.3 (exploration reports exist) | Raven is pre-1.0, a C library, and needs Vulkan. It is an optional binary built in its own CI job. The protocol crate already shipped in v0.2. |
+| `add-evm-toolkit` | v0.5 (`add-jsonrpc-client`) and v0.3 (explorer runner, agent) | XL (49 req, 37 tasks) with a niche audience. The signing gate needs its own security review. Split it into: read-only `evm-toolkit` → `chain-exploration` + `blockchain-graphql` → `evm-signing`. |
+
+## Critical path
+
+```
+Phase 0 ─▶ bootstrap (+ safety slice) ─▶ terminal-ui ─▶ openapi-explorer ─▶ agent-mcp-server ─▶ v0.3
+                     │                        │
+                     ├─▶ importers ─▶ runner-parity (script migration)
+                     └─▶ runner-parity (data, auth, snippets)   [parallel with the TUI]
+```
+
+After v0.3 the work spreads out: v0.4, v0.5 and the side tracks are mostly independent and can be staffed in parallel.
+
+## Dependency corrections
+
+These are missing from `openspec/ROADMAP.md`'s "Depends on" column, found by reading the designs and tasks.
+Fold them in during Phase 0 (item 0.7).
+
+| Change | Also depends on | Evidence |
+|--------|-----------------|----------|
+| 2 `add-terminal-ui` | 8 (protocol types only) | TUI design D10 and task 8.1 use `rustman-viz-protocol` |
+| 14, 15, 16 | 6 for their agent tools | Each registers conditional `agent-mcp-interface` tools. (The GraphQL and webhook tools are defined in 6 itself.) |
+| 9 `add-jsonrpc-client` | 6 | Task 7.2 adds the `rpc_call` agent tool |
+| 10 `add-evm-toolkit` | 5, 6, 8 (hard) | Design D10 reuses the explorer runner; tasks 4.4 and 6.4 |
+| 12 `add-openapi-mock-server` | 7, 11 | Design D6: replay header hygiene, and the HAR IR for `--record` |
+| 13 `add-snapshot-testing` | 3, 4, 9 (for e2e coverage) | Task 7.1 |
+| 18 `add-load-testing` | 5 (safety policy, reports), 25 (data-row reader) | Proposal "Safety"; cross-cutting contracts table |
+| 19 `add-trace-propagation` | 5 (report `trace` field) | Cross-cutting contracts table |
+| 22 `add-scheduled-monitors` | 5 (safety policy) | Proposal: "they go through the safety policy" |
+| 23 `add-plugin-system` | 4 (workspace trust), 5 (safety policy for network grants) | Proposal and cross-cutting contracts |
+
+## Risks to watch
+
+| Risk | Affects | Mitigation already in the specs | Roadmap action |
+|------|---------|---------------------------------|----------------|
+| Request-file format frozen at `version: 1` too early | everything | Additive fields only | Don't call it frozen until v0.5. By then, seven request kinds will have tested it. |
+| `hyper`-based transport means owning redirects, cookies and proxies | v0.1 | In-process test server | Budget extra time for bootstrap slice (c). |
+| MCP spec revisions move fast | 4, 6 | Shared `rmcp` pin, reference-server tests | Re-pin `rmcp` at each release. |
+| False positives in the explorer erode trust | 5 | Conservative severities, per-rule disable | Dogfood on 2–3 real APIs before v0.3. |
+| Raven API churn | 8 | Exact pin, a single adapter module | Kept as a side track. |
+| Security-sensitive surfaces (signing, local CA, plugins, wire faults, agent mode) | 6, 10, 17, 23, 26 | Gates exist in the specs | Run a `/security-review` pass before each of these is archived. |
+| Scope: ~645 tasks | all | — | Every release above is shippable on its own. Cut from the bottom of each release, never from v0.1–v0.3. |
+
+## How to use this file
+
+- Pick the next change from the current release, then run `openspec-apply-change <id>`.
+- When a change is implemented, archive it (`openspec archive <id>`) and tick it here.
+- Any change that adds or reorders a release updates this file in the same PR.
+
+| Release | Changes | Status |
+|---------|---------|--------|
+| Phase 0 | decisions 0.1–0.8 | ☐ |
+| v0.1 | bootstrap-core-engine, safety slice | ☐ |
+| v0.2 | add-terminal-ui, add-importers, add-runner-parity | ☐ |
+| v0.3 | add-openapi-explorer, add-agent-mcp-server | ☐ |
+| v0.4 | add-graphql-client, add-mcp-client, add-webhook-inspector, add-snapshot-testing, add-openapi-mock-server | ☐ |
+| v0.5 | add-jsonrpc-client, add-grpc-client, add-realtime-client | ☐ |
+| v0.6 | add-contract-testing, add-trace-propagation, add-load-testing, add-docs-generator, add-stress-testing | ☐ |
+| v0.7 | add-secret-providers, add-scheduled-monitors, add-plugin-system, add-traffic-recorder, add-messaging-client | ☐ |
+| Side | add-raven-visualizer, add-evm-toolkit | ☐ |
+| v1.0 | stabilize | ☐ |
