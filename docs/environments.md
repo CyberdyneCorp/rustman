@@ -27,7 +27,10 @@ variables:
   page_size: 100
 secrets:
   - api_token
+production: true
 ```
+
+`production: true` marks an environment as production for the [safety policy](safety.md#production-guard): automated senders such as OpenAPI exploration refuse to target it unless the host is confirmed, and never send destructive requests to it. Environments named `prod` or `production` are treated as production even without the key. It defaults to `false`.
 
 ```yaml
 # environments/ci.yaml

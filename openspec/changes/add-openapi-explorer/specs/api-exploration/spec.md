@@ -136,7 +136,7 @@ The allowlist SHALL default to the scheme, host and port of the target. Requests
 - **THEN** the redirect SHALL NOT be followed and the probe SHALL be recorded as `blocked: host not allowed`
 
 ### Requirement: Safety policy rate, concurrency and budgets
-Explorations SHALL default to 10 requests/second, 4 concurrent requests, a 2000-probe budget and a 15-minute time budget (`--rate`, `--concurrency`, `--max-probes`, `--max-duration`). When a budget is reached, execution SHALL stop and report the remaining probes as `not run: budget`. A 429 response SHALL halve the rate and honor `Retry-After`.
+Explorations SHALL default to 10 requests/second, 4 concurrent requests, a 2000-probe budget and a 15-minute time budget (`--rate`, `--concurrency`, `--max-probes`, `--max-duration`). When a budget is reached, execution SHALL stop and report the remaining probes as `not run: budget`. A 429 response SHALL halve the rate and honor `Retry-After`; 429 responses to requests sent at the same rate (for example, the requests in flight together) SHALL halve it only once.
 
 #### Scenario: Probe budget reached
 - **GIVEN** a plan of 3000 probes and default budgets

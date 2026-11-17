@@ -23,6 +23,7 @@ fn environment(secrets: &[&str]) -> Environment {
         name: "dev".into(),
         variables: Variables::new(vec![("base_url".into(), VarValue::String("x".into()))]),
         secrets: secrets.iter().map(|s| (*s).to_owned()).collect(),
+        production: false,
     }
 }
 

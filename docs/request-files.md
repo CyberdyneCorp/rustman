@@ -49,7 +49,7 @@ client_key = "certs/client.key"
 api_version = "v2"
 ```
 
-Only `[workspace]` with `name` and `version = 1` is required; every other key has the default shown above (`default_environment`, `ca_bundle`, `proxy` and the client certificate keys are unset by default). The `[http]` client certificate (`client_cert` and `client_key`, or `client_pkcs12` and `client_pkcs12_password`) applies to every request that sets none of its own. Unknown keys produce a warning, not an error. A `version` newer than this build supports fails with `error: rustman.toml version 2 is newer than this rustman supports (1)`.
+Only `[workspace]` with `name` and `version = 1` is required; every other key has the default shown above (`default_environment`, `ca_bundle`, `proxy` and the client certificate keys are unset by default). The `[http]` client certificate (`client_cert` and `client_key`, or `client_pkcs12` and `client_pkcs12_password`) applies to every request that sets none of its own. The optional `[safety]` table (`allowed_hosts`, `production_hosts`, `rate`, `concurrency`) configures the [safety policy](safety.md#safety-in-rustmantoml) for automated senders. Unknown keys produce a warning, not an error (except in `[safety]`, where they are errors). A `version` newer than this build supports fails with `error: rustman.toml version 2 is newer than this rustman supports (1)`.
 
 ## Common fields
 

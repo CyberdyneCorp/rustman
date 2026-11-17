@@ -11,6 +11,7 @@ mod dns;
 mod engine;
 mod error;
 mod exchange;
+mod governed;
 mod multipart;
 mod oauth2;
 mod proxy;
@@ -32,6 +33,7 @@ pub use curl::{
 pub use engine::{DEFAULT_CONNECT_TIMEOUT, HttpEngine, SendOptions};
 pub use error::{Phase, RequestError};
 pub use exchange::{Exchange, HttpVersion};
+pub use governed::{GovernedError, GovernedSender};
 pub use oauth2::{
     LOGIN_TIMEOUT, Login, OAuth2Context, cache_key as oauth2_cache_key, interactive_login_required,
 };

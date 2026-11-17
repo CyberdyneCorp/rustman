@@ -4,6 +4,7 @@
 #![allow(dead_code, unused_imports)]
 
 pub mod collection;
+pub mod recorder;
 pub mod request;
 
 pub use rustman_test_support::{
