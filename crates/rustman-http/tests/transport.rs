@@ -263,7 +263,14 @@ async fn a_slow_server_times_out_in_the_response_phase() {
 #[tokio::test]
 async fn a_slow_body_times_out_in_the_response_phase() {
     let server = TestServer::http().await;
-    let err = HttpEngine::new()
+    // Warm the pool so the 300 ms budget measures the body, not DNS and
+    // connect on a loaded machine.
+    let engine = HttpEngine::new();
+    engine
+        .send(&get(&server.url("/status/200")), &SendOptions::default())
+        .await
+        .unwrap();
+    let err = engine
         .send(
             &get(&server.url("/slow-body/2000")),
             &with_timeouts(300, None),

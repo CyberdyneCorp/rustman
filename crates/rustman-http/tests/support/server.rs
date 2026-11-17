@@ -1,4 +1,6 @@
-//! An in-process hyper server on `127.0.0.1`, reachable as `localhost`.
+//! An in-process hyper server on `127.0.0.1` and, where IPv6 works, on `::1`
+//! with the same port, so `localhost` connects at once whichever address the
+//! resolver lists first.
 //!
 //! Cleartext servers speak HTTP/1.1 and h2c (prior knowledge); TLS servers
 //! negotiate `h2`/`http/1.1` by ALPN and can require a client certificate.
@@ -120,8 +122,41 @@ impl TestServer {
     }
 }
 
-async fn bind() -> TcpListener {
-    TcpListener::bind("127.0.0.1:0").await.unwrap()
+/// Loopback listeners sharing one port: IPv4 always, IPv6 when available.
+struct Listener {
+    v4: TcpListener,
+    v6: Option<TcpListener>,
+}
+
+impl Listener {
+    fn local_addr(&self) -> std::io::Result<SocketAddr> {
+        self.v4.local_addr()
+    }
+
+    async fn accept(&self) -> std::io::Result<(TcpStream, SocketAddr)> {
+        match &self.v6 {
+            Some(v6) => tokio::select! {
+                accepted = self.v4.accept() => accepted,
+                accepted = v6.accept() => accepted,
+            },
+            None => self.v4.accept().await,
+        }
+    }
+}
+
+async fn bind() -> Listener {
+    // The IPv6 port may be taken; retry with a fresh one a few times.
+    for _ in 0..8 {
+        let v4 = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = v4.local_addr().unwrap().port();
+        match TcpListener::bind(("::1", port)).await {
+            Ok(v6) => return Listener { v4, v6: Some(v6) },
+            Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => continue,
+            Err(_) => return Listener { v4, v6: None },
+        }
+    }
+    let v4 = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    Listener { v4, v6: None }
 }
 
 async fn serve<S>(stream: S)
