@@ -46,7 +46,7 @@ A golden test builds a fixture workspace twice, and on Linux and Windows in CI, 
 *Alternative rejected:* WebSocket reload. SSE is simpler with hyper and needs no extra crate.
 
 ### D7. Code-sample generation
-A single neutral `SampleRequest` (method, URL template, headers, body by type) feeds every template. Variables stay as `{{name}}` in curl and HTTPie, and become language-appropriate placeholders in code (`BASE_URL` constants), consistently across languages. Multipart and file bodies render with each language's idiomatic file API.
+Samples come from the shared snippet engine in `rustman-http` (from `add-runner-parity`), called in placeholder mode, so docs and `rustman export snippet` never drift. A single neutral `SampleRequest` (method, URL template, headers, body by type) feeds every template. Variables stay as `{{name}}` in curl and HTTPie, and become language-appropriate placeholders in code (`BASE_URL` constants), consistently across languages. Multipart and file bodies render with each language's idiomatic file API.
 
 ### D8. Markdown flavor
 GitHub-flavored Markdown with tables and fenced code. Long bodies go into a `<details>` block so the tables stay readable on GitHub.

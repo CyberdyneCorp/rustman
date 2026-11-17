@@ -45,10 +45,11 @@ Each change lives in `openspec/changes/<id>/`. Archive it once it's implemented.
 | 18 | `add-load-testing` | `load-testing` | 1 (live charts: 8) |
 | 19 | `add-trace-propagation` | `trace-propagation` (OpenTelemetry) | 1 |
 | 20 | `add-contract-testing` | `contract-testing` | 1, 5 |
-| 21 | `add-docs-generator` | `api-docs-generation` | 1 (examples: `request-history`) |
+| 21 | `add-docs-generator` | `api-docs-generation` | 1 (examples: `request-history`; code samples: snippet engine from 25) |
 | 22 | `add-scheduled-monitors` | `monitors` | 1 |
 | 23 | `add-plugin-system` | `plugins` (WASM) | 1 |
 | 24 | `add-secret-providers` | `secret-providers` | 1 |
+| 25 | `add-runner-parity` | extends `cli-runner` (data-driven runs), `http-requests` (Digest, AWS SigV4, JWT auth; snippet export), `tui` (Copy as…), `collection-import` (script migration) | 1 (TUI parts: 2; script migration: 11) |
 
 Milestones:
 - **M1 "usable"** = 1 + 2. A REST client with workspace, environments, TUI and CLI runner.
@@ -56,7 +57,7 @@ Milestones:
 - **M3 "autonomous"** = 5 + 6. OpenAPI exploration, plus an agent interface.
 - **M4 "visual"** = 8.
 - **M5 "chain"** = 9 + 10. JSON-RPC, plus an ABI-aware, read-only-by-default Ethereum console.
-- **M6 "adoption"** = 11 + 12 + 13. Importers, mock server, snapshot tests.
+- **M6 "adoption"** = 11 + 12 + 13 + 25. Importers, mock server, snapshot tests, and Postman/Newman parity (data-driven runs, Digest/SigV4/JWT auth, code snippets, script migration). The data-run and auth parts of 25 depend only on 1, so they can land right after M1.
 - **M7 "protocols"** = 14 + 15 + 16. gRPC, WebSocket/SSE, message brokers.
 - **M8 "pro"** = 17 to 24. Recorder, load tests, tracing, contracts, docs, monitors, plugins, secret providers.
 
@@ -81,7 +82,8 @@ Milestones:
 | **Collection** | A folder inside the workspace that groups requests. Folders can nest. |
 | **Request file** | One saved request, one file (`*.rman.yaml`). Its `kind` comes from the request-kind registry (see Request kinds). |
 | **Environment** | A named set of variables (`environments/<name>.yaml`). Exactly one is active at a time. |
-| **Variable** | A `{{name}}` placeholder resolved at send time. Precedence, highest first: runtime override > captured > environment > workspace defaults. |
+| **Variable** | A `{{name}}` placeholder resolved at send time. Precedence, highest first: runtime override > in-run captures > data row > request `variables` > collection `variables` > persisted captures > environment > `rustman.toml` (owned by `environments`). |
+| **Data row** | One row of a `--data` CSV/JSON file. A data-driven run executes the selected requests once per row. |
 | **Secret** | A variable whose value is stored outside the workspace (OS keychain or the git-ignored `.rustman/secrets.yaml`). It's redacted as `«redacted:name»` everywhere it could leak. |
 | **Assertion** | A declarative check on a response (status, header, JSONPath, JSON Schema, latency). It doesn't involve a scripting language. |
 | **Capture** | Extracting a value from a response into a variable for later requests. |
@@ -108,7 +110,7 @@ Milestones:
 ```
 crates/
   rustman-core/      workspace, environments, variables, secrets, request model, safety policy
-  rustman-http/      HTTP execution (reqwest + hyper), timings, TLS, auth helpers
+  rustman-http/      HTTP execution (hyper + custom timed connector), timings, TLS, auth helpers, snippets
   rustman-graphql/   GraphQL execution, introspection, schema cache, graphql-ws subscriptions
   rustman-mcp/       MCP client and server (official `rmcp` SDK)
   rustman-explore/   OpenAPI parsing, probe generation, exploration engine, findings
@@ -146,6 +148,8 @@ These are defined once, in the capability named, and every other change reuses t
 | Workspace trust (`.rustman/trust.yaml`) | `mcp-client` | `plugins` reuses it. Spawning a stdio MCP server or loading plugins needs one-time trust; headless runs need `--trust` / `--trust-plugins`. |
 | Things agents can never do | `agent-mcp-interface` | Sign transactions, start load tests, install plugins, read secret values. There are no tools for these. |
 | Signing gate (explicit opt-in, decoded confirmation, chain-id match, agents can never sign) | `evm-signing` | No other capability may send a signed transaction. |
+| Snippet engine (code samples per language, redacted; placeholder mode) | `http-requests` | `tui` (Copy as…) and `api-docs-generation` reuse it. One template per language. |
+| Data-row reader (CSV/JSON) | `cli-runner` | `load-testing`'s `--data` uses the same reader. |
 | Agent tools for new capabilities | `agent-mcp-interface` | Each change may register read-only tools. They're conditional, pass the safety policy, and are redacted. |
 
 ### CLI exit codes (all subcommands)

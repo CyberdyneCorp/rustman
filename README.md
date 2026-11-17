@@ -15,7 +15,7 @@
 | Mandatory accounts and cloud sync for private requests | **Local-first.** Requests are plain YAML files you commit to Git. No accounts, no telemetry. |
 | One tool for REST, another for GraphQL, another for MCP | **One workbench for REST, GraphQL, MCP, gRPC, WebSocket, SSE, JSON-RPC and message brokers** |
 | Blockchain RPC means raw hex in curl | **An ABI-aware Ethereum console** that decodes everything, with a signing gate that agents can never pass |
-| Switching tools means rebuilding every collection | **Import from Postman, Insomnia, Bruno, HAR and `.http`**, with secrets pulled out automatically |
+| Switching tools means rebuilding every collection | **Import from Postman, Insomnia, Bruno, HAR and `.http`**, with secrets pulled out automatically and Postman test scripts converted to assertions |
 | Mocks, load tests, contract checks and docs each need another tool | **All built in**, and all driven from the same request files |
 | Tests written by hand, endpoint by endpoint | **Point it at an OpenAPI spec** and it plans and runs a full test campaign |
 | AI agents can't use your API client | **Built-in MCP server.** Agents use the same engine you do, under the same safety rules. |
@@ -30,7 +30,8 @@ mindmap
   root((Rustman))
     Protocols
       REST and HTTP
-        Auth incl OAuth2 PKCE
+        OAuth2, Digest, SigV4, JWT auth
+        Code snippets in 11 languages
         mTLS, proxies, cookies
         Phase timings
       GraphQL
@@ -71,6 +72,7 @@ mindmap
       Declarative assertions
       Snapshot testing
       Headless CI runner
+      Data-driven runs from CSV or JSON
       Load testing
       Contract testing
         Breaking change diff
@@ -163,8 +165,18 @@ captures:
 ```bash
 rustman run . --env staging --reporter pretty --reporter junit:out/junit.xml
 rustman send users/create-user.rman.yaml --var name=Bob
+rustman run api/users --data users.csv --data-label email   # one iteration per row, like newman -d
 rustman import curl < request.sh          # turn a curl command into a request file
 rustman export curl users/create-user     # and back
+rustman export snippet --lang python-requests users/create-user   # or go, js-fetch, httpie, powershell...
+```
+
+Data-driven runs give each row's columns to the requests as variables. Captures reset between rows, so each iteration is independent, and JUnit test names carry the row label. Columns such as `password` or `token` are redacted automatically.
+
+Auth helpers cover basic, bearer, API key, OAuth2 (client credentials and authorization code with PKCE), **Digest**, **AWS SigV4** and **JWT** (a fresh signed token per request):
+
+```yaml
+auth: {type: aws_sigv4, region: eu-west-1, service: execute-api, from: env}
 ```
 
 Exit codes are stable across every command, so they're easy to script against:
@@ -306,7 +318,13 @@ rustman import requests.http            # JetBrains / VS Code REST Client format
 rustman export postman api/ -o out.json
 ```
 
-Variables are translated to `{{var}}`. **Secrets found in the source go to the secret store, never into request files.** Postman scripts aren't run. Common ones, such as status checks, become assertions, and the rest are kept as comments and listed in an import report.
+Variables are translated to `{{var}}`. **Secrets found in the source go to the secret store, never into request files.** **Postman scripts aren't run.** Rustman has no scripting language by design. Instead, the importer converts common `pm.test` statements into declarative assertions and captures: status, response time, body text, header values, `pm.response.json()` field checks, and `pm.environment.set` / `pm.collectionVariables.set`. It prints how many statements it converted (for example `scripts: 31/40 statements converted (77%)`). The rest stay in the file as comments.
+
+```bash
+rustman import postman collection.json --into api/ --migration-report migration.md
+```
+
+The migration report lists every statement it couldn't convert, with a suggested equivalent (a schema assertion, collection ordering, or a plugin).
 
 ### 12. Mock an API before it exists
 
@@ -419,6 +437,34 @@ rustman secret get vault/kv/app#password   # masked unless --reveal on a TTY
 
 ---
 
+## Coming from Postman?
+
+| Postman / Newman | Rustman |
+|---|---|
+| Collections, folders, environments, globals | Folders of `*.rman.yaml` files, `_collection.yaml`, `environments/*.yaml`, `rustman.toml` defaults |
+| Secret variables, Vault integration | OS keychain, plus 1Password, Vault, SOPS and cloud secret managers |
+| `pm.test` / pre-request scripts | Declarative assertions and captures, plus WASM plugins for custom logic. Scripts are converted on import where possible. |
+| `newman run -d data.csv -r junit` | `rustman run --data data.csv --reporter junit:out.xml` |
+| Auth: Basic, Bearer, API key, OAuth2, Digest, AWS SigV4, JWT | Built in |
+| Auth: NTLM, Hawk, OAuth 1.0, Akamai EdgeGrid | Via plugins |
+| Code button (snippets) | `rustman export snippet`, or `Alt+C` in the TUI |
+| Mock servers, monitors, API docs | `rustman mock`, `rustman monitor`, `rustman docs`, all local |
+| Interceptor / proxy capture | `rustman record`, with a local CA |
+| Visualizer | Raven dashboards (`rustman-viz`) |
+| GraphQL, gRPC, WebSocket, Socket.IO, MQTT | GraphQL, gRPC, WebSocket, SSE, Kafka, MQTT, AMQP. Socket.IO via plugins. |
+| Team workspaces and cloud sync | Git. Rustman is local-first, with no accounts. |
+
+**What you lose:** running arbitrary JavaScript in requests, and cloud collaboration. Both are deliberate choices.
+
+**What you gain:**
+- OpenAPI-driven exploration
+- an MCP server for agents
+- snapshot, contract and load testing
+- an Ethereum console
+- a single native binary
+
+---
+
 ## Architecture
 
 ```mermaid
@@ -456,7 +502,7 @@ graph TD
 | Crate | Responsibility |
 |---|---|
 | `rustman-core` | Workspace, environments, variables, secrets, request model, safety policy |
-| `rustman-http` | HTTP execution on hyper and rustls, timings, auth, curl import and export |
+| `rustman-http` | HTTP execution on hyper and rustls, timings, auth (including Digest, SigV4, JWT), curl import and export, code snippets |
 | `rustman-graphql` | GraphQL execution, introspection, validation, subscriptions |
 | `rustman-mcp` | MCP client and server, built on the official `rmcp` SDK |
 | `rustman-explore` | OpenAPI parsing, probe generation, exploration engine, findings |
@@ -493,7 +539,7 @@ graph TD
 | **M3 - Autonomous** | `add-openapi-explorer`, `add-agent-mcp-server` | OpenAPI exploration, agent interface |
 | **M4 - Visual** | `add-raven-visualizer` | Raven dashboards |
 | **M5 - Chain** | `add-jsonrpc-client`, `add-evm-toolkit` | JSON-RPC, plus an Ethereum console that understands ABIs |
-| **M6 - Adoption** | `add-importers`, `add-openapi-mock-server`, `add-snapshot-testing` | Migration, mocks, snapshot tests |
+| **M6 - Adoption** | `add-importers`, `add-openapi-mock-server`, `add-snapshot-testing`, `add-runner-parity` | Migration, mocks, snapshot tests, plus Postman/Newman parity: data-driven runs, Digest/SigV4/JWT, code snippets, script conversion |
 | **M7 - Protocols** | `add-grpc-client`, `add-realtime-client`, `add-messaging-client` | gRPC, WebSocket and SSE, message brokers |
 | **M8 - Pro** | `add-traffic-recorder`, `add-load-testing`, `add-trace-propagation`, `add-contract-testing`, `add-docs-generator`, `add-scheduled-monitors`, `add-plugin-system`, `add-secret-providers` | Recorder, load tests, tracing, contracts, docs, monitors, plugins, secret providers |
 
