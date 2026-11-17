@@ -19,6 +19,7 @@ use serde_saphyr::options::DuplicateKeyPolicy;
 use crate::error::{LoadError, Position};
 
 pub use json::JsonValue;
+pub(crate) use json::{MaybeFloat, exact_located};
 pub use located::Located;
 
 fn options() -> serde_saphyr::Options {

@@ -53,7 +53,7 @@ pub fn init(dir: &Path, display: &str, bare: bool) -> Result<InitReport, ConfigE
 }
 
 fn workspace_name(dir: &Path) -> String {
-    let resolved = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
+    let resolved = dunce::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
     resolved
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())

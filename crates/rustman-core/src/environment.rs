@@ -9,6 +9,7 @@ use serde::Deserialize;
 use crate::error::{ConfigError, LoadError};
 use crate::format::{Located, from_yaml};
 use crate::model::Variables;
+use crate::paths;
 use crate::vars::template::is_variable_name;
 
 /// The folder, under the workspace root, holding one file per environment.
@@ -81,10 +82,16 @@ pub(crate) fn load_all(root: &Path) -> Loaded {
         let Some(stem) = file_name.strip_suffix(SUFFIX) else {
             continue;
         };
-        // Follows symlinks, like request files do.
+        // Follows symlinks, but only to files inside the workspace.
         if !dir.join(&file_name).is_file() {
             loaded.warnings.push(format!(
                 "ignoring environment '{stem}': not a readable file"
+            ));
+            continue;
+        }
+        if paths::contain(root, &dir, &file_name).is_err() {
+            loaded.warnings.push(format!(
+                "ignoring environment '{stem}': resolves outside the workspace"
             ));
             continue;
         }
@@ -294,6 +301,35 @@ mod tests {
         assert_eq!(
             loaded.warnings,
             ["ignoring environment 'dangling': not a readable file"]
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinks_resolving_outside_the_workspace_are_skipped() {
+        use std::os::unix::fs::symlink;
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("ws");
+        let dir = root.join(ENVIRONMENTS_DIR);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(tmp.path().join("elsewhere.yaml"), "variables:\n  a: 1\n").unwrap();
+        symlink(tmp.path().join("elsewhere.yaml"), dir.join("out.yaml")).unwrap();
+        symlink("../../elsewhere.yaml", dir.join("relative.yaml")).unwrap();
+        fs::write(dir.join("local.yaml"), "").unwrap();
+        let loaded = load_all(&root);
+        assert!(loaded.errors.is_empty(), "{:?}", loaded.errors);
+        let names: Vec<_> = loaded
+            .environments
+            .iter()
+            .map(|e| e.name.as_str())
+            .collect();
+        assert_eq!(names, ["local"]);
+        assert_eq!(
+            loaded.warnings,
+            [
+                "ignoring environment 'out': resolves outside the workspace",
+                "ignoring environment 'relative': resolves outside the workspace",
+            ]
         );
     }
 

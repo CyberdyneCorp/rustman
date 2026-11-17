@@ -11,7 +11,7 @@ use std::fmt;
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json::{Map, Number, Value};
 
-use super::{error_at, position_of};
+use super::{Located, error_at, position_of};
 
 const TOO_LARGE: &str = "body content has an integer too large to send exactly; quote it, or give the JSON body as a string";
 
@@ -45,15 +45,47 @@ pub struct JsonValue(pub Value);
 
 impl<'de> Deserialize<'de> for JsonValue {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let spanned = serde_saphyr::Spanned::<Node>::deserialize(deserializer)?;
-        match spanned.value {
+        match exact_located::<D, Node>(deserializer, TOO_LARGE)?.into_inner() {
             Node::Value(value) => Ok(Self(value)),
-            Node::Float(f) if is_overflowed_integer(f, spanned.referenced) => Err(
-                de::Error::custom(error_at(position_of(spanned.referenced), TOO_LARGE)),
-            ),
             Node::Float(f) => Ok(Self(Number::from_f64(f).map_or(Value::Null, Value::Number))),
         }
     }
+}
+
+/// A value YAML may have read as a float.
+pub(crate) trait MaybeFloat {
+    fn as_float(&self) -> Option<f64>;
+}
+
+impl MaybeFloat for Node {
+    fn as_float(&self) -> Option<f64> {
+        match self {
+            Self::Float(f) => Some(*f),
+            Self::Value(_) => None,
+        }
+    }
+}
+
+/// Read a `T` with its position, refusing with `message`, at the value, an
+/// integer literal too large for 64 bits that YAML read as a float.
+pub(crate) fn exact_located<'de, D, T>(
+    deserializer: D,
+    message: &str,
+) -> Result<Located<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de> + MaybeFloat,
+{
+    let spanned = serde_saphyr::Spanned::<T>::deserialize(deserializer)?;
+    let position = position_of(spanned.referenced);
+    let overflowed = spanned
+        .value
+        .as_float()
+        .is_some_and(|f| is_overflowed_integer(f, spanned.referenced));
+    if overflowed {
+        return Err(de::Error::custom(error_at(position, message)));
+    }
+    Ok(Located::at(spanned.value, position))
 }
 
 fn is_overflowed_integer(f: f64, at: serde_saphyr::Location) -> bool {

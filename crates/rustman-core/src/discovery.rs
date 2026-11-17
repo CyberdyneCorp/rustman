@@ -15,8 +15,7 @@ use crate::settings::SETTINGS_FILE;
 pub fn find_root(start: &Path, explicit: Option<&Path>) -> Result<PathBuf, ConfigError> {
     if let Some(dir) = explicit {
         let dir = start.join(dir);
-        return dir
-            .canonicalize()
+        return dunce::canonicalize(dir)
             .ok()
             .filter(|root| is_workspace(root))
             .ok_or(ConfigError::NoWorkspace);
@@ -67,7 +66,7 @@ mod tests {
         fs::create_dir_all(&other).unwrap();
         fs::write(outer.join(SETTINGS_FILE), "").unwrap();
         fs::write(other.join(SETTINGS_FILE), "").unwrap();
-        let other_real = other.canonicalize().unwrap();
+        let other_real = dunce::canonicalize(&other).unwrap();
         fs::create_dir_all(other.join("sub")).unwrap();
         assert_eq!(find_root(outer, Some(&other)).unwrap(), other_real);
         assert_eq!(

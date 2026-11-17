@@ -2,7 +2,7 @@
 //! be a real folder of the workspace, and Git must ignore it (environments spec
 //! "Secrets file is git-ignored").
 
-use std::io::ErrorKind;
+use std::io::{self, ErrorKind};
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -45,39 +45,67 @@ fn ensure_not_symlink(root: &Path, rel: &str) -> Result<(), SecretError> {
 /// Fail unless Git would ignore `rel` (a path relative to `root`).
 ///
 /// `git check-ignore` exits 0 when the path is ignored and 1 when it is not
-/// (a tracked file counts as not ignored). Outside a work tree, or without a
-/// usable `git`, the check passes; inside one, any other outcome is a failure.
+/// (a tracked file counts as not ignored). Without `git`, or when Git says
+/// `root` is not in a work tree, the check passes; any other outcome is a
+/// failure, so a check Git cannot answer never lets a write through.
 pub fn ensure_ignored(root: &Path, rel: &str) -> Result<(), SecretError> {
-    match git_status(root, &["check-ignore", "-q", "--", rel]) {
-        Some(0) => Ok(()),
-        Some(1) => Err(SecretError::NotIgnored),
-        _ if inside_work_tree(root) => Err(SecretError::GitCheckFailed),
-        _ => Ok(()),
+    ensure_ignored_with(root, rel, &run_git)
+}
+
+/// What a `git` run produced: its exit code (`None` when killed by a signal)
+/// and its standard output and error.
+struct GitRun {
+    code: Option<i32>,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+}
+
+/// Runs `git -C <root> <args>`.
+type GitRunner = dyn Fn(&Path, &[&str]) -> io::Result<GitRun>;
+
+fn ensure_ignored_with(root: &Path, rel: &str, git: &GitRunner) -> Result<(), SecretError> {
+    match git(root, &["check-ignore", "-q", "--", rel]) {
+        Ok(run) if run.code == Some(0) => return Ok(()),
+        Ok(run) if run.code == Some(1) => return Err(SecretError::NotIgnored),
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(()),
+        _ => {}
+    }
+    if outside_work_tree(root, git) {
+        Ok(())
+    } else {
+        Err(SecretError::GitCheckFailed)
     }
 }
 
-fn inside_work_tree(root: &Path) -> bool {
-    Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(["rev-parse", "--is-inside-work-tree"])
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .is_ok_and(|out| out.status.success() && out.stdout.trim_ascii() == b"true")
+/// Whether Git positively says `root` is not inside a work tree: it is not
+/// in a repository at all, or only inside a `.git` folder or a bare one.
+fn outside_work_tree(root: &Path, git: &GitRunner) -> bool {
+    match git(root, &["rev-parse", "--is-inside-work-tree"]) {
+        Ok(run) if run.code == Some(0) => run.stdout.trim_ascii() == b"false",
+        Ok(run) => contains(&run.stderr, b"not a git repository"),
+        Err(_) => false,
+    }
 }
 
-fn git_status(root: &Path, args: &[&str]) -> Option<i32> {
-    Command::new("git")
+fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+    haystack.windows(needle.len()).any(|w| w == needle)
+}
+
+fn run_git(root: &Path, args: &[&str]) -> io::Result<GitRun> {
+    // Untranslated messages, so "not a git repository" can be recognized.
+    let out = Command::new("git")
         .arg("-C")
         .arg(root)
         .args(args)
+        .env("LC_ALL", "C")
+        .env_remove("LANGUAGE")
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .ok()
-        .and_then(|status| status.code())
+        .output()?;
+    Ok(GitRun {
+        code: out.status.code(),
+        stdout: out.stdout,
+        stderr: out.stderr,
+    })
 }
 
 #[cfg(test)]
@@ -179,6 +207,90 @@ pub(crate) mod tests {
             err.to_string(),
             "refusing to write secrets: .rustman holds a symbolic link: .rustman/secrets.yaml"
         );
+    }
+
+    fn fake_git(
+        check_ignore: io::Result<GitRun>,
+        rev_parse: io::Result<GitRun>,
+    ) -> impl Fn(&Path, &[&str]) -> io::Result<GitRun> {
+        let check_ignore = std::cell::RefCell::new(Some(check_ignore));
+        let rev_parse = std::cell::RefCell::new(Some(rev_parse));
+        move |_, args| {
+            let slot = if args[0] == "check-ignore" {
+                &check_ignore
+            } else {
+                &rev_parse
+            };
+            slot.borrow_mut().take().expect("git run once per command")
+        }
+    }
+
+    fn exited(code: i32, stdout: &str, stderr: &str) -> io::Result<GitRun> {
+        Ok(GitRun {
+            code: Some(code),
+            stdout: stdout.into(),
+            stderr: stderr.into(),
+        })
+    }
+
+    fn unused() -> io::Result<GitRun> {
+        Err(io::Error::other("not run"))
+    }
+
+    fn check(
+        check_ignore: io::Result<GitRun>,
+        rev_parse: io::Result<GitRun>,
+    ) -> Result<(), SecretError> {
+        ensure_ignored_with(Path::new("ws"), FILE, &fake_git(check_ignore, rev_parse))
+    }
+
+    #[test]
+    fn check_ignore_answers_are_final() {
+        assert!(check(exited(0, "", ""), unused()).is_ok());
+        assert!(matches!(
+            check(exited(1, "", ""), unused()),
+            Err(SecretError::NotIgnored)
+        ));
+    }
+
+    #[test]
+    fn missing_git_passes() {
+        let missing = || Err(io::Error::from(ErrorKind::NotFound));
+        assert!(check(missing(), missing()).is_ok());
+    }
+
+    #[test]
+    fn only_a_reported_missing_repository_passes() {
+        let not_repo = "fatal: not a git repository (or any of the parent directories): .git\n";
+        assert!(check(exited(128, "", not_repo), exited(128, "", not_repo)).is_ok());
+        assert!(check(exited(128, "", ""), exited(0, "false\n", "")).is_ok());
+    }
+
+    #[test]
+    fn other_git_failures_fail_closed() {
+        let failed = |rev_parse| {
+            matches!(
+                check(exited(128, "", "fatal: x"), rev_parse),
+                Err(SecretError::GitCheckFailed)
+            )
+        };
+        assert!(failed(exited(0, "true\n", "")));
+        assert!(failed(exited(
+            128,
+            "",
+            "fatal: cannot change to '\\\\?\\C:\\ws': Invalid argument\n"
+        )));
+        assert!(failed(exited(
+            128,
+            "",
+            "fatal: detected dubious ownership in repository\n"
+        )));
+        assert!(failed(Ok(GitRun {
+            code: None,
+            stdout: Vec::new(),
+            stderr: Vec::new()
+        })));
+        assert!(failed(Err(io::Error::other("spawn failed"))));
     }
 
     #[test]
