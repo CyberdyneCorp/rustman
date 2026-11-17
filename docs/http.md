@@ -11,6 +11,7 @@ Rustman uses its own HTTP stack (hyper with a timed connector and rustls); it do
 - `https://` URLs negotiate HTTP/2 through ALPN and fall back to HTTP/1.1.
 - `http://` URLs use HTTP/1.1, unless `settings.http2_prior_knowledge: true` (HTTP/2 over cleartext, "h2c").
 - Connections are reused between requests that share the same TLS, proxy and timeout settings.
+- When a host name resolves to several addresses (for example `localhost` as `::1` and `127.0.0.1`), Rustman tries them in resolver order and starts the next one if an attempt fails or has not connected within 250 ms; the first to connect is used (Happy Eyeballs, RFC 8305).
 
 The exchange records the negotiated `http_version` (`HTTP/1.1` or `HTTP/2`).
 
