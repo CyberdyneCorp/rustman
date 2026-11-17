@@ -79,7 +79,7 @@ Milestones:
 |------|---------|
 | **Workspace** | A directory containing `rustman.toml`. It's the root of everything the user versions in Git. |
 | **Collection** | A folder inside the workspace that groups requests. Folders can nest. |
-| **Request file** | One saved request, one file (`*.rman.yaml`). Its `kind` is `http`, `graphql` or `mcp`. |
+| **Request file** | One saved request, one file (`*.rman.yaml`). Its `kind` comes from the request-kind registry (see Request kinds). |
 | **Environment** | A named set of variables (`environments/<name>.yaml`). Exactly one is active at a time. |
 | **Variable** | A `{{name}}` placeholder resolved at send time. Precedence, highest first: runtime override > captured > environment > workspace defaults. |
 | **Secret** | A variable whose value is stored outside the workspace (OS keychain or the git-ignored `.rustman/secrets.yaml`). It's redacted as `«redacted:name»` everywhere it could leak. |
@@ -139,10 +139,12 @@ These are defined once, in the capability named, and every other change reuses t
 |----------|------------------|-------|
 | Redaction of secrets | `environments` | Covers every output path: TUI, history, reports, viz, MCP tool results. |
 | Safety policy (host allowlist, methods, rate, destructive opt-in, production guard) | `api-exploration` | `agent-mcp-interface` reuses it. Implemented once in `rustman-core`, and every automated sender goes through it. |
-| Report format `rustman.report/v1` (`kind: run \| exploration`) | `test-reports` | `cli-runner` emits `kind: run` from day one. `test-reports` extends the schema additively. |
+| Report format `rustman.report/v1` (`kind: run \| exploration \| bench \| contract`, optional `subject`, optional per-exchange `trace`) | `test-reports` | `cli-runner` emits `kind: run` from day one. `load-testing` adds `bench`, `contract-testing` adds `contract`, `chain-exploration` adds `subject: evm-rpc`, and `trace-propagation` adds `trace`. Every extension is additive. |
 | Viz protocol `rustman-viz/1` | `visual-dashboards` | JSON lines over the companion's stdin. Read-only consumer. |
 | `rmcp` SDK version | `mcp-client` | `agent-mcp-interface` shares the same crate (`rustman-mcp`) and pin. |
 | Request-kind registry | `workspace` | New kinds plug in without changing the core loader. |
+| Workspace trust (`.rustman/trust.yaml`) | `mcp-client` | `plugins` reuses it. Spawning a stdio MCP server or loading plugins needs one-time trust; headless runs need `--trust` / `--trust-plugins`. |
+| Things agents can never do | `agent-mcp-interface` | Sign transactions, start load tests, install plugins, read secret values. There are no tools for these. |
 | Signing gate (explicit opt-in, decoded confirmation, chain-id match, agents can never sign) | `evm-signing` | No other capability may send a signed transaction. |
 | Agent tools for new capabilities | `agent-mcp-interface` | Each change may register read-only tools. They're conditional, pass the safety policy, and are redacted. |
 

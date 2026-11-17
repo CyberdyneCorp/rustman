@@ -1,6 +1,6 @@
 # Rustman
 
-> A fast, local-first API workbench for the terminal. It speaks **REST, GraphQL and MCP**, it can **test a backend on its own from an OpenAPI spec**, and **AI agents can drive it over MCP**. Written entirely in Rust.
+> A fast, local-first API workbench for the terminal. It speaks **REST, GraphQL, MCP, gRPC, WebSocket/SSE, JSON-RPC, Kafka/MQTT/AMQP and Ethereum**, it can **test a backend on its own from an OpenAPI spec**, and **AI agents can drive it over MCP**. Written entirely in Rust.
 
 > [!NOTE]
 > **Status: design phase.** Rustman is fully specified but not implemented yet. Everything below describes the planned behavior, as defined by the [OpenSpec](https://github.com/Fission-AI/OpenSpec) changes in [`openspec/`](openspec/). Commands and file formats come from those specs and may still change before v1.
@@ -13,7 +13,10 @@
 |---|---|
 | Heavy Electron apps idling at hundreds of MB of RAM | One native Rust binary that runs in your terminal |
 | Mandatory accounts and cloud sync for private requests | **Local-first.** Requests are plain YAML files you commit to Git. No accounts, no telemetry. |
-| One tool for REST, another for GraphQL, another for MCP | **One workbench for all three protocols** |
+| One tool for REST, another for GraphQL, another for MCP | **One workbench for REST, GraphQL, MCP, gRPC, WebSocket, SSE, JSON-RPC and message brokers** |
+| Blockchain RPC means raw hex in curl | **An ABI-aware Ethereum console** that decodes everything, with a signing gate that agents can never pass |
+| Switching tools means rebuilding every collection | **Import from Postman, Insomnia, Bruno, HAR and `.http`**, with secrets pulled out automatically |
+| Mocks, load tests, contract checks and docs each need another tool | **All built in**, and all driven from the same request files |
 | Tests written by hand, endpoint by endpoint | **Point it at an OpenAPI spec** and it plans and runs a full test campaign |
 | AI agents can't use your API client | **Built-in MCP server.** Agents use the same engine you do, under the same safety rules. |
 | Great GUI or great automation, rarely both | **Three front-ends, one engine:** a TUI for humans, a CLI for CI, MCP for agents. An optional GUI shows charts. |
@@ -27,67 +30,75 @@ mindmap
   root((Rustman))
     Protocols
       REST and HTTP
-        HTTP 1.1 and HTTP 2
-        Auth helpers incl OAuth2 PKCE
+        Auth incl OAuth2 PKCE
         mTLS, proxies, cookies
-        DNS, connect, TLS, TTFB timings
+        Phase timings
       GraphQL
-        Introspection and schema cache
-        Validation before send
-        Subscriptions over WS and SSE
-        File uploads and APQ
+        Schema cache and validation
+        Subscriptions
       MCP client
-        stdio and Streamable HTTP
         Tools, resources, prompts
-        Schema driven tool forms
         Human approval for sampling
+      gRPC
+        Reflection or proto files
+        All four streaming modes
+      WebSocket and SSE
+        Scripted message flows
+      Message brokers
+        Kafka, MQTT, AMQP
+        AsyncAPI import
+      JSON-RPC
+        Batches and subscriptions
+        OpenRPC catalogs
+    Ethereum
+      ABI aware contract calls
+      Tx, receipt, log decoding
+      Simulation and call traces
+      ENS and Anvil forks
+      Gated signing
+      Multi provider probing
+      Subgraph and geth GraphQL
     Workspace
       Plain YAML files in Git
-      Nested collections
       Environments and variables
-      Secrets in OS keychain
-      Request history
+      Secrets in keychain
+      Secret providers
+        1Password, Vault, SOPS
+        AWS, GCP, Azure
+      Importers and exporters
+      History
     Testing
       Declarative assertions
-      Captures and chaining
-      Headless runner for CI
-      JSON, JUnit, TAP reporters
+      Snapshot testing
+      Headless CI runner
+      Load testing
+      Contract testing
+        Breaking change diff
+        Pact contracts
     OpenAPI Explorer
-      Import and sync collections
       Dependency discovery
       Conformance probes
       Negative and fuzz probes
       Auth and BOLA checks
-      Coverage matrix
-      Findings with severity
-      SARIF and HTML reports
+      Coverage and findings
+    Tooling
+      Mock server
+      Traffic recorder
+      Webhook inspector
+      Scheduled monitors
+      API docs generator
+      OpenTelemetry tracing
+      WASM plugins
     Faces
       TUI for humans
-        Command palette
-        Vim mode and custom keys
-        JSON tree and JSONPath filter
-        Latency sparklines
-        Themes
       CLI for scripts and CI
-      MCP server for AI agents
-        Read only by default
-        Human confirmed mutations
-        Audit log
-    Webhook Inspector
-      Local listener
-      Mock responses
-      Signature verification
-      Safe replay
-    Visual Companion
-      Raven GUI optional
-      Run dashboards
-      Exploration heatmaps
-      API dependency graph
+      MCP server for agents
+      Raven visual dashboards
     Safety
-      Host allowlist
-      Rate limits and budgets
+      Host allowlist and budgets
       Production guard
-      Secret redaction everywhere
+      Redaction everywhere
+      Audit log
 ```
 
 ---
@@ -260,6 +271,152 @@ rustman viz reports/run.json           # open a saved report
 
 The companion is **optional and read-only**: it never sends requests. It needs Vulkan (MoltenVK on macOS), so it's built separately (cargo feature `raven`). If it isn't installed, Rustman offers the self-contained HTML report instead.
 
+### 10. Work with Ethereum and other JSON-RPC chains
+
+Any JSON-RPC 2.0 API works (Ethereum, Bitcoin Core, Solana, Starknet), with batches, WebSocket subscriptions and OpenRPC method catalogs. For EVM chains, Rustman adds a console that understands ABIs, built on `alloy`:
+
+```bash
+rustman rpc call {{rpc_url}} eth_blockNumber
+rustman evm call usdc.rman.yaml                      # ABI-encoded call, decoded result
+rustman evm tx 0x…                                   # decoded tx, receipt, logs and revert reason
+rustman evm logs --address 0xA0b8… --event "Transfer(address,address,uint256)"
+rustman evm call transfer.rman.yaml --trace          # simulated call tree, when the node supports it
+rustman evm ens vitalik.eth
+rustman evm fork --chain mainnet --block 20000000    # local Anvil fork for safe experiments
+rustman evm probe https://rpc-a.example https://rpc-b.example   # compare providers
+```
+
+- **Detects the chain and client.** The environment pins a chain id, and Rustman refuses to send if the node reports a different one.
+- **Decodes everything:** ERC-20/721/1155 built in, token amounts in units, custom errors and revert reasons. Verified ABIs can be fetched from explorers (opt-in).
+- **Assertions on decoded values,** e.g. `balanceOf >= 1 ether`, "event emitted", "reverts with reason".
+- **Blockchain GraphQL:** presets for geth's `/graphql` and The Graph subgraphs, with BigInt, bytes and checksummed-address display, pagination helpers, and a check that the subgraph is caught up with the chain.
+- **Probing providers:** which methods each node supports, archive vs full node, rate limits, drift between providers, and latency per method. Viz dashboards show block time, gas and call-trace graphs.
+
+> [!IMPORTANT]
+> **Signing is locked by default.** `rustman evm send <file> --sign` works only if the workspace sets `[evm] allow_signing = true` and the environment's chain id matches the node. Signers are encrypted keystores, the OS keychain, or Ledger/Trezor; raw private keys are rejected. Every transaction is simulated first and shown decoded for you to confirm, and mainnet requires typing the chain name. **AI agents can never sign**: there's no code path for it. Raw `eth_sendRawTransaction` calls are blocked as well.
+
+### 11. Migrate from other tools in one command
+
+```bash
+rustman import postman collection.json --into api/
+rustman import insomnia export.yaml
+rustman import bruno ./my-bruno-collection
+rustman import har session.har          # static assets are dropped by default
+rustman import requests.http            # JetBrains / VS Code REST Client format
+rustman export postman api/ -o out.json
+```
+
+Variables are translated to `{{var}}`. **Secrets found in the source go to the secret store, never into request files.** Postman scripts aren't run. Common ones, such as status checks, become assertions, and the rest are kept as comments and listed in an import report.
+
+### 12. Mock an API before it exists
+
+```bash
+rustman mock serve api.yaml --port 4010
+```
+
+Responses come from your OpenAPI spec: named examples, or data synthesized from the schema with a fixed seed. Requests are validated against the spec. A `Prefer: code=404` header selects a response, compatible with Prism. Hand-written overrides can add delays, error rates or dropped connections. **Stateful mode** keeps created resources in memory, so `POST` then `GET` works. The server reloads when files change.
+
+### 13. Snapshot-test responses
+
+Add a `snapshot` assertion. The first run records a normalized response next to the request file, and later runs show a structural diff when it changes. Timestamps, UUIDs and fields you choose are ignored, and secrets are redacted before anything is stored. In CI (`--ci` or `CI=true`) a missing snapshot is a failure instead of being written. In the TUI, `a` approves a change and `r` rejects it.
+
+```bash
+rustman run . --update-snapshots
+rustman snapshot prune --yes
+```
+
+### 14. gRPC, WebSocket, SSE and message brokers
+
+```bash
+rustman grpc list localhost:50051                    # via server reflection or .proto files (no protoc needed)
+rustman grpc call get-product.rman.yaml
+rustman ws connect wss://echo.example.com --json
+rustman sse listen https://api.example.com/events --json --max-messages 3
+rustman import asyncapi asyncapi.yaml
+rustman kafka consume --brokers localhost:9092 --topic orders --offset earliest --max-messages 5 --json
+```
+
+- **gRPC:** all four call types, decoded `google.rpc.Status` error details, deadlines, and a health-check helper.
+- **WebSocket and SSE:** scripted send / wait-for / assert steps, and SSE resume with `Last-Event-ID`.
+- **Kafka, MQTT and AMQP:** pure-Rust clients. Consuming has no side effects by default, producing counts as a mutation under the safety policy, and payloads are validated against AsyncAPI schemas.
+
+### 15. Record real traffic into request files
+
+```bash
+rustman record --save --har session.har     # local proxy on 127.0.0.1:8888
+```
+
+Point an app or CLI at the proxy and Rustman captures its traffic. Saving deduplicates similar requests, turns ids into variables (`/users/{{user_id}}`) and moves secrets into placeholders. HTTPS interception uses a local CA that you create and install yourself (`rustman record ca install`). It's never trusted automatically, and hosts outside your include list are passed through without decryption.
+
+### 16. Load-test with the requests you already have
+
+```bash
+rustman bench api/ --target https://staging.example.com --vus 20 --viz
+```
+
+You can run a fixed number of virtual users, ramp them in stages, or hold a constant arrival rate. Latency percentiles are accurate even when the server falls behind and requests queue up. Thresholds such as `p95 < 300ms` make the command exit with 1 when breached. A live dashboard runs in the TUI, or in the viz companion with `--viz`. Load tests are capped by default (50 VUs, 5 minutes, 200 rps), stay on the single target host, and AI agents can't start them.
+
+### 17. Catch breaking API changes before they merge
+
+```bash
+rustman contract diff --base origin/main openapi.yaml    # Markdown output ready for a PR comment
+rustman contract pact generate api/ --consumer web --provider users
+rustman contract pact verify pacts/*.json --provider-url http://localhost:8080
+rustman contract verify --spec openapi.yaml               # check recorded traffic, sends nothing
+```
+
+Changes are classified as breaking, non-breaking or unknown using a versioned rule catalog. Request and response schemas follow opposite rules, so a stricter request is breaking while a response that adds fields is not. Pact v3/v4 contracts are supported for consumer-driven testing.
+
+### 18. Generate API docs from your collections
+
+```bash
+rustman docs build --out site/      # self-contained offline HTML, or --format markdown
+rustman docs serve                  # local preview with live reload
+```
+
+Docs include request tables, OpenAPI descriptions, code samples (curl, httpie, fetch, Python, Rust) and client-side search. Real examples appear only for requests that opt in, are always redacted, and the build fails if a secret would leak. The output is deterministic, so it diffs cleanly in Git.
+
+### 19. Monitor your APIs on a schedule
+
+```yaml
+# monitors/api-health.rman-monitor.yaml
+version: 1
+name: api-health
+targets: [health/]
+environment: prod
+schedule: { every: 5m }          # or { cron: "*/5 * * * *" }
+alerts:
+  rules:
+    - consecutive_failures: 3
+    - latency_p95_gt: 800
+  notify:
+    - desktop
+    - webhook: { url: "{{secret:keychain/slack-webhook}}", template: slack }
+```
+
+```bash
+rustman monitor daemon                                  # long-running local scheduler
+rustman monitor schedule-recipe api-health --for cron   # or systemd, launchd, github-actions
+rustman monitor status --viz    # uptime % and latency trends
+```
+
+Alerts go to desktop notifications, Slack, Discord, webhooks or email. They're deduplicated, have a cooldown, and send a notice when things recover. Monitors are read-only by default.
+
+### 20. Follow a request into your backend traces
+
+Turn on trace propagation and Rustman adds a W3C `traceparent` header (or B3) to every request. Each exchange records its trace id, and `rustman trace open 42` opens it in Jaeger, Tempo, Honeycomb or Datadog. Rustman also parses `Server-Timing` headers, and can export its own client spans over OTLP if you configure an endpoint. It's off by default and stays local-first.
+
+### 21. Extend it with plugins and external secret stores
+
+```bash
+rustman plugin new my-auth --kind auth     # scaffold a WASM plugin
+rustman plugin add ./my-auth               # pinned by sha256 in rustman.lock
+rustman secret get vault/kv/app#password   # masked unless --reveal on a TTY
+```
+
+- **WASM plugins** (wasmtime) can add auth schemes, assertions, value generators, transformers, importers, request kinds and report formats. Each plugin runs sandboxed with no filesystem or network access unless you grant it, plus CPU and memory limits. Plugins need workspace trust before they load.
+- **Secret providers:** `{{secret:vault/kv/app#password}}` resolves at send time from 1Password, HashiCorp Vault, SOPS, AWS, GCP, Azure or environment variables. Values are cached in memory only, never stored on disk, and redacted everywhere.
+
 ---
 
 ## Architecture
@@ -280,12 +437,19 @@ graph TD
     EXP --> SAFE2["Safety policy"]
     SAFE2 --> HTTP
     CORE --> WH["Webhook inspector"]
+    CORE --> PROTO["gRPC, WebSocket, SSE, brokers"]
+    CORE --> RPC["JSON-RPC client"]
+    RPC --> EVM["EVM toolkit"]
+    EVM --> GATE["Signing gate"]
+    CORE --> TOOLS["Mock, recorder, bench, monitors"]
+    CORE --> PLUG["WASM plugins"]
     CORE --> REP["Reports"]
     REP --> VIZ["rustman-viz - Raven GUI, optional"]
 
     style CORE fill:#E3F2FD,stroke:#1565C0
     style SAFE fill:#FFF9C4,stroke:#F9A825
     style SAFE2 fill:#FFF9C4,stroke:#F9A825
+    style GATE fill:#FFEBEE,stroke:#C62828
     style VIZ fill:#F3E5F5,stroke:#6A1B9A
 ```
 
@@ -301,6 +465,16 @@ graph TD
 | `rustman-tui` | Terminal UI |
 | `rustman-cli` | The `rustman` binary |
 | `rustman-viz` | Optional Raven GUI companion, separate binary |
+| `rustman-jsonrpc` | Generic JSON-RPC 2.0 client over HTTP and WebSocket |
+| `rustman-evm` | Ethereum toolkit on `alloy`: ABI, decoding, simulation, ENS, signing gate |
+| `rustman-grpc` | gRPC client using tonic, reflection and protox |
+| `rustman-realtime` | WebSocket and SSE sessions |
+| `rustman-messaging` | Kafka, MQTT and AMQP clients (pure Rust) |
+| `rustman-import` | Postman, Insomnia, Bruno, HAR and `.http` import and export |
+| `rustman-mock` | OpenAPI mock server |
+| `rustman-proxy` | Traffic recorder |
+| `rustman-bench` | Load-testing engine |
+| `rustman-plugin` | WASM plugin host (wasmtime) |
 
 **Build principles**
 - The default binary builds with plain `cargo build`: no OpenSSL, SQLite, GPU or CMake to install.
@@ -318,6 +492,10 @@ graph TD
 | **M2 - Multi-protocol** | `add-graphql-client`, `add-mcp-client`, `add-webhook-inspector` | GraphQL, MCP client, webhooks |
 | **M3 - Autonomous** | `add-openapi-explorer`, `add-agent-mcp-server` | OpenAPI exploration, agent interface |
 | **M4 - Visual** | `add-raven-visualizer` | Raven dashboards |
+| **M5 - Chain** | `add-jsonrpc-client`, `add-evm-toolkit` | JSON-RPC, plus an Ethereum console that understands ABIs |
+| **M6 - Adoption** | `add-importers`, `add-openapi-mock-server`, `add-snapshot-testing` | Migration, mocks, snapshot tests |
+| **M7 - Protocols** | `add-grpc-client`, `add-realtime-client`, `add-messaging-client` | gRPC, WebSocket and SSE, message brokers |
+| **M8 - Pro** | `add-traffic-recorder`, `add-load-testing`, `add-trace-propagation`, `add-contract-testing`, `add-docs-generator`, `add-scheduled-monitors`, `add-plugin-system`, `add-secret-providers` | Recorder, load tests, tracing, contracts, docs, monitors, plugins, secret providers |
 
 The order, the glossary and the cross-cutting contracts are in [`openspec/ROADMAP.md`](openspec/ROADMAP.md).
 
