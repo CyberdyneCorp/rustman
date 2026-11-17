@@ -3,7 +3,7 @@
 ## 1. Repository scaffold and CI
 
 - [x] 1.1 Create the Cargo workspace (`Cargo.toml` with `[workspace.dependencies]`, `resolver = "3"`), `rust-toolchain.toml` pinning the MSRV (1.97, also set as `rust-version` and `license = "MIT OR Apache-2.0"` in `[workspace.package]`), and crates `rustman-core`, `rustman-http`, `rustman-report` and `rustman-cli` (binary `rustman`) with the dependency direction from design D1. Verify: `cargo build --workspace` succeeds, and `cargo tree -p rustman-core` shows no hyper, clap or terminal crates.
-- [ ] 1.2 Add `.github/workflows/ci.yml`: `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test --workspace` on ubuntu-latest, macos-latest and windows-latest; plus a job running `openspec validate --all --strict`. Verify: the workflow passes on the scaffold PR.
+- [x] 1.2 Add `.github/workflows/ci.yml`: `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test --workspace` on ubuntu-latest, macos-latest and windows-latest; plus a job running `openspec validate --all --strict`. Verify: the workflow passes on the scaffold PR.
 - [x] 1.3 Add `cargo deny` (licenses, advisories, bans on `openssl-sys` and `native-tls`) to CI. Verify: the CI job fails if `openssl-sys` is added to any crate.
 - [x] 1.4 Add `README.md` (install, quick start) and a `docs/` skeleton. Verify: the README quick-start commands run against the built binary in a CI smoke step.
 
