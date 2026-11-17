@@ -12,7 +12,7 @@ use crate::error::{ConfigError, LoadError};
 use crate::format::from_yaml;
 use crate::model::{Auth, KindRegistry, NameValue, REQUEST_FILE_SUFFIX, Request, Variables};
 use crate::paths::{PathEscape, contain};
-use crate::settings::{SETTINGS_FILE, Settings};
+use crate::settings::{HTTP_PATH_KEYS, HttpDefaults, SETTINGS_FILE, Settings};
 
 /// A loaded workspace.
 #[derive(Clone, Debug)]
@@ -90,7 +90,8 @@ impl Workspace {
     /// Every request, in run order, with the collections it inherits from.
     pub fn requests(&self) -> Vec<RequestRef<'_>> {
         let mut out = Vec::new();
-        collect_requests(&self.root, &self.tree, &mut Vec::new(), &mut out);
+        let http = &self.settings.http;
+        collect_requests(&self.root, http, &self.tree, &mut Vec::new(), &mut out);
         out
     }
 
@@ -101,10 +102,39 @@ impl Workspace {
             .filter(|r| r.entry.request.name() == name)
             .collect()
     }
+
+    /// The request `target` names: a request file (relative to `cwd`), its
+    /// id (the path from the root without `.rman.yaml`), or its unique `name`.
+    pub fn find_request(&self, target: &str, cwd: &Path) -> Result<RequestRef<'_>, ConfigError> {
+        let file = dunce::canonicalize(cwd.join(target)).ok();
+        let same_file = |r: &RequestRef<'_>| {
+            file.is_some() && dunce::canonicalize(self.root.join(&r.entry.path)).ok() == file
+        };
+        let requests = self.requests();
+        let by_path = requests
+            .iter()
+            .find(|r| r.entry.id() == target || same_file(r));
+        if let Some(found) = by_path {
+            return Ok(found.clone());
+        }
+        let mut named = self.find_by_name(target);
+        match named.len() {
+            0 => Err(ConfigError::RequestNotFound(target.to_owned())),
+            1 => Ok(named.remove(0)),
+            _ => Err(ConfigError::AmbiguousRequest {
+                name: target.to_owned(),
+                paths: named
+                    .iter()
+                    .map(|r| r.entry.path.to_string_lossy().replace('\\', "/"))
+                    .collect(),
+            }),
+        }
+    }
 }
 
 fn collect_requests<'a>(
     root: &'a Path,
+    http: &'a HttpDefaults,
     collection: &'a Collection,
     ancestors: &mut Vec<&'a Collection>,
     out: &mut Vec<RequestRef<'a>>,
@@ -114,10 +144,11 @@ fn collect_requests<'a>(
         match entry {
             Entry::Request(request) => out.push(RequestRef {
                 root,
+                http,
                 entry: request,
                 ancestors: ancestors.clone(),
             }),
-            Entry::Collection(child) => collect_requests(root, child, ancestors, out),
+            Entry::Collection(child) => collect_requests(root, http, child, ancestors, out),
         }
     }
     ancestors.pop();
@@ -128,6 +159,8 @@ fn collect_requests<'a>(
 pub struct RequestRef<'a> {
     /// The workspace root.
     pub root: &'a Path,
+    /// `rustman.toml [http]`: the workspace client certificate.
+    pub http: &'a HttpDefaults,
     pub entry: &'a RequestEntry,
     /// From the root collection down to the nearest folder.
     pub ancestors: Vec<&'a Collection>,
@@ -144,6 +177,12 @@ impl<'a> RequestRef<'a> {
     pub fn contain_file(&self, raw: &str) -> Result<PathBuf, PathEscape> {
         let folder = self.entry.path.parent().unwrap_or(Path::new(""));
         contain(self.root, &self.root.join(folder), raw)
+    }
+
+    /// Resolve a path from `rustman.toml` (relative to the workspace root)
+    /// and check it stays inside the workspace.
+    pub fn contain_workspace_file(&self, raw: &str) -> Result<PathBuf, PathEscape> {
+        contain(self.root, self.root, raw)
     }
 
     /// Inherited headers merged with the request's own. A header set at a
@@ -206,15 +245,19 @@ enum Item {
 
 impl Loader<'_> {
     fn check_settings_paths(&mut self, settings: &Settings) {
-        let Some(ca_bundle) = settings.http.ca_bundle.as_deref() else {
-            return;
-        };
-        if let Err(err) = contain(self.root, self.root, ca_bundle) {
-            self.errors.push(LoadError::new(
-                Path::new(SETTINGS_FILE),
-                settings.http.ca_bundle_position,
-                err.to_string(),
-            ));
+        let http = &settings.http;
+        for key in HTTP_PATH_KEYS {
+            let Some(raw) = http.path(key) else {
+                continue;
+            };
+            if let Err(err) = contain(self.root, self.root, raw) {
+                let position = http.positions.get(key).copied();
+                self.errors.push(LoadError::new(
+                    Path::new(SETTINGS_FILE),
+                    position,
+                    err.to_string(),
+                ));
+            }
         }
     }
 
@@ -320,16 +363,49 @@ impl Loader<'_> {
     }
 
     fn check_request_paths(&mut self, rel: &Path, request: &Request) {
-        let Request::Http(http) = request else {
-            return;
-        };
         let base = self.root.join(rel.parent().unwrap_or(Path::new("")));
-        for path in http.file_paths() {
-            if let Err(message) = check_path(self.root, &base, path.get()) {
-                self.errors
-                    .push(LoadError::new(rel, path.position(), message));
-            }
-        }
+        self.errors
+            .extend(request_path_errors(self.root, &base, rel, request));
+    }
+}
+
+/// The errors of `request`'s file paths that leave the workspace at `root`,
+/// for a request file in `base` (reported as `shown`).
+fn request_path_errors(
+    root: &Path,
+    base: &Path,
+    shown: &Path,
+    request: &Request,
+) -> Vec<LoadError> {
+    let Request::Http(http) = request else {
+        return Vec::new();
+    };
+    http.file_paths()
+        .into_iter()
+        .filter_map(|path| {
+            let message = check_path(root, base, path.get()).err()?;
+            Some(LoadError::new(shown, path.position(), message))
+        })
+        .collect()
+}
+
+/// Check a request about to be written to `file` (a new file, given as the
+/// user typed it): inside a workspace, its file paths must stay in that
+/// workspace, or the workspace would no longer load. Outside any workspace
+/// (or when the folder does not exist yet) there is nothing to check.
+pub fn check_new_request_file(file: &Path, request: &Request) -> Result<(), ConfigError> {
+    let folder = file.parent().filter(|p| !p.as_os_str().is_empty());
+    let Ok(base) = dunce::canonicalize(folder.unwrap_or(Path::new("."))) else {
+        return Ok(());
+    };
+    let Ok(root) = crate::discovery::find_root(&base, None) else {
+        return Ok(());
+    };
+    let errors = request_path_errors(&root, &base, file, request);
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(ConfigError::Invalid(errors))
     }
 }
 

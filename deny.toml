@@ -36,6 +36,8 @@ deny = [
     { crate = "openssl-sys", reason = "system OpenSSL is not allowed; use rustls" },
     { crate = "openssl", reason = "system OpenSSL is not allowed; use rustls" },
     { crate = "native-tls", reason = "system TLS is not allowed; use rustls" },
+    { crate = "aws-lc-rs", reason = "rustls uses the ring provider (design D3)" },
+    { crate = "aws-lc-sys", reason = "rustls uses the ring provider (design D3)" },
 ]
 
 [sources]

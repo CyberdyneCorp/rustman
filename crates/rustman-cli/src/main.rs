@@ -21,6 +21,14 @@ enum Command {
     Env(commands::env::EnvArgs),
     /// Manage secret values (stored in the OS keychain, never in workspace files)
     Secret(commands::secret::SecretArgs),
+    /// Manage the cookie jars kept per environment
+    Cookies(commands::cookies::CookiesArgs),
+    /// Log in to OAuth2-protected APIs
+    Auth(commands::auth::AuthArgs),
+    /// Create request files from other formats (curl)
+    Import(commands::import::ImportArgs),
+    /// Print requests in other formats (curl)
+    Export(commands::export::ExportArgs),
 }
 
 fn main() -> ExitCode {
@@ -34,16 +42,20 @@ fn main() -> ExitCode {
             .and_then(|()| writeln!(out));
         return ExitCode::SUCCESS;
     };
-    let result = match command {
-        Command::Init(args) => commands::init::run(&args),
-        Command::Env(args) => commands::env::run(&args),
-        Command::Secret(args) => commands::secret::run(&args),
+    let result: Result<(), exit::CliError> = match command {
+        Command::Init(args) => commands::init::run(&args).map_err(Into::into),
+        Command::Env(args) => commands::env::run(&args).map_err(Into::into),
+        Command::Secret(args) => commands::secret::run(&args).map_err(Into::into),
+        Command::Cookies(args) => commands::cookies::run(&args).map_err(Into::into),
+        Command::Auth(args) => commands::auth::run(&args),
+        Command::Import(args) => commands::import::run(&args),
+        Command::Export(args) => commands::export::run(&args),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
-            let _ = writeln!(std::io::stderr(), "{}", exit::render(&err));
-            ExitCode::from(exit::code(&err))
+            let _ = writeln!(std::io::stderr(), "{}", err.render());
+            ExitCode::from(err.code())
         }
     }
 }

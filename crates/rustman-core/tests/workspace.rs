@@ -308,6 +308,22 @@ fn settings_ca_bundle_is_contained() {
 }
 
 #[test]
+fn settings_client_certificate_paths_are_contained() {
+    let f = Fixture::new();
+    f.write(
+        "rustman.toml",
+        "[workspace]\nname = \"t\"\nversion = 1\n[http]\nclient_cert = \"certs/c.pem\"\nclient_key = \"/etc/k.pem\"\nclient_pkcs12 = \"../c.p12\"\n",
+    );
+    assert_eq!(
+        errors(f.load().unwrap_err()),
+        [
+            "rustman.toml:6: file path escapes workspace: /etc/k.pem",
+            "rustman.toml:7: file path escapes workspace: ../c.p12",
+        ]
+    );
+}
+
+#[test]
 fn settings_ca_bundle_is_not_interpolated_so_braces_do_not_skip_the_check() {
     let f = Fixture::new();
     f.write(
@@ -364,4 +380,27 @@ fn symlinked_folders_are_not_followed() {
     .unwrap();
     std::os::unix::fs::symlink(outside.path(), f.root().join("linked")).unwrap();
     assert!(f.load().unwrap().requests().is_empty());
+}
+
+#[test]
+fn requests_are_found_by_file_id_or_unique_name() {
+    let f = Fixture::new();
+    f.request("api/me.rman.yaml", "Me", "");
+    f.request("a/list.rman.yaml", "List", "");
+    f.request("b/list.rman.yaml", "List", "");
+    let ws = f.load().unwrap();
+    let id = |target: &str, cwd: &Path| ws.find_request(target, cwd).unwrap().entry.id();
+    assert_eq!(id("Me", f.root()), "api/me");
+    assert_eq!(id("api/me", f.root()), "api/me");
+    assert_eq!(id("api/me.rman.yaml", f.root()), "api/me");
+    assert_eq!(id("me.rman.yaml", &f.root().join("api")), "api/me");
+    // A path wins over a name, so an ambiguous name stays reachable.
+    assert_eq!(id("a/list.rman.yaml", f.root()), "a/list");
+    let err = ws.find_request("List", f.root()).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "request name 'List' is ambiguous: a/list.rman.yaml, b/list.rman.yaml"
+    );
+    let err = ws.find_request("nope", f.root()).unwrap_err();
+    assert!(matches!(err, ConfigError::RequestNotFound(_)));
 }

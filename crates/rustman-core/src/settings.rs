@@ -1,5 +1,7 @@
 //! `rustman.toml`: the workspace marker and its settings (design D5).
 
+use std::collections::BTreeMap;
+use std::fmt;
 use std::path::Path;
 
 use serde::Deserialize;
@@ -25,7 +27,18 @@ const KNOWN_KEYS: &[(&str, &[&str])] = &[
             "default_environment",
         ],
     ),
-    ("http", &["ca_bundle", "proxy", "max_body_bytes"]),
+    (
+        "http",
+        &[
+            "ca_bundle",
+            "proxy",
+            "max_body_bytes",
+            "client_cert",
+            "client_key",
+            "client_pkcs12",
+            "client_pkcs12_password",
+        ],
+    ),
 ];
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -67,25 +80,70 @@ impl Default for Defaults {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+/// `[http]`. The file paths are relative to the workspace root. The client
+/// certificate (`client_cert` + `client_key`, or `client_pkcs12`) applies to
+/// every request that sets none of its own.
+#[derive(Clone, PartialEq, Deserialize)]
 #[serde(default)]
 pub struct HttpDefaults {
     pub ca_bundle: Option<String>,
-    /// Where `ca_bundle` was written in `rustman.toml`, for error messages.
-    #[serde(skip)]
-    pub ca_bundle_position: Option<Position>,
     pub proxy: Option<String>,
     pub max_body_bytes: u64,
+    pub client_cert: Option<String>,
+    pub client_key: Option<String>,
+    pub client_pkcs12: Option<String>,
+    /// A `{{variable}}` template, resolved with the request's variables (the
+    /// one `rustman.toml` value that is interpolated).
+    pub client_pkcs12_password: Option<String>,
+    /// Where each file path key was written in `rustman.toml`, for messages.
+    #[serde(skip)]
+    pub positions: BTreeMap<&'static str, Position>,
+}
+
+/// The `[http]` keys that name files.
+pub const HTTP_PATH_KEYS: [&str; 4] = ["ca_bundle", "client_cert", "client_key", "client_pkcs12"];
+
+impl HttpDefaults {
+    /// The file path set under `key` (one of [`HTTP_PATH_KEYS`]).
+    pub fn path(&self, key: &str) -> Option<&str> {
+        match key {
+            "ca_bundle" => self.ca_bundle.as_deref(),
+            "client_cert" => self.client_cert.as_deref(),
+            "client_key" => self.client_key.as_deref(),
+            "client_pkcs12" => self.client_pkcs12.as_deref(),
+            _ => None,
+        }
+    }
 }
 
 impl Default for HttpDefaults {
     fn default() -> Self {
         Self {
             ca_bundle: None,
-            ca_bundle_position: None,
             proxy: None,
             max_body_bytes: 10 * 1024 * 1024,
+            client_cert: None,
+            client_key: None,
+            client_pkcs12: None,
+            client_pkcs12_password: None,
+            positions: BTreeMap::new(),
         }
+    }
+}
+
+/// Hides `client_pkcs12_password`.
+impl fmt::Debug for HttpDefaults {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let password = self.client_pkcs12_password.as_ref().map(|_| "<hidden>");
+        f.debug_struct("HttpDefaults")
+            .field("ca_bundle", &self.ca_bundle)
+            .field("proxy", &self.proxy)
+            .field("max_body_bytes", &self.max_body_bytes)
+            .field("client_cert", &self.client_cert)
+            .field("client_key", &self.client_key)
+            .field("client_pkcs12", &self.client_pkcs12)
+            .field("client_pkcs12_password", &password)
+            .finish_non_exhaustive()
     }
 }
 
@@ -96,7 +154,7 @@ impl Settings {
         let table: toml::Table = toml::from_str(text).map_err(|e| toml_error(file, text, &e))?;
         check_version(file, &table)?;
         let mut settings: Self = toml::from_str(text).map_err(|e| toml_error(file, text, &e))?;
-        settings.http.ca_bundle_position = ca_bundle_position(text);
+        settings.http.positions = http_path_positions(text);
         Ok((settings, unknown_keys(&table)))
     }
 
@@ -108,19 +166,23 @@ impl Settings {
     }
 }
 
-/// The position of `[http] ca_bundle`, read in a second, span-keeping pass.
-fn ca_bundle_position(text: &str) -> Option<Position> {
+/// The positions of the `[http]` file paths, read in a second, span-keeping
+/// pass.
+fn http_path_positions(text: &str) -> BTreeMap<&'static str, Position> {
     #[derive(Deserialize)]
     struct Spans {
-        http: Option<HttpSpans>,
+        http: Option<BTreeMap<String, toml::Spanned<toml::Value>>>,
     }
-    #[derive(Deserialize)]
-    struct HttpSpans {
-        ca_bundle: Option<toml::Spanned<String>>,
-    }
-    let spans: Spans = toml::from_str(text).ok()?;
-    let span = spans.http?.ca_bundle?.span();
-    Some(position_at(text, span.start))
+    let Ok(Spans { http: Some(http) }) = toml::from_str(text) else {
+        return BTreeMap::new();
+    };
+    HTTP_PATH_KEYS
+        .into_iter()
+        .filter_map(|key| {
+            let span = http.get(key)?.span();
+            Some((key, position_at(text, span.start)))
+        })
+        .collect()
 }
 
 /// Check `[workspace] version`. A value of the wrong type is left to the
@@ -220,6 +282,10 @@ default_environment = "local"
 ca_bundle = "certs/ca.pem"
 proxy = "http://127.0.0.1:3128"
 max_body_bytes = 1024
+client_cert = "certs/client.pem"
+client_key = "certs/client.key"
+client_pkcs12 = "certs/client.p12"
+client_pkcs12_password = "{{p12_password}}"
 
 [variables]
 base_url = "http://localhost"
@@ -231,7 +297,14 @@ base_url = "http://localhost"
         assert_eq!(s.defaults.default_environment.as_deref(), Some("local"));
         assert_eq!(s.http.ca_bundle.as_deref(), Some("certs/ca.pem"));
         assert_eq!(s.http.max_body_bytes, 1024);
+        assert_eq!(s.http.client_cert.as_deref(), Some("certs/client.pem"));
+        assert_eq!(s.http.path("client_key"), Some("certs/client.key"));
+        assert_eq!(s.http.path("client_pkcs12"), Some("certs/client.p12"));
+        assert_eq!(s.http.positions["ca_bundle"].line, 14);
+        assert_eq!(s.http.positions["client_pkcs12"].line, 19);
         assert!(s.variables.get("base_url").is_some());
+        let debug = format!("{:?}", s.http);
+        assert!(!debug.contains("p12_password"), "{debug}");
     }
 
     #[test]

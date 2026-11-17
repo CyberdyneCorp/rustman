@@ -20,7 +20,7 @@ The system SHALL treat a directory containing `rustman.toml` as a workspace. Com
 - **THEN** the system SHALL print `error: no rustman workspace found (run 'rustman init')` and exit with code 2
 
 ### Requirement: Workspace settings file
-`rustman.toml` SHALL hold `[workspace] name` and `version = 1`, plus optional `[defaults]` (`timeout_ms`, `follow_redirects`, `max_redirects`, `verify_tls`, `default_environment`) and `[http]` (`ca_bundle`, `proxy`, `max_body_bytes`). Unknown keys SHALL produce a warning, not an error. A `version` greater than the supported one SHALL fail with `error: rustman.toml version <n> is newer than this rustman supports (1)`.
+`rustman.toml` SHALL hold `[workspace] name` and `version = 1`, plus optional `[defaults]` (`timeout_ms`, `follow_redirects`, `max_redirects`, `verify_tls`, `default_environment`) and an `[http]` table (see Workspace HTTP settings). Unknown keys SHALL produce a warning, not an error. A `version` greater than the supported one SHALL fail with `error: rustman.toml version <n> is newer than this rustman supports (1)`.
 
 #### Scenario: Minimal settings
 - **GIVEN** `rustman.toml` contains only `[workspace]\nname = "shop"\nversion = 1`
@@ -31,6 +31,14 @@ The system SHALL treat a directory containing `rustman.toml` as a workspace. Com
 - **GIVEN** `rustman.toml` has `version = 2`
 - **WHEN** any command loads the workspace
 - **THEN** it SHALL fail with the newer-version error and exit code 2
+
+### Requirement: Workspace HTTP settings
+The optional `[http]` table SHALL accept `ca_bundle`, `proxy`, `max_body_bytes`, and a workspace client certificate (`client_cert`, `client_key`, `client_pkcs12`, `client_pkcs12_password`) that applies to requests that set none of their own. `[http]` file paths SHALL be relative to the workspace root, and `client_pkcs12_password` SHALL be the one interpolated value, so that it can reference a secret variable.
+
+#### Scenario: Workspace client certificate
+- **GIVEN** `[http] client_cert = "certs/client.pem"` and `client_key = "certs/client.key"`
+- **WHEN** a request without its own certificate is sent
+- **THEN** it SHALL present the workspace certificate, resolved from the workspace root
 
 ### Requirement: Request file schema
 Each saved request SHALL be one UTF-8 YAML file named `*.rman.yaml`. It SHALL contain `version: 1`, `kind` and `name`. Optional fields SHALL be `description`, `tags`, `assertions` and `captures`, plus the kind-specific fields. Kinds come from a registry: this change registers `http`, `graphql` and `mcp`, and later capabilities register more. A missing or unregistered kind SHALL fail to load with an error naming the file, line and registered kinds.

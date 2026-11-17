@@ -17,7 +17,11 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub use file::{FileSecretStore, SECRETS_FILE};
+/// Guards and writer for any private state under `.rustman/` (cookie jars,
+/// spilled bodies), shared with the secrets file.
+pub use git::ensure_private;
 pub use keychain::{Keychain, KeychainError, SERVICE};
+pub use private_file::{create_private_dir, write as write_private};
 
 use crate::error::LoadError;
 use crate::secret::Secret;
