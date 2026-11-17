@@ -7,7 +7,7 @@ use serde::de::{self, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 
 use crate::error::Position;
-use crate::format::{Located, error_at};
+use crate::format::{Located, MaybeFloat, error_at, exact_located};
 
 /// One `{name, value}` pair. Used for headers, query parameters and form fields,
 /// where order matters and names may repeat.
@@ -126,15 +126,38 @@ impl<'de> Visitor<'de> for VariablesVisitor {
 
     fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Variables, A::Error> {
         let mut entries = Vec::new();
-        while let Some((name, value)) = map.next_entry::<String, Located<CheckedVar>>()? {
-            let at = value.position();
+        while let Some((name, value)) = map.next_entry::<String, ExactVar>()? {
+            let at = value.0.position();
             let value = value
+                .0
                 .into_inner()
                 .0
                 .map_err(|msg| de::Error::custom(error_at(at, msg)))?;
             entries.push((name, value));
         }
         Ok(Variables(entries))
+    }
+}
+
+const VAR_TOO_LARGE: &str =
+    "variable has an integer too large to use exactly; quote it to keep it as a string";
+
+/// A variable value with its position, refusing an integer literal too large
+/// for 64 bits that YAML read as a float.
+struct ExactVar(Located<CheckedVar>);
+
+impl<'de> Deserialize<'de> for ExactVar {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        exact_located(deserializer, VAR_TOO_LARGE).map(ExactVar)
+    }
+}
+
+impl MaybeFloat for CheckedVar {
+    fn as_float(&self) -> Option<f64> {
+        match self.0 {
+            Ok(VarValue::Float(f)) => Some(f),
+            _ => None,
+        }
     }
 }
 
@@ -370,5 +393,26 @@ mod tests {
         let e = err("n: 18446744073709551615\n");
         assert_eq!((e.line(), e.column()), (Some(1), Some(4)));
         assert_eq!(e.message, "integer 18446744073709551615 is too large");
+    }
+
+    #[test]
+    fn integers_too_large_for_64_bits_are_refused_at_the_value() {
+        let load = |text: &str| {
+            crate::format::from_yaml::<Variables>(std::path::Path::new("v.yaml"), text)
+        };
+        for text in [
+            "ok: 1\na:   12345678901234567890123\n",
+            "ok: 1\na:   -99999999999999999999\n",
+        ] {
+            let e = load(text).unwrap_err();
+            assert_eq!((e.line(), e.column()), (Some(2), Some(6)), "{text}");
+            assert_eq!(e.message, VAR_TOO_LARGE);
+        }
+        let vars = load("a: 1e22\nb: '12345678901234567890123'\n").unwrap();
+        assert_eq!(vars.get("a"), Some(&VarValue::Float(1e22)));
+        assert_eq!(
+            vars.get("b"),
+            Some(&VarValue::String("12345678901234567890123".into()))
+        );
     }
 }

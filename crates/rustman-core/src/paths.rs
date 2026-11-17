@@ -21,7 +21,7 @@ pub fn contain(root: &Path, base_dir: &Path, raw: &str) -> Result<PathBuf, PathE
     if !joined.starts_with(&lexical_root) {
         return Err(escape());
     }
-    let Ok(real_root) = root.canonicalize() else {
+    let Ok(real_root) = dunce::canonicalize(root) else {
         return Ok(joined);
     };
     match canonical_existing(&joined) {
@@ -54,7 +54,7 @@ fn canonical_existing(path: &Path) -> io::Result<PathBuf> {
     let mut rest = Vec::new();
     loop {
         if existing.symlink_metadata().is_ok() {
-            let mut real = existing.canonicalize()?;
+            let mut real = dunce::canonicalize(existing)?;
             real.extend(rest.iter().rev());
             return Ok(real);
         }

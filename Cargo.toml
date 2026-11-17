@@ -41,6 +41,10 @@ futures-lite = { version = "2.6", default-features = false, features = ["std"] }
 # No-echo prompt for `rustman secret set` (CLI only).
 rpassword = "7.5"
 
+# Canonical paths without Windows' `\\?\` prefix, for paths shown to users or
+# passed to `git`.
+dunce = "1"
+
 tempfile = "3"
 
 assert_cmd = "2"

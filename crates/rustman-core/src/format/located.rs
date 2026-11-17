@@ -25,6 +25,10 @@ impl<T> Located<T> {
         }
     }
 
+    pub(crate) fn at(value: T, position: Option<Position>) -> Self {
+        Self { value, position }
+    }
+
     pub fn position(&self) -> Option<Position> {
         self.position
     }

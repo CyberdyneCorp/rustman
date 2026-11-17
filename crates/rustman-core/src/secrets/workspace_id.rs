@@ -2,8 +2,10 @@
 //! one workspace on the same machine never share keychain entries (design D6).
 
 use std::fs;
-use std::io::ErrorKind;
+use std::io::{self, ErrorKind};
 use std::path::Path;
+use std::thread;
+use std::time::Duration;
 
 use super::{SecretError, git, private_file};
 use crate::error::LoadError;
@@ -33,20 +35,44 @@ pub fn load(root: &Path) -> Result<Option<String>, SecretError> {
 
 /// The workspace id, created on first use.
 pub fn load_or_create(root: &Path) -> Result<String, SecretError> {
-    if let Some(id) = load(root)? {
+    load_or_create_with(root, private_file::write_new)
+}
+
+/// [`load_or_create`] with the file creation given, so tests can change it.
+fn load_or_create_with(
+    root: &Path,
+    write_new: fn(&Path, &[u8]) -> io::Result<()>,
+) -> Result<String, SecretError> {
+    if let Some(id) = load_settled(root)? {
         return Ok(id);
     }
     git::ensure_private(root, WORKSPACE_ID_FILE)?;
     let path = root.join(WORKSPACE_ID_FILE);
     let id = uuid::Uuid::new_v4().hyphenated().to_string();
-    match private_file::write_new(&path, format!("{id}\n").as_bytes()) {
+    match write_new(&path, format!("{id}\n").as_bytes()) {
         Ok(()) => Ok(id),
-        // Another process created it first, complete: use theirs.
+        // Another process created it first: use theirs.
         Err(e) if e.kind() == ErrorKind::AlreadyExists => {
-            load(root)?.ok_or_else(|| SecretError::io(&path, ErrorKind::NotFound.into()))
+            load_settled(root)?.ok_or_else(|| SecretError::io(&path, ErrorKind::NotFound.into()))
         }
         Err(e) => Err(SecretError::io(&path, e)),
     }
+}
+
+/// How many times, and how far apart, an invalid id is read again.
+const SETTLE_RETRIES: u32 = 20;
+const SETTLE_DELAY: Duration = Duration::from_millis(10);
+
+/// [`load`], reading an invalid id again for a short while: on a filesystem
+/// without hard links another process may still be writing it.
+fn load_settled(root: &Path) -> Result<Option<String>, SecretError> {
+    for _ in 0..SETTLE_RETRIES {
+        match load(root) {
+            Err(SecretError::Invalid(_)) => thread::sleep(SETTLE_DELAY),
+            other => return other,
+        }
+    }
+    load(root)
 }
 
 #[cfg(test)]
@@ -82,6 +108,52 @@ mod tests {
         assert_eq!(load(&root).unwrap(), Some(ids[0].clone()));
     }
 
+    fn no_hard_links(path: &Path, contents: &[u8]) -> io::Result<()> {
+        private_file::write_new_with(path, contents, |_, _| {
+            Err(io::Error::from(ErrorKind::Unsupported))
+        })
+    }
+
+    #[test]
+    fn created_without_hard_links() {
+        let dir = tempfile::tempdir().unwrap();
+        let id = load_or_create_with(dir.path(), no_hard_links).unwrap();
+        assert_eq!(load_or_create_with(dir.path(), no_hard_links).unwrap(), id);
+        assert_eq!(load(dir.path()).unwrap(), Some(id));
+    }
+
+    #[test]
+    fn concurrent_creators_agree_on_one_id_without_hard_links() {
+        for _ in 0..20 {
+            let dir = tempfile::tempdir().unwrap();
+            let root = dir.path().to_path_buf();
+            let ids: Vec<String> = std::thread::scope(|s| {
+                let handles: Vec<_> = (0..8)
+                    .map(|_| s.spawn(|| load_or_create_with(&root, no_hard_links).unwrap()))
+                    .collect();
+                handles.into_iter().map(|h| h.join().unwrap()).collect()
+            });
+            assert!(ids.iter().all(|id| *id == ids[0]), "{ids:?}");
+            assert_eq!(load(&root).unwrap(), Some(ids[0].clone()));
+        }
+    }
+
+    #[test]
+    fn an_id_still_being_written_is_waited_for() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(WORKSPACE_ID_FILE);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, "").unwrap();
+        let id = uuid::Uuid::new_v4().hyphenated().to_string();
+        let loaded = std::thread::scope(|s| {
+            let reader = s.spawn(|| load_or_create(dir.path()));
+            thread::sleep(SETTLE_DELAY * 3);
+            fs::write(&path, format!("{id}\n")).unwrap();
+            reader.join().unwrap()
+        });
+        assert_eq!(loaded.unwrap(), id);
+    }
+
     #[test]
     fn two_clones_get_different_ids() {
         let a = tempfile::tempdir().unwrap();
@@ -101,6 +173,10 @@ mod tests {
             load(dir.path()).unwrap_err().to_string(),
             ".rustman/workspace-id: invalid workspace id: expected a UUID"
         );
+        assert!(matches!(
+            load_or_create(dir.path()),
+            Err(SecretError::Invalid(_))
+        ));
     }
 
     #[test]

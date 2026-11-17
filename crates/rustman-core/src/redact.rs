@@ -9,10 +9,11 @@
 //!   second net catches servers that echo a secret back, and secrets that
 //!   reached a structure without provenance (a structured JSON body, auth).
 //!
-//! Secret values are also matched in their JSON-escaped and percent-encoded
-//! forms, the two ways an echoing server most often re-encodes them, and in
-//! their Rust `Debug`-escaped form, which `Debug` output of any value holding
-//! a secret (a JSON body, auth fields) uses.
+//! Secret values are also matched in their JSON-escaped (also with `\uXXXX`
+//! escapes) and percent-encoded (upper- or lowercase hex) forms, the two
+//! ways an echoing server most often re-encodes them, and in their Rust
+//! `Debug`-escaped form, which `Debug` output of any value holding a secret
+//! (a JSON body, auth fields) uses.
 
 use std::borrow::Cow;
 use std::fmt;
@@ -234,17 +235,28 @@ fn into_string(bytes: Vec<u8>) -> String {
     String::from_utf8(bytes).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned())
 }
 
-/// The raw value plus its JSON-escaped, percent-encoded and form-encoded
-/// forms, without duplicates.
+/// The raw value plus its JSON-escaped, `Debug`-escaped, percent-encoded and
+/// form-encoded forms, without duplicates. Percent-encoding comes in upper-
+/// and lowercase hex, and the JSON form also with every non-ASCII character
+/// as `\uXXXX` (UTF-16, so a surrogate pair beyond the BMP), in both cases.
 fn encoded_forms(value: &str) -> Vec<String> {
     let json = serde_json::to_string(value).unwrap_or_default();
     let json = json[1..json.len() - 1].to_owned();
     let debug = format!("{value:?}");
     let debug = debug[1..debug.len() - 1].to_owned();
-    let percent = percent_encode(value, "%20");
-    let form = percent_encode(value, "+");
     let mut forms = vec![value.to_owned()];
-    for form in [json, debug, percent, form] {
+    for upper in [true, false] {
+        for form in [
+            ascii_json(&json, upper),
+            percent_encode(value, "%20", upper),
+            percent_encode(value, "+", upper),
+        ] {
+            if !forms.contains(&form) {
+                forms.push(form);
+            }
+        }
+    }
+    for form in [json, debug] {
         if !forms.contains(&form) {
             forms.push(form);
         }
@@ -252,9 +264,29 @@ fn encoded_forms(value: &str) -> Vec<String> {
     forms
 }
 
-/// RFC 3986 percent-encoding of everything but unreserved characters; a space
-/// becomes `space`.
-fn percent_encode(value: &str, space: &str) -> String {
+/// `json` with every non-ASCII character written as `\uXXXX` escapes.
+fn ascii_json(json: &str, upper: bool) -> String {
+    let mut out = String::with_capacity(json.len());
+    let mut units = [0; 2];
+    for ch in json.chars() {
+        if ch.is_ascii() {
+            out.push(ch);
+            continue;
+        }
+        for unit in ch.encode_utf16(&mut units) {
+            out.push_str(&if upper {
+                format!("\\u{unit:04X}")
+            } else {
+                format!("\\u{unit:04x}")
+            });
+        }
+    }
+    out
+}
+
+/// RFC 3986 percent-encoding of everything but unreserved characters, in
+/// upper- or lowercase hex; a space becomes `space`.
+fn percent_encode(value: &str, space: &str, upper: bool) -> String {
     let mut out = String::with_capacity(value.len());
     for byte in value.bytes() {
         match byte {
@@ -262,7 +294,8 @@ fn percent_encode(value: &str, space: &str) -> String {
                 out.push(char::from(byte));
             }
             b' ' => out.push_str(space),
-            _ => out.push_str(&format!("%{byte:02X}")),
+            _ if upper => out.push_str(&format!("%{byte:02X}")),
+            _ => out.push_str(&format!("%{byte:02x}")),
         }
     }
     out
@@ -348,6 +381,28 @@ mod tests {
         assert_eq!(r.text(r#"{"pw":"a b\"/&é"}"#), r#"{"pw":"«redacted:pw»"}"#);
         assert_eq!(r.text("q=a%20b%22%2F%26%C3%A9"), "q=«redacted:pw»");
         assert_eq!(r.text("q=a+b%22%2F%26%C3%A9"), "q=«redacted:pw»");
+    }
+
+    #[test]
+    fn lowercase_percent_encoding_is_replaced() {
+        let r = Redactor::new().with(&Secret::new("pw", "a b/é😀".to_owned()));
+        assert_eq!(r.text("q=a%20b%2f%c3%a9%f0%9f%98%80"), "q=«redacted:pw»");
+        assert_eq!(r.text("q=a+b%2f%c3%a9%f0%9f%98%80&x"), "q=«redacted:pw»&x");
+        assert_eq!(r.text("q=a+b%2F%C3%A9%F0%9F%98%80"), "q=«redacted:pw»");
+    }
+
+    #[test]
+    fn json_unicode_escapes_are_replaced() {
+        let r = Redactor::new().with(&Secret::new("pw", "é\"😀x".to_owned()));
+        assert_eq!(
+            r.text(r#"{"pw":"\u00e9\"\ud83d\ude00x"}"#),
+            r#"{"pw":"«redacted:pw»"}"#
+        );
+        assert_eq!(
+            r.text(r#"{"pw":"\u00E9\"\uD83D\uDE00x"}"#),
+            r#"{"pw":"«redacted:pw»"}"#
+        );
+        assert_eq!(r.text(r#"{"pw":"é\"😀x"}"#), r#"{"pw":"«redacted:pw»"}"#);
     }
 
     #[test]
