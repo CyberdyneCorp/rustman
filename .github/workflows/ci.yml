@@ -58,6 +58,12 @@ jobs:
           sudo apt-get install -y zsh fish
           echo "RUSTMAN_REQUIRE_SHELLS=1" >> "$GITHUB_ENV"
       - run: cargo test --workspace --locked
+      # Task 3.4: the real OS keychain round trip. Windows runners have the
+      # Credential Manager; macOS is run manually (the runner keychain is
+      # locked) and Linux has no Secret Service on the runner.
+      - name: OS keychain tests
+        if: runner.os == 'Windows'
+        run: cargo test -p rustman-core --locked -- --ignored keychain
       # Keep in sync with the "Quick start" section of README.md.
       - name: Smoke test README quick start
         shell: bash
