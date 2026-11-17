@@ -1,0 +1,36 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Local-first API workbench for the terminal
+
+Usage: rustman [OPTIONS] [COMMAND]
+
+Commands:
+  init         Create a new workspace (rustman.toml, a local environment and a sample request)
+  env          Inspect environments
+  secret       Manage secret values (stored in the OS keychain, never in workspace files)
+  cookies      Manage the cookie jars kept per environment
+  auth         Log in to OAuth2-protected APIs
+  import       Create request files from other formats (curl)
+  export       Print requests in other formats (curl)
+  send         Send one request (a file, id or name, or an ad-hoc METHOD URL) and print the response
+  run          Run the requests under files or folders and report the results
+  history      List, inspect, replay and clear past exchanges (redacted)
+  completions  Print a shell completion script: rustman completions zsh > _rustman
+  help         Print this message or the help of the given subcommand(s)
+
+Options:
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help
+
+  -V, --version
+          Print version

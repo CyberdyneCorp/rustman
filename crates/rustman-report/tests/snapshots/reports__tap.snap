@@ -1,0 +1,22 @@
+---
+source: crates/rustman-report/tests/reports.rs
+expression: tap(&run())
+---
+TAP version 14
+1..4
+ok 1 - users/list
+not ok 2 - users/create
+  ---
+  status: failed
+  file: "users/create.rman.yaml"
+  reasons:
+    - "status: expected 201, got 404"
+  ...
+not ok 3 - users/slow
+  ---
+  status: errored
+  file: "users/slow.rman.yaml"
+  reasons:
+    - "timeout after 500 ms (response)"
+  ...
+ok 4 - users/delete # SKIP bail

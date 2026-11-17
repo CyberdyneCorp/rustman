@@ -1,12 +1,17 @@
 //! One module per subcommand.
 
 pub mod auth;
+pub mod completions;
 pub mod cookies;
 pub mod env;
+pub mod exec;
 pub mod export;
+pub mod history;
 pub mod import;
 pub mod init;
+pub mod run;
 pub mod secret;
+pub mod send;
 
 use std::path::{Path, PathBuf};
 

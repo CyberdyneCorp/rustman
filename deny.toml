@@ -6,7 +6,13 @@ all-features = true
 [advisories]
 # Fail on vulnerabilities, unmaintained and unsound crates, and yanked versions.
 yanked = "deny"
-ignore = []
+ignore = [
+    # chrono is unmaintained, with no fixed version. It comes only through
+    # quick-junit (the JUnit reporter, design D11), which uses it for optional
+    # timestamps that Rustman never sets. Not a vulnerability; revisit when
+    # quick-junit moves off chrono.
+    { id = "RUSTSEC-2026-0543", reason = "unmaintained chrono via quick-junit; no timestamps are parsed or formatted" },
+]
 
 [licenses]
 # Every dependency must be compatible with Rustman's MIT OR Apache-2.0 license.
@@ -20,6 +26,8 @@ allow = [
     "Unicode-3.0",
     "Zlib",
     "CDLA-Permissive-2.0",
+    # MIT without the attribution clause (borrow-or-share, via jsonschema).
+    "MIT-0",
 ]
 confidence-threshold = 0.9
 unused-allowed-license = "allow"

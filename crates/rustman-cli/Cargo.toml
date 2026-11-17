@@ -17,13 +17,26 @@ rustman-core.workspace = true
 rustman-http.workspace = true
 rustman-report.workspace = true
 clap.workspace = true
+clap_complete.workspace = true
+anstream.workspace = true
+tracing-subscriber.workspace = true
 rpassword.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["rt"] }
+dunce.workspace = true
+tokio = { workspace = true, features = ["rt", "signal"] }
+tokio-util.workspace = true
 
 [dev-dependencies]
 assert_cmd.workspace = true
+insta.workspace = true
+jsonschema.workspace = true
+roxmltree.workspace = true
+rustman-test-support.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 predicates.workspace = true
+regex.workspace = true
 shell-words.workspace = true
 tempfile.workspace = true
 

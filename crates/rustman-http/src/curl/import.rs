@@ -235,11 +235,7 @@ impl Parsed {
             .url
             .take()
             .ok_or_else(|| CurlError("no URL in the command".into()))?;
-        let url = if raw_url.contains("://") {
-            raw_url
-        } else {
-            format!("http://{raw_url}")
-        };
+        let url = with_scheme(raw_url);
         if self.compressed && !self.has_header("Accept-Encoding") {
             self.headers.push(NameValue::new(
                 "Accept-Encoding",
@@ -449,11 +445,34 @@ fn basic_auth(user: &str) -> Auth {
     }
 }
 
-/// `POST /path`: the method and the URL path.
+/// The URL with `http://` added when it has no scheme, as curl does. A URL
+/// that starts with a `{{variable}}` is kept: the variable (such as
+/// `{{base_url}}`) brings the scheme when it is resolved.
+fn with_scheme(url: String) -> String {
+    if url.contains("://") || url.starts_with("{{") {
+        url
+    } else {
+        format!("http://{url}")
+    }
+}
+
+/// `POST /path`: the method and the URL path. For `{{base_url}}/path`, the
+/// path after the variable.
 fn request_name(method: &str, url: &str) -> String {
-    let path = url::Url::parse(url)
-        .map(|u| u.path().to_owned())
-        .unwrap_or_else(|_| "/".to_owned());
+    let path = match url
+        .strip_prefix("{{")
+        .and_then(|rest| rest.split_once("}}"))
+    {
+        Some((_, rest)) => rest.split(['?', '#']).next().unwrap_or_default().to_owned(),
+        None => url::Url::parse(url)
+            .map(|u| u.path().to_owned())
+            .unwrap_or_default(),
+    };
+    let path = if path.starts_with('/') {
+        path
+    } else {
+        format!("/{path}")
+    };
     format!("{method} {path}")
 }
 
@@ -545,5 +564,14 @@ mod tests {
     fn names_use_the_url_path() {
         assert_eq!(request_name("GET", "https://x.io/a/b?q=1"), "GET /a/b");
         assert_eq!(request_name("GET", "not a url"), "GET /");
+        assert_eq!(request_name("GET", "{{base_url}}/a/b?q=1"), "GET /a/b");
+        assert_eq!(request_name("GET", "{{base_url}}"), "GET /");
+    }
+
+    #[test]
+    fn a_templated_url_keeps_its_variable_as_the_scheme() {
+        assert_eq!(with_scheme("{{base_url}}/x".into()), "{{base_url}}/x");
+        assert_eq!(with_scheme("x.io/a".into()), "http://x.io/a");
+        assert_eq!(with_scheme("https://x.io".into()), "https://x.io");
     }
 }

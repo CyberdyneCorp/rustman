@@ -10,8 +10,8 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;
 use tokio_rustls::TlsAcceptor;
 
-use super::certs::TestCerts;
-use super::server::{Tls, server_config};
+use crate::certs::TestCerts;
+use crate::server::{Tls, server_config};
 
 type Log = Arc<Mutex<Vec<String>>>;
 

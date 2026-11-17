@@ -1,0 +1,12 @@
+---
+source: crates/rustman-report/tests/reports.rs
+expression: "pretty_styled(&run()).replace('\\x1b', \"\\\\e\")"
+---
+\e[1m\e[32mPASS \e[0m users/list  GET 200  4 ms
+\e[1m\e[31mFAIL \e[0m users/create  POST 404  4 ms
+      \e[2mstatus: expected 201, got 404\e[0m
+\e[1m\e[35mERROR\e[0m users/slow
+      \e[2mtimeout after 500 ms (response)\e[0m
+\e[1m\e[33mSKIP \e[0m users/delete  skipped (bail)
+
+4 requests: 1 passed, 1 failed, 1 errored, 1 skipped (42 ms)

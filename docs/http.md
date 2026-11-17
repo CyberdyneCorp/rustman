@@ -19,7 +19,7 @@ The exchange records the negotiated `http_version` (`HTTP/1.1` or `HTTP/2`).
 
 | Setting | Default | Covers |
 |---------|---------|--------|
-| `timeout_ms` | 30000 | The whole exchange: connect, send, response and body. Set in `rustman.toml [defaults]` or the request's `settings.timeout_ms` (and with `--timeout` on `rustman send`, which arrives with the CLI commands). |
+| `timeout_ms` | 30000 | The whole exchange: connect, send, response and body. Set in `rustman.toml [defaults]` or the request's `settings.timeout_ms`; `--timeout` on `rustman send` and `rustman run` replaces both. |
 | `connect_timeout_ms` | 10000 | DNS, TCP connect, proxy tunnel and TLS handshake. Set in `settings.connect_timeout_ms`. |
 
 A timeout fails the request with `timeout after <n> ms (<phase>)`, where the phase is `connect` or `response`.
@@ -43,7 +43,7 @@ settings:
 
 Certificates and host names are verified against the operating system's trust store, plus any `ca_bundle` (PEM) from `rustman.toml [http]` and the request's `settings.ca_bundle`. With a `ca_bundle`, the operating system's root certificates are loaded as a list next to the bundle, so OS-only checks such as revocation do not apply to that request. A failure starts with `tls: certificate verification failed`.
 
-`verify_tls: false` (in `[defaults]` or the request's settings, and `--insecure` on `rustman send` once it arrives) turns verification off. Every exchange sent that way is flagged `insecure: true`, plain `http://` ones included.
+`verify_tls: false` (in `[defaults]` or the request's settings) or `--insecure` on `rustman send` and `rustman run` turns verification off. Every exchange sent that way is flagged `insecure: true`, plain `http://` ones included.
 
 For mutual TLS, give a PEM certificate and key, or a PKCS#12 bundle whose passphrase comes from a secret variable:
 
@@ -172,7 +172,7 @@ auth:
     - profile
 ```
 
-The authorization-code grant needs a person at a terminal. Without one (stdin is not a TTY, as in CI) and without a cached token, the request fails with `oauth2: interactive login required (run 'rustman auth login <request>')`. Run `rustman auth login http/oauth-login --env prod` once on a workstation; later runs reuse and refresh the cached token.
+The authorization-code grant needs a person at a terminal. When `rustman send` or `rustman run` has no terminal on stdin (as in CI) and no cached token, the request fails with `oauth2: interactive login required (run 'rustman auth login <request>')`. Run `rustman auth login http/oauth-login --env prod` once on a workstation; later runs reuse and refresh the cached token.
 
 ## Timing breakdown
 
@@ -192,7 +192,7 @@ Phases that did not happen are `null`, never `0`: `tls` on plain HTTP, `dns` for
 ## Response bodies
 
 - Bodies are decompressed (`gzip`, `br`, `deflate`, `zstd`) unless `settings.decompress: false`. An unknown `Content-Encoding` leaves the body as received, with a warning. Decoding goes through a fixed 64 KiB buffer, so memory stays bounded whatever the compression ratio, and a body that decodes to more than 1 GiB fails with `network: the decompressed response body is larger than <n> bytes` (use `decompress: false` to keep such a body encoded).
-- Bodies up to `rustman.toml [http] max_body_bytes` (10 MiB) stay in memory. A larger body is streamed to `.rustman/bodies/<exchange-id>.bin`; the exchange keeps its first 64 KiB as a preview and its full `size_bytes`. The file is removed again when the request fails or times out before the body ends, and redirect hops keep none. Spill files are readable by the current user only, and, like cookie jars, are written only when `.rustman/` is a real, git-ignored folder. A 50 MiB download keeps well under 16 MiB of memory for its body.
+- Bodies up to `rustman.toml [http] max_body_bytes` (10 MiB) stay in memory. A larger body is streamed to `.rustman/bodies/<uuid>.bin` (a random name per exchange; outside a workspace, a `rustman-bodies` folder in the temp folder); the exchange keeps its first 64 KiB as a preview and its full `size_bytes`. The file is removed again when the request fails or times out before the body ends, and redirect hops keep none. Once the request is done, the file is kept only while a history entry refers to it: with `--no-history`, history disabled or outside a workspace, it is deleted when the command has used it (after `rustman send` printed the body). Pruning history deletes it with its entry, along with any spill file no entry refers to that is more than an hour old, and `rustman history clear` deletes every spill file. Spill files are readable by the current user only, and, like cookie jars, are written only when `.rustman/` is a real, git-ignored folder. A 50 MiB download keeps well under 16 MiB of memory for its body.
 - A body that is not valid UTF-8 (an image, a PDF) is marked `binary: true`, and its bytes are kept exactly as received, never decoded lossily.
 
 ```toml
@@ -228,7 +228,7 @@ body:
 | curl option | Becomes |
 |-------------|---------|
 | `-X`, `--request` | `method` |
-| URL, `--url` | `url` (`http://` is added when the scheme is missing) |
+| URL, `--url` | `url` (`http://` is added when the scheme is missing, unless the URL starts with a variable such as `{{base_url}}`) |
 | `-H`, `--header` | `headers` |
 | `-d`, `--data`, `--data-ascii`, `--data-binary`, `--data-raw`, `--data-urlencode`, `--json` | `body`: `json` when the content type is JSON, `form` for `a=1&b=2` data, a `file` body for `@file`, else `text` |
 | `-F`, `--form`, `--form-string` | a `multipart` body (`@file` parts and `;type=` included) |

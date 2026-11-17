@@ -3,3 +3,5 @@
 _collection.yaml text eol=lf
 crates/rustman-core/tests/fixtures/** text eol=lf
 docs/*.md text eol=lf
+# insta snapshots (reporters, help output).
+*.snap text eol=lf

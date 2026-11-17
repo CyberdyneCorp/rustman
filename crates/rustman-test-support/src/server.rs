@@ -18,8 +18,8 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;
 use tokio_rustls::TlsAcceptor;
 
-use super::certs::{TestCerts, certs_from_pem, key_from_pem};
-use super::routes;
+use crate::certs::{TestCerts, certs_from_pem, key_from_pem};
+use crate::routes;
 
 /// What a TLS test server offers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

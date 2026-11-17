@@ -3,15 +3,19 @@
 //!
 //! This crate has no network, terminal or CLI dependencies.
 
+pub mod assertions;
+pub mod captures;
 pub mod collection;
 pub mod discovery;
 pub mod environment;
 pub mod error;
 pub mod format;
+pub mod history;
 pub mod init;
 pub mod model;
 pub mod paths;
 pub mod redact;
+pub mod run;
 pub mod secret;
 pub mod secrets;
 pub mod settings;

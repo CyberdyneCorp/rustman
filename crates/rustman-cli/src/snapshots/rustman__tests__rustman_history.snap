@@ -1,0 +1,29 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+List, inspect, replay and clear past exchanges (redacted)
+
+Usage: rustman history [OPTIONS] <COMMAND>
+
+Commands:
+  list    List exchanges, newest first: id, time, method, URL, status and total ms
+  show    Print one exchange in full (redacted)
+  replay  Send an exchange's request again, with secrets read from the store now
+  clear   Delete every exchange (and its spilled body)
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards; outside any workspace, the ad-hoc history)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

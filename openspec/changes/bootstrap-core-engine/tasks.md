@@ -24,7 +24,7 @@
 - [ ] 3.2 Implement the template parser and resolver with the full precedence chain, escaping, non-recursive expansion and multi-name unresolved errors. Verify: unit tests for each precedence scenario, `\{{`, `a="{{b}}"`, and a test showing no socket is opened on unresolved variables.
 - [x] 3.3 Implement the dynamic variables (`$uuid`, `$timestamp`, `$timestampMs`, `$isoTimestamp`, `$randomInt [min max]`, `$randomString n`, `$env NAME`). Verify: tests for distinct UUIDs, bounded random (1000 samples) and the missing `$env` error.
 - [ ] 3.4 Implement `SecretStore` with the keyring backend, the file fallback (0600 / user-only ACL, one-time warning), the git-ignore guard, `.rustman/workspace-id`, and `rustman secret set|rm|list` (no echo). Verify: file-backend tests on all OSes, the not-ignored refusal test, and an `#[ignore]`d keychain test run manually on macOS and Windows.
-- [ ] 3.5 Implement `Secret<T>`, segment provenance in `ResolvedRequest`, and the `Redactor` with sensitive-header rules and the echo substring scan. Verify: a canary-secret test asserts the secret never appears in reporter output, history files, logs, curl export or error messages; `--show-secrets` affects the terminal only.
+- [x] 3.5 Implement `Secret<T>`, segment provenance in `ResolvedRequest`, and the `Redactor` with sensitive-header rules and the echo substring scan. Verify: a canary-secret test asserts the secret never appears in reporter output, history files, logs, curl export or error messages; `--show-secrets` affects the terminal only.
 - [x] 3.6 Document environments, secrets and the CI pattern in `docs/environments.md`. Verify: the doc examples are exercised by an integration test.
 
 ## 4. HTTP engine (`http-requests`)
@@ -44,33 +44,33 @@
 
 ## 5. Assertions and captures (`assertions`)
 
-- [ ] 5.1 Implement the assertion engine (evaluate everything; pass/fail/error) with status, header, body and latency assertions. Verify: unit tests per scenario, with exact failure message snapshots.
-- [ ] 5.2 Implement JSONPath assertions (`serde_json_path`) with all the ops, and the non-JSON error. Verify: tests for equals, length, missing path (fail, not error) and multi-node comparison.
-- [ ] 5.3 Implement JSON Schema assertions (file and inline, 2020-12 and draft-07, max 10 violations). Verify: the `/email` violation message test.
-- [ ] 5.4 Implement interpolation in expected values, and captures (json, header, status, body_regex, cookie; `required`; `persist` to `.rustman/state/<env>.yaml`; secret captures to `SecretStore`). Verify: the token-chaining collection test, the required-capture failure, persisted-capture-across-runs, and a check that `environments/` stays unmodified.
-- [ ] 5.5 Document assertions and captures in `docs/assertions.md`. Verify: every documented example is a passing fixture.
+- [x] 5.1 Implement the assertion engine (evaluate everything; pass/fail/error) with status, header, body and latency assertions. Verify: unit tests per scenario, with exact failure message snapshots.
+- [x] 5.2 Implement JSONPath assertions (`serde_json_path`) with all the ops, and the non-JSON error. Verify: tests for equals, length, missing path (fail, not error) and multi-node comparison.
+- [x] 5.3 Implement JSON Schema assertions (file and inline, 2020-12 and draft-07, max 10 violations). Verify: the `/email` violation message test.
+- [x] 5.4 Implement interpolation in expected values, and captures (json, header, status, body_regex, cookie; `required`; `persist` to `.rustman/state/<env>.yaml`; secret captures to `SecretStore`). Verify: the token-chaining collection test, the required-capture failure, persisted-capture-across-runs, and a check that `environments/` stays unmodified.
+- [x] 5.5 Document assertions and captures in `docs/assertions.md`. Verify: every documented example is a passing fixture.
 
 ## 6. CLI runner (`cli-runner`)
 
-- [ ] 6.1 Implement `rustman send` (by path or name, `--body-only`, `-o`, `--timeout`, `--insecure`, the ambiguous-name error) and ad-hoc send outside a workspace. Verify: `assert_cmd` tests, including `--body-only` byte equality and running without a workspace.
-- [ ] 6.2 Implement `rustman run` with `--env`, `--var`, `--timeout`, `--insecure`, `--bail`, `--filter`, `--iterations`, the folder-sequential/parallel scheduler and ordered results. Verify: bail and filter tests, and a parallel test using server-side timestamps to show folders overlap while in-folder order holds.
-- [ ] 6.3 Implement the reporters in `rustman-report` (pretty, json `rustman.report/v1 (kind: run)` with a published JSON Schema at `docs/schemas/report.schema.json`, junit via `quick-junit`, tap), multi-reporter output and stdout default. Verify: insta snapshots per reporter; the JSON report validates against its published schema; JUnit is checked with an XML parser.
-- [ ] 6.4 Implement the exit-code mapping (0/1/2/3/130) and SIGINT cancellation with partial report flush. Verify: tests per exit code, including "3 wins over 1"; a SIGINT test on Unix (spawn, signal, assert 130 and a valid partial JSON report).
-- [ ] 6.5 Implement terminal behavior (TTY detection, `NO_COLOR`, `TERM=dumb`, `--color`), stderr/stdout separation, and `-v`/`RUST_LOG` with redacting logs. Verify: tests show no ANSI escapes with `NO_COLOR=1` or when piped, and that stdout is valid JSON with `-vv`.
+- [x] 6.1 Implement `rustman send` (by path or name, `--body-only`, `-o`, `--timeout`, `--insecure`, the ambiguous-name error) and ad-hoc send outside a workspace. Verify: `assert_cmd` tests, including `--body-only` byte equality and running without a workspace.
+- [x] 6.2 Implement `rustman run` with `--env`, `--var`, `--timeout`, `--insecure`, `--bail`, `--filter`, `--iterations`, the folder-sequential/parallel scheduler and ordered results. Verify: bail and filter tests, and a parallel test using server-side timestamps to show folders overlap while in-folder order holds.
+- [x] 6.3 Implement the reporters in `rustman-report` (pretty, json `rustman.report/v1 (kind: run)` with a published JSON Schema at `docs/schemas/report.schema.json`, junit via `quick-junit`, tap), multi-reporter output and stdout default. Verify: insta snapshots per reporter; the JSON report validates against its published schema; JUnit is checked with an XML parser.
+- [x] 6.4 Implement the exit-code mapping (0/1/2/3/130) and SIGINT cancellation with partial report flush. Verify: tests per exit code, including "3 wins over 1"; a SIGINT test on Unix (spawn, signal, assert 130 and a valid partial JSON report).
+- [x] 6.5 Implement terminal behavior (TTY detection, `NO_COLOR`, `TERM=dumb`, `--color`), stderr/stdout separation, and `-v`/`RUST_LOG` with redacting logs. Verify: tests show no ANSI escapes with `NO_COLOR=1` or when piped, and that stdout is valid JSON with `-vv`.
 - [ ] 6.6 Implement `--help`, `--version` and `rustman completions <shell>`. Verify: snapshot tests of help output; generated completion scripts parse in bash/zsh/fish on CI (ubuntu).
-- [ ] 6.7 Document the CLI reference and exit codes in `docs/cli.md`. Verify: a test checks that every subcommand appears in `docs/cli.md`.
+- [x] 6.7 Document the CLI reference and exit codes in `docs/cli.md`. Verify: a test checks that every subcommand appears in `docs/cli.md`.
 
 ## 7. Request history (`request-history`)
 
-- [ ] 7.1 Implement recording (ULID files, workspace or platform data dir, `--no-history`, `[history] enabled`) through the `Redactor`. Verify: tests for send-is-recorded, disabled and the canary secret never on disk.
-- [ ] 7.2 Implement retention (500 default, spill-file cleanup, `history clear`) with atomic writes and a pruning lock. Verify: the 501st-write prune test, and a concurrent-writers test (two processes × 50 requests) where every entry is readable.
-- [ ] 7.3 Implement `history list` filters (`--status`, `--method`, `--grep`, `--since`, `--limit`, `--json`), `show` and `replay` with secret re-resolution. Verify: filter tests; replay with the secret present (real value sent) and with it deleted (unresolved error, nothing sent).
-- [ ] 7.4 Document history in `docs/history.md`. Verify: the doc examples run in an integration test.
+- [x] 7.1 Implement recording (ULID files, workspace or platform data dir, `--no-history`, `[history] enabled`) through the `Redactor`. Verify: tests for send-is-recorded, disabled and the canary secret never on disk.
+- [x] 7.2 Implement retention (500 default, spill-file cleanup, `history clear`) with atomic writes and a pruning lock. Verify: the 501st-write prune test, and a concurrent-writers test (two processes × 50 requests) where every entry is readable.
+- [x] 7.3 Implement `history list` filters (`--status`, `--method`, `--grep`, `--since`, `--limit`, `--json`), `show` and `replay` with secret re-resolution. Verify: filter tests; replay with the secret present (real value sent) and with it deleted (unresolved error, nothing sent).
+- [x] 7.4 Document history in `docs/history.md`. Verify: the doc examples run in an integration test.
 
 ## 8. Integration checks
 
 - [ ] 8.1 End-to-end smoke test: `rustman init` → add an environment and secret → run the sample collection against the in-process server with the json and junit reporters → replay from history. Verify: it passes on all three CI operating systems with no network access (CI job with networking disabled on Linux).
-- [ ] 8.2 Run the full redaction audit: grep every artifact produced by the e2e test for the canary secret. Verify: zero matches.
+- [x] 8.2 Run the full redaction audit: grep every artifact produced by the e2e test for the canary secret, including a non-ASCII secret with a `"` echoed `\u`-escaped, an assertion message cut mid-secret and a spilled body whose preview cut falls mid-secret (spilled bodies themselves are documented working state). Verify: zero matches of any piece of either secret.
 
 ## Workflow follow-up
 

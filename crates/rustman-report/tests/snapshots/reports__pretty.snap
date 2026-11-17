@@ -1,0 +1,12 @@
+---
+source: crates/rustman-report/tests/reports.rs
+expression: pretty(&run())
+---
+PASS  users/list  GET 200  4 ms
+FAIL  users/create  POST 404  4 ms
+      status: expected 201, got 404
+ERROR users/slow
+      timeout after 500 ms (response)
+SKIP  users/delete  skipped (bail)
+
+4 requests: 1 passed, 1 failed, 1 errored, 1 skipped (42 ms)

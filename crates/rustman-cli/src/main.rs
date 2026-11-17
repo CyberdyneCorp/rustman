@@ -1,14 +1,33 @@
 mod commands;
 mod exit;
+mod terminal;
 
 use std::io::Write;
 use std::process::ExitCode;
 
-use clap::{CommandFactory, Parser, Subcommand};
+use clap::{ArgAction, CommandFactory, Parser, Subcommand};
+
+use terminal::ColorWhen;
 
 #[derive(Debug, Parser)]
 #[command(name = "rustman", version = rustman_core::VERSION, about)]
 struct Cli {
+    /// Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+    #[arg(
+        long,
+        value_name = "WHEN",
+        value_enum,
+        global = true,
+        default_value_t,
+        hide_possible_values = true,
+        display_order = 100
+    )]
+    color: ColorWhen,
+    /// Log more on stderr: -v requests, -vv headers, -vvv everything
+    /// (RUST_LOG, when set, replaces these levels)
+    #[arg(short = 'v', long = "verbose", action = ArgAction::Count, global = true,
+          display_order = 101)]
+    verbose: u8,
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -29,10 +48,20 @@ enum Command {
     Import(commands::import::ImportArgs),
     /// Print requests in other formats (curl)
     Export(commands::export::ExportArgs),
+    /// Send one request (a file, id or name, or an ad-hoc METHOD URL) and print the response
+    Send(commands::send::SendArgs),
+    /// Run the requests under files or folders and report the results
+    Run(commands::run::RunArgs),
+    /// List, inspect, replay and clear past exchanges (redacted)
+    History(commands::history::HistoryArgs),
+    /// Print a shell completion script: rustman completions zsh > _rustman
+    Completions(commands::completions::CompletionsArgs),
 }
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+    terminal::init_color(cli.color);
+    terminal::init_logs(cli.verbose, cli.color);
     let Some(command) = cli.command else {
         // The TUI arrives in a later change; until then, show help. A closed
         // stdout (e.g. `rustman | head -c0`) is not an error worth a panic.
@@ -42,17 +71,8 @@ fn main() -> ExitCode {
             .and_then(|()| writeln!(out));
         return ExitCode::SUCCESS;
     };
-    let result: Result<(), exit::CliError> = match command {
-        Command::Init(args) => commands::init::run(&args).map_err(Into::into),
-        Command::Env(args) => commands::env::run(&args).map_err(Into::into),
-        Command::Secret(args) => commands::secret::run(&args).map_err(Into::into),
-        Command::Cookies(args) => commands::cookies::run(&args).map_err(Into::into),
-        Command::Auth(args) => commands::auth::run(&args),
-        Command::Import(args) => commands::import::run(&args),
-        Command::Export(args) => commands::export::run(&args),
-    };
-    match result {
-        Ok(()) => ExitCode::SUCCESS,
+    match dispatch(command) {
+        Ok(code) => ExitCode::from(code),
         Err(err) => {
             let _ = writeln!(std::io::stderr(), "{}", err.render());
             ExitCode::from(err.code())
@@ -60,13 +80,26 @@ fn main() -> ExitCode {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::Cli;
-    use clap::CommandFactory;
-
-    #[test]
-    fn cli_definition_is_valid() {
-        Cli::command().debug_assert();
+/// Run `command`; `Ok` carries the exit code of a command that completed.
+fn dispatch(command: Command) -> Result<u8, exit::CliError> {
+    let done = |()| exit::SUCCESS;
+    match command {
+        Command::Init(args) => Ok(commands::init::run(&args).map(done)?),
+        Command::Env(args) => Ok(commands::env::run(&args).map(done)?),
+        Command::Secret(args) => Ok(commands::secret::run(&args).map(done)?),
+        Command::Cookies(args) => Ok(commands::cookies::run(&args).map(done)?),
+        Command::Auth(args) => commands::auth::run(&args).map(done),
+        Command::Import(args) => commands::import::run(&args).map(done),
+        Command::Export(args) => commands::export::run(&args).map(done),
+        Command::Send(args) => commands::send::run(&args),
+        Command::Run(args) => commands::run::run(&args),
+        Command::History(args) => commands::history::run(&args),
+        Command::Completions(args) => {
+            commands::completions::run(&args, &mut Cli::command());
+            Ok(exit::SUCCESS)
+        }
     }
 }
+
+#[cfg(test)]
+mod tests;

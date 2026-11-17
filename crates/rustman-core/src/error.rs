@@ -81,6 +81,9 @@ pub enum ConfigError {
     RequestNotFound(String),
     #[error("request name '{name}' is ambiguous: {}", paths.join(", "))]
     AmbiguousRequest { name: String, paths: Vec<String> },
+    /// A bad flag value or argument, such as a run path outside the workspace.
+    #[error("{0}")]
+    Usage(String),
     #[error(transparent)]
     Secrets(#[from] SecretError),
     #[error("{}: {source}", path.display())]

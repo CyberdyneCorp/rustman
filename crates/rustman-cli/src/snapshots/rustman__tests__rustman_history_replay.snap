@@ -1,0 +1,38 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Send an exchange's request again, with secrets read from the store now
+
+Usage: rustman history replay [OPTIONS] <ID>
+
+Arguments:
+  <ID>
+          The exchange id (or a unique prefix of it)
+
+Options:
+      --no-history
+          Do not record the replayed exchange
+
+      --body-only
+          Print only the response body, byte for byte
+
+  -o, --output <FILE>
+          Write the response body, byte for byte, to FILE instead of stdout
+
+      --show-secrets
+          Print secret values and credential headers as they are, on this terminal only (history and reports stay redacted)
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards; outside any workspace, the ad-hoc history)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

@@ -1,0 +1,26 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Convert a curl command (an argument, or stdin) into a request file
+
+Usage: rustman import curl [OPTIONS] [COMMAND]...
+
+Arguments:
+  [COMMAND]...
+          The curl command: one quoted argument, or its words after `--`
+
+Options:
+      --out <FILE>
+          Write the request file here instead of printing it (never overwrites)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

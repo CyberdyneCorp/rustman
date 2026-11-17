@@ -193,9 +193,15 @@ Authorization: «redacted:Authorization»
 
 Rustman tracks which bytes of a request came from a secret, and also scans every output for the secret values themselves (including their JSON-escaped forms, with or without `\uXXXX` escapes for non-ASCII characters, and their URL-encoded forms, in upper- or lowercase hex). That second check catches a server that echoes a secret back in its response.
 
-The only exception is an explicit, per-command opt-in, `--show-secrets`, which affects terminal output only: history and reports stay redacted. It arrives with `rustman send` and `rustman run`.
+Redaction happens before anything is quoted or shortened: an assertion message that quotes 200 characters of a body, or the 64 KiB preview of a large body, never ends with the start of a secret, and never splits a `«redacted:<name>»` placeholder.
 
-> **Status:** this section describes the redaction contract. In this release the commands that produce output are `rustman init`, `rustman env` and `rustman secret`, plus error messages, and those are redacted today. History, reports, logs and copy-as-curl arrive with `rustman send` and `rustman run`, and each of them goes through the same redactor.
+Two kinds of files are working state rather than artifacts, and hold what the server sent as is: the cookie jar (`.rustman/cookies/`), which keeps a cookie whose value echoes a secret so it can be sent back, and a large response body spilled to `.rustman/bodies/` while history keeps its entry. Both are readable by the current user only and live in the git-ignored `.rustman/` folder.
+
+A secret the server transforms before echoing it (base64-encodes it, changes its case, hashes it, splits it) is not recognized, and is shown as the server sent it. Only the forms listed above are matched.
+
+The only exception is an explicit, per-command opt-in, `--show-secrets`, which affects terminal output only: history, reports and logs stay redacted. `rustman send` and `rustman history replay` accept it to print the response headers and body as received, and `rustman export curl` accepts it to print the real values in the command. `--body-only` and `-o` always write the body exactly as received, since they exist to save it byte for byte.
+
+An end-to-end test (`crates/rustman-cli/tests/e2e.rs`) checks this contract: it runs a workspace through `init`, `secret set`, `run` with the json and junit reporters and `-vvv` logs, `export curl`, a failing request, and `history list`, `show` and `replay`, then searches every file it produced and everything it printed for the secret, and finds nothing. Its secret is non-ASCII and contains a `"`, and the server also echoes it JSON-escaped, in a failing assertion message cut mid-secret and across the cut of a spilled body's preview.
 
 ## The CI pattern
 

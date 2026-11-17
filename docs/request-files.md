@@ -12,7 +12,7 @@ shop/
 ├── environments/             one file per environment (see environments.md)
 │   └── local.yaml
 ├── users/                    a collection
-│   ├── _collection.yaml      optional: order, inherited headers, auth and variables
+│   ├── _collection.yaml      optional: order, parallel, inherited headers, auth and variables
 │   ├── login.rman.yaml
 │   └── get-user.rman.yaml
 └── .rustman/                 per-user state (history, secrets): git-ignored
@@ -63,7 +63,7 @@ Every request file has these fields, in this order:
 | `description` | no | Free text. |
 | `tags` | no | A list of strings. |
 | `variables` | no | Request-level variables (see environments.md for precedence). |
-| `assertions` | no | Checks on the response (see assertions.md). |
+| `assertions` | no | Checks on the response (see [assertions.md](assertions.md)). |
 | `captures` | no | Values extracted from the response for later requests. |
 
 `graphql` and `mcp` files are parsed and listed, but executing them reports them as skipped with `request kind '<kind>' is not supported by this build` until the GraphQL and MCP client changes land.
@@ -316,7 +316,7 @@ settings:
 
 ## Assertions and captures
 
-Each assertion is a one-key mapping naming its type. Captures extract values for later requests in the same run. assertions.md covers every operator.
+Each assertion is a one-key mapping naming its type. Captures extract values for later requests in the same run. [assertions.md](assertions.md) covers every operator.
 
 ```yaml
 # users/login.rman.yaml
@@ -361,7 +361,7 @@ Every folder under the workspace root is a collection, except `environments/`, f
 
 Requests run in file-name order unless the folder has a `_collection.yaml` with `order:`. Entries named there (request file names without `.rman.yaml`, or sub-folder names) run first, in that order, and the rest follow by file name. An `order:` entry that matches nothing produces a warning.
 
-A `_collection.yaml` may also set `name`, `description`, and `headers`, `auth` and `variables` that the requests inside inherit. A request's own value wins. A header set closer to the request replaces every header with the same name (case-insensitive) set further up.
+A `_collection.yaml` may also set `name`, `description`, `parallel: true` (under `rustman run --parallel <n>`, the folder's requests run concurrently instead of one after another; see [the CLI reference](cli.md#rustman-run)), and `headers`, `auth` and `variables` that the requests inside inherit. A request's own value wins. A header set closer to the request replaces every header with the same name (case-insensitive) set further up.
 
 ```yaml
 # users/_collection.yaml

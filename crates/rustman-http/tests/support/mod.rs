@@ -1,16 +1,11 @@
-//! The in-process test server (design D14) and helpers for the integration
-//! tests. Nothing here touches the network beyond the loopback interface.
+//! The in-process test server (design D14, from `rustman-test-support`) and
+//! helpers for the integration tests. Nothing here touches the network
+//! beyond the loopback interface.
 #![allow(dead_code, unused_imports)]
 
-pub mod certs;
-pub mod oauth;
-pub mod proxy;
-pub mod raw;
-pub mod routes;
-pub mod server;
-
-pub use certs::TestCerts;
-pub use oauth::OAuthServer;
-pub use proxy::TestProxy;
-pub use server::{TestServer, Tls};
+pub mod collection;
 pub mod request;
+
+pub use rustman_test_support::{
+    OAuthServer, TestCerts, TestProxy, TestServer, Tls, certs, oauth, proxy, raw, routes, server,
+};
