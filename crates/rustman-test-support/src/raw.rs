@@ -12,8 +12,8 @@ use rustls_pki_types::ServerName;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_rustls::TlsConnector;
 
-use super::certs::{TestCerts, certs_from_pem, key_from_pem};
-use super::server::{TestServer, tcp};
+use crate::certs::{TestCerts, certs_from_pem, key_from_pem};
+use crate::server::{TestServer, tcp};
 
 pub struct RawResponse {
     pub version: Version,

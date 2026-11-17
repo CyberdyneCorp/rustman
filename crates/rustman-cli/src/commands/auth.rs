@@ -2,14 +2,13 @@
 //! token in the secret store, so later runs (CI included) can reuse and
 //! refresh it without a browser.
 
-use std::process::{Command, Stdio};
-
 use clap::{Args, Subcommand};
 use rustman_core::secrets::BACKEND_VAR;
 use rustman_core::vars::{Resolver, resolve_request};
 use rustman_core::{ConfigError, SecretBackend, SecretStore};
-use rustman_http::{HttpEngine, Login, OAuth2Context, RequestError, SendOptions, oauth2_cache_key};
+use rustman_http::{HttpEngine, Login, OAuth2Context, SendOptions, oauth2_cache_key};
 
+use super::exec::{runtime, show_login_url};
 use super::{EnvSelection, current_dir, env_label, print_warnings};
 use crate::exit::CliError;
 
@@ -64,32 +63,4 @@ fn login(args: &LoginArgs) -> Result<(), CliError> {
         env_label(env)
     );
     Ok(())
-}
-
-fn runtime() -> Result<tokio::runtime::Runtime, RequestError> {
-    tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map_err(|e| RequestError::Io(format!("cannot start the async runtime: {e}")))
-}
-
-/// Print the authorization URL and try to open it in the default browser.
-fn show_login_url(url: &str) {
-    eprintln!("Open this URL in your browser to log in:\n  {url}");
-    let mut command = if cfg!(target_os = "macos") {
-        Command::new("open")
-    } else if cfg!(windows) {
-        let mut command = Command::new("rundll32");
-        command.arg("url.dll,FileProtocolHandler");
-        command
-    } else {
-        Command::new("xdg-open")
-    };
-    // Without a browser the printed URL is the way in.
-    let _ = command
-        .arg(url)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
 }

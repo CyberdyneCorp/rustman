@@ -15,6 +15,7 @@ mod multipart;
 mod oauth2;
 mod proxy;
 mod redirect;
+pub mod runner;
 mod timing;
 mod tls;
 mod transport;

@@ -1,10 +1,15 @@
 //! What one sent request produced.
 
+use std::borrow::Cow;
 use std::fmt;
+use std::io;
 use std::path::PathBuf;
 
 use bytes::Bytes;
 use http::{HeaderMap, Version};
+use rustman_core::Redactor;
+use rustman_core::assertions::ResponseView;
+use rustman_core::vars::ResolvedRequest;
 use serde::{Serialize, Serializer};
 
 use crate::redirect::RedirectHop;
@@ -74,6 +79,50 @@ pub struct Exchange {
     pub insecure: bool,
     /// Non-fatal problems, such as a stale `Content-Length` that was replaced.
     pub warnings: Vec<String>,
+    /// The credentials of the sensitive headers sent or received on any hop
+    /// (jar cookies, proxy credentials, `Set-Cookie`), which the request
+    /// itself does not name. Merge it into the request's redactor so an
+    /// echoing server cannot leak them.
+    pub credentials: Redactor,
+}
+
+impl Exchange {
+    /// The redactor for everything recorded about this exchange of
+    /// `request`: the request's own, plus the credentials sent or received
+    /// on the wire.
+    pub fn redactor(&self, request: &ResolvedRequest) -> Redactor {
+        let mut redactor = Redactor::for_request(request);
+        redactor.merge(&self.credentials);
+        redactor
+    }
+
+    /// The response as assertions and captures read it. With `full_body`, a
+    /// body spilled to disk is read back whole; otherwise the view holds
+    /// the in-memory body (or its first 64 KiB), which is enough for
+    /// assertions that do not read the body (see
+    /// [`rustman_core::assertions::needs_body`]).
+    pub fn view(&self, full_body: bool) -> io::Result<ResponseView<'_>> {
+        let body = match &self.spill {
+            Some(path) if full_body => Cow::Owned(std::fs::read(path)?),
+            _ => Cow::Borrowed(self.body.as_ref()),
+        };
+        let headers = self
+            .headers
+            .iter()
+            .map(|(name, value)| {
+                let value = String::from_utf8_lossy(value.as_bytes()).into_owned();
+                (name.as_str().to_owned(), value)
+            })
+            .collect();
+        Ok(ResponseView {
+            status: self.status,
+            headers,
+            body,
+            binary: self.binary,
+            ttfb: self.timings.ttfb,
+            total: self.timings.total,
+        })
+    }
 }
 
 #[cfg(test)]

@@ -39,6 +39,7 @@ const KNOWN_KEYS: &[(&str, &[&str])] = &[
             "client_pkcs12_password",
         ],
     ),
+    ("history", &["enabled", "max_entries"]),
 ];
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -49,7 +50,26 @@ pub struct Settings {
     #[serde(default)]
     pub http: HttpDefaults,
     #[serde(default)]
+    pub history: HistorySettings,
+    #[serde(default)]
     pub variables: Variables,
+}
+
+/// `[history]`: whether exchanges are recorded, and how many are kept.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct HistorySettings {
+    pub enabled: bool,
+    pub max_entries: usize,
+}
+
+impl Default for HistorySettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_entries: 500,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -158,6 +178,15 @@ impl Settings {
         Ok((settings, unknown_keys(&table)))
     }
 
+    /// The settings of a request sent outside any workspace: every default,
+    /// no variables.
+    pub fn ad_hoc() -> Self {
+        let text = "[workspace]\nname = \"ad-hoc\"\nversion = 1\n";
+        Self::parse(Path::new(SETTINGS_FILE), text)
+            .expect("the built-in settings parse")
+            .0
+    }
+
     /// Read and parse `rustman.toml` from the workspace root.
     pub fn load(root: &Path) -> Result<(Self, Vec<String>), ConfigError> {
         let file = root.join(SETTINGS_FILE);
@@ -262,6 +291,9 @@ mod tests {
         assert!(settings.defaults.verify_tls);
         assert_eq!(settings.http.max_body_bytes, 10 * 1024 * 1024);
         assert!(settings.variables.is_empty());
+        assert_eq!(settings.history, HistorySettings::default());
+        assert!(settings.history.enabled);
+        assert_eq!(settings.history.max_entries, 500);
     }
 
     #[test]
@@ -287,6 +319,10 @@ client_key = "certs/client.key"
 client_pkcs12 = "certs/client.p12"
 client_pkcs12_password = "{{p12_password}}"
 
+[history]
+enabled = false
+max_entries = 20
+
 [variables]
 base_url = "http://localhost"
 "#;
@@ -303,6 +339,13 @@ base_url = "http://localhost"
         assert_eq!(s.http.positions["ca_bundle"].line, 14);
         assert_eq!(s.http.positions["client_pkcs12"].line, 19);
         assert!(s.variables.get("base_url").is_some());
+        assert_eq!(
+            s.history,
+            HistorySettings {
+                enabled: false,
+                max_entries: 20
+            }
+        );
         let debug = format!("{:?}", s.http);
         assert!(!debug.contains("p12_password"), "{debug}");
     }

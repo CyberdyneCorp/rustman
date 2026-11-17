@@ -115,7 +115,7 @@ fn since_epoch() -> std::time::Duration {
 }
 
 /// RFC 3339 UTC with milliseconds, e.g. `2026-11-17T09:30:00.123Z`.
-fn iso_now() -> String {
+pub(crate) fn iso_now() -> String {
     let now = OffsetDateTime::now_utc();
     format!(
         "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",

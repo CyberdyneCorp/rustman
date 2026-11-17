@@ -18,6 +18,7 @@
 use std::borrow::Cow;
 use std::fmt;
 use std::ops::Range;
+use std::sync::{OnceLock, PoisonError, RwLock};
 
 use aho_corasick::AhoCorasick;
 use base64::Engine as _;
@@ -69,14 +70,53 @@ impl Redactor {
         Self::default()
     }
 
-    /// A redactor for everything produced while sending `request`.
+    /// A redactor for everything produced while sending `request`: its
+    /// secrets, and the credentials its sensitive headers and auth carry
+    /// even when they are literals, so an echoing server cannot leak them.
     pub fn for_request(request: &ResolvedRequest) -> Self {
         let mut redactor = Self::new();
         for secret in &request.secrets {
             redactor.add(secret);
         }
         redactor.add_basic_credential(request);
+        for header in &request.headers {
+            redactor.add_header_value(&header.name.text, &header.value.text);
+        }
+        if let Some(auth) = &request.auth {
+            redactor.add_auth(auth);
+        }
         redactor
+    }
+
+    /// Redact every occurrence of the credential a sensitive header value
+    /// carries, as `«redacted:<Header-Name>»`: the value after the scheme
+    /// (`Bearer`, `Basic`, ...) or each cookie value. Other headers, and
+    /// credentials shorter than [`MIN_HEADER_CREDENTIAL`], are ignored.
+    pub fn add_header_value(&mut self, header: &str, value: &str) {
+        let Some(name) = sensitive_header(header) else {
+            return;
+        };
+        for credential in header_credentials(name, value) {
+            if credential.chars().count() >= MIN_HEADER_CREDENTIAL {
+                self.add_value(name, credential);
+            }
+        }
+    }
+
+    /// The literal credentials of `auth`, as the `Authorization` header (or
+    /// the API key's header) carries them.
+    fn add_auth(&mut self, auth: &Auth) {
+        match auth {
+            Auth::Basic { username, password } => {
+                let encoded = STANDARD.encode(format!("{username}:{password}"));
+                self.add_header_value("Authorization", &format!("Basic {encoded}"));
+            }
+            Auth::Bearer { token } => {
+                self.add_header_value("Authorization", &format!("Bearer {token}"));
+            }
+            Auth::ApiKey { name, value, .. } => self.add_header_value(name, value),
+            Auth::None | Auth::OAuth2(_) => {}
+        }
     }
 
     /// The Basic auth header carries `user:password` base64-encoded, a form
@@ -128,9 +168,46 @@ impl Redactor {
         self.matcher = AhoCorasick::new(&self.needles).ok();
     }
 
+    /// Also redact every value `other` knows, under the same names.
+    pub fn merge(&mut self, other: &Redactor) {
+        let mut added = false;
+        for (needle, placeholder) in other.needles.iter().zip(&other.placeholders) {
+            if !self.needles.contains(needle) {
+                self.needles.push(needle.clone());
+                self.placeholders.push(placeholder.clone());
+                added = true;
+            }
+        }
+        for name in &other.names {
+            if !self.names.contains(name) {
+                self.names.push(name.clone());
+            }
+        }
+        if added {
+            self.matcher = AhoCorasick::new(&self.needles).ok();
+        }
+    }
+
     /// The names of the secrets this redactor knows.
     pub fn secret_names(&self) -> &[String] {
         &self.names
+    }
+
+    /// Whether `text` holds a known secret value, in any form it is matched in.
+    pub fn finds_secret(&self, text: &str) -> bool {
+        self.occurs_in(text.as_bytes())
+    }
+
+    /// Whether `text` holds a known secret value or is a piece of one at
+    /// least [`MIN_SECRET_PIECE`] characters long (a capture that matched
+    /// part of an echoed secret).
+    pub fn reveals_secret(&self, text: &str) -> bool {
+        let piece = text.chars().count() >= MIN_SECRET_PIECE
+            && self
+                .needles
+                .iter()
+                .any(|n| n.windows(text.len()).any(|w| w == text.as_bytes()));
+        piece || self.finds_secret(text)
     }
 
     /// `input` with every known secret value replaced.
@@ -148,6 +225,31 @@ impl Redactor {
             return Cow::Borrowed(input);
         }
         Cow::Owned(self.scan(input, &[]))
+    }
+
+    /// The first `keep` bytes of `input`, with every known secret value
+    /// replaced. A secret that starts before `keep` is replaced whole, so
+    /// the cut never leaves a part of it: pass an `input` that runs at least
+    /// [`Redactor::longest`] bytes past `keep` when one exists.
+    pub fn bytes_prefix(&self, input: &[u8], keep: usize) -> Vec<u8> {
+        let keep = keep.min(input.len());
+        let mut out = Vec::with_capacity(keep);
+        let mut copied = 0;
+        let runs = merge(self.matches(input, &[]));
+        for run in runs.into_iter().take_while(|run| run.range.start < keep) {
+            out.extend_from_slice(&input[copied..run.range.start]);
+            out.extend_from_slice(run.placeholders.concat().as_bytes());
+            copied = run.range.end;
+        }
+        if copied < keep {
+            out.extend_from_slice(&input[copied..keep]);
+        }
+        out
+    }
+
+    /// The length in bytes of the longest form of a known secret value.
+    pub fn longest(&self) -> usize {
+        self.needles.iter().map(Vec::len).max().unwrap_or(0)
     }
 
     /// Resolved text with its secret spans and every known secret replaced.
@@ -214,6 +316,42 @@ impl Redactor {
         found.sort_by_key(|m| (m.range.start, std::cmp::Reverse(m.range.end)));
         found
     }
+}
+
+/// The shortest piece of a secret value that counts as revealing it; shorter
+/// ones are too common to tell.
+pub const MIN_SECRET_PIECE: usize = 4;
+
+/// The shortest header credential (cookie value, token) redacted wherever
+/// it occurs. Shorter ones (`theme=1`) would mangle unrelated text and are
+/// only redacted in the header itself.
+pub const MIN_HEADER_CREDENTIAL: usize = 6;
+
+/// The credentials in the value of the sensitive header `name`: each cookie
+/// value for `Cookie`, the cookie value for `Set-Cookie`, otherwise the
+/// value after its scheme, or the whole value when it has none.
+fn header_credentials<'v>(name: &str, value: &'v str) -> Vec<&'v str> {
+    let cookie_value = |pair: &'v str| pair.split_once('=').map(|(_, v)| unquote(v.trim()));
+    match name {
+        "Cookie" => value.split(';').filter_map(cookie_value).collect(),
+        "Set-Cookie" => value
+            .split(';')
+            .next()
+            .and_then(cookie_value)
+            .into_iter()
+            .collect(),
+        _ => {
+            let value = value.trim();
+            vec![value.split_once(' ').map_or(value, |(_, c)| c.trim())]
+        }
+    }
+}
+
+fn unquote(value: &str) -> &str {
+    value
+        .strip_prefix('"')
+        .and_then(|v| v.strip_suffix('"'))
+        .unwrap_or(value)
 }
 
 /// One secret occurrence in the input.
@@ -323,6 +461,36 @@ fn percent_encode(value: &str, space: &str, upper: bool) -> String {
         }
     }
     out
+}
+
+/// Every secret value this process has resolved, for sinks that are not
+/// tied to one request: logs (`-v`, `RUST_LOG`) go through
+/// [`redact_logs`] as a safety net over events that are already redacted.
+fn log_secrets() -> &'static RwLock<Redactor> {
+    static SECRETS: OnceLock<RwLock<Redactor>> = OnceLock::new();
+    SECRETS.get_or_init(RwLock::default)
+}
+
+/// Make [`redact_logs`] redact every value `redactor` knows. Call it as soon
+/// as secrets are resolved, before anything about the request is logged.
+pub fn remember_for_logs(redactor: &Redactor) {
+    if redactor.matcher.is_none() {
+        return;
+    }
+    log_secrets()
+        .write()
+        .unwrap_or_else(PoisonError::into_inner)
+        .merge(redactor);
+}
+
+/// `line` with every secret value remembered by [`remember_for_logs`]
+/// replaced.
+pub fn redact_logs(line: &str) -> String {
+    log_secrets()
+        .read()
+        .unwrap_or_else(PoisonError::into_inner)
+        .text(line)
+        .into_owned()
 }
 
 #[cfg(test)]
@@ -469,6 +637,107 @@ mod tests {
         );
     }
 
+    fn request_with(headers: &[(&str, &str)], auth: Option<Auth>) -> ResolvedRequest {
+        ResolvedRequest {
+            method: "GET".into(),
+            url: Resolved::literal("http://h/"),
+            query: Vec::new(),
+            headers: headers
+                .iter()
+                .map(|(n, v)| crate::vars::ResolvedPair {
+                    name: Resolved::literal(*n),
+                    value: Resolved::literal(*v),
+                })
+                .collect(),
+            body: crate::vars::ResolvedBody::None,
+            auth,
+            settings: crate::model::RequestSettings::default(),
+            tls: crate::vars::TlsFiles::default(),
+            secrets: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn echoed_literal_sensitive_headers_are_redacted() {
+        let request = request_with(
+            &[
+                ("authorization", "Bearer LITERALabc123"),
+                ("Cookie", "sid=\"CANARYs3cr3tXYZ\"; theme=1"),
+                ("X-Trace", "trace-value-1"),
+            ],
+            None,
+        );
+        let r = Redactor::for_request(&request);
+        assert_eq!(
+            r.text(r#"{"auth":"Bearer LITERALabc123","cookie":"sid=CANARYs3cr3tXYZ; theme=1"}"#),
+            r#"{"auth":"Bearer «redacted:Authorization»","cookie":"sid=«redacted:Cookie»; theme=1"}"#
+        );
+        assert_eq!(r.text("trace-value-1"), "trace-value-1");
+    }
+
+    #[test]
+    fn literal_auth_credentials_are_redacted_when_echoed() {
+        let bearer = request_with(
+            &[],
+            Some(Auth::Bearer {
+                token: "tok-LITERAL-9".into(),
+            }),
+        );
+        assert_eq!(
+            Redactor::for_request(&bearer).text("got tok-LITERAL-9"),
+            "got «redacted:Authorization»"
+        );
+        let basic = Auth::Basic {
+            username: "user".into(),
+            password: "pass".into(),
+        };
+        let encoded = STANDARD.encode("user:pass");
+        assert_eq!(
+            Redactor::for_request(&request_with(&[], Some(basic))).text(&encoded),
+            "«redacted:Authorization»"
+        );
+    }
+
+    #[test]
+    fn header_credentials_skip_short_and_other_values() {
+        let mut r = Redactor::new();
+        r.add_header_value("Set-Cookie", "sid=abcdef123; Path=/; HttpOnly");
+        r.add_header_value("Cookie", "a=1");
+        r.add_header_value("Accept", "application/json");
+        assert_eq!(
+            r.text("abcdef123 a=1 application/json Path=/"),
+            "«redacted:Set-Cookie» a=1 application/json Path=/"
+        );
+    }
+
+    #[test]
+    fn a_prefix_never_ends_inside_a_secret() {
+        let r = Redactor::new().with(&Secret::new("tok", "simpleCANARY".to_owned()));
+        let input = format!("{}simpleCANARY tail", "A".repeat(10));
+        for keep in 0..=input.len() {
+            let out = into_string(r.bytes_prefix(input.as_bytes(), keep));
+            assert!(!out.contains("simple"), "{keep}: {out}");
+            if keep > 10 {
+                assert!(
+                    out.ends_with("«redacted:tok»") || out.contains("» "),
+                    "{keep}: {out}"
+                );
+            }
+        }
+        assert_eq!(r.bytes_prefix(b"AAsimpleCANARY", 1), b"A");
+        assert_eq!(r.longest(), "simpleCANARY".len());
+    }
+
+    #[test]
+    fn pieces_of_a_secret_reveal_it() {
+        let r = Redactor::new().with(&Secret::new("tok", "simpleCANARY".to_owned()));
+        assert!(r.reveals_secret("simpleCAN"));
+        assert!(r.reveals_secret("x simpleCANARY y"));
+        assert!(r.reveals_secret("NARY"));
+        assert!(!r.reveals_secret("ARY"));
+        assert!(!r.reveals_secret("other"));
+    }
+
     #[test]
     fn debug_lists_names_only() {
         let r = Redactor::new().with(&token());
@@ -477,5 +746,30 @@ mod tests {
             debug.contains("api_token") && !debug.contains("s3cr3t"),
             "{debug}"
         );
+    }
+
+    #[test]
+    fn merged_redactors_redact_both_sets_of_values() {
+        let mut a = Redactor::new().with(&Secret::new("one", "first-value".to_owned()));
+        let b = Redactor::new().with(&Secret::new("two", "second-value".to_owned()));
+        a.merge(&b);
+        assert_eq!(
+            a.text("first-value second-value"),
+            "«redacted:one» «redacted:two»"
+        );
+        assert_eq!(a.secret_names(), ["one", "two"]);
+    }
+
+    #[test]
+    fn remembered_secrets_are_redacted_from_logs() {
+        let redactor = Redactor::new().with(&Secret::new("log_canary", "c4n4ry-l0g".to_owned()));
+        assert_eq!(redact_logs("token=c4n4ry-l0g"), "token=c4n4ry-l0g");
+        remember_for_logs(&redactor);
+        assert_eq!(
+            redact_logs("token=c4n4ry-l0g"),
+            "token=«redacted:log_canary»"
+        );
+        remember_for_logs(&Redactor::new());
+        assert_eq!(redact_logs("plain"), "plain");
     }
 }

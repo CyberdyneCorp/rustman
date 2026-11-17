@@ -14,11 +14,19 @@
 //! | `/stall-after/<n>` | `<n>` of the promised `2n` bytes, then nothing |
 //! | `/png` | a small PNG, byte for byte [`PNG`] |
 //! | `/login` | `200` with `Set-Cookie: sid=abc; Path=/` |
+//! | `/session` | `200` with `Set-Cookie: session=`[`SESSION`]`; Path=/` |
+//! | `/token` | `200` JSON `{"access_token": TOKEN, "user": {"id": 42}}` |
+//! | `/users/42` | `200` JSON [`USER`] with `X-Request-Id: req-1` |
+//! | `/orders` | `201` `created order-123456` with `Location` and `Set-Cookie: cart=c-9` |
+//! | `/timed/<ms>?id=<id>` | `200 done` after `<ms>` milliseconds, logging server-side start and end times (see [`timed_hits`]) |
+//! | `/mirror?pad=<n>&tail=<m>` | `200` text: `<n>` `A`s, the request body as an ASCII-only JSON string (`"caf\u00e9 \"x\""`), `<m>` `B`s |
+//! | `/me` | `200` JSON `{"id": 42}` with `Authorization: Bearer TOKEN`, else `401` |
 
 use std::convert::Infallible;
 use std::pin::Pin;
+use std::sync::Mutex;
 use std::task::{Context, Poll};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use async_compression::tokio::bufread::{BrotliEncoder, GzipEncoder, ZlibEncoder, ZstdEncoder};
 use bytes::Bytes;
@@ -41,18 +49,63 @@ pub const PNG: &[u8] = &[
     0xfe, 0x00, 0x80,
 ];
 
+/// The user `/users/42` returns.
+pub const USER: &str = r#"{"id":42,"name":"Ana","email":"ana@example.com","roles":["admin","dev"],"address":{"city":"Lisbon"}}"#;
+
+/// The access token `/token` issues and `/me` requires.
+pub const TOKEN: &str = "tok-7f3a";
+
 const CHUNK: usize = 64 * 1024;
+
+/// One `/timed` request as the server saw it.
+#[derive(Clone, Debug)]
+pub struct TimedHit {
+    pub id: String,
+    pub start: Instant,
+    /// `None` while the response is pending, or when the client went away.
+    pub end: Option<Instant>,
+}
+
+static TIMED: Mutex<Vec<TimedHit>> = Mutex::new(Vec::new());
+
+/// Every `/timed` request whose id starts with `prefix`, in arrival order.
+pub fn timed_hits(prefix: &str) -> Vec<TimedHit> {
+    let hits = TIMED.lock().unwrap_or_else(|e| e.into_inner());
+    hits.iter()
+        .filter(|h| h.id.starts_with(prefix))
+        .cloned()
+        .collect()
+}
+
+async fn timed(req: &Request<Incoming>, ms: &str) -> Response<TestBody> {
+    let id = query_param(req, "id");
+    let index = {
+        let mut hits = TIMED.lock().unwrap_or_else(|e| e.into_inner());
+        hits.push(TimedHit {
+            id,
+            start: Instant::now(),
+            end: None,
+        });
+        hits.len() - 1
+    };
+    tokio::time::sleep(millis(ms)).await;
+    TIMED.lock().unwrap_or_else(|e| e.into_inner())[index].end = Some(Instant::now());
+    text(StatusCode::OK, "done")
+}
 
 pub async fn handle(req: Request<Incoming>) -> Result<Response<TestBody>, Infallible> {
     let path = req.uri().path().to_owned();
     let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
     let response = match segments.as_slice() {
-        ["echo"] => echo(req).await,
+        // `/get` answers like httpbin's, for the request `rustman init` writes.
+        ["echo"] | ["get"] => echo(req).await,
+        ["mirror"] => Box::pin(mirror(req)).await,
         ["delay", ms] => {
             tokio::time::sleep(millis(ms)).await;
             text(StatusCode::OK, "done")
         }
         ["slow-body", ms] => slow_body(millis(ms)),
+        ["timed", ms] => timed(&req, ms).await,
         ["status", code] => status(code.parse().unwrap_or(500)),
         ["redirect", code] => {
             let pad = query_param(&req, "pad").parse().unwrap_or(0);
@@ -66,6 +119,14 @@ pub async fn handle(req: Request<Incoming>) -> Result<Response<TestBody>, Infall
         ["stall-after", n] => stall_after(n.parse().unwrap_or(0)),
         ["png"] => png(),
         ["login"] => login(),
+        ["session"] => session(),
+        ["token"] => json(
+            StatusCode::OK,
+            &serde_json::json!({"access_token": TOKEN, "user": {"id": 42}}),
+        ),
+        ["me"] => me(&req),
+        ["users", "42"] => user(),
+        ["orders"] => order(),
         _ => text(StatusCode::NOT_FOUND, "no such route"),
     };
     Ok(response)
@@ -131,6 +192,32 @@ async fn echo(req: Request<Incoming>) -> Response<TestBody> {
     Response::builder()
         .header(header::CONTENT_TYPE, "application/json")
         .body(Full::new(Bytes::from(json.to_string())).boxed())
+        .unwrap()
+}
+
+/// `/mirror`: the request body as a JSON string with every non-ASCII
+/// character `\u`-escaped, the way Python's `json.dumps` writes it, between
+/// `pad` `A`s and `tail` `B`s.
+async fn mirror(req: Request<Incoming>) -> Response<TestBody> {
+    let count = |name| query_param(&req, name).parse().unwrap_or(0);
+    let (pad, tail) = (count("pad"), count("tail"));
+    let body = req.into_body().collect().await.map(|b| b.to_bytes());
+    let text = String::from_utf8_lossy(&body.unwrap_or_default()).into_owned();
+    let mut escaped = String::new();
+    for ch in serde_json::to_string(&text).unwrap_or_default().chars() {
+        if ch.is_ascii() {
+            escaped.push(ch);
+        } else {
+            let mut units = [0; 2];
+            for unit in ch.encode_utf16(&mut units) {
+                escaped.push_str(&format!("\\u{unit:04x}"));
+            }
+        }
+    }
+    let out = format!("{}{escaped}{}", "A".repeat(pad), "B".repeat(tail));
+    Response::builder()
+        .header(header::CONTENT_TYPE, "text/plain")
+        .body(Full::new(Bytes::from(out)).boxed())
         .unwrap()
 }
 
@@ -202,6 +289,59 @@ fn login() -> Response<TestBody> {
     Response::builder()
         .header(header::SET_COOKIE, "sid=abc; Path=/")
         .body(Full::new(Bytes::from_static(b"welcome")).boxed())
+        .unwrap()
+}
+
+/// The session cookie `/session` sets, long enough to be redacted wherever
+/// a server echoes it.
+pub const SESSION: &str = "sess-CANARY-4f9Qz";
+
+fn session() -> Response<TestBody> {
+    Response::builder()
+        .header(header::SET_COOKIE, format!("session={SESSION}; Path=/"))
+        .body(Full::new(Bytes::from_static(b"session started")).boxed())
+        .unwrap()
+}
+
+fn json(status: StatusCode, value: &serde_json::Value) -> Response<TestBody> {
+    Response::builder()
+        .status(status)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Full::new(Bytes::from(value.to_string())).boxed())
+        .unwrap()
+}
+
+fn me(req: &Request<Incoming>) -> Response<TestBody> {
+    let expected = format!("Bearer {TOKEN}");
+    let authorized = req
+        .headers()
+        .get(header::AUTHORIZATION)
+        .is_some_and(|v| v.as_bytes() == expected.as_bytes());
+    if authorized {
+        json(StatusCode::OK, &serde_json::json!({"id": 42}))
+    } else {
+        json(
+            StatusCode::UNAUTHORIZED,
+            &serde_json::json!({"error": "unauthorized"}),
+        )
+    }
+}
+
+fn user() -> Response<TestBody> {
+    Response::builder()
+        .header(header::CONTENT_TYPE, "application/json")
+        .header("X-Request-Id", "req-1")
+        .body(Full::new(Bytes::from_static(USER.as_bytes())).boxed())
+        .unwrap()
+}
+
+fn order() -> Response<TestBody> {
+    Response::builder()
+        .status(StatusCode::CREATED)
+        .header(header::CONTENT_TYPE, "text/plain")
+        .header(header::LOCATION, "/orders/123456")
+        .header(header::SET_COOKIE, "cart=c-9; Path=/")
+        .body(Full::new(Bytes::from_static(b"created order-123456")).boxed())
         .unwrap()
 }
 

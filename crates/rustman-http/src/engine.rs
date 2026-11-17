@@ -234,9 +234,10 @@ impl Hops<'_> {
     async fn follow(&self, mut request: Request<Full<Bytes>>) -> Result<Exchange, RequestError> {
         let options = self.options;
         let mut redirects = Vec::new();
+        let mut credentials = Redactor::new();
         loop {
             let id = uuid::Uuid::new_v4().to_string();
-            let received = self.send(&request, &id).await?;
+            let received = self.send(&request, &id, &mut credentials).await?;
             let next = if options.follow_redirects {
                 let head = &received.head;
                 redirect::next_request(&request, head.status, &head.headers, &self.credentials)?
@@ -245,7 +246,9 @@ impl Hops<'_> {
             };
             let Some(next) = next else {
                 let url = request.uri().to_string();
-                return Ok(exchange(id, url, redirects, received, !options.tls.verify));
+                let mut exchange = exchange(id, url, redirects, received, !options.tls.verify);
+                exchange.credentials = credentials;
+                return Ok(exchange);
             };
             discard_spill(&received);
             if redirects.len() >= options.max_redirects as usize {
@@ -260,21 +263,34 @@ impl Hops<'_> {
     }
 
     /// Send one hop, with the jar's cookies, and store the cookies it sets.
+    /// The sensitive header values sent and received go to `credentials`.
     async fn send(
         &self,
         request: &Request<Full<Bytes>>,
         id: &str,
+        credentials: &mut Redactor,
     ) -> Result<Received, RequestError> {
         let options = self.options;
         let wire = on_the_wire(request, options);
+        add_credentials(credentials, wire.headers());
         let received = self
             .transport
             .send(wire, &options.body, id, self.probe)
             .await?;
+        add_credentials(credentials, &received.head.headers);
         if let Some(jar) = &options.cookies {
             jar.store(request.uri(), &received.head.headers).await?;
         }
         Ok(received)
+    }
+}
+
+/// Add the credential of every sensitive header in `headers`.
+fn add_credentials(credentials: &mut Redactor, headers: &http::HeaderMap) {
+    for (name, value) in headers {
+        if let Ok(value) = value.to_str() {
+            credentials.add_header_value(name.as_str(), value);
+        }
     }
 }
 
@@ -333,6 +349,7 @@ fn exchange(
         timings: received.timings,
         insecure,
         warnings: received.body.warnings,
+        credentials: Redactor::new(),
     }
 }
 

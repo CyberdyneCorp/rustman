@@ -1,0 +1,40 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+List exchanges, newest first: id, time, method, URL, status and total ms
+
+Usage: rustman history list [OPTIONS]
+
+Options:
+      --status <CODE|CLASS>
+          Only exchanges with this status code (404) or class (5xx)
+
+      --method <METHOD>
+          Only exchanges with this method
+
+      --grep <TEXT>
+          Only exchanges whose URL, request body or response body contains TEXT (ignoring case)
+
+      --since <DURATION>
+          Only exchanges from the last DURATION: 30s, 15m, 1h, 2d or 1w
+
+      --limit <N>
+          Show at most N exchanges (at least 1)
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards; outside any workspace, the ad-hoc history)
+
+      --json
+          Print a JSON array instead of one line per exchange
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

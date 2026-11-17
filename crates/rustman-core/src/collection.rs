@@ -22,6 +22,9 @@ pub struct CollectionMeta {
     /// Auth inherited by requests that set none.
     pub auth: Option<Auth>,
     pub variables: Option<Variables>,
+    /// Run this folder's requests concurrently under `rustman run --parallel`
+    /// instead of one after another.
+    pub parallel: Option<bool>,
 }
 
 /// A folder of requests. The workspace root is the top-level collection.

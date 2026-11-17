@@ -1,6 +1,8 @@
 //! Mapping errors to messages and exit codes (design D12, ROADMAP exit codes).
 
 use rustman_core::ConfigError;
+use rustman_core::history::HistoryError;
+use rustman_core::run::Summary;
 use rustman_core::vars::ResolveError;
 use rustman_http::{CurlError, RequestError};
 
@@ -10,6 +12,15 @@ pub const CONFIG: u8 = 2;
 /// A request could not be completed: unresolved variables, network, TLS,
 /// timeout, auth.
 pub const REQUEST: u8 = 3;
+
+/// Every executed request passed.
+pub const SUCCESS: u8 = 0;
+
+/// At least one assertion failed (and no request errored).
+pub const ASSERTION: u8 = 1;
+
+/// Interrupted by SIGINT (Ctrl+C).
+pub const INTERRUPTED: u8 = 130;
 
 /// Any error a command can end with.
 #[derive(Debug, thiserror::Error)]
@@ -23,6 +34,9 @@ pub enum CliError {
     /// A curl command that cannot be imported.
     #[error(transparent)]
     Curl(#[from] CurlError),
+    /// History cannot be read or written, or has no such entry.
+    #[error(transparent)]
+    History(#[from] HistoryError),
 }
 
 impl CliError {
@@ -30,7 +44,7 @@ impl CliError {
         match self {
             Self::Config(err) => code(err),
             Self::Request(_) | Self::Resolve(_) => REQUEST,
-            Self::Curl(_) => CONFIG,
+            Self::Curl(_) | Self::History(_) => CONFIG,
         }
     }
 
@@ -50,8 +64,23 @@ pub fn code(err: &ConfigError) -> u8 {
         | ConfigError::NoActiveEnvironment
         | ConfigError::RequestNotFound(_)
         | ConfigError::AmbiguousRequest { .. }
+        | ConfigError::Usage(_)
         | ConfigError::Secrets(_)
         | ConfigError::Io { .. } => CONFIG,
+    }
+}
+
+/// The exit code of a finished run: interrupted wins, then errors ("3 wins
+/// over 1"), then assertion failures.
+pub fn run_code(summary: &Summary) -> u8 {
+    if summary.interrupted {
+        INTERRUPTED
+    } else if summary.errored > 0 {
+        REQUEST
+    } else if summary.failed > 0 {
+        ASSERTION
+    } else {
+        SUCCESS
     }
 }
 
@@ -137,6 +166,33 @@ mod tests {
         );
         let err = CliError::from(ConfigError::RequestNotFound("x".into()));
         assert_eq!(err.code(), 2);
+    }
+
+    fn summary(failed: usize, errored: usize, interrupted: bool) -> Summary {
+        Summary {
+            total: 5,
+            passed: 5 - failed - errored,
+            failed,
+            errored,
+            interrupted,
+            ..Summary::default()
+        }
+    }
+
+    #[test]
+    fn run_codes_follow_the_spec() {
+        assert_eq!(run_code(&summary(0, 0, false)), 0);
+        assert_eq!(run_code(&summary(1, 0, false)), 1);
+        assert_eq!(run_code(&summary(0, 1, false)), 3);
+        // 3 wins over 1.
+        assert_eq!(run_code(&summary(1, 1, false)), 3);
+        assert_eq!(run_code(&summary(1, 1, true)), 130);
+    }
+
+    #[test]
+    fn usage_errors_exit_2() {
+        let err = CliError::from(ConfigError::Usage("bad --var".into()));
+        assert_eq!((err.code(), err.render().as_str()), (2, "error: bad --var"));
     }
 
     #[test]

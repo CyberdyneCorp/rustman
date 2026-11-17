@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::common::{Seen, check_fields, seen};
 use crate::format::{Located, error_at};
@@ -32,7 +32,7 @@ pub enum Auth {
     OAuth2(OAuth2),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ApiKeyLocation {
     Header,
@@ -48,7 +48,7 @@ impl ApiKeyLocation {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OAuth2Grant {
     ClientCredentials,
