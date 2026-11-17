@@ -29,6 +29,8 @@ pub struct Environment {
     /// Variables whose values live outside the workspace (keychain or
     /// `.rustman/secrets.yaml`).
     pub secrets: Vec<String>,
+    /// `production: true`: the safety policy's production guard applies.
+    pub production: bool,
 }
 
 impl Environment {
@@ -45,6 +47,8 @@ struct EnvironmentFile {
     variables: Variables,
     #[serde(default)]
     secrets: Vec<Located<String>>,
+    #[serde(default)]
+    production: bool,
 }
 
 /// Whether `name` is a valid environment name: `[A-Za-z0-9_-]+`.
@@ -153,6 +157,7 @@ pub fn parse(file: &Path, name: &str, text: &str) -> Result<Environment, LoadErr
             .into_iter()
             .map(Located::into_inner)
             .collect(),
+        production: parsed.production,
     })
 }
 
@@ -331,6 +336,18 @@ mod tests {
                 "ignoring environment 'relative': resolves outside the workspace",
             ]
         );
+    }
+
+    #[test]
+    fn production_marker_defaults_to_false() {
+        assert!(!env("variables:\n  a: 1\n").unwrap().production);
+        assert!(env("production: true\n").unwrap().production);
+        assert!(!env("production: false\n").unwrap().production);
+        assert!(env("production: yes\n").is_err());
+        let prod = env("production: true\n").unwrap();
+        let info = crate::safety::EnvironmentInfo::from(&prod);
+        assert_eq!(info.name, Some("local"));
+        assert!(info.marked_production);
     }
 
     #[test]

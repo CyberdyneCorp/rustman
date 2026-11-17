@@ -16,9 +16,9 @@
 
 ## 2. Safety policy
 
-- [ ] 2.1 Implement `SafetyPolicy` in `rustman-core`: method gating, origin allowlist, the production detection rules, `--production <host>` matching, no destructive on production. Verify with a unit test table covering every gating rule.
-- [ ] 2.2 Implement `GovernedSender` with manual redirect handling and a policy check per hop, plus the `governor` rate limit, semaphore concurrency, 429/`Retry-After` backoff and probe/time budgets. Verify with integration tests against a local server: an off-host redirect is blocked, a 429 halves the rate, and budgets stop execution.
-- [ ] 2.3 Add the `[safety]` table to the `rustman.toml` schema (`allowed_hosts`, `production_hosts`, rate, concurrency). Verify with config parsing tests and a docs entry in `docs/safety.md`.
+- [x] 2.1 Implement `SafetyPolicy` in `rustman-core`: method gating, origin allowlist, the production detection rules, `--production <host>` matching, no destructive on production. Verify with a unit test table covering every gating rule.
+- [x] 2.2 Implement `GovernedSender` with manual redirect handling and a policy check per hop, plus the `governor` rate limit, semaphore concurrency, 429/`Retry-After` backoff and probe/time budgets. Verify with integration tests against a local server: an off-host redirect is blocked, a 429 halves the rate, and budgets stop execution.
+- [x] 2.3 Add the `[safety]` table to the `rustman.toml` schema (`allowed_hosts`, `production_hosts`, rate, concurrency). Verify with config parsing tests and a docs entry in `docs/safety.md`.
 
 ## 3. Exploration engine
 

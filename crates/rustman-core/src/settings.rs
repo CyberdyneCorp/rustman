@@ -8,6 +8,7 @@ use serde::Deserialize;
 
 use crate::error::{ConfigError, LoadError, Position};
 use crate::model::Variables;
+use crate::safety::SafetySettings;
 
 pub const SETTINGS_FILE: &str = "rustman.toml";
 
@@ -40,6 +41,10 @@ const KNOWN_KEYS: &[(&str, &[&str])] = &[
         ],
     ),
     ("history", &["enabled", "max_entries"]),
+    (
+        "safety",
+        &["allowed_hosts", "production_hosts", "rate", "concurrency"],
+    ),
 ];
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -51,6 +56,8 @@ pub struct Settings {
     pub http: HttpDefaults,
     #[serde(default)]
     pub history: HistorySettings,
+    #[serde(default)]
+    pub safety: SafetySettings,
     #[serde(default)]
     pub variables: Variables,
 }

@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use bytes::Bytes;
-use http::Request;
 use http::header::{COOKIE, PROXY_AUTHORIZATION};
+use http::{HeaderMap, Request, StatusCode};
 use http_body_util::Full;
 use rustman_core::model::RequestSettings;
 use rustman_core::settings::{Defaults, Settings};
@@ -174,8 +174,31 @@ impl HttpEngine {
         options: &SendOptions,
         token: Option<&Secret<String>>,
     ) -> Result<Exchange, RequestError> {
+        let prepared = Self::prepare(request, token).await?;
+        self.dispatch(request, prepared, options, &Ungated).await
+    }
+
+    /// The request as it leaves the process (before any hop), with the
+    /// warnings building it produced. Unredacted.
+    pub(crate) async fn prepare(
+        request: &ResolvedRequest,
+        token: Option<&Secret<String>>,
+    ) -> Result<Prepared, RequestError> {
         let (mut outgoing, warnings) = wire::build(request).await?;
         auth::apply(&mut outgoing, request.auth.as_ref(), token)?;
+        Ok(Prepared { outgoing, warnings })
+    }
+
+    /// Send a prepared request and follow its redirects within the total
+    /// timeout, letting `gate` stop each redirect hop and see every response.
+    /// Errors are unredacted.
+    pub(crate) async fn dispatch<G: Gate>(
+        &self,
+        request: &ResolvedRequest,
+        prepared: Prepared,
+        options: &SendOptions,
+        gate: &G,
+    ) -> Result<Exchange, G::Error> {
         let transport = self.transport(options)?;
         let probe = PhaseProbe::default();
         let hops = Hops {
@@ -183,22 +206,22 @@ impl HttpEngine {
             options,
             credentials: auth::credentials(request.auth.as_ref()),
             probe: &probe,
+            gate,
         };
-        let chain = hops.follow(outgoing);
+        let chain = hops.follow(prepared.outgoing);
         tokio::pin!(chain);
         // The phase is read while the request is still alive: dropping it
         // first would also drop a connection attempt in progress.
         let mut exchange = tokio::select! {
             result = &mut chain => result?,
             () = tokio::time::sleep(options.timeout) => {
-                return Err(RequestError::Timeout {
-                    after: options.timeout,
-                    phase: probe.phase(),
-                });
+                let phase = probe.phase();
+                let after = options.timeout;
+                return Err(RequestError::Timeout { after, phase }.into());
             }
         };
         let redactor = Redactor::for_request(request);
-        let mut all = warnings;
+        let mut all = prepared.warnings;
         all.append(&mut exchange.warnings);
         exchange.warnings = all.iter().map(|w| redactor.text(w).into_owned()).collect();
         Ok(exchange)
@@ -219,27 +242,64 @@ impl HttpEngine {
     }
 }
 
+/// A request built for the wire, before its first hop.
+pub(crate) struct Prepared {
+    pub outgoing: Request<Full<Bytes>>,
+    pub warnings: Vec<String>,
+}
+
+/// Decides, for a governed sender, whether each redirect hop may be sent,
+/// and sees every response. The first hop is the caller's to check before
+/// [`HttpEngine::dispatch`].
+pub(crate) trait Gate: Sync {
+    type Error: From<RequestError>;
+
+    /// Called before every redirect hop is sent.
+    fn before_redirect(
+        &self,
+        request: &Request<Full<Bytes>>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+
+    /// Called with the head of every response, redirects included.
+    fn after_hop(&self, status: StatusCode, headers: &HeaderMap);
+}
+
+/// No gate: requests sent with `rustman send` and `rustman run`.
+struct Ungated;
+
+impl Gate for Ungated {
+    type Error = RequestError;
+
+    async fn before_redirect(&self, _: &Request<Full<Bytes>>) -> Result<(), RequestError> {
+        Ok(())
+    }
+
+    fn after_hop(&self, _: StatusCode, _: &HeaderMap) {}
+}
+
 /// What every hop of one request shares.
-struct Hops<'a> {
+struct Hops<'a, G> {
     transport: &'a Transport,
     options: &'a SendOptions,
     /// Dropped when a redirect leaves the origin.
     credentials: redirect::Credentials,
     probe: &'a PhaseProbe,
+    gate: &'a G,
 }
 
-impl Hops<'_> {
+impl<G: Gate> Hops<'_, G> {
     /// Send `request` and every redirect hop after it. Every exchange made
     /// with TLS verification off is flagged insecure.
-    async fn follow(&self, mut request: Request<Full<Bytes>>) -> Result<Exchange, RequestError> {
+    async fn follow(&self, mut request: Request<Full<Bytes>>) -> Result<Exchange, G::Error> {
         let options = self.options;
         let mut redirects = Vec::new();
         let mut credentials = Redactor::new();
         loop {
             let id = uuid::Uuid::new_v4().to_string();
             let received = self.send(&request, &id, &mut credentials).await?;
+            let head = &received.head;
+            self.gate.after_hop(head.status, &head.headers);
             let next = if options.follow_redirects {
-                let head = &received.head;
                 redirect::next_request(&request, head.status, &head.headers, &self.credentials)?
             } else {
                 None
@@ -252,12 +312,13 @@ impl Hops<'_> {
             };
             discard_spill(&received);
             if redirects.len() >= options.max_redirects as usize {
-                return Err(RequestError::TooManyRedirects(options.max_redirects));
+                return Err(RequestError::TooManyRedirects(options.max_redirects).into());
             }
             redirects.push(RedirectHop {
                 status: received.head.status.as_u16(),
                 url: request.uri().to_string(),
             });
+            self.gate.before_redirect(&next).await?;
             request = next;
         }
     }

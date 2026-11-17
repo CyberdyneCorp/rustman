@@ -16,6 +16,7 @@ pub mod model;
 pub mod paths;
 pub mod redact;
 pub mod run;
+pub mod safety;
 pub mod secret;
 pub mod secrets;
 pub mod settings;

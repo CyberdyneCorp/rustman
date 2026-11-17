@@ -115,6 +115,12 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["f
 # Snapshot tests (reporters, help output) and the JUnit check in tests.
 insta = { version = "1", default-features = false }
 roxmltree = "0.21"
+# Governed senders (safety policy, design D4/D5): GCRA rate limiting, a
+# runtime-agnostic concurrency semaphore and timer, and `Retry-After` dates.
+governor = { version = "0.10.4", default-features = false, features = ["std"] }
+async-lock = "3.5"
+futures-timer = "3.0.3"
+httpdate = "1.0.3"
 
 assert_cmd = "2"
 predicates = "3"
