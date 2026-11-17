@@ -1,0 +1,14 @@
+version: 1
+kind: http
+name: OAuth2 auth
+url: '{{base_url}}/me'
+auth:
+  type: oauth2
+  grant: authorization_code
+  token_url: https://auth.example.com/token
+  auth_url: https://auth.example.com/authorize
+  client_id: rustman
+  client_secret: '{{client_secret}}'
+  scopes:
+    - read
+    - write

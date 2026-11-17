@@ -1,0 +1,12 @@
+version: 1
+kind: http
+name: Text note
+method: POST
+url: '{{base_url}}/notes'
+body:
+  type: text
+  content: |
+    first line
+    \{{not_a_var}}
+
+    last line

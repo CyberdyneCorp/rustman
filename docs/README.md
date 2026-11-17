@@ -5,6 +5,8 @@ User and developer documentation for Rustman. Pages are added as the features th
 ## Available
 
 - [Install and quick start](../README.md#install-and-quick-start-current-state)
+- [Request files](request-files.md): the workspace layout, `rustman.toml`, the `*.rman.yaml` format with one example per body type, collections and `rustman init`
+- [Environments, variables and secrets](environments.md): environment files, the active environment, variable precedence, dynamic variables, `rustman secret`, secret storage and redaction, and the CI pattern
 
 ## Planned
 
@@ -12,8 +14,6 @@ These pages arrive with the `bootstrap-core-engine` change ([tasks](../openspec/
 
 | Page | Covers |
 |------|--------|
-| `request-files.md` | The `*.rman.yaml` request-file format, with one example per body type |
-| `environments.md` | Environments, variables, secrets and the CI pattern |
 | `http.md` | HTTP settings, auth helpers and curl import/export |
 | `assertions.md` | Declarative assertions and captures |
 | `cli.md` | CLI reference and exit codes |

@@ -1,0 +1,4 @@
+version: 1
+kind: soap
+name: Old service
+url: http://x

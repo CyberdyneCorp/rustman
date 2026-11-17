@@ -40,5 +40,5 @@ None. This is a greenfield project.
 ## Impact
 
 - New repository content: `Cargo.toml` workspace, `crates/rustman-core`, `crates/rustman-http`, `crates/rustman-report` (run-report types and the json/junit writers only), `crates/rustman-cli`, `.github/workflows/ci.yml`, `rust-toolchain.toml`, `README.md` and `docs/`.
-- New dependencies: tokio, hyper/hyper-util with a custom timing connector, rustls, clap, serde, serde-saphyr (YAML), toml, keyring, serde_json_path, jsonschema and quick-junit. design.md gives the rationale for each and the alternatives that were rejected, including reqwest and serde_yaml.
+- New dependencies: tokio, hyper/hyper-util with a custom timing connector, rustls, clap, serde, serde-saphyr (YAML), toml, keyring-core/oo7 (OS keychains), serde_json_path, jsonschema and quick-junit. design.md gives the rationale for each and the alternatives that were rejected, including reqwest and serde_yaml.
 - It defines the request-file format that every later change extends. Changing it later means a migration, so this change fixes the format at `version: 1`.

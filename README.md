@@ -15,9 +15,11 @@ cd rustman
 cargo install --path crates/rustman-cli --locked
 rustman --version
 rustman --help
+rustman init my-api        # create a workspace: rustman.toml, environments/local.yaml, a sample request
+cd my-api && rustman env list   # list environments; '*' marks the active one (--env > RUSTMAN_ENV > default)
 ```
 
-CI runs these commands on Linux, macOS and Windows for every pull request. Developer documentation lives in [`docs/`](docs/).
+The request-file format is documented in [`docs/request-files.md`](docs/request-files.md). CI runs these commands on Linux, macOS and Windows for every pull request. Developer documentation lives in [`docs/`](docs/).
 
 ---
 

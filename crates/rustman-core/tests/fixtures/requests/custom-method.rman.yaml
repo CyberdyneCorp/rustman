@@ -1,0 +1,10 @@
+version: 1
+kind: http
+name: Purge tags
+method: PURGE
+url: '{{base_url}}/path'
+query:
+  - name: tag
+    value: a
+  - name: tag
+    value: b

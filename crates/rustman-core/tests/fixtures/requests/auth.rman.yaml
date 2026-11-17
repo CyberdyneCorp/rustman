@@ -1,0 +1,8 @@
+version: 1
+kind: http
+name: Basic auth
+url: '{{base_url}}/me'
+auth:
+  type: basic
+  username: ana
+  password: '{{password}}'

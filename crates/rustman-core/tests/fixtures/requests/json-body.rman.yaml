@@ -1,0 +1,29 @@
+version: 1
+kind: http
+name: Create user
+description: Creates a user and checks the response
+tags:
+  - users
+  - smoke
+method: POST
+url: '{{base_url}}/users'
+headers:
+  - name: Authorization
+    value: Bearer {{token}}
+  - name: X-Trace
+    value: '{{$uuid}}'
+body:
+  type: json
+  content:
+    name: Ana
+    age: 3
+    ratio: 1.5
+    admin: true
+    nickname: null
+    answers:
+      - 'no'
+      - 'on'
+      - '0755'
+    nested:
+      empty_list: []
+      empty_map: {}

@@ -1,0 +1,5 @@
+version: 1
+kind: http
+name: Bad method
+url: http://x
+method: "GET USERS"

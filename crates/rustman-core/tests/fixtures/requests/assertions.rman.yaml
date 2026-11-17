@@ -1,0 +1,58 @@
+version: 1
+kind: http
+name: Checked request
+url: '{{base_url}}/users'
+assertions:
+  - status: 200
+  - status:
+      - 200
+      - 201
+  - status: '2xx'
+  - header:
+      name: x-request-id
+      exists: true
+  - header:
+      name: content-type
+      contains: json
+  - json:
+      path: $.user.id
+      equals: 42
+  - json:
+      path: $.items
+      length: 3
+  - json:
+      path: $.id
+      equals: '{{user_id}}'
+  - json:
+      path: $.nope
+      exists: false
+  - schema:
+      file: ../schemas/user.json
+  - schema:
+      inline:
+        type: object
+        required:
+          - email
+  - body:
+      matches: order-[0-9]{6}
+  - latency:
+      total_lt: 200
+      ttfb_lt: 100
+captures:
+  - var: token
+    from: json
+    path: $.access_token
+  - var: request_id
+    from: header
+    name: x-request-id
+  - var: code
+    from: status
+  - var: order
+    from: body_regex
+    pattern: order-([0-9]+)
+    group: 1
+    required: true
+  - var: session
+    from: cookie
+    name: sid
+    persist: true

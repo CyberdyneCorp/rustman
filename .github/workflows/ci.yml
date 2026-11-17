@@ -57,6 +57,8 @@ jobs:
           cargo install --path crates/rustman-cli --locked
           rustman --version
           rustman --help
+          cd "$RUNNER_TEMP" && rustman init my-api
+          cd my-api && rustman env list
 
   deny:
     runs-on: ubuntu-latest

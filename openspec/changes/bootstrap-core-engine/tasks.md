@@ -9,23 +9,23 @@
 
 ## 2. Workspace model and loader (`workspace`)
 
-- [ ] 2.1 Implement `rustman.toml` parsing with defaults, unknown-key warnings and the version check. Verify: unit tests for minimal settings, unknown key and `version = 2` (exit-code mapping to 2).
-- [ ] 2.2 Implement workspace discovery (ancestor search, `--workspace`). Verify: tests for the nested-folder and no-workspace scenarios, including the exact error text.
-- [ ] 2.3 Define the typed request model (`kind` http/graphql/mcp, the HTTP fields, all body types, auth, settings, assertions, captures) behind `rustman_core::format` using `serde-saphyr` with the D4 options and two-pass loading (no `flatten` or tagged/untagged enums), with `<path>:<line>:` errors. Verify: fixture tests for the minimal request, unknown kind, invalid method token, custom method and repeated query; each error asserts the exact line:column; `no`, `on` and `0755` in a JSON body stay strings.
-- [ ] 2.4 Enforce workspace-relative file paths (body `file`, multipart `file:`, `ca_bundle`, schema files). Verify: the path-escape test rejects `../../etc/passwd` and symlinks that point outside the workspace.
-- [ ] 2.5 Implement collections, `_collection.yaml` (order, inherited headers, auth and variables) and ordering. Verify: tests for explicit order, inherited auth and the `auth: none` override.
-- [ ] 2.6 Implement the deterministic YAML emitter. Verify: golden-file round-trip tests show byte-identical load → save for every fixture.
-- [ ] 2.7 Implement `rustman init [--bare]`. Verify: `assert_cmd` tests for a fresh init, appending to an existing `.gitignore`, and refusing to re-init (exit 2, no files touched).
-- [ ] 2.8 Document the request-file format in `docs/request-files.md` with one example per body type. Verify: a doc test loads every example in that file.
+- [x] 2.1 Implement `rustman.toml` parsing with defaults, unknown-key warnings and the version check. Verify: unit tests for minimal settings, unknown key and `version = 2` (exit-code mapping to 2).
+- [x] 2.2 Implement workspace discovery (ancestor search, `--workspace`). Verify: tests for the nested-folder and no-workspace scenarios, including the exact error text.
+- [x] 2.3 Define the typed request model (`kind` http/graphql/mcp, the HTTP fields, all body types, auth, settings, assertions, captures) behind `rustman_core::format` using `serde-saphyr` with the D4 options and two-pass loading (no `flatten` or tagged/untagged enums), with `<path>:<line>:` errors. Verify: fixture tests for the minimal request, unknown kind, invalid method token, custom method and repeated query; each error asserts the exact line:column; `no`, `on` and `0755` in a JSON body stay strings.
+- [x] 2.4 Enforce workspace-relative file paths (body `file`, multipart `file:`, `ca_bundle`, schema files). Verify: the path-escape test rejects `../../etc/passwd` and symlinks that point outside the workspace.
+- [x] 2.5 Implement collections, `_collection.yaml` (order, inherited headers, auth and variables) and ordering. Verify: tests for explicit order, inherited auth and the `auth: none` override.
+- [x] 2.6 Implement the deterministic YAML emitter. Verify: golden-file round-trip tests show byte-identical load → save for every fixture.
+- [x] 2.7 Implement `rustman init [--bare]`. Verify: `assert_cmd` tests for a fresh init, appending to an existing `.gitignore`, and refusing to re-init (exit 2, no files touched).
+- [x] 2.8 Document the request-file format in `docs/request-files.md` with one example per body type. Verify: a doc test loads every example in that file.
 
 ## 3. Environments, variables and secrets (`environments`)
 
-- [ ] 3.1 Implement environment loading, name validation, active-environment selection (`--env` > `RUSTMAN_ENV` > default) and `rustman env list`. Verify: tests for precedence, invalid name warning, and the not-found error that lists available environments.
+- [x] 3.1 Implement environment loading, name validation, active-environment selection (`--env` > `RUSTMAN_ENV` > default) and `rustman env list`. Verify: tests for precedence, invalid name warning, and the not-found error that lists available environments.
 - [ ] 3.2 Implement the template parser and resolver with the full precedence chain, escaping, non-recursive expansion and multi-name unresolved errors. Verify: unit tests for each precedence scenario, `\{{`, `a="{{b}}"`, and a test showing no socket is opened on unresolved variables.
-- [ ] 3.3 Implement the dynamic variables (`$uuid`, `$timestamp`, `$timestampMs`, `$isoTimestamp`, `$randomInt [min max]`, `$randomString n`, `$env NAME`). Verify: tests for distinct UUIDs, bounded random (1000 samples) and the missing `$env` error.
+- [x] 3.3 Implement the dynamic variables (`$uuid`, `$timestamp`, `$timestampMs`, `$isoTimestamp`, `$randomInt [min max]`, `$randomString n`, `$env NAME`). Verify: tests for distinct UUIDs, bounded random (1000 samples) and the missing `$env` error.
 - [ ] 3.4 Implement `SecretStore` with the keyring backend, the file fallback (0600 / user-only ACL, one-time warning), the git-ignore guard, `.rustman/workspace-id`, and `rustman secret set|rm|list` (no echo). Verify: file-backend tests on all OSes, the not-ignored refusal test, and an `#[ignore]`d keychain test run manually on macOS and Windows.
 - [ ] 3.5 Implement `Secret<T>`, segment provenance in `ResolvedRequest`, and the `Redactor` with sensitive-header rules and the echo substring scan. Verify: a canary-secret test asserts the secret never appears in reporter output, history files, logs, curl export or error messages; `--show-secrets` affects the terminal only.
-- [ ] 3.6 Document environments, secrets and the CI pattern in `docs/environments.md`. Verify: the doc examples are exercised by an integration test.
+- [x] 3.6 Document environments, secrets and the CI pattern in `docs/environments.md`. Verify: the doc examples are exercised by an integration test.
 
 ## 4. HTTP engine (`http-requests`)
 

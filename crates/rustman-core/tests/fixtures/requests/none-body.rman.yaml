@@ -1,0 +1,9 @@
+version: 1
+kind: http
+name: Delete user
+method: DELETE
+url: '{{base_url}}/users/{{user_id}}'
+body:
+  type: none
+auth:
+  type: none
