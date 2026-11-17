@@ -1,0 +1,26 @@
+[package]
+name = "rustman-cli"
+description = "Local-first API workbench for the terminal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "rustman"
+path = "src/main.rs"
+
+[dependencies]
+rustman-core.workspace = true
+rustman-http.workspace = true
+rustman-report.workspace = true
+clap.workspace = true
+
+[dev-dependencies]
+assert_cmd.workspace = true
+predicates.workspace = true
+
+[lints]
+workspace = true

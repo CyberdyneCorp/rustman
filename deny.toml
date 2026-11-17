@@ -1,0 +1,44 @@
+# cargo-deny policy: https://embarkstudios.github.io/cargo-deny/
+
+[graph]
+all-features = true
+
+[advisories]
+# Fail on vulnerabilities, unmaintained and unsound crates, and yanked versions.
+yanked = "deny"
+ignore = []
+
+[licenses]
+# Every dependency must be compatible with Rustman's MIT OR Apache-2.0 license.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    "CDLA-Permissive-2.0",
+]
+confidence-threshold = 0.9
+unused-allowed-license = "allow"
+
+[licenses.private]
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+# The default binary must not link system TLS libraries (openspec/config.yaml).
+deny = [
+    { crate = "openssl-sys", reason = "system OpenSSL is not allowed; use rustls" },
+    { crate = "openssl", reason = "system OpenSSL is not allowed; use rustls" },
+    { crate = "native-tls", reason = "system TLS is not allowed; use rustls" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

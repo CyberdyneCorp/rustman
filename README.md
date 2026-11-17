@@ -3,7 +3,21 @@
 > A fast, local-first API workbench for the terminal. It speaks **REST, GraphQL, MCP, gRPC, WebSocket/SSE, JSON-RPC, Kafka/MQTT/AMQP and Ethereum**, it can **test a backend on its own from an OpenAPI spec**, and **AI agents can drive it over MCP**. Written entirely in Rust.
 
 > [!NOTE]
-> **Status: design phase.** Rustman is fully specified but not implemented yet. Everything below describes the planned behavior, as defined by the [OpenSpec](https://github.com/Fission-AI/OpenSpec) changes in [`openspec/`](openspec/). Commands and file formats come from those specs and may still change before v1.
+> **Status: early development.** Rustman is fully specified, and only the project scaffold is implemented so far: the `rustman` binary builds and answers `--version` and `--help`, nothing more. Everything after the quick start below describes the planned behavior, as defined by the [OpenSpec](https://github.com/Fission-AI/OpenSpec) changes in [`openspec/`](openspec/). Commands and file formats come from those specs and may still change before v1.
+
+## Install and quick start (current state)
+
+There are no release binaries yet. Build from source with [rustup](https://rustup.rs); the pinned toolchain (Rust 1.97, see `rust-toolchain.toml`) is installed automatically. No system libraries are needed.
+
+```bash
+git clone https://github.com/CyberdyneCorp/rustman
+cd rustman
+cargo install --path crates/rustman-cli --locked
+rustman --version
+rustman --help
+```
+
+CI runs these commands on Linux, macOS and Windows for every pull request. Developer documentation lives in [`docs/`](docs/).
 
 ---
 
