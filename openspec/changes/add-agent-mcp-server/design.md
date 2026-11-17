@@ -60,4 +60,4 @@ Additive. `rustman init` adds `.rustman/audit/` to the generated `.gitignore`. E
 
 ## Open Questions
 
-- Exact `rmcp` version to pin depends on the version adopted by `add-mcp-client`. Both must match.
+None. `rmcp` is pinned to `~3.10` once in `[workspace.dependencies]` (see `add-mcp-client` D1), so both halves of `rustman-mcp` always match.

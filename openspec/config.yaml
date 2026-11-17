@@ -7,10 +7,12 @@ context: |
   An optional Raven-based GUI companion (rustman-viz) renders charts and dashboards on demand.
 
   Hard constraints:
-  - Rust stable (MSRV pinned in rust-toolchain.toml), edition 2024. Linux, macOS and Windows are first-class.
+  - Rust stable, edition 2024, MSRV 1.97 (pinned in rust-toolchain.toml and `rust-version`; raised only in a minor
+    release, never past the stable release from ~3 months earlier). Linux, macOS and Windows are first-class.
+  - License: MIT OR Apache-2.0. Every dependency must be compatible (enforced by `cargo deny`).
   - The default `rustman` binary MUST build with plain `cargo build` (a platform C compiler used by common
     crates such as `ring` is fine) and MUST NOT require installing system libraries (no OpenSSL, no SQLite,
-    no CMake), a GPU, or any network service. Anything needing native libraries (Raven/Vulkan) is behind
+    no CMake), a GPU, or any network service. Decided: `ring`'s build-time use of the platform C compiler is accepted. Anything needing native libraries (Raven/Vulkan) is behind
     a cargo feature and a separate binary.
   - Local-first: no accounts, no telemetry, no cloud sync. Workspaces are plain text files meant for Git.
   - Secrets never leave the machine unredacted: never written to workspace files, history, reports,

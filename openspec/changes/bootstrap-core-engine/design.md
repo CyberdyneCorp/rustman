@@ -32,8 +32,16 @@ The platform verifier uses the OS trust store (Keychain, SChannel, or the Linux 
 - `ring` over `aws-lc-rs`: aws-lc-rs needs CMake and a C toolchain on some targets. ring needs only the C compiler that Rust targets already assume (MSVC on Windows), and no system libraries. OpenSSL (`native-tls`) is rejected because it's a system library.
 
 ### D4. YAML: `serde-saphyr` (serde_yaml rejected)
-`serde_yaml` is deprecated and archived. `serde_yml` (a fork) had soundness and maintenance concerns. We use `serde-saphyr`: pure Rust, built on the maintained `saphyr` parser, with serde support and no `unsafe` libyaml port. Line and column positions from parse errors feed the `<path>:<line>:` messages.
-- Fallback if `serde-saphyr` blocks us: `serde_norway`, a maintained fork with the serde_yaml API. Hiding the crate behind the `rustman_core::format` module makes swapping a one-module change.
+`serde_yaml` is deprecated and archived. `serde_yml` (a fork) had soundness and maintenance concerns. We use `serde-saphyr` (pinned `=2.1.x`, MSRV 1.89): pure Rust, with serde support and no `unsafe` libyaml port. Since 2.x it parses with `granit-parser` (a `saphyr` descendant). Line and column positions from parse errors feed the `<path>:<line>:` messages.
+- Spike result (2026-11-17, serde-saphyr 2.1.1), which this design now depends on:
+  - Load → save → load is value-equal, and output is byte-stable after the first save.
+  - Errors carry exact line:column for unknown fields, bad indentation, unclosed quotes, duplicate keys (rejected by default) and wrong types, **except** inside `#[serde(flatten)]`, internally tagged and untagged enums. There serde buffers the content and positions drift to the end of the mapping. `deny_unknown_fields` also doesn't work with `flatten` (a serde limitation).
+  - The default budget rejects an alias bomb (250k nodes) in ~60 ms. 2000 request files parse in ~35 ms; a 5 MiB string body in ~3 ms.
+  - Defaults follow YAML 1.1 scalar rules for untyped values (`no` → false, `0755` → 755.0), which would corrupt `body.json` and variables.
+- Rules that follow from the spike:
+  - Always parse with `strict_booleans: true` and `leading_zero_numbers_as_strings: true` (only `true`/`false` are booleans; `0755` stays a string). Keep the default budget and `DuplicateKeyPolicy::Error`.
+  - The request model uses no `flatten`, internally tagged or untagged enums. Loading is two-pass: read `version` and `kind` into a small header struct, then deserialize the kind-specific struct (`deny_unknown_fields`) from the same source. Assertions use an explicit key per type and a hand-written `Deserialize`. This keeps every error position exact.
+- Fallback if `serde-saphyr` blocks us: `serde_norway`, a fork with the serde_yaml API (last release 2024-12, so treat it as a stopgap). Hiding the crate behind the `rustman_core::format` module makes swapping a one-module change.
 - For byte-stable output, writes don't use the generic serializer directly. A small emitter in `rustman_core::format::write` walks the typed model in schema order with fixed quoting rules. That gives the "Stable serialization" requirement a single owner and a golden-file test suite.
 
 ### D5. Settings and data formats
@@ -93,7 +101,13 @@ Import uses `shell-words` for tokenizing, plus a hand-written flag parser that c
 
 Greenfield, so there's nothing to migrate. The request-file `version: 1` and `rustman.report/v1 (kind: run)` schemas are frozen at release. Future breaking changes bump the version, and Rustman keeps reading older versions.
 
+## Resolved Questions
+
+- `ring`'s build-time C compiler is accepted under the "no system libraries" rule (recorded in `openspec/config.yaml`). `rustls-rustcrypto` stays experimental; revisit if it stabilizes.
+- License: MIT OR Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`).
+- MSRV: 1.97, the highest `rust-version` among planned dependencies (`wasmtime` for `add-plugin-system`). Others need ≤ 1.89.
+- YAML crate: `serde-saphyr`, confirmed by the spike in D4.
+
 ## Open Questions
 
-- Whether `ring`'s build-time C compiler requirement satisfies the "no C toolchain" constraint as the user intends it. Answering this doesn't change the specs. Alternatives are `rustls-rustcrypto` (experimental, pure Rust) or vendored prebuilt crypto.
-- The exact license (MIT OR Apache-2.0 is the usual Rust default). Answering this doesn't change the specs.
+None.

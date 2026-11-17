@@ -18,7 +18,7 @@
 ## Decisions
 
 ### D1. SDK: official `rmcp` (rejected: hand-rolled JSON-RPC, `mcp-rust-sdk` community crates)
-`rmcp` is the official Rust SDK, tracks spec revisions, provides child-process and Streamable HTTP client transports, typed models for every message, and a `ClientHandler` trait for server-initiated requests. Shared models also serve the server half in `add-agent-mcp-server`. Hand-rolling would duplicate version-negotiation and transport edge cases (session IDs, resumable SSE). Pin a minor version; wrap it behind our `McpSession` facade so SDK churn stays inside `rustman-mcp`.
+`rmcp` is the official Rust SDK, tracks spec revisions, provides child-process and Streamable HTTP client transports, typed models for every message, and a `ClientHandler` trait for server-initiated requests. Shared models also serve the server half in `add-agent-mcp-server`. Hand-rolling would duplicate version-negotiation and transport edge cases (session IDs, resumable SSE). Pin `rmcp = "~3.10"` (MSRV 1.88) in `[workspace.dependencies]`, shared with `add-agent-mcp-server`, and re-pin to the latest minor at each Rustman release; wrap it behind our `McpSession` facade so SDK churn stays inside `rustman-mcp`.
 
 ### D2. Legacy HTTP+SSE fallback
 If `rmcp` lacks a legacy SSE client transport in the pinned version, implement a thin `Transport` adapter (GET SSE → `endpoint` event → POST messages) using `eventsource-stream` over `rustman-http`. Fallback triggers only on 4xx≠401 from the initialize POST, per the spec's backwards-compatibility guidance.

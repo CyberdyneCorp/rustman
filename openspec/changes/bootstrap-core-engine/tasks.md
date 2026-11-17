@@ -2,7 +2,7 @@
 
 ## 1. Repository scaffold and CI
 
-- [ ] 1.1 Create the Cargo workspace (`Cargo.toml` with `[workspace.dependencies]`, `resolver = "3"`), `rust-toolchain.toml` pinning the MSRV, and crates `rustman-core`, `rustman-http`, `rustman-report` and `rustman-cli` (binary `rustman`) with the dependency direction from design D1. Verify: `cargo build --workspace` succeeds, and `cargo tree -p rustman-core` shows no hyper, clap or terminal crates.
+- [ ] 1.1 Create the Cargo workspace (`Cargo.toml` with `[workspace.dependencies]`, `resolver = "3"`), `rust-toolchain.toml` pinning the MSRV (1.97, also set as `rust-version` and `license = "MIT OR Apache-2.0"` in `[workspace.package]`), and crates `rustman-core`, `rustman-http`, `rustman-report` and `rustman-cli` (binary `rustman`) with the dependency direction from design D1. Verify: `cargo build --workspace` succeeds, and `cargo tree -p rustman-core` shows no hyper, clap or terminal crates.
 - [ ] 1.2 Add `.github/workflows/ci.yml`: `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test --workspace` on ubuntu-latest, macos-latest and windows-latest; plus a job running `openspec validate --all --strict`. Verify: the workflow passes on the scaffold PR.
 - [ ] 1.3 Add `cargo deny` (licenses, advisories, bans on `openssl-sys` and `native-tls`) to CI. Verify: the CI job fails if `openssl-sys` is added to any crate.
 - [ ] 1.4 Add `README.md` (install, quick start) and a `docs/` skeleton. Verify: the README quick-start commands run against the built binary in a CI smoke step.
@@ -11,7 +11,7 @@
 
 - [ ] 2.1 Implement `rustman.toml` parsing with defaults, unknown-key warnings and the version check. Verify: unit tests for minimal settings, unknown key and `version = 2` (exit-code mapping to 2).
 - [ ] 2.2 Implement workspace discovery (ancestor search, `--workspace`). Verify: tests for the nested-folder and no-workspace scenarios, including the exact error text.
-- [ ] 2.3 Define the typed request model (`kind` http/graphql/mcp, the HTTP fields, all body types, auth, settings, assertions, captures) behind `rustman_core::format` using `serde-saphyr`, with `<path>:<line>:` errors. Verify: fixture tests for the minimal request, unknown kind, invalid method token, custom method and repeated query.
+- [ ] 2.3 Define the typed request model (`kind` http/graphql/mcp, the HTTP fields, all body types, auth, settings, assertions, captures) behind `rustman_core::format` using `serde-saphyr` with the D4 options and two-pass loading (no `flatten` or tagged/untagged enums), with `<path>:<line>:` errors. Verify: fixture tests for the minimal request, unknown kind, invalid method token, custom method and repeated query; each error asserts the exact line:column; `no`, `on` and `0755` in a JSON body stay strings.
 - [ ] 2.4 Enforce workspace-relative file paths (body `file`, multipart `file:`, `ca_bundle`, schema files). Verify: the path-escape test rejects `../../etc/passwd` and symlinks that point outside the workspace.
 - [ ] 2.5 Implement collections, `_collection.yaml` (order, inherited headers, auth and variables) and ordering. Verify: tests for explicit order, inherited auth and the `auth: none` override.
 - [ ] 2.6 Implement the deterministic YAML emitter. Verify: golden-file round-trip tests show byte-identical load → save for every fixture.
