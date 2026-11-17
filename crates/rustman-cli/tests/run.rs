@@ -495,3 +495,31 @@ fn ctrl_c_cancels_and_flushes_a_partial_report() {
     assert!(in_flight[0].end.is_none());
     assert!(timed_hits(&format!("{prefix}api-3")).is_empty());
 }
+
+/// Task 3.2: an unresolved variable stops the request before any socket is
+/// opened. The listener is never accepted from, so a connection attempt
+/// would sit in its backlog; there is none.
+#[test]
+fn an_unresolved_variable_opens_no_connection() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        "rustman.toml",
+        "[workspace]\nname = \"t\"\nversion = 1\n",
+    );
+    let url = format!("http://127.0.0.1:{port}/x?k={{{{missing}}}}");
+    write(dir.path(), "x.rman.yaml", &request("x", &url, ""));
+    rustman(dir.path())
+        .args(["run", "x.rman.yaml", "--no-history"])
+        .assert()
+        .code(3)
+        .stdout(predicates::str::contains("unresolved variable(s): missing"));
+    let pending = listener.accept();
+    assert!(
+        matches!(&pending, Err(e) if e.kind() == std::io::ErrorKind::WouldBlock),
+        "a connection was made: {pending:?}"
+    );
+}

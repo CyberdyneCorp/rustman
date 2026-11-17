@@ -143,6 +143,12 @@ fn ad_hoc_requests_in_a_workspace_resolve_variables_and_secrets() {
         .args(["--body-only", "--no-history"])
         .assert()
         .success()
+        .stdout(predicate::str::contains("/echo?k=«redacted:tok»"));
+    rustman(ws.path())
+        .args(["send", "GET", "{{base_url}}/echo?k={{tok}}", "--env", "dev"])
+        .args(["--body-only", "--no-history", "--show-secrets"])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("/echo?k=Qz9-c4n4ry"));
     rustman(ws.path())
         .args([

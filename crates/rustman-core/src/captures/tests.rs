@@ -335,3 +335,31 @@ fn a_piece_of_a_secret_is_not_persisted_and_becomes_secret() {
     assert_eq!(scope.taint(&redactor).len(), 1);
     assert!(matches!(scope.get("part"), Some(Lookup::Secret(_))));
 }
+
+#[test]
+fn a_capture_straddling_or_masking_a_secret_is_not_persisted() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let env = environment(&[]);
+    let store = SecretStore::with_keychain(root, None);
+    let redactor = Redactor::new().with(&Secret::new("tok", "QJX7vwP3K".to_owned()));
+    let persistence = Persistence {
+        root,
+        environment: Some(&env),
+        secrets: &store,
+        redactor: &redactor,
+    };
+    let mut scope = RunCaptures::new();
+    let report = apply(
+        &captures(
+            "- {var: edge, from: body_regex, pattern: 'v.:.QJX7v', persist: true}\n\
+             - {var: masked, from: body_regex, pattern: '[*]+wP3K', persist: true}\n",
+        ),
+        &response(r#"{"v":"QJX7vwP3K","m":"*****wP3K"}"#),
+        &mut scope,
+        Some(&persistence),
+    );
+    assert_eq!(report.warnings.len(), 2, "{:?}", report.warnings);
+    assert!(!root.join(".rustman/state/dev.yaml").exists());
+    assert_eq!(scope.taint(&redactor).len(), 2);
+}

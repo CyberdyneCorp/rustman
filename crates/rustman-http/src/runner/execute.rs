@@ -30,6 +30,7 @@ impl Sent {
             exchange: None,
             resolved: None,
             discard: None,
+            redactor: Redactor::new(),
         }
     }
 
@@ -39,6 +40,7 @@ impl Sent {
             exchange: None,
             resolved: None,
             discard: None,
+            redactor: Redactor::new(),
         }
     }
 
@@ -63,6 +65,7 @@ impl Runner<'_> {
         let file = (!self.options.ad_hoc).then(|| sent.record.file.clone());
         let redactor = self.sink_redactor(&sent);
         redact_error(&mut sent.record, &redactor);
+        sent.redactor = redactor.clone();
         let kept = self.record_history(&mut sent, &redactor, file, Some(cache_key(request)));
         sent.discard_spill_unless(kept);
         log_record(&sent.record);
@@ -224,6 +227,7 @@ impl Runner<'_> {
             exchange: Some(exchange),
             resolved: None,
             discard: None,
+            redactor: Redactor::new(),
         }
     }
 

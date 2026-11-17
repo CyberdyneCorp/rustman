@@ -24,7 +24,7 @@ Options:
           Ad-hoc JSON body (sets Content-Type and Accept to application/json)
 
       --body-only
-          Print only the response body, byte for byte
+          Print only the response body: a text body redacted (unless --show-secrets), a binary one byte for byte
 
   -o, --output <FILE>
           Write the response body, byte for byte, to FILE instead of stdout
