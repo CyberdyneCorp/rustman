@@ -286,8 +286,15 @@ async fn an_unfinished_body_leaves_no_spill_file() {
     let server = TestServer::http().await;
     let dir = tempfile::tempdir().unwrap();
     let mut options = spilling_to(dir.path(), 64 * 1024);
+    // Warm the pool so the 500 ms budget measures the body, not DNS and
+    // connect on a loaded machine.
+    let engine = HttpEngine::new();
+    engine
+        .send(&get(&server.url("/status/200")), &options)
+        .await
+        .unwrap();
     options.timeout = std::time::Duration::from_millis(500);
-    let err = HttpEngine::new()
+    let err = engine
         .send(&get(&server.url("/stall-after/1048576")), &options)
         .await
         .unwrap_err();

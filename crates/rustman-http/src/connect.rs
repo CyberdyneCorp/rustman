@@ -16,6 +16,7 @@ use hyper_util::rt::TokioIo;
 use rustls::ClientConfig;
 use rustls_pki_types::ServerName;
 use tokio::net::TcpStream;
+use tokio::task::JoinSet;
 use tokio_rustls::TlsConnector;
 use tokio_rustls::client::TlsStream;
 
@@ -241,26 +242,55 @@ async fn handshake<S: Io>(
         .map_err(|e| handshake_error(host, &e))
 }
 
-/// Try each address in order; report the last failure.
+/// How long one connection attempt runs alone before the next address is
+/// tried alongside it (RFC 8305 recommends 250 ms).
+const ATTEMPT_DELAY: Duration = Duration::from_millis(250);
+
+/// Happy Eyeballs, simplified (RFC 8305): try the addresses in resolver
+/// order, starting the next one when an attempt fails or has not connected
+/// within [`ATTEMPT_DELAY`]; the first connection wins and the others are
+/// dropped. Without it, `localhost` on Windows (`::1` first, while many dev
+/// servers listen on `127.0.0.1` only) stalls for seconds per request.
 async fn connect_any(
     host: &str,
     port: u16,
     addrs: &[SocketAddr],
 ) -> Result<TcpStream, RequestError> {
+    let mut pending = addrs.iter().copied();
+    let mut attempts = JoinSet::new();
     let mut last = None;
-    for addr in addrs {
-        match TcpStream::connect(addr).await {
-            Ok(tcp) => {
-                tcp.set_nodelay(true).ok();
-                return Ok(tcp);
+    start_next(&mut pending, &mut attempts);
+    while !attempts.is_empty() {
+        tokio::select! {
+            Some(done) = attempts.join_next() => match done {
+                Ok(Ok(tcp)) => {
+                    tcp.set_nodelay(true).ok();
+                    return Ok(tcp);
+                }
+                Ok(Err(e)) => {
+                    last = Some(e);
+                    start_next(&mut pending, &mut attempts);
+                }
+                Err(e) => last = Some(io::Error::other(e)),
+            },
+            () = tokio::time::sleep(ATTEMPT_DELAY), if pending.len() > 0 => {
+                start_next(&mut pending, &mut attempts);
             }
-            Err(e) => last = Some(e),
         }
     }
     let reason = last.map_or_else(|| "no addresses".to_owned(), |e| e.to_string());
     Err(RequestError::Network(format!(
         "cannot connect to {host}:{port}: {reason}"
     )))
+}
+
+fn start_next(
+    pending: &mut impl Iterator<Item = SocketAddr>,
+    attempts: &mut JoinSet<io::Result<TcpStream>>,
+) {
+    if let Some(addr) = pending.next() {
+        attempts.spawn(TcpStream::connect(addr));
+    }
 }
 
 fn handshake_error(host: &str, err: &io::Error) -> RequestError {
@@ -343,6 +373,49 @@ impl Write for TimedConn {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// TEST-NET-1 (RFC 5737): never routed, so a connect there either hangs
+    /// or fails at once, depending on the host's routing table.
+    const UNREACHABLE: &str = "192.0.2.1:9";
+
+    #[tokio::test]
+    async fn a_stalled_address_does_not_block_the_next_one() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let good = listener.local_addr().unwrap();
+        let addrs = [UNREACHABLE.parse().unwrap(), good];
+        let started = Instant::now();
+        let tcp = connect_any("localhost", good.port(), &addrs).await.unwrap();
+        assert_eq!(tcp.peer_addr().unwrap(), good);
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "{:?}",
+            started.elapsed()
+        );
+    }
+
+    #[tokio::test]
+    async fn every_address_failing_reports_the_last_error() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let closed = listener.local_addr().unwrap();
+        drop(listener);
+        let err = connect_any("localhost", closed.port(), &[closed])
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .starts_with(&format!("cannot connect to localhost:{}: ", closed.port())),
+            "{err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn no_addresses_is_an_error() {
+        let err = connect_any("nowhere", 80, &[]).await.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "cannot connect to nowhere:80: no addresses"
+        );
+    }
 
     #[test]
     fn target_defaults_ports_and_strips_ipv6_brackets() {
