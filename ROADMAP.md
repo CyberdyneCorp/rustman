@@ -26,16 +26,16 @@ dependency, user value and risk. The main changes:
 
 Settle these first. Each one is cheap now and expensive after code exists.
 
-| # | Decision / fix | Source | Recommendation |
-|---|----------------|--------|----------------|
-| 0.1 | Does `ring`'s build-time C compiler satisfy the "no native toolchain" rule? | bootstrap design, Open Questions | Accept it. `rustls-rustcrypto` is still experimental. Write the decision into `openspec/config.yaml`. |
-| 0.2 | License | bootstrap design | `MIT OR Apache-2.0`. Raven (Apache-2.0) is compatible. |
-| 0.3 | Pin the MSRV and the `rmcp` minor version | bootstrap 1.1, mcp-client D1, agent Open Questions | Choose them once. Changes 4 and 6 must share the same `rmcp` pin. |
-| 0.4 | Spike `serde-saphyr`: round-trip, error positions, deterministic emitter | bootstrap D4 | Two-day spike. Fall back to `serde_norway` if it fails. The request format is frozen at `version: 1`, so this has to be right. |
-| 0.5 | Fix: `add-graphql-client` design D4/D5 build SSE and multipart uploads on "reqwest" | graphql design | `rustman-http` is hyper-based, and reqwest was rejected in bootstrap D2. Rewrite both on `rustman-http` byte streams. |
-| 0.6 | Fix: report versioning contradiction | bootstrap 6.3 vs explorer design and task 4.2 | Bootstrap already publishes `rustman.report/v1 (kind: run)`. Change the explorer to say it *extends* v1 instead of introducing it. |
-| 0.7 | Fix: `openspec/ROADMAP.md` dependency table | see below | Update the "Depends on" column. |
-| 0.8 | Pin the OpenSpec CLI in CI | `.github/workflows/openspec-validate.yml` uses `@latest` | Pin an exact version. |
+| # | Decision / fix | Source | Recommendation | Status |
+|---|----------------|--------|----------------|--------|
+| 0.1 | Does `ring`'s build-time C compiler satisfy the "no native toolchain" rule? | bootstrap design, Open Questions | Accept it. `rustls-rustcrypto` is still experimental. Write the decision into `openspec/config.yaml`. | ☐ open |
+| 0.2 | License | bootstrap design | `MIT OR Apache-2.0`. Raven (Apache-2.0) is compatible. | ☐ open |
+| 0.3 | Pin the MSRV and the `rmcp` minor version | bootstrap 1.1, mcp-client D1, agent Open Questions | Choose them once. Changes 4 and 6 must share the same `rmcp` pin. | ☐ open |
+| 0.4 | Spike `serde-saphyr`: round-trip, error positions, deterministic emitter | bootstrap D4 | Two-day spike. Fall back to `serde_norway` if it fails. The request format is frozen at `version: 1`, so this has to be right. | ☐ open |
+| 0.5 | Fix: `add-graphql-client` design D4/D5 build SSE and multipart uploads on "reqwest" | graphql design | `rustman-http` is hyper-based, and reqwest was rejected in bootstrap D2. Rewrite both on `rustman-http` byte streams. | ✅ done |
+| 0.6 | Fix: report versioning contradiction | bootstrap 6.3 vs explorer design and task 4.2 | Bootstrap already publishes `rustman.report/v1 (kind: run)`. Change the explorer to say it *extends* v1 instead of introducing it. | ✅ done |
+| 0.7 | Fix: `openspec/ROADMAP.md` dependency table | see below | Update the "Depends on" column. | ✅ done |
+| 0.8 | Pin the OpenSpec CLI in CI | `.github/workflows/openspec-validate.yml` uses `@latest` | Pin an exact version. | ✅ done |
 
 ## Shared enablers
 
@@ -203,7 +203,7 @@ Fold them in during Phase 0 (item 0.7).
 
 | Release | Changes | Status |
 |---------|---------|--------|
-| Phase 0 | decisions 0.1–0.8 | ☐ |
+| Phase 0 | decisions 0.1–0.8 | ◐ spec fixes 0.5–0.8 done; decisions 0.1–0.4 open |
 | v0.1 | bootstrap-core-engine, safety slice | ☐ |
 | v0.2 | add-terminal-ui, add-importers, add-runner-parity | ☐ |
 | v0.3 | add-openapi-explorer, add-agent-mcp-server | ☐ |

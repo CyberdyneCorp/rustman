@@ -27,10 +27,10 @@ Introspection JSON is converted to an `apollo_compiler::Schema` via a small conv
 HTTP queries/mutations/uploads/APQ/SSE go through `rustman-http`, so TLS, proxies, cookies, auth helpers, timings and redaction come for free. WebSocket subscriptions use `tokio-tungstenite` with rustls, reusing the TLS config builder exported by `rustman-http` (rejected: `graphql-ws-client` crate — adds its own abstractions over the protocol and lags on legacy-protocol fallback; the protocol is small enough to implement directly with a state machine and is easier to test with a fake server).
 
 ### D4. SSE client
-`eventsource-stream` over the `reqwest` byte stream from `rustman-http` (rejected: `reqwest-eventsource` — it owns retries/reconnects, which we don't want for subscriptions that must end on `complete`).
+`eventsource-stream` over the response body stream (`hyper::body::Incoming` adapted to a `Stream<Item = Bytes>`) returned by `rustman-http`, so SSE inherits its TLS, proxies, auth, timings and redaction (rejected: `reqwest-eventsource` — it requires reqwest, which `bootstrap-core-engine` D2 rejected, and it owns retries/reconnects, which we don't want for subscriptions that must end on `complete`).
 
 ### D5. Upload encoding
-`{ "$file": path }` markers are walked in the variables tree, replaced with `null`, and their JSON paths collected into `map` — the spec's own algorithm. Files stream from disk (no full read into memory) using reqwest's multipart streaming parts.
+`{ "$file": path }` markers are walked in the variables tree, replaced with `null`, and their JSON paths collected into `map` — the spec's own algorithm. Files stream from disk (no full read into memory): a small `multipart/form-data` encoder in `rustman-http` produces a streaming `http_body::Body`: the `operations` and `map` parts first, then one `tokio_util::io::ReaderStream` per file (rejected: reqwest's multipart API, for the same reason as D4).
 
 ### D6. Subscription result model
 A subscription produces an `Exchange` (from `request-history`) whose response is an ordered list of `{ts, payload}` events. Headless bounds (`max_events`, `duration`) live on the request file and can be overridden by `--max-events/--duration` flags. History keeps the first 100 events to bound file size.

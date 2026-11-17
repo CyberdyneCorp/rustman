@@ -47,7 +47,7 @@ The planner emits a deterministic `Vec<Probe>` (pure function of IR, graph, seed
 Each rule has a stable id (`auth-not-enforced`, ...), a default severity, a description, a remediation hint and a SARIF descriptor. Detectors return rule ids, never free text. That makes diffing and SARIF stable across versions.
 
 ### D9. Reports: one IR, many renderers
-`rustman-report` holds the canonical `Report` (serde), and it's the only input renderers receive. The JSON Schema is generated from the Rust types with `schemars` and checked into `docs/report.schema.json`. A test fails if it drifts. Renderers: `quick-junit` (already in core), `serde-sarif`, and `minijinja` templates for Markdown and HTML, with CSS/JS inlined at build time via `include_str!`. Redaction happens while the report is built, from exchanges that are already redacted by core.
+`rustman-report` holds the canonical `Report` (serde), and it's the only input renderers receive. The JSON Schema is generated from the Rust types with `schemars` and checked into `docs/schemas/report.schema.json`, the file `bootstrap-core-engine` first published for `kind: run`. A test fails if it drifts. Renderers: `quick-junit` (already in core), `serde-sarif`, and `minijinja` templates for Markdown and HTML, with CSS/JS inlined at build time via `include_str!`. Redaction happens while the report is built, from exchanges that are already redacted by core.
 
 ### D10. Leakage detection: curated regex set
 A small, versioned regex set (Java/.NET/Python/Node/Go/Ruby stack traces, common SQL error strings, framework debug-page markers, absolute file paths) runs over response bodies capped at 64 KiB. False positives are acceptable at `medium`, and rules can be disabled via `[explore].disabled_rules`.
@@ -63,7 +63,7 @@ A small, versioned regex set (Java/.NET/Python/Node/Go/Ruby stack traces, common
 
 ## Migration Plan
 
-Additive only. New `[safety]` and `[explore]` tables in `rustman.toml` are optional with the defaults from the specs. The report schema starts at `rustman.report/v1`, and core's JSON reporter emits that from this change on (before it, run JSON wasn't versioned, so nothing depends on the old shape).
+Additive only. New `[safety]` and `[explore]` tables in `rustman.toml` are optional with the defaults from the specs. The report schema stays at `rustman.report/v1`: `bootstrap-core-engine` introduced it with `kind: run`, and this change adds `kind: exploration` and the new optional fields additively, so existing run reports remain valid.
 
 ## Open Questions
 

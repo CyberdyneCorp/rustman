@@ -36,8 +36,8 @@
 
 ## 4. Reports
 
-- [ ] 4.1 Define the canonical `Report` types with `schemars`, check in `docs/report.schema.json`, and add `rustman report schema`. Verify with a test that the generated schema equals the checked-in file and that all produced reports validate.
-- [ ] 4.2 Make core's JSON and JUnit run reporters emit `rustman.report/v1`. Verify the existing `cli-runner` tests are updated and pass.
+- [ ] 4.1 Extend the `Report` types from `bootstrap-core-engine` with `kind: exploration` (additive), regenerate `docs/schemas/report.schema.json` with `schemars`, and add `rustman report schema`. Verify with a test that the generated schema equals the checked-in file and that all produced reports validate.
+- [ ] 4.2 Move the JSON and JUnit run reporters onto the shared report IR used by the new renderers, without changing their output. Verify the existing `cli-runner` reporter snapshots pass unchanged and old `kind: run` reports still validate.
 - [ ] 4.3 Implement the renderers: JUnit (exploration mapping), SARIF 2.1.0 (`serde-sarif`, level mapping, pointer locations), Markdown and HTML (`minijinja`, inlined assets). Verify with snapshot tests per format, a SARIF schema validation test, and a test that HTML has no external URLs.
 - [ ] 4.4 Implement `rustman report render` and repeatable `--report <fmt>[=path]` on `run` and `explore run`. Verify with a CLI test writing two formats at once.
 - [ ] 4.5 Implement `rustman report diff` (new/fixed/unchanged, coverage delta, exit codes, `--format`). Verify with fixture report pairs.

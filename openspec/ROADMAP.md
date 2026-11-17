@@ -21,33 +21,33 @@ Rustman is a terminal-first, local-first alternative to Postman, written in Rust
 
 ## Changes, in implementation order
 
-Each change lives in `openspec/changes/<id>/`. Archive it once it's implemented. Its delta specs then become the living specs in `openspec/specs/`.
+Each change lives in `openspec/changes/<id>/`. The delivery order (releases, shared enablers, exit criteria) is in the top-level [`ROADMAP.md`](../ROADMAP.md); the numbers below are ids, not the build order. Archive it once it's implemented. Its delta specs then become the living specs in `openspec/specs/`.
 
 | # | Change | Introduces capabilities | Depends on |
 |---|--------|-------------------------|------------|
 | 1 | `bootstrap-core-engine` | `workspace`, `environments`, `http-requests`, `assertions`, `cli-runner`, `request-history` | — |
-| 2 | `add-terminal-ui` | `tui` | 1 |
+| 2 | `add-terminal-ui` | `tui` | 1 (viz hand-off: protocol types from 8) |
 | 3 | `add-graphql-client` | `graphql-requests` | 1 (TUI parts: 2) |
 | 4 | `add-mcp-client` | `mcp-client` | 1 (TUI parts: 2) |
 | 5 | `add-openapi-explorer` | `openapi-import`, `api-exploration`, `test-reports` | 1 |
 | 6 | `add-agent-mcp-server` | `agent-mcp-interface` | 1, 5 |
 | 7 | `add-webhook-inspector` | `webhook-inspector` | 1 (TUI parts: 2) |
 | 8 | `add-raven-visualizer` | `visual-dashboards` | 1, 5 (TUI launch: 2) |
-| 9 | `add-jsonrpc-client` | `jsonrpc-requests` | 1 (TUI parts: 2) |
-| 10 | `add-evm-toolkit` | `evm-toolkit`, `evm-signing`, `chain-exploration`, `blockchain-graphql` | 1, 9 (GraphQL presets: 3; reports: 5) |
+| 9 | `add-jsonrpc-client` | `jsonrpc-requests` | 1 (TUI parts: 2; agent tool: 6) |
+| 10 | `add-evm-toolkit` | `evm-toolkit`, `evm-signing`, `chain-exploration`, `blockchain-graphql` | 1, 5, 6, 9 (GraphQL presets: 3; probe dashboards: 8) |
 | 11 | `add-importers` | `collection-import` | 1 |
-| 12 | `add-openapi-mock-server` | `mock-server` | 1, 5 |
-| 13 | `add-snapshot-testing` | `snapshot-testing` | 1 (TUI approve flow: 2) |
-| 14 | `add-grpc-client` | `grpc-requests` | 1 (TUI parts: 2) |
-| 15 | `add-realtime-client` | `realtime-sessions` (WebSocket, SSE) | 1 (TUI parts: 2) |
-| 16 | `add-messaging-client` | `messaging-requests` (Kafka, MQTT, AMQP via AsyncAPI) | 1 |
+| 12 | `add-openapi-mock-server` | `mock-server` | 1, 5 (proxy header hygiene: 7; `--record`: 11) |
+| 13 | `add-snapshot-testing` | `snapshot-testing` | 1 (TUI approve flow: 2; per-kind coverage: 3, 4, 9) |
+| 14 | `add-grpc-client` | `grpc-requests` | 1 (TUI parts: 2; agent tools: 6) |
+| 15 | `add-realtime-client` | `realtime-sessions` (WebSocket, SSE) | 1 (TUI parts: 2; agent tools: 6) |
+| 16 | `add-messaging-client` | `messaging-requests` (Kafka, MQTT, AMQP via AsyncAPI) | 1, 5 (agent tools: 6) |
 | 17 | `add-traffic-recorder` | `traffic-recorder` | 1 |
-| 18 | `add-load-testing` | `load-testing` | 1 (live charts: 8) |
-| 19 | `add-trace-propagation` | `trace-propagation` (OpenTelemetry) | 1 |
+| 18 | `add-load-testing` | `load-testing` | 1, 5, 25 (live charts: 8) |
+| 19 | `add-trace-propagation` | `trace-propagation` (OpenTelemetry) | 1, 5 |
 | 20 | `add-contract-testing` | `contract-testing` | 1, 5 |
 | 21 | `add-docs-generator` | `api-docs-generation` | 1 (examples: `request-history`; code samples: snippet engine from 25) |
-| 22 | `add-scheduled-monitors` | `monitors` | 1 |
-| 23 | `add-plugin-system` | `plugins` (WASM) | 1 |
+| 22 | `add-scheduled-monitors` | `monitors` | 1, 5 |
+| 23 | `add-plugin-system` | `plugins` (WASM) | 1, 4 (workspace trust), 5 (safety policy) |
 | 24 | `add-secret-providers` | `secret-providers` | 1 |
 | 25 | `add-runner-parity` | extends `cli-runner` (data-driven runs), `http-requests` (Digest, AWS SigV4, JWT auth; snippet export), `tui` (Copy as…), `collection-import` (script migration) | 1 (TUI parts: 2; script migration: 11) |
 | 26 | `add-stress-testing` | `stress-testing` (breakpoint, spike, soak, fuzz under load, malformed and wire faults) | 1, 5, 18 (live charts: 8) |

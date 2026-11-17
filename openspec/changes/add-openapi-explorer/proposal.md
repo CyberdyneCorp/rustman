@@ -14,7 +14,7 @@ Most backends that Rustman users test already publish an OpenAPI document. Hand-
   - *Execute* runs under a strict **safety policy**: read-only by default, `--allow-mutations` for POST/PUT/PATCH, `--allow-destructive` for DELETE, target-host allowlist, 10 req/s and concurrency 4, probe and time budgets, a production guard, and best-effort cleanup.
   - *Report* produces coverage (operations × documented status codes), findings with severity, evidence and reproduction (curl plus an exportable request file).
   - Explorations can be interrupted and resumed.
-- **Test reports** define one canonical, versioned JSON report schema for runs and explorations, with renderers for JUnit XML, Markdown, self-contained HTML and SARIF (security findings), plus `rustman report diff`. Every renderer upholds the redaction invariant.
+- **Test reports** take ownership of the canonical `rustman.report/v1` schema that `bootstrap-core-engine` introduced for runs, extend it additively with `kind: exploration`, and add with renderers for JUnit XML, Markdown, self-contained HTML and SARIF (security findings), plus `rustman report diff`. Every renderer upholds the redaction invariant.
 
 ## Capabilities
 
@@ -26,7 +26,7 @@ Most backends that Rustman users test already publish an OpenAPI document. Hand-
 
 ### Modified Capabilities
 
-None. `cli-runner` and `request-history` (from `bootstrap-core-engine`) are reused unchanged. The JSON and JUnit run reporters from `bootstrap-core-engine` must emit the canonical schema defined here. That's a constraint on their output, not a change to their requirements.
+None. `cli-runner` and `request-history` (from `bootstrap-core-engine`) are reused unchanged. The JSON and JUnit run reporters from `bootstrap-core-engine` already emit `rustman.report/v1` (`kind: run`); this change extends that schema additively and doesn't change their requirements.
 
 ## Out of Scope
 
