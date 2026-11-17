@@ -1,0 +1,7 @@
+version: 1
+kind: http
+name: Typo
+url: http://x
+header:
+  - name: a
+    value: b

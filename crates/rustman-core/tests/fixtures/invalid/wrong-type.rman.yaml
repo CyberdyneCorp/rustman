@@ -1,0 +1,6 @@
+version: 1
+kind: http
+name: Wrong type
+url: http://x
+settings:
+  timeout_ms: soon

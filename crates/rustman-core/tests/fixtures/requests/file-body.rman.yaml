@@ -1,0 +1,8 @@
+version: 1
+kind: http
+name: Upload blob
+method: PUT
+url: '{{base_url}}/blob'
+body:
+  type: file
+  path: ./fixtures/blob.bin

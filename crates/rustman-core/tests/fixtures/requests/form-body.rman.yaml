@@ -1,0 +1,12 @@
+version: 1
+kind: http
+name: Login form
+method: POST
+url: '{{base_url}}/login'
+body:
+  type: form
+  fields:
+    - name: user
+      value: ana
+    - name: password
+      value: '{{password}}'

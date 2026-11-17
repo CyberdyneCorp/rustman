@@ -1,0 +1,5 @@
+version: 1
+kind: http
+name: Twice
+url: http://x
+name: Again

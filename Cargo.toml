@@ -15,6 +15,33 @@ rustman-http = { path = "crates/rustman-http", version = "0.1.0" }
 rustman-report = { path = "crates/rustman-report", version = "0.1.0" }
 
 clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+# Pinned per design D4; only used behind rustman_core::format.
+serde-saphyr = { version = "=2.1.1", default-features = false, features = ["deserialize"] }
+# preserve_order keeps JSON body keys in file order (round trip, D4).
+serde_json = { version = "1", features = ["preserve_order"] }
+thiserror = "2"
+toml = "1"
+# Redactor (design D7): one linear pass over large bodies for every secret form.
+aho-corasick = "1"
+# Dynamic variables (design D8): {{$uuid}}, {{$random*}} and {{$isoTimestamp}}.
+rand = "0.10"
+time = { version = "0.3", default-features = false, features = ["std"] }
+uuid = { version = "1", default-features = false, features = ["std", "v4"] }
+# OS keychains for secrets (design D6), all pure Rust with no system libraries.
+# macOS Keychain and Windows Credential Manager go through keyring-core stores;
+# Linux talks to the Secret Service with oo7 (zbus 6, Rust crypto, no libdbus or
+# OpenSSL). The keyring 3.x Secret Service backends depend on unmaintained zbus
+# 4/5 crates (RUSTSEC-2026-0370..0372), so they are not used.
+keyring-core = "1.0.1"
+apple-native-keyring-store = { version = "1.0.2", default-features = false, features = ["keychain"] }
+windows-native-keyring-store = { version = "1.1.0", default-features = false }
+oo7 = { version = "0.7.1", default-features = false, features = ["async-std", "native_crypto"] }
+futures-lite = { version = "2.6", default-features = false, features = ["std"] }
+# No-echo prompt for `rustman secret set` (CLI only).
+rpassword = "7.5"
+
+tempfile = "3"
 
 assert_cmd = "2"
 predicates = "3"

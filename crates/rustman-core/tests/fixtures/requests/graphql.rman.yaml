@@ -1,0 +1,7 @@
+version: 1
+kind: graphql
+name: List users
+description: Runs once add-graphql-client lands
+url: '{{base_url}}/graphql'
+query: |
+  { users { id } }

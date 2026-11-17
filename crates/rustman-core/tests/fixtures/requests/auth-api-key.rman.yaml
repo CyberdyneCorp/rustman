@@ -1,0 +1,9 @@
+version: 1
+kind: http
+name: API key auth
+url: '{{base_url}}/me'
+auth:
+  type: api_key
+  name: key
+  value: '{{k}}'
+  in: query

@@ -1,0 +1,5 @@
+version: 1
+kind: http
+name: Get user
+method: GET
+url: '{{base_url}}/users/1'

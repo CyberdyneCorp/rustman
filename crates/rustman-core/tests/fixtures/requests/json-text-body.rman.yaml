@@ -1,0 +1,8 @@
+version: 1
+kind: http
+name: Raw JSON
+method: POST
+url: '{{base_url}}/raw'
+body:
+  type: json
+  content: '{"a":1}'

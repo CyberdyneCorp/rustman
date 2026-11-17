@@ -116,13 +116,18 @@ A `_collection.yaml` MAY define `name`, `description`, and collection-level `hea
 - **THEN** no `Authorization` header SHALL be added
 
 ### Requirement: Workspace initialization
-`rustman init [dir]` SHALL create `rustman.toml`, `environments/local.yaml`, a sample `examples/ping.rman.yaml`, and a `.gitignore` entry for `.rustman/`. It SHALL refuse to overwrite an existing `rustman.toml`, failing with `error: <dir> is already a rustman workspace` (exit 2). `--bare` SHALL skip the sample files.
+`rustman init [dir]` SHALL create `rustman.toml`, `environments/local.yaml`, a sample `examples/ping.rman.yaml`, and a `.gitignore` entry for `.rustman/`. It SHALL refuse to overwrite an existing `rustman.toml`, failing with `error: <dir> is already a rustman workspace` (exit 2). `--bare` SHALL skip the sample files (`environments/local.yaml` and `examples/ping.rman.yaml`), creating only `rustman.toml` and the `.gitignore` entry.
 
 #### Scenario: Fresh init
 - **GIVEN** an empty directory
 - **WHEN** the user runs `rustman init`
 - **THEN** `rustman.toml`, `environments/local.yaml` and `examples/ping.rman.yaml` SHALL exist
 - **AND** `.gitignore` SHALL contain `.rustman/`
+
+#### Scenario: Bare init
+- **GIVEN** an empty directory
+- **WHEN** the user runs `rustman init --bare`
+- **THEN** only `rustman.toml` and `.gitignore` SHALL exist, and `.gitignore` SHALL contain `.rustman/`
 
 #### Scenario: Existing gitignore is appended
 - **GIVEN** a `.gitignore` containing `target/`

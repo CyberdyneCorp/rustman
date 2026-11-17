@@ -1,0 +1,5 @@
+# Rustman writes LF; golden fixtures and docs examples are compared byte for byte.
+*.rman.yaml text eol=lf
+_collection.yaml text eol=lf
+crates/rustman-core/tests/fixtures/** text eol=lf
+docs/*.md text eol=lf

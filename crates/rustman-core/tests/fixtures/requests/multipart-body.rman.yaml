@@ -1,0 +1,13 @@
+version: 1
+kind: http
+name: Upload avatar
+method: POST
+url: '{{base_url}}/avatar'
+body:
+  type: multipart
+  parts:
+    - name: user
+      value: '42'
+    - name: avatar
+      file: ./fixtures/a.png
+      content_type: image/png
