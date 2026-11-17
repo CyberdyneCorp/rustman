@@ -1,0 +1,5 @@
+/target/
+**/*.rs.bk
+.DS_Store
+# Rustman per-user state (history, secrets, audit, caches) — never commit
+.rustman/

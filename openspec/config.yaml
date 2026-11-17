@@ -1,0 +1,32 @@
+schema: spec-driven
+
+context: |
+  Rustman is a local-first, keyboard-driven API client for the terminal, written entirely in Rust.
+  It speaks REST/HTTP, GraphQL and MCP (Model Context Protocol), with three faces over one engine:
+  a TUI for humans, a headless CLI for scripts/CI, and an MCP server so AI agents can drive it.
+  An optional Raven-based GUI companion (rustman-viz) renders charts and dashboards on demand.
+
+  Hard constraints:
+  - Rust stable (MSRV pinned in rust-toolchain.toml), edition 2024. Linux, macOS and Windows are first-class.
+  - The default `rustman` binary MUST build with plain `cargo build` (a platform C compiler used by common
+    crates such as `ring` is fine) and MUST NOT require installing system libraries (no OpenSSL, no SQLite,
+    no CMake), a GPU, or any network service. Anything needing native libraries (Raven/Vulkan) is behind
+    a cargo feature and a separate binary.
+  - Local-first: no accounts, no telemetry, no cloud sync. Workspaces are plain text files meant for Git.
+  - Secrets never leave the machine unredacted: never written to workspace files, history, reports,
+    logs, or MCP tool results unless the user explicitly opts in per value.
+  - Active testing against a backend (OpenAPI exploration, agent-triggered requests) is safe by default:
+    no destructive methods and no hosts outside an allowlist without explicit opt-in.
+  - Engine crates contain no UI code; TUI, CLI, MCP server and viz are thin adapters over the same core.
+  - Every behavior change ships with tests; every bug fix ships with a regression test.
+
+  Shared vocabulary and the capability map live in openspec/ROADMAP.md. Use those exact terms.
+
+rules:
+  proposal:
+    - State what is out of scope.
+    - Name capabilities from the capability map in openspec/ROADMAP.md; do not invent near-duplicates.
+  design:
+    - Name crates and key dependencies explicitly, with the alternative that was rejected.
+  tasks:
+    - Each task states how to verify it (a test, command, or observable behavior).
