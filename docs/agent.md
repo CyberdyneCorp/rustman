@@ -80,6 +80,8 @@ Every request an agent triggers, saved or ad hoc, passes these checks before any
 
 All the requests of a session share one rate limit and one concurrency limit, from `[safety].rate` and `[safety].concurrency`.
 
+`send_request` and `run_collection` compare [snapshots](snapshots.md) in CI mode: an agent never writes or updates a snapshot file, and a missing snapshot fails the assertion.
+
 ### Human confirmation
 
 When mutations are allowed, each mutating request first asks the human, through MCP elicitation, with the method, the redacted URL and the environment:

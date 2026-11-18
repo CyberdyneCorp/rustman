@@ -162,6 +162,18 @@ mod tests {
     }
 
     #[test]
+    fn snapshots_are_not_ignored() {
+        let tmp = tempfile::tempdir().unwrap();
+        init(tmp.path(), ".", false).unwrap();
+        let gitignore = fs::read_to_string(tmp.path().join(GITIGNORE)).unwrap();
+        assert!(!gitignore.contains("__snapshots__"), "{gitignore}");
+        assert!(
+            gitignore.lines().all(|l| l.trim() == GITIGNORE_ENTRY),
+            "only .rustman/ is ignored: {gitignore}"
+        );
+    }
+
+    #[test]
     fn bare_init_skips_samples() {
         let tmp = tempfile::tempdir().unwrap();
         let report = init(tmp.path(), ".", true).unwrap();

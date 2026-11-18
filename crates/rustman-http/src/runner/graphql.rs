@@ -124,12 +124,18 @@ impl Runner<'_> {
             record: graphql_record,
             warnings,
         } = outcome;
+        let events = graphql_record
+            .subscription
+            .as_ref()
+            .map(|s| s.events.iter().map(|e| e.payload.clone()).collect());
         let checked = Checked {
             assertions: graphql.assertions.as_deref().unwrap_or_default(),
             captures: graphql.captures.as_deref().unwrap_or_default(),
             request,
             resolver: &resolver,
             resolved: &sent,
+            kind: "graphql",
+            events,
         };
         let redactor = self.request_redactor(Some(&sent), Some(&exchange));
         let mut done = self.evaluate(&checked, exchange, record);

@@ -389,6 +389,29 @@ async fn an_echoed_secret_never_reaches_the_agent() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn agents_never_write_snapshot_files() {
+    let server = TestServer::http().await;
+    let ws = workspace(&server.url(""), "");
+    write(
+        ws.path(),
+        "users/snap.rman.yaml",
+        "version: 1\nkind: http\nname: Snap\nmethod: GET\nurl: \"{{base_url}}/users/1\"\nassertions:\n  - snapshot\n",
+    );
+    let client = connect(ws.path()).await;
+    let sent = ok(&client, "send_request", json!({"path": "users/snap"})).await;
+    assert_eq!(sent["outcome"], "failed", "{sent}");
+    let run = ok(
+        &client,
+        "run_collection",
+        json!({"path": "users/snap.rman.yaml"}),
+    )
+    .await;
+    let report = finished_run(&client, run["job_id"].as_str().unwrap()).await;
+    assert_eq!(report["summary"]["summary"]["failed"], 1, "{report:#}");
+    assert!(!ws.path().join("users/__snapshots__").exists());
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn digest_auth_is_refused_rather_than_sent_without_credentials() {
     let server = TestServer::http().await;
     let ws = workspace(&server.url(""), "");

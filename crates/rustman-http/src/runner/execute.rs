@@ -32,6 +32,7 @@ impl Sent {
             resolved: None,
             discard: None,
             redactor: Redactor::new(),
+            snapshots: Vec::new(),
         }
     }
 
@@ -42,6 +43,7 @@ impl Sent {
             resolved: None,
             discard: None,
             redactor: Redactor::new(),
+            snapshots: Vec::new(),
         }
     }
 
@@ -132,6 +134,8 @@ impl Runner<'_> {
             request,
             resolver: &resolver,
             resolved: &resolved,
+            kind: "http",
+            events: None,
         };
         let sent = self.evaluate(&checked, exchange, record);
         sent.with_resolved(resolved)
@@ -246,6 +250,8 @@ impl Runner<'_> {
         };
         record.assertions = assertions::evaluate(assertions, &view, &ctx);
         let report = self.capture(captures, &view, &mut redactor);
+        // After the captures, so a captured secret is redacted too.
+        let snapshots = self.check_snapshots(checked, &view, &redactor, &mut record.assertions);
         drop(view);
         remember_for_logs(&redactor);
         let passed = record.assertions.iter().all(|a| a.passed()) && !report.failed();
@@ -259,6 +265,7 @@ impl Runner<'_> {
         }
         let warnings = exchange.warnings.iter().chain(&report.warnings);
         record.warnings = warnings.map(|w| redactor.text(w).into_owned()).collect();
+        record.warnings.extend(snapshots.warnings);
         record.captures = report.results;
         for capture in &mut record.captures {
             if let Some(message) = &mut capture.message {
@@ -272,6 +279,7 @@ impl Runner<'_> {
             resolved: None,
             discard: None,
             redactor: Redactor::new(),
+            snapshots: snapshots.reviews,
         }
     }
 
@@ -367,6 +375,10 @@ pub(super) struct Checked<'c, 'r> {
     pub request: &'c RequestRef<'r>,
     pub resolver: &'c Resolver<'c>,
     pub resolved: &'c ResolvedRequest,
+    /// The request kind, as snapshot files record it.
+    pub kind: &'static str,
+    /// The events of a subscription: what its snapshots compare.
+    pub events: Option<Vec<serde_json::Value>>,
 }
 
 /// Redact the error message of `record`, which may quote what was sent.

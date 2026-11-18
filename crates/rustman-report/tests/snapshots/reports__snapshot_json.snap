@@ -1,0 +1,287 @@
+---
+source: crates/rustman-report/tests/reports.rs
+expression: json_snapshot(&run)
+---
+{
+  "schema": "rustman.report/v1",
+  "kind": "run",
+  "rustman_version": "[version]",
+  "started_at": "2026-11-17T09:30:00.123Z",
+  "environment": null,
+  "summary": {
+    "total": 4,
+    "passed": 2,
+    "failed": 2,
+    "errored": 0,
+    "skipped": 0,
+    "duration_ms": 9.0,
+    "interrupted": false,
+    "snapshots": {
+      "matched": 0,
+      "recorded": 1,
+      "updated": 1,
+      "failed": 1,
+      "missing": 1
+    }
+  },
+  "requests": [
+    {
+      "id": "users/new",
+      "name": "users/new",
+      "file": "users/new.rman.yaml",
+      "iteration": 1,
+      "status": "passed",
+      "skip_reason": null,
+      "error": null,
+      "exchange": {
+        "request": {
+          "method": "GET",
+          "url": "http://localhost:1/x",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "«redacted:Authorization»"
+            }
+          ],
+          "body": null
+        },
+        "response": {
+          "status": 200,
+          "http_version": "HTTP/1.1",
+          "headers": [],
+          "body": "{}",
+          "body_bytes": 2,
+          "body_truncated": false,
+          "binary": false
+        },
+        "timings": {
+          "dns_ms": null,
+          "connect_ms": 0.5,
+          "tls_ms": null,
+          "ttfb_ms": 3.2,
+          "download_ms": 0.0,
+          "total_ms": 4.0
+        },
+        "redirects": [],
+        "insecure": false
+      },
+      "assertions": [
+        {
+          "kind": "snapshot",
+          "outcome": "pass",
+          "label": "snapshot default",
+          "expected": null,
+          "actual": null,
+          "message": "",
+          "snapshot": {
+            "name": "default",
+            "state": "recorded",
+            "path": "users/__snapshots__/get-user.default.snap.yaml"
+          }
+        }
+      ],
+      "captures": [],
+      "warnings": [],
+      "duration_ms": 0.0
+    },
+    {
+      "id": "users/changed",
+      "name": "users/changed",
+      "file": "users/changed.rman.yaml",
+      "iteration": 1,
+      "status": "passed",
+      "skip_reason": null,
+      "error": null,
+      "exchange": {
+        "request": {
+          "method": "GET",
+          "url": "http://localhost:1/x",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "«redacted:Authorization»"
+            }
+          ],
+          "body": null
+        },
+        "response": {
+          "status": 200,
+          "http_version": "HTTP/1.1",
+          "headers": [],
+          "body": "{}",
+          "body_bytes": 2,
+          "body_truncated": false,
+          "binary": false
+        },
+        "timings": {
+          "dns_ms": null,
+          "connect_ms": 0.5,
+          "tls_ms": null,
+          "ttfb_ms": 3.2,
+          "download_ms": 0.0,
+          "total_ms": 4.0
+        },
+        "redirects": [],
+        "insecure": false
+      },
+      "assertions": [
+        {
+          "kind": "snapshot",
+          "outcome": "pass",
+          "label": "snapshot default",
+          "expected": null,
+          "actual": null,
+          "message": "",
+          "snapshot": {
+            "name": "default",
+            "state": "updated",
+            "path": "users/__snapshots__/get-user.default.snap.yaml",
+            "diff": {
+              "changes": [
+                {
+                  "path": "$.user.role",
+                  "kind": "changed",
+                  "old": "admin",
+                  "new": "viewer"
+                }
+              ],
+              "more": 0
+            }
+          }
+        }
+      ],
+      "captures": [],
+      "warnings": [],
+      "duration_ms": 0.0
+    },
+    {
+      "id": "users/get-user",
+      "name": "users/get-user",
+      "file": "users/get-user.rman.yaml",
+      "iteration": 1,
+      "status": "failed",
+      "skip_reason": null,
+      "error": null,
+      "exchange": {
+        "request": {
+          "method": "GET",
+          "url": "http://localhost:1/x",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "«redacted:Authorization»"
+            }
+          ],
+          "body": null
+        },
+        "response": {
+          "status": 200,
+          "http_version": "HTTP/1.1",
+          "headers": [],
+          "body": "{}",
+          "body_bytes": 2,
+          "body_truncated": false,
+          "binary": false
+        },
+        "timings": {
+          "dns_ms": null,
+          "connect_ms": 0.5,
+          "tls_ms": null,
+          "ttfb_ms": 3.2,
+          "download_ms": 0.0,
+          "total_ms": 4.0
+        },
+        "redirects": [],
+        "insecure": false
+      },
+      "assertions": [
+        {
+          "kind": "snapshot",
+          "outcome": "fail",
+          "label": "snapshot default",
+          "expected": null,
+          "actual": null,
+          "message": "snapshot mismatch: users/__snapshots__/get-user.default.snap.yaml\nchanged $.user.role: \"admin\" → \"viewer\"",
+          "snapshot": {
+            "name": "default",
+            "state": "failed",
+            "path": "users/__snapshots__/get-user.default.snap.yaml",
+            "diff": {
+              "changes": [
+                {
+                  "path": "$.user.role",
+                  "kind": "changed",
+                  "old": "admin",
+                  "new": "viewer"
+                }
+              ],
+              "more": 0
+            }
+          }
+        }
+      ],
+      "captures": [],
+      "warnings": [],
+      "duration_ms": 0.0
+    },
+    {
+      "id": "users/ci",
+      "name": "users/ci",
+      "file": "users/ci.rman.yaml",
+      "iteration": 1,
+      "status": "failed",
+      "skip_reason": null,
+      "error": null,
+      "exchange": {
+        "request": {
+          "method": "GET",
+          "url": "http://localhost:1/x",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "«redacted:Authorization»"
+            }
+          ],
+          "body": null
+        },
+        "response": {
+          "status": 200,
+          "http_version": "HTTP/1.1",
+          "headers": [],
+          "body": "{}",
+          "body_bytes": 2,
+          "body_truncated": false,
+          "binary": false
+        },
+        "timings": {
+          "dns_ms": null,
+          "connect_ms": 0.5,
+          "tls_ms": null,
+          "ttfb_ms": 3.2,
+          "download_ms": 0.0,
+          "total_ms": 4.0
+        },
+        "redirects": [],
+        "insecure": false
+      },
+      "assertions": [
+        {
+          "kind": "snapshot",
+          "outcome": "fail",
+          "label": "snapshot default",
+          "expected": null,
+          "actual": null,
+          "message": "snapshot missing: users/__snapshots__/get-user.default.snap.yaml (run without --ci to record)",
+          "snapshot": {
+            "name": "default",
+            "state": "missing",
+            "path": "users/__snapshots__/get-user.default.snap.yaml"
+          }
+        }
+      ],
+      "captures": [],
+      "warnings": [],
+      "duration_ms": 0.0
+    }
+  ]
+}

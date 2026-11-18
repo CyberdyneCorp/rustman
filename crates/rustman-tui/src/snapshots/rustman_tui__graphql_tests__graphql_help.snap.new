@@ -55,11 +55,11 @@ expression: screen
 │             │   Alt+S                    Start GraphQL subscription                │             │
 │             │   Alt+X                    Stop GraphQL subscription                 │             │
 │             │   Alt+C                    Copy as…                                  │             │
+│             │   Alt+A                    Review snapshots                          │             │
 │             │   Ctrl+Q                   Quit                                      │             │
 │             │                                                                      │             │
 │             │ ↑↓ scroll · Esc close                                                │             │
 │             └──────────────────────────────────────────────────────────────────────┘             │
-│                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │

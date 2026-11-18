@@ -11,6 +11,7 @@ use crate::captures::CaptureResult;
 use crate::model::{ApiKeyLocation, Auth};
 use crate::redact::Redactor;
 use crate::secret::placeholder;
+use crate::snapshot::SnapshotCounts;
 use crate::vars::{ResolvedBody, ResolvedRequest};
 
 /// How one request of a run ended.
@@ -312,6 +313,9 @@ pub struct Summary {
     pub duration_ms: f64,
     /// The run was stopped by Ctrl+C; the records are partial.
     pub interrupted: bool,
+    /// How the run's snapshot assertions ended; absent without any.
+    #[serde(skip_serializing_if = "SnapshotCounts::is_empty")]
+    pub snapshots: SnapshotCounts,
 }
 
 impl Summary {
@@ -325,6 +329,12 @@ impl Summary {
             skipped: count(RequestStatus::Skipped),
             duration_ms,
             interrupted,
+            snapshots: SnapshotCounts::of(
+                records
+                    .iter()
+                    .flat_map(|r| &r.assertions)
+                    .filter_map(|a| a.snapshot.as_ref()),
+            ),
         }
     }
 }

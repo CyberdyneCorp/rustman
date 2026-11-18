@@ -1,0 +1,16 @@
+---
+source: crates/rustman-report/tests/reports.rs
+expression: pretty(&run)
+---
+PASS  users/new  GET 200  4 ms
+      snapshot default recorded: users/__snapshots__/get-user.default.snap.yaml
+PASS  users/changed  GET 200  4 ms
+      snapshot default updated: users/__snapshots__/get-user.default.snap.yaml
+FAIL  users/get-user  GET 200  4 ms
+      snapshot mismatch: users/__snapshots__/get-user.default.snap.yaml
+      changed $.user.role: "admin" → "viewer"
+FAIL  users/ci  GET 200  4 ms
+      snapshot missing: users/__snapshots__/get-user.default.snap.yaml (run without --ci to record)
+
+4 requests: 2 passed, 2 failed, 0 errored, 0 skipped (9 ms)
+1 snapshot recorded, 1 snapshot updated, 1 snapshot failed, 1 snapshot missing

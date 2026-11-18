@@ -16,7 +16,9 @@ use rustman_http::Exchange;
 use rustman_http::import_curl_words;
 use rustman_http::runner::{RunContext, Runner, Sent};
 
-use super::exec::{SendFlags, cancel_on_ctrl_c, history_store, runtime, secret_store};
+use super::exec::{
+    SendFlags, cancel_on_ctrl_c, history_store, print_snapshot_notes, runtime, secret_store,
+};
 use super::{EnvSelection, current_dir, print_warnings};
 use crate::exit::{CliError, run_code};
 
@@ -182,6 +184,7 @@ fn send(
     }
     print_warnings(&store.take_warnings());
     print_warnings(&sent.record.warnings);
+    print_snapshot_notes(&sent.record);
     finish(&args.output, &sent)
 }
 

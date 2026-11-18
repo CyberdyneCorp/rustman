@@ -42,6 +42,9 @@ pub mod palette;
 pub mod pane;
 pub mod response;
 pub mod reveal;
+pub mod review;
+#[cfg(test)]
+mod review_tests;
 mod runtime;
 pub mod send;
 #[cfg(test)]
@@ -278,7 +281,8 @@ pub fn run(start: &Path, overrides: Overrides) -> Result<(), TuiError> {
     }
     // Spilled viz bodies go when this returns or a panic unwinds out of it.
     let _viz_spills = viz::CleanupGuard::new();
-    let (state, effects) = initial_state(start, overrides);
+    let (mut state, effects) = initial_state(start, overrides);
+    state.snapshot_mode = review::mode_from_env(std::env::var("CI").ok().as_deref());
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;

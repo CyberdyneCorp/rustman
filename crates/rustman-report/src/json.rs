@@ -9,5 +9,5 @@ use crate::run::RunReport;
 
 /// `run` as a pretty-printed `rustman.report/v1` document, ending in a newline.
 pub fn json(run: &RunRecord) -> String {
-    Report::Run(RunReport::new(run)).to_json()
+    Report::Run(Box::new(RunReport::new(run))).to_json()
 }

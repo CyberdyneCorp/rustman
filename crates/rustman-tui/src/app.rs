@@ -12,6 +12,7 @@ use std::time::Instant;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent};
 use ratatui::layout::Rect;
 use rustman_core::model::Request;
+use rustman_core::snapshot::SnapshotMode;
 use rustman_core::{Secret, Workspace};
 
 use crate::commands;
@@ -36,7 +37,7 @@ use crate::vim::Vim;
 use crate::viz::{self, VizError, VizJob};
 use crate::webhook::{self, WebhookPane};
 use crate::workbench::{self, Pending};
-use crate::{graphql, reveal, send, viewer_keys};
+use crate::{graphql, reveal, review, send, viewer_keys};
 
 /// The whole UI state; `view` renders it and `update` changes it.
 #[derive(Debug)]
@@ -80,6 +81,8 @@ pub struct State {
     pub viz: viz::Discovery,
     /// The webhook inspector pane and its listener.
     pub webhook: WebhookPane,
+    /// How sends treat snapshot files: CI mode (`CI=true`) never writes.
+    pub snapshot_mode: SnapshotMode,
 }
 
 /// Modals drawn over the shell.
@@ -105,6 +108,8 @@ pub enum Overlay {
     Snippet(Box<crate::copy_as::SnippetPane>),
     /// The "Import…" dialog and its preview.
     Import(Box<crate::import_dialog::ImportDialog>),
+    /// The snapshot review queue (`Alt+A`).
+    SnapshotQueue(Box<review::Queue>),
 }
 
 /// What fills the terminal.
@@ -292,6 +297,8 @@ pub enum Action {
     },
     /// An import (or its dry run) finished.
     Imported(Box<crate::import_dialog::ImportDone>),
+    /// An approved snapshot was written (or not).
+    SnapshotApproved(Box<review::Approved>),
 }
 
 /// Why the loop stopped without the user quitting.
@@ -384,6 +391,8 @@ pub enum Effect {
     Snippet(Box<crate::copy_as::SnippetJob>),
     /// Run an import or its dry run.
     Import(Box<crate::import_dialog::ImportJob>),
+    /// Write an approved snapshot.
+    ApproveSnapshot(Box<review::ApproveJob>),
 }
 
 impl State {
@@ -424,6 +433,7 @@ impl State {
             revealed: Revealed::default(),
             viz: viz::Discovery::default(),
             webhook: WebhookPane::default(),
+            snapshot_mode: SnapshotMode::Record,
         }
     }
 
@@ -557,6 +567,10 @@ fn on_workbench(state: &mut State, action: Action) -> Vec<Effect> {
             Vec::new()
         }
         Action::Imported(done) => crate::import_dialog::on_done(state, *done),
+        Action::SnapshotApproved(done) => {
+            review::on_approved(state, *done);
+            Vec::new()
+        }
         other => viewer_keys::on_action(state, other),
     }
 }

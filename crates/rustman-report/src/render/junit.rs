@@ -2,7 +2,8 @@
 //!
 //! - A run: one `<testcase>` per request, with a `<failure>` for a failed
 //!   request, an `<error>` for an errored one and `<skipped>` for a skipped
-//!   one.
+//!   one. A failed snapshot's diff is in the failure message; recorded and
+//!   updated snapshots go to system-out.
 //! - An exploration: one `<testsuite>` per tag and one `<testcase>` per
 //!   operation. Findings at or above `--fail-on` become a `<failure>` whose
 //!   type is the rule id; an operation whose probes were all blocked or
@@ -31,6 +32,9 @@ pub fn run_junit(run: &RunReport) -> String {
     suite.add_property(Property::new("started_at", run.started_at.as_str()));
     if run.summary.interrupted {
         suite.add_property(Property::new("interrupted", "true"));
+    }
+    if let Some(line) = run.summary.snapshots.line() {
+        suite.add_property(Property::new("snapshots", line));
     }
     suite.add_test_cases(run.requests.iter().map(|r| request_case(r, iterated)));
     let mut report = Report::new(SUITE);
@@ -75,6 +79,10 @@ fn request_case(record: &RunRequest, iterated: bool) -> TestCase {
     case.set_classname(record.file.as_str());
     case.set_time(duration(record.duration_ms));
     case.set_assertions(record.assertions.len());
+    let notes = record.snapshot_notes();
+    if !notes.is_empty() {
+        case.set_system_out(notes.join("\n"));
+    }
     case
 }
 

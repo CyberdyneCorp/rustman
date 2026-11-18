@@ -264,3 +264,39 @@ fn unclosed_quote_has_exact_position() {
     let err = error("unclosed-quote.rman.yaml");
     assert_error(&err, 4, 6, "unclosed-quote.rman.yaml:4: unclosed quote");
 }
+
+#[test]
+fn snapshot_assertions_load_in_both_forms() {
+    use rustman_core::model::Assertion;
+    let request = http("snapshot.rman.yaml");
+    let names: Vec<&str> = request
+        .assertions
+        .iter()
+        .flatten()
+        .filter_map(|a| match a {
+            Assertion::Snapshot(s) => Some(s.name()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(names, ["default", "headers"]);
+}
+
+#[test]
+fn duplicate_snapshot_names_point_at_the_second() {
+    let err = error("snapshot-duplicate-name.rman.yaml");
+    assert_eq!(
+        err.to_string(),
+        "snapshot-duplicate-name.rman.yaml:7: duplicate snapshot name 'default'"
+    );
+}
+
+#[test]
+fn invalid_snapshot_regex_names_pattern_and_reason() {
+    let err = error("snapshot-invalid-regex.rman.yaml");
+    assert_error(
+        &err,
+        8,
+        20,
+        "snapshot-invalid-regex.rman.yaml:8: invalid regex '(': unclosed group",
+    );
+}

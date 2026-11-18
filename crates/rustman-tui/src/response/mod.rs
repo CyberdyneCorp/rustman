@@ -46,6 +46,8 @@ pub enum ResponseTab {
     Extensions,
     /// GraphQL: a subscription's events.
     Events,
+    /// A failed, missing or new snapshot and its review.
+    Snapshot,
 }
 
 impl ResponseTab {
@@ -64,6 +66,28 @@ impl ResponseTab {
         Self::Assertions,
     ];
 
+    /// The tabs of an HTTP exchange with a snapshot to review.
+    pub const WITH_SNAPSHOT: [Self; 5] = [
+        Self::Body,
+        Self::Headers,
+        Self::Timing,
+        Self::Assertions,
+        Self::Snapshot,
+    ];
+
+    /// The tabs of a GraphQL exchange with a snapshot to review.
+    pub const GRAPHQL_WITH_SNAPSHOT: [Self; 9] = [
+        Self::Data,
+        Self::Errors,
+        Self::Extensions,
+        Self::Events,
+        Self::Body,
+        Self::Headers,
+        Self::Timing,
+        Self::Assertions,
+        Self::Snapshot,
+    ];
+
     pub fn label(self) -> &'static str {
         match self {
             Self::Body => "Body",
@@ -74,6 +98,7 @@ impl ResponseTab {
             Self::Errors => "Errors",
             Self::Extensions => "Extensions",
             Self::Events => "Events",
+            Self::Snapshot => "Snapshot",
         }
     }
 
@@ -218,6 +243,8 @@ pub struct Viewer {
     search_job: Option<(u64, CancellationToken)>,
     /// The exchange is a GraphQL one: its result has tabs of its own.
     pub graphql: bool,
+    /// The exchange has a snapshot to review: the Snapshot tab is shown.
+    pub snapshot: bool,
 }
 
 impl Viewer {
@@ -236,6 +263,7 @@ impl Viewer {
             tree,
             page,
             graphql,
+            snapshot: !received.snapshots.is_empty(),
             tab: if graphql {
                 ResponseTab::Data
             } else {
@@ -247,10 +275,11 @@ impl Viewer {
 
     /// The tabs this exchange has.
     pub fn tabs(&self) -> &'static [ResponseTab] {
-        if self.graphql {
-            &ResponseTab::GRAPHQL
-        } else {
-            &ResponseTab::ALL
+        match (self.graphql, self.snapshot) {
+            (true, false) => &ResponseTab::GRAPHQL,
+            (true, true) => &ResponseTab::GRAPHQL_WITH_SNAPSHOT,
+            (false, false) => &ResponseTab::ALL,
+            (false, true) => &ResponseTab::WITH_SNAPSHOT,
         }
     }
 

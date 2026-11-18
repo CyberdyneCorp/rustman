@@ -9,6 +9,7 @@ use serde::de::{self, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 
 use super::common::{Checked, Validate, exactly_one, given};
+use super::snapshot::SnapshotAssertion;
 use crate::format::Located;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -29,6 +30,8 @@ pub enum Assertion {
     ErrorCode(String),
     /// `data: {path, <op>: value}`: a JSONPath check rooted at `data`.
     Data(Box<Checked<JsonAssertion>>),
+    /// `snapshot` or `snapshot: {...}`: compare with a stored snapshot.
+    Snapshot(Box<Checked<SnapshotAssertion>>),
 }
 
 /// The key naming an assertion's type.
@@ -46,11 +49,12 @@ enum AssertionKey {
     ErrorMessageContains,
     ErrorCode,
     Data,
+    Snapshot,
 }
 
 impl<'de> Deserialize<'de> for Assertion {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        deserializer.deserialize_map(AssertionVisitor)
+        deserializer.deserialize_any(AssertionVisitor)
     }
 }
 
@@ -61,6 +65,17 @@ impl<'de> Visitor<'de> for AssertionVisitor {
 
     fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("an assertion such as `status: 200` (one key naming its type)")
+    }
+
+    /// The only assertion written as a bare word: `- snapshot`.
+    fn visit_str<E: de::Error>(self, v: &str) -> Result<Assertion, E> {
+        if v == "snapshot" {
+            let default = Checked::new(SnapshotAssertion::default()).map_err(E::custom)?;
+            return Ok(Assertion::Snapshot(Box::new(default)));
+        }
+        Err(E::custom(format!(
+            "unknown assertion `{v}` (only `snapshot` may be written without a value)"
+        )))
     }
 
     fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Assertion, A::Error> {
@@ -83,6 +98,7 @@ impl<'de> Visitor<'de> for AssertionVisitor {
             }
             AssertionKey::ErrorCode => Assertion::ErrorCode(map.next_value()?),
             AssertionKey::Data => Assertion::Data(map.next_value()?),
+            AssertionKey::Snapshot => Assertion::Snapshot(map.next_value()?),
         };
         if let Some(extra) = map.next_key::<String>()? {
             return Err(de::Error::custom(format!(
@@ -108,6 +124,7 @@ impl AssertionKey {
             Self::ErrorMessageContains => "error_message_contains",
             Self::ErrorCode => "error_code",
             Self::Data => "data",
+            Self::Snapshot => "snapshot",
         }
     }
 }

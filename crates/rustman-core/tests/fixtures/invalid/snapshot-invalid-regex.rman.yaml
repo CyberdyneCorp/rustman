@@ -1,0 +1,9 @@
+version: 1
+kind: http
+name: Bad replacement
+url: '{{base_url}}/users/1'
+assertions:
+  - snapshot:
+      replace:
+        - pattern: "("
+          with: x

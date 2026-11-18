@@ -34,6 +34,10 @@ use expected::Interp;
 use response::Parsed;
 pub(crate) use shown::quoted;
 
+/// Snapshot assertions read and write files, so the runner checks them
+/// with [`crate::snapshot::check`] instead of [`evaluate`].
+pub const SNAPSHOT_NEEDS_RUNNER: &str = "snapshot assertions are checked by the runner";
+
 /// How one assertion ended.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -62,6 +66,9 @@ pub struct AssertionResult {
     /// Why it failed or errored, such as `status: expected 200, got 404`.
     /// Empty when it passed.
     pub message: String,
+    /// The outcome of a `snapshot` assertion: its state, file and diff.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snapshot: Option<crate::snapshot::SnapshotResult>,
 }
 
 impl AssertionResult {
@@ -96,7 +103,7 @@ pub fn needs_body(assertions: &[Assertion]) -> bool {
     assertions.iter().any(|a| {
         matches!(
             a,
-            Assertion::Json(_) | Assertion::Schema(_) | Assertion::Body(_)
+            Assertion::Json(_) | Assertion::Schema(_) | Assertion::Body(_) | Assertion::Snapshot(_)
         ) || graphql::reads_result(a)
     })
 }
@@ -131,6 +138,10 @@ fn evaluate_one(
         Assertion::Schema(schema) => schema::evaluate(schema, response, ctx.request),
         Assertion::Body(body) => body::evaluate(body, view, interp),
         Assertion::Latency(latency) => status::latency(latency, view),
+        Assertion::Snapshot(snapshot) => {
+            Check::new("snapshot", format!("snapshot {}", snapshot.name()))
+                .error(SNAPSHOT_NEEDS_RUNNER)
+        }
         graphql => graphql::evaluate(graphql, response, interp),
     }
 }
@@ -203,6 +214,7 @@ impl Check {
             expected,
             actual,
             message,
+            snapshot: None,
         }
     }
 }

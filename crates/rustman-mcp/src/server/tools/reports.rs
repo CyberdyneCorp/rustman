@@ -97,7 +97,7 @@ pub fn find_report(ctx: &AgentContext, id: Option<&str>) -> Result<(String, Repo
         })?;
         let report = serde_json::from_value::<RunReport>(report)
             .map_err(|e| ToolError::internal(e.to_string()))?;
-        return Ok((job.id.clone(), Report::Run(report)));
+        return Ok((job.id.clone(), Report::Run(Box::new(report))));
     }
     let exploration = exploration_id(ctx, id)?;
     let report = exploration_report(ctx, &exploration)?;

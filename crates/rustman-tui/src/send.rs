@@ -22,6 +22,7 @@ use rustman_core::model::{HttpRequest, REQUEST_FILE_SUFFIX, Request};
 use rustman_core::run::RequestRecord;
 use rustman_core::secrets::{BACKEND_VAR, SecretBackend, SecretStore};
 use rustman_core::settings::Settings;
+use rustman_core::snapshot::SnapshotMode;
 use rustman_core::vars::Lookup;
 use rustman_core::workspace::RequestRef;
 use rustman_core::{Redactor, Workspace};
@@ -36,6 +37,7 @@ use crate::dialogs::Confirm;
 use crate::response::graphql::GraphqlView;
 use crate::response::timing::SPARK_POINTS;
 use crate::response::{Captured, RawBody, Received, Source};
+use crate::review::Reviews;
 use crate::tabs::{LiveEvent, LiveEvents, TabId};
 use crate::toast::Severity;
 use crate::workbench;
@@ -63,6 +65,8 @@ pub struct SendJob {
     pub stop: CancellationToken,
     /// Where a subscription's events go as they arrive.
     pub live: LiveEvents,
+    /// How snapshot assertions treat their files.
+    pub snapshots: SnapshotMode,
 }
 
 impl fmt::Debug for SendJob {
@@ -126,6 +130,7 @@ pub fn start_with(state: &mut State, validate: bool) -> Vec<Effect> {
         validate,
         stop: flight.stop.clone(),
         live: Arc::clone(&flight.live),
+        snapshots: state.snapshot_mode,
     };
     state.status.in_flight = state.tabs.in_flight();
     vec![Effect::Send(Box::new(job))]
@@ -350,6 +355,7 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         history: place.history(),
         ad_hoc,
         graphql: Some(&graphql),
+        snapshots: job.snapshots,
         ..RunOptions::default()
     };
     let ctx = RunContext {
@@ -378,7 +384,9 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         Request::Http(http) => Some(http.as_ref()),
         _ => None,
     };
+    let reviews = std::mem::take(&mut sent.snapshots);
     let mut received = prepare(sent, http);
+    received.snapshots = Reviews::new(reviews, job.snapshots);
     received.graphql = graphql_view(&received);
     if !ad_hoc && let Some(store) = place.history() {
         received.history = latencies(&store, &received.record.file);
@@ -552,6 +560,7 @@ mod tests {
             validate: true,
             stop: CancellationToken::new(),
             live: LiveEvents::default(),
+            snapshots: SnapshotMode::Record,
         };
         let mut other = job.clone();
         assert_eq!(job, other);

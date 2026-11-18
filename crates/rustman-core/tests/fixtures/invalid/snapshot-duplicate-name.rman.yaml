@@ -1,0 +1,8 @@
+version: 1
+kind: http
+name: Two default snapshots
+url: '{{base_url}}/users/1'
+assertions:
+  - snapshot
+  - snapshot:
+      compare: [body]

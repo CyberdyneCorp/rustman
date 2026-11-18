@@ -8,7 +8,7 @@ use crate::model::{
     ApiKeyLocation, Assertion, Auth, AwsCredentials, AwsSigV4, Body, Capture, CountExpectation,
     CountOp, GraphqlMethod, GraphqlRequest, GraphqlTransport, HeaderAssertion, HttpRequest,
     JsonAssertion, JsonContent, Jwt, NameValue, OAuth2, Part, PartSource, Request, RequestSettings,
-    StatusExpectation, VarValue, Variables, WsProtocol,
+    SnapshotAssertion, StatusExpectation, VarValue, Variables, WsProtocol,
 };
 
 /// The YAML text Rustman writes for a request file.
@@ -406,6 +406,10 @@ fn settings(s: &RequestSettings) -> Node {
 
 fn assertion(a: &Assertion) -> Node {
     let (key, node) = match a {
+        Assertion::Snapshot(s) if ***s == SnapshotAssertion::default() => {
+            return Node::str("snapshot");
+        }
+        Assertion::Snapshot(s) => ("snapshot", snapshot_node(s)),
         Assertion::Status(status) => ("status", status_node(status)),
         Assertion::Header(h) => ("header", header_assertion(h)),
         Assertion::Json(j) => ("json", json_assertion(j)),
@@ -439,6 +443,70 @@ fn assertion(a: &Assertion) -> Node {
         Assertion::Data(j) => ("data", json_assertion(j)),
     };
     Node::Map(vec![(key.to_owned(), node)])
+}
+
+fn snapshot_node(s: &SnapshotAssertion) -> Node {
+    let names = |v: &[String]| strings(v);
+    let located = |v: &[crate::format::Located<String>]| {
+        Node::Seq(v.iter().map(|p| Node::str(p.get())).collect())
+    };
+    MapBuilder::new()
+        .opt("name", s.name.as_ref().map(|n| Node::str(n.get())))
+        .opt(
+            "compare",
+            s.compare
+                .as_ref()
+                .map(|c| Node::Seq(c.iter().map(|p| Node::str(p.as_str())).collect())),
+        )
+        .opt("ignore", s.ignore.as_deref().map(located))
+        .opt(
+            "headers",
+            s.headers.as_ref().map(|h| {
+                MapBuilder::new()
+                    .opt("include", h.include.as_deref().map(names))
+                    .opt("redact", h.redact.as_deref().map(names))
+                    .build()
+            }),
+        )
+        .opt(
+            "replace",
+            s.replace.as_ref().map(|rules| {
+                Node::Seq(
+                    rules
+                        .iter()
+                        .map(|r| {
+                            MapBuilder::new()
+                                .str("pattern", r.pattern.get())
+                                .str("with", &r.with)
+                                .build()
+                        })
+                        .collect(),
+                )
+            }),
+        )
+        .opt(
+            "sort",
+            s.sort.as_ref().map(|rules| {
+                Node::Seq(
+                    rules
+                        .iter()
+                        .map(|r| {
+                            MapBuilder::new()
+                                .str("path", r.path.get())
+                                .opt_str("by", r.by.as_deref())
+                                .build()
+                        })
+                        .collect(),
+                )
+            }),
+        )
+        .opt(
+            "presets",
+            s.presets
+                .as_ref()
+                .map(|p| Node::Seq(p.iter().map(|p| Node::str(p.as_str())).collect())),
+        )
+        .build()
 }
 
 fn status_node(status: &StatusExpectation) -> Node {

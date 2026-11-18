@@ -68,6 +68,8 @@ enum Command {
     Tui(commands::tui::TuiArgs),
     /// Capture, inspect and mock inbound webhooks on a local listener
     Webhook(commands::webhook::WebhookArgs),
+    /// List snapshot files and prune the ones no request uses
+    Snapshot(commands::snapshot::SnapshotArgs),
 }
 
 fn main() -> ExitCode {
@@ -119,6 +121,7 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
         }
         Command::Tui(args) => Ok(commands::tui::run(&args)),
         Command::Webhook(args) => commands::webhook::run(&args),
+        Command::Snapshot(args) => commands::snapshot::run(&args),
     }
 }
 

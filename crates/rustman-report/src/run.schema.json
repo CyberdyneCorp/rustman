@@ -90,6 +90,9 @@
       "interrupted": {
         "type": "boolean",
         "description": "Stopped by Ctrl+C; the requests are partial."
+      },
+      "snapshots": {
+        "$ref": "#/$defs/snapshot_counts"
       }
     }
   },
@@ -385,7 +388,8 @@
           "errors_count",
           "error_message_contains",
           "error_code",
-          "data"
+          "data",
+          "snapshot"
         ]
       },
       "outcome": {
@@ -412,6 +416,9 @@
       },
       "message": {
         "type": "string"
+      },
+      "snapshot": {
+        "$ref": "#/$defs/snapshot_result"
       }
     }
   },
@@ -451,6 +458,163 @@
       "secret": {
         "type": "boolean"
       }
+    }
+  },
+  "snapshot_counts": {
+    "description": "How the run's snapshot assertions ended; absent when the run had none.",
+    "type": "object",
+    "required": [
+      "matched",
+      "recorded",
+      "updated",
+      "failed",
+      "missing"
+    ],
+    "properties": {
+      "matched": {
+        "$ref": "#/$defs/count"
+      },
+      "recorded": {
+        "$ref": "#/$defs/count"
+      },
+      "updated": {
+        "$ref": "#/$defs/count"
+      },
+      "failed": {
+        "$ref": "#/$defs/count"
+      },
+      "missing": {
+        "$ref": "#/$defs/count"
+      }
+    }
+  },
+  "snapshot_result": {
+    "description": "The outcome of a `snapshot` assertion. Every value is redacted.",
+    "type": "object",
+    "required": [
+      "name",
+      "state",
+      "path"
+    ],
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "state": {
+        "enum": [
+          "matched",
+          "recorded",
+          "updated",
+          "failed",
+          "missing"
+        ]
+      },
+      "path": {
+        "type": "string",
+        "description": "The snapshot file, relative to the workspace, with `/`."
+      },
+      "diff": {
+        "$ref": "#/$defs/snapshot_diff"
+      }
+    }
+  },
+  "snapshot_diff": {
+    "description": "The differences from the stored snapshot.",
+    "type": "object",
+    "required": [
+      "changes",
+      "more"
+    ],
+    "properties": {
+      "changes": {
+        "type": "array",
+        "maxItems": 50,
+        "items": {
+          "$ref": "#/$defs/snapshot_change"
+        }
+      },
+      "more": {
+        "$ref": "#/$defs/count"
+      },
+      "text": {
+        "type": "string",
+        "description": "The unified diff of text bodies."
+      },
+      "binary": {
+        "type": "object",
+        "required": [
+          "old_size",
+          "old_sha256",
+          "new_size",
+          "new_sha256"
+        ],
+        "properties": {
+          "old_size": {
+            "$ref": "#/$defs/count"
+          },
+          "old_sha256": {
+            "type": "string"
+          },
+          "new_size": {
+            "$ref": "#/$defs/count"
+          },
+          "new_sha256": {
+            "type": "string"
+          }
+        }
+      },
+      "event_count": {
+        "type": "object",
+        "required": [
+          "old",
+          "new"
+        ],
+        "properties": {
+          "old": {
+            "$ref": "#/$defs/count"
+          },
+          "new": {
+            "$ref": "#/$defs/count"
+          }
+        }
+      },
+      "body_type": {
+        "type": "object",
+        "required": [
+          "old",
+          "new"
+        ],
+        "properties": {
+          "old": {
+            "type": "string"
+          },
+          "new": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "snapshot_change": {
+    "type": "object",
+    "required": [
+      "path",
+      "kind"
+    ],
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "A JSONPath into the body, or `status` or `headers.<name>`."
+      },
+      "kind": {
+        "enum": [
+          "added",
+          "removed",
+          "changed"
+        ]
+      },
+      "old": {},
+      "new": {}
     }
   }
 }

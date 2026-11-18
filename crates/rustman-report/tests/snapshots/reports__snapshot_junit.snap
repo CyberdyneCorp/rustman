@@ -1,0 +1,27 @@
+---
+source: crates/rustman-report/tests/reports.rs
+expression: junit(&run)
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="rustman" tests="4" skipped="0" failures="2" errors="0" time="0.009">
+    <testsuite name="rustman" tests="4" skipped="0" errors="0" failures="2" time="0.009">
+        <properties>
+            <property name="started_at" value="2026-11-17T09:30:00.123Z"/>
+            <property name="snapshots" value="1 snapshot recorded, 1 snapshot updated, 1 snapshot failed, 1 snapshot missing"/>
+        </properties>
+        <testcase name="users/new" classname="users/new.rman.yaml" assertions="1" time="0.000">
+            <system-out>snapshot default recorded: users/__snapshots__/get-user.default.snap.yaml</system-out>
+        </testcase>
+        <testcase name="users/changed" classname="users/changed.rman.yaml" assertions="1" time="0.000">
+            <system-out>snapshot default updated: users/__snapshots__/get-user.default.snap.yaml</system-out>
+        </testcase>
+        <testcase name="users/get-user" classname="users/get-user.rman.yaml" assertions="1" time="0.000">
+            <failure message="snapshot mismatch: users/__snapshots__/get-user.default.snap.yaml
+changed $.user.role: &quot;admin&quot; → &quot;viewer&quot;">snapshot mismatch: users/__snapshots__/get-user.default.snap.yaml
+changed $.user.role: &quot;admin&quot; → &quot;viewer&quot;</failure>
+        </testcase>
+        <testcase name="users/ci" classname="users/ci.rman.yaml" assertions="1" time="0.000">
+            <failure message="snapshot missing: users/__snapshots__/get-user.default.snap.yaml (run without --ci to record)">snapshot missing: users/__snapshots__/get-user.default.snap.yaml (run without --ci to record)</failure>
+        </testcase>
+    </testsuite>
+</testsuites>

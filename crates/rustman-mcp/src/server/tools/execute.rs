@@ -14,6 +14,7 @@ use rustman_core::collection::RequestEntry;
 use rustman_core::history::HistoryStore;
 use rustman_core::model::{REQUEST_FILE_SUFFIX, Request, Variables};
 use rustman_core::run::{Filter, RequestRecord, RequestStatus, plan};
+use rustman_core::snapshot::SnapshotMode;
 use rustman_core::vars::{ResolvedRequest, parse_overrides};
 use rustman_core::workspace::RequestRef;
 use rustman_http::runner::{RunContext, RunOptions, Runner, SendGate, Sent};
@@ -326,6 +327,8 @@ async fn send_here(call: &Call) -> Result<ToolOutput, ToolError> {
     let mut options = RunOptions {
         overrides: overrides(args.vars.as_ref())?,
         timeout: args.timeout_ms.map(Duration::from_millis),
+        // Agents never write snapshot files: a missing snapshot fails.
+        snapshots: SnapshotMode::Ci,
         ..RunOptions::default()
     };
     let ws = call.ctx.workspace();
@@ -552,6 +555,7 @@ async fn run_job(
         cancel: job.cancel_token(),
         history: history(&ctx),
         gate: Some(&gate),
+        snapshots: SnapshotMode::Ci,
         ..RunOptions::default()
     };
     let run_ctx = RunContext {
@@ -569,7 +573,7 @@ async fn run_job(
     if let Err(err) = runner.finish() {
         tracing::warn!("cookies: {err}");
     }
-    let report = Report::Run(RunReport::new(&record)).to_json();
+    let report = Report::Run(Box::new(RunReport::new(&record))).to_json();
     let report = serde_json::from_str(&report).ok();
     let state = if record.summary.interrupted {
         JobState::Cancelled
