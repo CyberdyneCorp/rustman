@@ -2,26 +2,26 @@
 
 ## 1. Crate scaffolding and app loop
 
-- [ ] 1.1 Create `crates/rustman-tui` with `ratatui`, `crossterm`, `tokio`, `tokio-util` dependencies and wire `rustman` (no subcommand) and `rustman tui [PATH]` in `rustman-cli`; verify `cargo run -- tui --help` prints usage.
-- [ ] 1.2 Implement the `State`/`Action`/`update`/`view` loop with one `mpsc` action channel and an effect runner task; verify with a unit test that `update` is synchronous and returns effects instead of performing I/O.
-- [ ] 1.3 Terminal setup/teardown guard plus panic hook that restores cooked mode and the main screen; verify with an integration test that triggers a panic under a pty (`expectrl`/`portable-pty`) and asserts the terminal is restored.
-- [ ] 1.4 Workspace discovery (walk ancestors for `rustman.toml`) and the "Create workspace / Scratch session" prompt; verify with tests for subdirectory discovery and the no-workspace prompt.
+- [x] 1.1 Create `crates/rustman-tui` with `ratatui`, `crossterm`, `tokio`, `tokio-util` dependencies and wire `rustman` (no subcommand) and `rustman tui [PATH]` in `rustman-cli`; verify `cargo run -- tui --help` prints usage.
+- [x] 1.2 Implement the `State`/`Action`/`update`/`view` loop with one `mpsc` action channel and an effect runner task; verify with a unit test that `update` is synchronous and returns effects instead of performing I/O.
+- [x] 1.3 Terminal setup/teardown guard plus panic hook that restores cooked mode and the main screen; verify with an integration test that triggers a panic under a pty (`expectrl`/`portable-pty`) and asserts the terminal is restored.
+- [x] 1.4 Workspace discovery (walk ancestors for `rustman.toml`) and the "Create workspace / Scratch session" prompt; verify with tests for subdirectory discovery and the no-workspace prompt.
 
 ## 2. Layout, focus and theming
 
-- [ ] 2.1 Implement the three breakpoints (≥120, 80–119, <80 cols or <24 rows), sidebar resize (20–50) and `Ctrl+B` overlay; verify with `insta` snapshot tests at 160x45, 80x24 and 60x20.
-- [ ] 2.2 Status bar (workspace, environment, TLS badge, in-flight count, vim mode, `SECRETS VISIBLE`); verify with snapshot tests for each badge state.
-- [ ] 2.3 Theme engine with semantic tokens and the `dark`, `light`, `high-contrast` themes; colour detection (`COLORTERM`, xterm-256 fallback, `NO_COLOR`); `--ascii` glyph set; verify with unit tests for colour mapping and snapshot tests in `NO_COLOR` and ASCII modes.
-- [ ] 2.4 Focus ring with `Tab`/`Shift+Tab` and mouse focus/click/scroll/drag-resize, with a `mouse = false` option; verify with event-driven tests on `TestBackend`.
-- [ ] 2.5 Toast system (3-deep stack, timeouts per severity) and notification log; verify with tests using a mocked clock.
+- [x] 2.1 Implement the three breakpoints (≥120, 80–119, <80 cols or <24 rows), sidebar resize (20–50) and `Ctrl+B` overlay; verify with `insta` snapshot tests at 160x45, 80x24 and 60x20.
+- [x] 2.2 Status bar (workspace, environment, TLS badge, in-flight count, vim mode, `SECRETS VISIBLE`); verify with snapshot tests for each badge state.
+- [x] 2.3 Theme engine with semantic tokens and the `dark`, `light`, `high-contrast` themes; colour detection (`COLORTERM`, xterm-256 fallback, `NO_COLOR`); `--ascii` glyph set; verify with unit tests for colour mapping and snapshot tests in `NO_COLOR` and ASCII modes.
+- [x] 2.4 Focus ring with `Tab`/`Shift+Tab` and mouse focus/click/scroll/drag-resize, with a `mouse = false` option; verify with event-driven tests on `TestBackend`.
+- [x] 2.5 Toast system (3-deep stack, timeouts per severity) and notification log; verify with tests using a mocked clock.
 
 ## 3. Keymap, palette and help
 
-- [ ] 3.1 Action registry with stable ids; layered keymaps (default → vim → `keybindings.toml`) with per-context chords; startup validation that toasts unknown ids or bad chords; verify with unit tests covering override precedence and invalid entries.
-- [ ] 3.2 Fuzzy command palette (`nucleo`) over actions, request files and environments, with recency ranking; verify with tests that `swenv` ranks "Switch environment" first and that bindings are displayed.
-- [ ] 3.3 Help overlay generated from the effective keymap; verify a snapshot shows a user-rebound action with its new chord.
-- [ ] 3.4 Vim mode: navigation in lists/trees and modal editing in text areas (normal/insert/visual, listed motions); verify with key-sequence tests and the status-bar mode indicator.
-- [ ] 3.5 Document the default keymap, the vim preset and the `keybindings.toml` format in `docs/tui.md`; verify the doc table is generated from the registry by a test that fails on drift.
+- [x] 3.1 Action registry with stable ids; layered keymaps (default → vim → `keybindings.toml`) with per-context chords; startup validation that toasts unknown ids or bad chords; verify with unit tests covering override precedence and invalid entries.
+- [x] 3.2 Fuzzy command palette (`nucleo`; its `nucleo-matcher` crate, without the worker pool) over actions, request files and environments, with recency ranking; verify with tests that `swenv` ranks "Switch environment" first and that bindings are displayed.
+- [x] 3.3 Help overlay generated from the effective keymap; verify a snapshot shows a user-rebound action with its new chord.
+- [x] 3.4 Vim mode: navigation in lists/trees and modal editing in text areas (normal/insert/visual, listed motions); verify with key-sequence tests and the status-bar mode indicator.
+- [x] 3.5 Document the default keymap, the vim preset and the `keybindings.toml` format in `docs/tui.md`; verify the doc table is generated from the registry by a test that fails on drift.
 
 ## 4. Sidebar, tabs and editing
 
@@ -51,7 +51,7 @@
 
 ## 7. Environments and secrets
 
-- [ ] 7.1 Environment switcher (`Alt+E`) listing variables with layer; activating updates the status bar and next send; verify with a test that the next exchange uses the new environment's values.
+- [ ] 7.1 Environment switcher (`Alt+E`) listing variables with layer; activating updates the status bar and next send; verify with a test that the next exchange uses the new environment's values. (Already done in group 3: the palette's environment switcher sets the active environment shown in the status bar, in memory only; see `commands.rs`. Remaining: the variable/layer listing and wiring into the next send.)
 - [ ] 7.2 Secret masking in every surface and session-only reveal (`Alt+R`) with the `SECRETS VISIBLE` badge; verify with a test that scans the rendered buffer for a known secret value and finds it only while revealed.
 - [ ] 7.3 Persistent `TLS: INSECURE` badge; verify with a snapshot test using an environment that disables verification.
 

@@ -1,0 +1,5 @@
+---
+source: crates/rustman-tui/src/status.rs
+expression: "text(&StatusInfo::default())"
+---
+ demo │ no environment │ TLS verified │ 0 in flight                                     Ctrl+Q quit

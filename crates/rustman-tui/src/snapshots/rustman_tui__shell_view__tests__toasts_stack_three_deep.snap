@@ -1,0 +1,34 @@
+---
+source: crates/rustman-tui/src/shell_view.rs
+expression: text
+---
+┌ › Sidebar ───────────────┐┌ Request ───────────────────────────────────┐┌ Response ┌ ✖ error ────────────────────────┐
+│ examples/ping.rman.yaml  ││ METHOD   No request open                   ││ No respon│ Permission denied (os error 13) │
+│                          ││ Params  Headers  Body  Auth  Assertions    ││          └─────────────────────────────────┘
+│                          ││ Open a request from the sidebar.        ┌ ⚠ warning ─────────────────────────────────────┐
+│                          ││                                         │ Unknown action `request.sned` in               │
+│                          ││                                         │ keybindings.toml                               │
+│                          ││                                         └────────────────────────────────────────────────┘
+│                          ││                                            ││           ┌ ✔ success ─────────────────────┐
+│                          ││                                            ││           │ Saved users/get-user.rman.yaml │
+│                          ││                                            ││           └────────────────────────────────┘
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+└──────────────────────────┘└────────────────────────────────────────────┘└────────────────────────────────────────────┘
+ demo │ env: local │ TLS verified │ 0 in flight                                                             Ctrl+Q quit

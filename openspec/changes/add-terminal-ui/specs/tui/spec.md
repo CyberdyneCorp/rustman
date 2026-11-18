@@ -24,6 +24,14 @@ Running `rustman` with no subcommand, or `rustman tui [PATH]`, SHALL open the TU
 - **WHEN** an internal panic occurs
 - **THEN** the terminal SHALL be restored to cooked mode on the main screen before the panic message is printed
 
+### Requirement: Launching without a terminal
+When stdin or stdout is not a terminal, `rustman` with no subcommand SHALL print the help and exit 0 instead of opening the TUI.
+
+#### Scenario: No terminal
+- **GIVEN** stdout is a pipe
+- **WHEN** the user runs `rustman` with no subcommand
+- **THEN** the help SHALL be printed and the exit status SHALL be 0
+
 ### Requirement: Three-region layout
 At terminal widths of at least 120 columns the TUI SHALL show a collection tree sidebar (default 28 columns, resizable 20–50), a request editor and a response viewer side by side, plus a one-line status bar showing the workspace, active environment, TLS verification state and in-flight request count.
 
@@ -320,7 +328,7 @@ Transient notifications SHALL appear as toasts in the top-right corner, stacked 
 - **AND** the message SHALL be available in the notification log
 
 ### Requirement: Themes and colour capability
-The TUI SHALL ship the themes `dark` (default), `light` and `high-contrast`, selectable with `--theme` or in `tui.toml`. It SHALL use 24-bit colour when `COLORTERM` is `truecolor` or `24bit`, and the nearest xterm-256 colours otherwise. When `NO_COLOR` is set, it SHALL render without colour and convey status with symbols and text attributes.
+The TUI SHALL ship the themes `dark` (default), `light` and `high-contrast`, selectable with `--theme` or in `tui.toml`. It SHALL use 24-bit colour when `COLORTERM` is `truecolor` or `24bit`, and the nearest xterm-256 colours otherwise. When `NO_COLOR` is set to a non-empty value, it SHALL render without colour and convey status with symbols and text attributes.
 
 #### Scenario: 256-colour terminal
 - **GIVEN** `COLORTERM` is unset and `TERM=xterm-256color`

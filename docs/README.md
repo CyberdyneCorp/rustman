@@ -13,3 +13,5 @@ User and developer documentation for Rustman. Pages are added as the features th
 - [Request history](history.md): what is recorded and where, retention, redaction at rest, `rustman history list` filters, `show`, `replay` with secret re-resolution, and `clear`
 - [CLI reference](cli.md): every command, global flags, `rustman send` (including ad-hoc requests), `rustman run` (filters, iterations, parallel folders, bail), the pretty, json, junit and tap reporters, terminal output and logs, completions and exit codes
 - [Report schema](schemas/report.schema.json): the JSON Schema of `rustman.report/v1` (`kind: run`)
+- [Terminal UI](tui.md): starting `rustman` / `rustman tui`, workspace discovery, the create-or-scratch prompt, the responsive layout, focus, status bar, toasts, mouse, themes and colour detection, `--ascii`, `tui.toml`, the command palette, help, vim mode, `keybindings.toml` and the key reference, quitting and terminal restore, and rendering screenshots
+

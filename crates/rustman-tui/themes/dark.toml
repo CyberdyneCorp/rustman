@@ -1,0 +1,13 @@
+# The default theme. Every key is a semantic token (design D7).
+[colors]
+text = "#c0caf5"
+muted = "#737aa2"
+accent = "#7aa2f7"
+border = "#3b4261"
+focus = "#7dcfff"
+selection = "#283457"
+ok = "#9ece6a"
+info = "#7dcfff"
+warn = "#e0af68"
+error = "#f7768e"
+background = "#1a1b26"

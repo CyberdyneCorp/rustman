@@ -12,6 +12,7 @@ pub mod init;
 pub mod run;
 pub mod secret;
 pub mod send;
+pub mod tui;
 
 use std::path::{Path, PathBuf};
 

@@ -1,0 +1,32 @@
+[package]
+name = "rustman-tui"
+description = "Terminal user interface for Rustman"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+rustman-core.workspace = true
+ratatui.workspace = true
+crossterm.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+toml.workspace = true
+tokio = { workspace = true, features = ["rt", "sync", "time", "signal"] }
+tokio-util.workspace = true
+nucleo-matcher.workspace = true
+dunce.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt", "sync", "time", "signal", "macros"] }
+
+[target.'cfg(unix)'.dev-dependencies]
+portable-pty.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,28 @@
+---
+source: crates/rustman-tui/src/shell_view.rs
+expression: text(&state)
+---
+┌ › Request ───────────────────────────────────────────────────────────────────┐
+│ METHOD   No request open                                                     │
+│ Params  Headers  Body  Auth  Assertions                                      │
+│ Open a request from the sidebar.                                             │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│      ┌ Notifications ─────────────────────────────────────────────────┐      │
+│      │ ✖ error Permission denied (os error 13)                        │      │
+└──────│ ℹ info Copied 42                                               │──────┘
+┌ Respo│                                                                │──────┐
+│ No re│ Esc close                                                      │      │
+│      └────────────────────────────────────────────────────────────────┘      │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+ demo │ env: local │ TLS verified │ 0 in flight                     Ctrl+Q quit

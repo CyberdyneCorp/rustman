@@ -56,6 +56,8 @@ enum Command {
     History(commands::history::HistoryArgs),
     /// Print a shell completion script: rustman completions zsh > _rustman
     Completions(commands::completions::CompletionsArgs),
+    /// Open the terminal UI (the default when stdin and stdout are a terminal)
+    Tui(commands::tui::TuiArgs),
 }
 
 fn main() -> ExitCode {
@@ -63,8 +65,11 @@ fn main() -> ExitCode {
     terminal::init_color(cli.color);
     terminal::init_logs(cli.verbose, cli.color);
     let Some(command) = cli.command else {
-        // The TUI arrives in a later change; until then, show help. A closed
-        // stdout (e.g. `rustman | head -c0`) is not an error worth a panic.
+        if commands::tui::is_interactive() {
+            return ExitCode::from(commands::tui::run(&commands::tui::TuiArgs::default()));
+        }
+        // Without a terminal (pipes, scripts), show help. A closed stdout
+        // (e.g. `rustman | head -c0`) is not an error worth a panic.
         let mut out = std::io::stdout();
         let _ = Cli::command()
             .write_help(&mut out)
@@ -98,6 +103,7 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
             commands::completions::run(&args, &mut Cli::command());
             Ok(exit::SUCCESS)
         }
+        Command::Tui(args) => Ok(commands::tui::run(&args)),
     }
 }
 

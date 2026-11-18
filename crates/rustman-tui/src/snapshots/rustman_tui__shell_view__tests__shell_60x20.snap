@@ -1,0 +1,24 @@
+---
+source: crates/rustman-tui/src/shell_view.rs
+expression: text
+---
+ Sidebar   Request   Response
+┌ › Sidebar ───────────────────────────────────────────────┐
+│ examples/ping.rman.yaml                                  │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+Smaller than the recommended minimum of 80x24
+ demo │ env: local │ TLS verified │ 0 in flight Ctrl+Q quit
