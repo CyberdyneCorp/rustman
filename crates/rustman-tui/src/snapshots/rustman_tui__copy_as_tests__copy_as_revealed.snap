@@ -1,0 +1,34 @@
+---
+source: crates/rustman-tui/src/copy_as_tests.rs
+expression: screen
+---
+┌ me ──────────────────────────────────────────────────────────────────────────────────────────────┐
+│ GET      {{base_url}}/me                                                                         │
+│ Params  Headers  B┌ Copy as… ────────────────────────────────────────────────┐                   │
+│ No rows · press a │ ›                                                        │                   │
+│                   │ ⚠ Secrets revealed: snippet will contain secret values   │                   │
+│                   │                                                          │                   │
+│                   │  curl                                                    │                   │
+│                   │  httpie                                                  │                   │
+│                   │  wget                                                    │                   │
+│                   │  python-requests                                         │                   │
+│                   │  python-httpx                                            │                   │
+│                   │  js-fetch                                                │                   │
+│                   │  node-axios                                              │                   │
+│ {{base_url}} = htt│  go                                                      │                   │
+└───────────────────│  rust-reqwest                                            │───────────────────┘
+┌ Response ─────────│  powershell                                              │───────────────────┐
+│ No response yet · │  csharp                                                  │                   │
+│                   │                                                          │                   │
+│                   │ ↑↓ choose · Enter copy · Esc close                       │                   │
+│                   └──────────────────────────────────────────────────────────┘                   │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ demo │ env: dev │ TLS verified │ 0 in flight                          SECRETS VISIBLE  Ctrl+Q quit

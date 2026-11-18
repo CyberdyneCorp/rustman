@@ -70,6 +70,8 @@ pub struct State {
     pub recent: Vec<Target>,
     /// Text for the terminal's clipboard (OSC 52), written by the loop.
     pub clipboard: Option<String>,
+    /// The terminal takes OSC 52 ("Copy as…" copies through it).
+    pub osc52: bool,
     /// The secret store backend sends use; `None`: `RUSTMAN_SECRET_STORE`.
     pub secret_backend: Option<rustman_core::SecretBackend>,
     /// Secret values read while secrets are revealed (memory only).
@@ -97,6 +99,12 @@ pub enum Overlay {
     Exchanges(Box<Picker>),
     /// The differences between two exchanges.
     Diff(Box<DiffView>),
+    /// The "Copy as…" language picker.
+    CopyAs(Box<crate::copy_as::Picker>),
+    /// A snippet to select by hand (no OSC 52, or too large).
+    Snippet(Box<crate::copy_as::SnippetPane>),
+    /// The "Import…" dialog and its preview.
+    Import(Box<crate::import_dialog::ImportDialog>),
 }
 
 /// What fills the terminal.
@@ -277,6 +285,13 @@ pub enum Action {
         refresh: bool,
         result: Result<Box<SchemaLoaded>, String>,
     },
+    /// A "Copy as…" snippet was made.
+    SnippetMade {
+        lang: rustman_http::Lang,
+        result: Result<rustman_http::Snippet, String>,
+    },
+    /// An import (or its dry run) finished.
+    Imported(Box<crate::import_dialog::ImportDone>),
 }
 
 /// Why the loop stopped without the user quitting.
@@ -365,6 +380,10 @@ pub enum Effect {
     Webhook(Box<webhook::Job>),
     /// Load (or refresh) a GraphQL tab's schema.
     GraphqlSchema(Box<SchemaJob>),
+    /// Make a "Copy as…" snippet.
+    Snippet(Box<crate::copy_as::SnippetJob>),
+    /// Run an import or its dry run.
+    Import(Box<crate::import_dialog::ImportJob>),
 }
 
 impl State {
@@ -400,6 +419,7 @@ impl State {
             vim: None,
             recent: Vec::new(),
             clipboard: None,
+            osc52: false,
             secret_backend: None,
             revealed: Revealed::default(),
             viz: viz::Discovery::default(),
@@ -532,6 +552,11 @@ fn on_workbench(state: &mut State, action: Action) -> Vec<Effect> {
             graphql::on_loaded(state, tab, refresh, result);
             Vec::new()
         }
+        Action::SnippetMade { lang, result } => {
+            crate::copy_as::on_made(state, lang, result);
+            Vec::new()
+        }
+        Action::Imported(done) => crate::import_dialog::on_done(state, *done),
         other => viewer_keys::on_action(state, other),
     }
 }

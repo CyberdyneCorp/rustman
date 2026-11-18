@@ -73,7 +73,7 @@ Signature auth (`digest`, `aws_sigv4`, `jwt`) can't be precomputed into a static
 
 ### D8. OSC 52 for the clipboard
 The TUI copies through the OSC 52 escape sequence. It works over SSH, inside tmux (with `set-clipboard on`) and in most modern terminals, and needs no system clipboard library or display server.
-- When the terminal doesn't advertise support, or the payload is over 100 KB, the snippet opens in a read-only pane for manual copy instead.
+- When the terminal doesn't advertise support, or the payload is over 100 KB, the snippet opens in a read-only pane for manual copy instead. The payload is the escape sequence as sent (base64 included), since terminals cap the sequence. Inside tmux, support means tmux's `set-clipboard` is `on`; its default, `external`, drops application sequences.
 - *Rejected:* `arboard`. It needs X11/Wayland libraries on Linux, which conflicts with the no-system-libraries constraint, and it doesn't work over SSH.
 
 ### D9. Script mapping uses a token pattern matcher, not a JavaScript parser

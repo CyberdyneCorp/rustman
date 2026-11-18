@@ -16,7 +16,6 @@ expression: screen
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
-│                                                                                                  │
 │             ┌ Help ────────────────────────────────────────────────────────────────┐             │
 │             │ Request editor                                                       │             │
 │             │   Ctrl+E                   Edit in external editor                   │             │
@@ -35,11 +34,11 @@ expression: screen
 │             │   Alt+2                    Go to tab 2                               │             │
 │             │   Alt+3                    Go to tab 3                               │             │
 │             │   Alt+4                    Go to tab 4                               │             │
-│ ✔ Valid     │   Alt+5                    Go to tab 5                               │             │
-└─────────────│   Alt+6                    Go to tab 6                               │─────────────┘
-┌ Response ───│   Alt+7                    Go to tab 7                               │─────────────┐
-│ No response │   Alt+8                    Go to tab 8                               │             │
-│             │   Alt+9                    Go to tab 9                               │             │
+│             │   Alt+5                    Go to tab 5                               │             │
+│ ✔ Valid     │   Alt+6                    Go to tab 6                               │             │
+└─────────────│   Alt+7                    Go to tab 7                               │─────────────┘
+┌ Response ───│   Alt+8                    Go to tab 8                               │─────────────┐
+│ No response │   Alt+9                    Go to tab 9                               │             │
 │             │   Ctrl+P                   Command palette                           │             │
 │             │   ?, F1                    Help                                      │             │
 │             │   Ctrl+B                   Toggle sidebar                            │             │
@@ -54,6 +53,7 @@ expression: screen
 │             │   Ctrl+G                   Refresh GraphQL schema                    │             │
 │             │   Alt+S                    Start GraphQL subscription                │             │
 │             │   Alt+X                    Stop GraphQL subscription                 │             │
+│             │   Alt+C                    Copy as…                                  │             │
 │             │   Ctrl+Q                   Quit                                      │             │
 │             │                                                                      │             │
 │             │ ↑↓ scroll · Esc close                                                │             │

@@ -108,6 +108,8 @@ fn execute_other(effect: Effect) -> Action {
         Effect::WriteReport(job) => Action::ReportWritten(html::write(&job)),
         Effect::Webhook(job) => crate::webhook::execute(*job),
         Effect::GraphqlSchema(job) => graphql_schema::execute(&job),
+        Effect::Snippet(job) => crate::copy_as::execute(&job),
+        Effect::Import(job) => crate::import_dialog::execute(&job),
         other => Action::Abort(Abort::Failed(format!("unexpected effect {other:?}"))),
     }
 }

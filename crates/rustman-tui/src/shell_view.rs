@@ -170,6 +170,13 @@ pub fn overlay(frame: &mut Frame, state: &State) {
         Some(Overlay::Input(input)) => input.render(frame, &state.ui),
         Some(Overlay::Exchanges(picker)) => picker.render(frame, &state.ui),
         Some(Overlay::Diff(diff)) => diff.render(frame, &state.ui),
+        Some(Overlay::CopyAs(picker)) => {
+            crate::copy_as_view::picker(frame, frame.area(), picker, &state.ui);
+        }
+        Some(Overlay::Snippet(pane)) => {
+            crate::copy_as_view::pane(frame, frame.area(), pane, &state.ui);
+        }
+        Some(Overlay::Import(dialog)) => crate::import_dialog::render(frame, dialog, &state.ui),
     }
 }
 

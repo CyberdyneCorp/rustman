@@ -152,3 +152,5 @@ error: snippet: kind 'mcp' has no snippet export
 ## Library use
 
 The snippet engine lives in `rustman-http` (`rustman_http::snippet`), so the CLI, the TUI and generated docs share it: `snippet(&resolved, lang, &options)` renders one language from a resolved request, and `resolve_placeholders` resolves a request for placeholder mode. Each language is one `minijinja` template in `crates/rustman-http/src/snippet/templates/` plus its quoting rules.
+
+In the TUI, `Alt+C` or **Copy as…** in the palette copies the current request as a snippet through OSC 52; see [Terminal UI](tui.md#copy-as-code).

@@ -12,6 +12,7 @@ publish = false
 rustman-core.workspace = true
 rustman-http.workspace = true
 rustman-graphql.workspace = true
+rustman-import.workspace = true
 rustman-viz-protocol.workspace = true
 rustman-webhook.workspace = true
 ratatui.workspace = true

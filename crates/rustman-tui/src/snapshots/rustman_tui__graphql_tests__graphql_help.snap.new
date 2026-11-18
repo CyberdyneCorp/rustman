@@ -1,0 +1,75 @@
+---
+source: crates/rustman-tui/src/graphql_tests.rs
+assertion_line: 295
+expression: screen
+---
+┌ users ───────────────────────────────────────────────────────────────────────────────────────────┐
+│ POST     {{http}}/graphql                                                                        │
+│ Query  Variables  Schema                                                                         │
+│ Schema: schema_file schema.graphql · 5 types                                                     │
+│ { user(id: 1) {                                                                                  │
+│   name                                                                                           │
+│ } }                                                                                              │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│             ┌ Help ────────────────────────────────────────────────────────────────┐             │
+│             │ Request editor                                                       │             │
+│             │   Ctrl+E                   Edit in external editor                   │             │
+│             │   Alt+M                    Change body mode or auth type             │             │
+│             │   Ctrl+Space               Show GraphQL completions                  │             │
+│             │                                                                      │             │
+│             │ Global                                                               │             │
+│             │   Ctrl+Enter, Ctrl+R       Send request                              │             │
+│             │   Ctrl+C                   Cancel request                            │             │
+│             │   Ctrl+S                   Save request                              │             │
+│             │   Ctrl+T                   New tab                                   │             │
+│             │   Ctrl+W                   Close tab                                 │             │
+│             │   Ctrl+PageDown            Next tab                                  │             │
+│             │   Ctrl+PageUp              Previous tab                              │             │
+│             │   Alt+1                    Go to tab 1                               │             │
+│             │   Alt+2                    Go to tab 2                               │             │
+│             │   Alt+3                    Go to tab 3                               │             │
+│             │   Alt+4                    Go to tab 4                               │             │
+│             │   Alt+5                    Go to tab 5                               │             │
+│ ✔ Valid     │   Alt+6                    Go to tab 6                               │             │
+└─────────────│   Alt+7                    Go to tab 7                               │─────────────┘
+┌ Response ───│   Alt+8                    Go to tab 8                               │─────────────┐
+│ No response │   Alt+9                    Go to tab 9                               │             │
+│             │   Ctrl+P                   Command palette                           │             │
+│             │   ?, F1                    Help                                      │             │
+│             │   Ctrl+B                   Toggle sidebar                            │             │
+│             │   Alt+Right                Widen sidebar                             │             │
+│             │   Alt+Left                 Narrow sidebar                            │             │
+│             │   Tab                      Focus next                                │             │
+│             │   Shift+Tab                Focus previous                            │             │
+│             │   Esc                      Close or dismiss                          │             │
+│             │   Alt+E                    Switch environment                        │             │
+│             │   Alt+R                    Reveal secrets                            │             │
+│             │   Alt+W                    Webhook inspector                         │             │
+│             │   Ctrl+G                   Refresh GraphQL schema                    │             │
+│             │   Alt+S                    Start GraphQL subscription                │             │
+│             │   Alt+X                    Stop GraphQL subscription                 │             │
+│             │   Alt+C                    Copy as…                                  │             │
+│             │   Ctrl+Q                   Quit                                      │             │
+│             │                                                                      │             │
+│             │ ↑↓ scroll · Esc close                                                │             │
+│             └──────────────────────────────────────────────────────────────────────┘             │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ demo │ env: local │ TLS verified │ 0 in flight                                         Ctrl+Q quit

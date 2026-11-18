@@ -11,6 +11,7 @@ use rustman_explore::explore::export::ExportError;
 use rustman_explore::explore::session::SessionError;
 use rustman_explore::sync::SyncError;
 use rustman_graphql::GraphqlError;
+use rustman_http::snippet::RequestSnippetError;
 use rustman_http::{CurlError, RequestError, SnippetError};
 use rustman_import::ImportError;
 
@@ -78,6 +79,15 @@ pub enum CliError {
     /// A GraphQL schema that cannot be fetched, read or written.
     #[error(transparent)]
     Graphql(#[from] GraphqlError),
+}
+
+impl From<RequestSnippetError> for CliError {
+    fn from(err: RequestSnippetError) -> Self {
+        match err {
+            RequestSnippetError::Snippet(e) => Self::Snippet(e),
+            RequestSnippetError::Resolve(e) => Self::Resolve(e),
+        }
+    }
 }
 
 impl CliError {

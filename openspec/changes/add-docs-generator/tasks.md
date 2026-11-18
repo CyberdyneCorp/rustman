@@ -22,6 +22,7 @@
 ## 4. Code samples
 
 - [ ] 4.1 Map `SampleRequest` onto the shared snippet engine from `add-runner-parity` (placeholder mode), using its built-in templates for curl, HTTPie, fetch, Python requests and Rust reqwest (JSON, form, multipart, file bodies); verify snapshot tests per language and body type, and that generated curl samples run against a local fixture server.
+  - Note (add-runner-parity 4.5): also add the test that `rustman docs` code samples and `rustman export snippet --placeholders` output match byte for byte; it closes runner-parity task 4.5.
 - [ ] 4.2 Implement `[docs].samples` selection and `template_dirs` overrides with a versioned template context; verify tests for the custom-language scenario and the version-mismatch fallback.
 
 ## 5. Markdown output and determinism

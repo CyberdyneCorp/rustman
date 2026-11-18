@@ -382,3 +382,5 @@ The export goes through the same neutral IR as imports (`rustman_import::export:
 ## Using the importer as a library
 
 The pipeline lives in the `rustman-import` crate, so other front-ends and producers share it: a source parser builds the neutral IR (`ImportedCollection`: folders, requests, environments, notes with source locations), `rustman_import::plan` translates variables, extracts secrets, suggests assertions and lays out the files without writing anything, and `rustman_import::apply` stores the secrets and writes the files.
+
+`rustman_import::session::run` runs a whole import the way a front-end without a command line needs it (detect, plan, and apply under the import lock unless it is a dry run) and returns the redacted summary; the TUI's **Import…** palette action uses it (see [Terminal UI](tui.md#importing-collections)).

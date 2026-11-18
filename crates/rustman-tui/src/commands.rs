@@ -13,7 +13,7 @@ use crate::shell::{self, Command};
 use crate::status::VimMode;
 use crate::toast::Severity;
 use crate::tree::{self, Filter};
-use crate::{graphql, reveal, send, viewer_keys, viz, workbench};
+use crate::{copy_as, graphql, import_dialog, reveal, send, viewer_keys, viz, workbench};
 
 /// Handle a key while the shell is showing.
 pub fn shell_key(state: &mut State, chord: Chord) -> Vec<Effect> {
@@ -23,6 +23,12 @@ pub fn shell_key(state: &mut State, chord: Chord) -> Vec<Effect> {
         Some(Overlay::Confirm(_)) => confirm_key(state, chord),
         Some(Overlay::Input(_)) => workbench::input_key(state, chord),
         Some(Overlay::Exchanges(_) | Overlay::Diff(_)) => viewer_keys::overlay_key(state, chord),
+        Some(Overlay::CopyAs(_)) => copy_as::picker_key(state, chord),
+        Some(Overlay::Snippet(_)) => {
+            copy_as::pane_key(state, chord);
+            Vec::new()
+        }
+        Some(Overlay::Import(_)) => import_dialog::key(state, chord),
         _ => match crate::webhook::key(state, chord).or_else(|| viewer_keys::box_key(state, chord))
         {
             Some(effects) => effects,
@@ -202,6 +208,7 @@ fn choose(state: &mut State) -> Vec<Effect> {
             state.status.environment = Some(name);
             reveal::environment_changed(state)
         }
+        Target::Snippet(lang) => copy_as::copy(state, lang),
     }
 }
 
@@ -244,6 +251,8 @@ pub fn run(state: &mut State, action: ActionId) -> Vec<Effect> {
         ActionId::EnvSwitch => open_palette(state, Scope::Environments),
         ActionId::HelpOpen => state.overlay = Some(Overlay::Help { scroll: 0 }),
         ActionId::SecretsReveal => return reveal::toggle(state),
+        ActionId::CopyAs => copy_as::open(state),
+        ActionId::ImportOpen => import_dialog::open(state),
         ActionId::VizOpen => return viz::start(state),
         ActionId::WebhookOpen => crate::webhook::toggle_pane(state),
         ActionId::ReportHtml => return crate::response::html::start(state),

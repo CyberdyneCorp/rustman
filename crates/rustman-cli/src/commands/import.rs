@@ -11,7 +11,7 @@ use rustman_core::format::write::request_to_yaml;
 use rustman_core::model::Request;
 use rustman_core::secrets::BACKEND_VAR;
 use rustman_core::workspace::check_new_request_file;
-use rustman_core::{ConfigError, Redactor, SecretBackend, SecretStore};
+use rustman_core::{ConfigError, SecretBackend, SecretStore};
 use rustman_explore::collection::collection_dir;
 use rustman_explore::openapi::Diagnostic;
 use rustman_explore::store::{Target, generate_for, write_import};
@@ -20,8 +20,7 @@ use rustman_explore::{ImportOptions as OpenApiOptions, Imported, import};
 use rustman_http::{CurlError, import_curl, import_curl_words};
 use rustman_import::secrets::Existing;
 use rustman_import::{
-    DEFAULT_MAX_SIZE, Format, HarFilter, ImportError, OnConflict, PlanOptions, SourceOptions,
-    apply, load, plan,
+    DEFAULT_MAX_SIZE, Format, HarFilter, ImportError, OnConflict, PlanOptions, SourceOptions, load,
 };
 
 use super::{EnvSelection, current_dir, exec, print_warnings};
@@ -260,22 +259,9 @@ fn source(
         },
         dry_run: o.dry_run,
     };
-    let plan = plan(collection, &options)?;
-    if !o.dry_run {
-        let save = |batch: &[(&str, &_)]| store.set_many(batch);
-        let applied = apply(&plan, &ws.root, &save);
-        print_warnings(&store.take_warnings());
-        applied?;
-    }
-    // Reports name secrets only; redacting them as well guards every
-    // output. Values that are ordinary words or numbers (`password`,
-    // `123456`) are left out: the report shows them only as data (URLs,
-    // names), which redacting would corrupt.
-    let redactor = plan
-        .secrets
-        .iter()
-        .filter(|m| rustman_import::secrets::is_secret_like(m.secret.expose()))
-        .fold(Redactor::new(), |r, m| r.with(&m.secret));
+    let imported = rustman_import::session::import(collection, &options, &store);
+    print_warnings(&store.take_warnings());
+    let rustman_import::session::Planned { plan, redactor } = imported?;
     print!("{}", redactor.text(&plan.report.summary_text()));
     if let Some(path) = &o.report {
         write_report(path, &redactor.text(&plan.report.to_json()))?;

@@ -57,6 +57,73 @@ fn run(program: &str, args: &[&str], text: &str) -> bool {
     child.wait().is_ok_and(|status| status.success()) && written
 }
 
+/// The variable that overrides OSC 52 detection: `1` on, `0` off.
+pub const OSC52_VAR: &str = "RUSTMAN_OSC52";
+
+/// `TERM_PROGRAM` (or `LC_TERMINAL`, which SSH forwards) values of
+/// terminals that take OSC 52.
+const OSC52_PROGRAMS: [&str; 7] = [
+    "iTerm.app",
+    "iTerm2",
+    "WezTerm",
+    "ghostty",
+    "vscode",
+    "rio",
+    "tmux",
+];
+
+/// `TERM` substrings of terminals that take OSC 52.
+const OSC52_TERMS: [&str; 6] = [
+    "kitty",
+    "alacritty",
+    "foot",
+    "wezterm",
+    "ghostty",
+    "contour",
+];
+
+/// Whether the terminal takes OSC 52, from its environment (`var` reads
+/// a variable): [`OSC52_VAR`] decides when set. Inside tmux it depends on
+/// tmux's `set-clipboard` option (`tmux_clipboard` reads it): only `on`
+/// passes an application's sequence on; the default, `external`, drops
+/// it. Otherwise Windows Terminal and the terminals known to support it
+/// do. Others (Apple's Terminal among them) get the read-only pane.
+pub fn osc52_supported(
+    var: impl Fn(&str) -> Option<String>,
+    tmux_clipboard: impl FnOnce() -> Option<String>,
+) -> bool {
+    match var(OSC52_VAR).as_deref().map(str::trim) {
+        Some("1" | "true" | "on") => return true,
+        Some("0" | "false" | "off") => return false,
+        _ => {}
+    }
+    if var("TMUX").is_some() {
+        return tmux_clipboard().is_some_and(|value| value.trim() == "on");
+    }
+    if var("WT_SESSION").is_some() {
+        return true;
+    }
+    let program = |name: &str| var(name).is_some_and(|v| OSC52_PROGRAMS.contains(&v.as_str()));
+    let term = var("TERM").unwrap_or_default();
+    program("TERM_PROGRAM")
+        || program("LC_TERMINAL")
+        || OSC52_TERMS.iter().any(|t| term.contains(t))
+}
+
+/// The tmux server's global `set-clipboard` option, if tmux answers.
+pub fn tmux_set_clipboard() -> Option<String> {
+    let output = Command::new("tmux")
+        .args(["show-options", "-gv", "set-clipboard"])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
 /// The OSC 52 sequence that puts `text` on the terminal's clipboard.
 pub fn osc52(text: &str) -> String {
     let encoded = base64::engine::general_purpose::STANDARD.encode(text);
@@ -70,6 +137,62 @@ mod tests {
     #[test]
     fn osc52_encodes_the_text() {
         assert_eq!(osc52("42"), "\x1b]52;c;NDI=\x07");
+    }
+
+    #[test]
+    fn osc52_sequence_bytes() {
+        let bytes = osc52("curl -X GET 'http://x'\n").into_bytes();
+        assert_eq!(&bytes[..7], b"\x1b]52;c;");
+        assert_eq!(bytes.last(), Some(&0x07));
+        assert_eq!(
+            &bytes[7..bytes.len() - 1],
+            b"Y3VybCAtWCBHRVQgJ2h0dHA6Ly94Jwo="
+        );
+    }
+
+    fn env<'a>(pairs: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<String> + 'a {
+        move |name| {
+            pairs
+                .iter()
+                .find(|(k, _)| *k == name)
+                .map(|(_, v)| (*v).to_owned())
+        }
+    }
+
+    fn no_tmux() -> Option<String> {
+        panic!("tmux is asked only inside tmux")
+    }
+
+    #[test]
+    fn osc52_support_is_detected_from_the_environment() {
+        let supported = |pairs: &[(&str, &str)]| osc52_supported(env(pairs), no_tmux);
+        assert!(!supported(&[]));
+        assert!(!supported(&[("TERM_PROGRAM", "Apple_Terminal")]));
+        assert!(!supported(&[("TERM", "xterm-256color")]));
+        assert!(supported(&[("WT_SESSION", "abc")]));
+        assert!(supported(&[("TERM_PROGRAM", "iTerm.app")]));
+        assert!(supported(&[("LC_TERMINAL", "iTerm2")]), "over SSH");
+        assert!(supported(&[("TERM", "xterm-kitty")]));
+        assert!(supported(&[("TERM", "dumb"), (OSC52_VAR, "1")]));
+        assert!(!supported(&[("TMUX", "x"), (OSC52_VAR, "0")]));
+    }
+
+    #[test]
+    fn inside_tmux_osc52_needs_set_clipboard_on() {
+        let tmux = [
+            ("TMUX", "/tmp/tmux-1/default,1,0"),
+            ("TERM", "tmux-256color"),
+            ("TERM_PROGRAM", "tmux"),
+        ];
+        assert!(osc52_supported(env(&tmux), || Some("on\n".into())));
+        assert!(
+            !osc52_supported(env(&tmux), || Some("external\n".into())),
+            "tmux's default drops application OSC 52"
+        );
+        assert!(!osc52_supported(env(&tmux), || Some("off\n".into())));
+        assert!(!osc52_supported(env(&tmux), || None), "tmux did not answer");
+        let forced = [("TMUX", "x"), (OSC52_VAR, "1")];
+        assert!(osc52_supported(env(&forced), no_tmux));
     }
 
     #[test]

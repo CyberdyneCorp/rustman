@@ -33,4 +33,5 @@
 
 ## 6. TUI entry point
 
-- [ ] 6.1 Add an "Import…" palette action that runs a dry-run preview and then imports on confirmation (layout from `add-terminal-ui`); verify with a ratatui test-backend snapshot of the preview screen.
+- [x] 6.1 Add an "Import…" palette action that runs a dry-run preview and then imports on confirmation (layout from `add-terminal-ui`); verify with a ratatui test-backend snapshot of the preview screen.
+  - Note: `rustman_import::session::run` runs the dry run and the import (under the import lock) and returns the redacted summary; the TUI dialog is `crates/rustman-tui/src/import_dialog.rs`. Snapshot `import_preview` in `import_dialog_tests.rs`, which also checks nothing is written before confirmation and no secret value reaches the screen, the toasts or the files. Documented in `docs/tui.md#importing-collections`.

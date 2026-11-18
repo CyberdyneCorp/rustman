@@ -73,6 +73,8 @@ pub enum ActionId {
     GraphqlRefreshSchema,
     GraphqlSubscriptionStart,
     GraphqlSubscriptionStop,
+    CopyAs,
+    ImportOpen,
     Quit,
 }
 
@@ -91,7 +93,7 @@ const fn def(action: ActionId, id: &'static str, title: &'static str) -> ActionD
 }
 
 /// Every action, in the order the palette and the docs list them.
-pub const REGISTRY: [ActionDef; 67] = [
+pub const REGISTRY: [ActionDef; 69] = [
     def(ActionId::RequestSend, "request.send", "Send request"),
     def(ActionId::RequestCancel, "request.cancel", "Cancel request"),
     def(ActionId::RequestSave, "request.save", "Save request"),
@@ -214,6 +216,8 @@ pub const REGISTRY: [ActionDef; 67] = [
         "graphql.subscription_stop",
         "Stop GraphQL subscription",
     ),
+    def(ActionId::CopyAs, "request.copy_as", "Copy as…"),
+    def(ActionId::ImportOpen, "import.open", "Import…"),
     def(ActionId::Quit, "app.quit", "Quit"),
 ];
 

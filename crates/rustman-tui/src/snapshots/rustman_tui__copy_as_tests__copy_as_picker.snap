@@ -1,0 +1,34 @@
+---
+source: crates/rustman-tui/src/copy_as_tests.rs
+expression: text(&state)
+---
+┌ me ───────────────────────────────────────────────────────────────────────┌ ✔ success ───────────┐
+│ GET      {{base_url}}/me                                                  │ Copied go snippet    │
+│ Params  Headers  B┌ Copy as… ─────────────────────────────────────────────└──────────────────────┘
+│ No rows · press a │ ›                                                        │                   │
+│                   │                                                          │                   │
+│                   │  go                                                      │                   │
+│                   │  curl                                                    │                   │
+│                   │  httpie                                                  │                   │
+│                   │  wget                                                    │                   │
+│                   │  python-requests                                         │                   │
+│                   │  python-httpx                                            │                   │
+│                   │  js-fetch                                                │                   │
+│                   │  node-axios                                              │                   │
+│ {{base_url}} = htt│  rust-reqwest                                            │                   │
+└───────────────────│  powershell                                              │───────────────────┘
+┌ Response ─────────│  csharp                                                  │───────────────────┐
+│ No response yet · │                                                          │                   │
+│                   │                                                          │                   │
+│                   │ ↑↓ choose · Enter copy · Esc close                       │                   │
+│                   └──────────────────────────────────────────────────────────┘                   │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ demo │ env: dev │ TLS verified │ 0 in flight                                           Ctrl+Q quit
