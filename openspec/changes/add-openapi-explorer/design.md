@@ -47,18 +47,22 @@ The planner emits a deterministic `Vec<Probe>` (pure function of IR, graph, seed
 Each rule has a stable id (`auth-not-enforced`, ...), a default severity, a description, a remediation hint and a SARIF descriptor. Detectors return rule ids, never free text. That makes diffing and SARIF stable across versions.
 
 ### D9. Reports: one IR, many renderers
-`rustman-report` holds the canonical `Report` (serde), and it's the only input renderers receive. The JSON Schema is generated from the Rust types with `schemars` and checked into `docs/schemas/report.schema.json`, the file `bootstrap-core-engine` first published for `kind: run`. A test fails if it drifts. Renderers: `quick-junit` (already in core), `serde-sarif`, and `minijinja` templates for Markdown and HTML, with CSS/JS inlined at build time via `include_str!`. Redaction happens while the report is built, from exchanges that are already redacted by core.
+`rustman-report` holds the canonical `Report` (serde), a run or an exploration, and it's the only input renderers receive; the exploration data types live there and `rustman-explore` builds them. The JSON Schema is checked into `docs/schemas/report.schema.json`, the file `bootstrap-core-engine` first published for `kind: run`: its `kind: run` part is kept verbatim (so old run reports stay valid), and its `kind: exploration` part is generated from the Rust types with `schemars`. A test fails if it drifts. Renderers: `quick-junit` (already in core), a small typed `serde` model for SARIF 2.1.0, and `minijinja` templates for Markdown and HTML, with CSS/JS inlined at build time via `include_str!`. `serde-sarif` was rejected: it generates its types at build time from the SARIF schema (`schemafy`, `syn`, a second `strum`), a heavy build for the dozen fields Rustman writes; a test validates the output against the official SARIF 2.1.0 schema instead. Redaction happens while the report is built, from exchanges that are already redacted by core.
 
 ### D10. Leakage detection: curated regex set
 A small, versioned regex set (Java/.NET/Python/Node/Go/Ruby stack traces, common SQL error strings, framework debug-page markers, absolute file paths) runs over response bodies capped at 64 KiB. False positives are acceptable at `medium`, and rules can be disabled via `[explore].disabled_rules`.
 
+### D11. `bad-api` lives in `rustman-test-support`, on hyper
+The deliberately broken fixture API is `rustman_test_support::bad_api`, not an axum server under `tests/fixtures/bad-api`: the other in-process test servers are hyper servers in that crate, so it adds no dependency (no axum), and the library tests, the CLI end-to-end test and the docs examples all start the same server. Its OpenAPI document sits next to it (`bad_api.yaml`).
+
 ## Risks / Trade-offs
 
 - [Heuristic dependency discovery gets the graph wrong] → `explore plan --graph` shows it; `[explore.producers]` in `rustman.toml` lets users pin producers manually.
-- [Generated POSTs create junk data on shared staging] → read-only by default, journaled created resources, cleanup with `--allow-destructive`, and a "left behind" list.
+- [Generated POSTs create junk data on shared staging] → read-only by default, journaled created resources, cleanup with `--allow-destructive` (its deletes go through the policy and the rate limit but not the budgets, so it still runs after a budget ran out), and a "left behind" list.
 - [False positives erode trust] → conservative default severities, de-duplication, `--fail-on high` default, and per-rule disable.
 - [Rate limiting is still too aggressive for fragile backends] → `--rate` and `--concurrency` can go down to 1, and we back off on 429.
 - [Big documents produce huge plans] → probe budget, per-family caps and `--operations <glob>` filtering.
+- [Small but adversarial schemas (wide, nested, `allOf` chains) make validation errors or synthesized values grow exponentially] → only the first schema violation is computed, planning asks only whether a variant is valid, and synthesized values stop at a nesting depth and a member cap.
 - [Merge logic bugs during sync silently drop edits] → `--dry-run` summary; removed operations are moved, never deleted; property tests on the merge function.
 
 ## Migration Plan

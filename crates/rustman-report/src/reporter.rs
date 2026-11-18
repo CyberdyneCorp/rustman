@@ -89,13 +89,17 @@ impl Reporter {
         let Some(path) = &self.path else {
             return Ok(Some(self.format.render_styled(run)));
         };
-        let text = self.format.render(run);
-        if let Some(folder) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-            std::fs::create_dir_all(folder)?;
-        }
-        write_report(path, &text)?;
+        write_file(path, &self.format.render(run))?;
         Ok(None)
     }
+}
+
+/// Write a report to `path`, creating its folder (see [`write_report`]).
+pub(crate) fn write_file(path: &Path, text: &str) -> std::io::Result<()> {
+    if let Some(folder) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        std::fs::create_dir_all(folder)?;
+    }
+    write_report(path, text)
 }
 
 /// Write a report to `path`. A device or pipe (`/dev/stdout`) is written in

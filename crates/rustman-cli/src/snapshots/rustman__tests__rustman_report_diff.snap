@@ -1,0 +1,37 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Compare two reports: new, fixed and unchanged findings, coverage and assertion changes
+
+Usage: rustman report diff [OPTIONS] <OLD> <NEW>
+
+Arguments:
+  <OLD>
+          The earlier JSON report
+
+  <NEW>
+          The later JSON report
+
+Options:
+      --fail-on <SEVERITY>
+          Exit 1 when a new finding is at or above this severity
+          
+          [default: high]
+
+      --format <FORMAT>
+          Output format
+          
+          [default: markdown]
+          [possible values: markdown, json]
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

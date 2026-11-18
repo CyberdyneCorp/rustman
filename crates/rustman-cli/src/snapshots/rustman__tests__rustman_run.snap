@@ -60,6 +60,9 @@ Options:
       --reporter <FORMAT[:PATH]>
           Report format, optionally written to a file: pretty, json, junit or tap, as in json or junit:out/junit.xml (repeatable; default: pretty on stdout)
 
+      --report <FORMAT[=PATH]>
+          Also render the report as json, junit, markdown, html or sarif, written to a file or stdout, as in html=out/report.html (repeatable)
+
       --color <WHEN>
           Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
           

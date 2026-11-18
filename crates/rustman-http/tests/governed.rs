@@ -203,6 +203,38 @@ async fn the_probe_budget_stops_execution() {
 }
 
 #[tokio::test]
+async fn cleanup_is_sent_after_the_budgets_ran_out_but_still_checked() {
+    let server = Recorder::start().await;
+    let other = Recorder::start().await;
+    let sender = sender_as(
+        &server.url("/"),
+        &[],
+        Permission::Destructive,
+        limits(1000, 1, 1, Duration::from_millis(200)),
+    );
+    let options = SendOptions::default();
+    sender
+        .send(&get(&server.url("/ok")), &options)
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let mut delete = get(&server.url("/ok"));
+    delete.method = "DELETE".into();
+    let err = sender.send(&delete, &options).await.unwrap_err();
+    assert_eq!(err.to_string(), "not run: budget");
+    let exchange = sender.send_cleanup(&delete, &options).await.unwrap();
+    assert_eq!(exchange.status, 200);
+    let err = sender
+        .send_cleanup(&get(&other.url("/ok")), &options)
+        .await
+        .unwrap_err();
+    assert_eq!(err.to_string(), "blocked: host not allowed");
+    assert_eq!(server.hits().len(), 2);
+    assert!(other.hits().is_empty());
+    assert_eq!(sender.governor().admitted(), 1);
+}
+
+#[tokio::test]
 async fn the_time_budget_stops_execution() {
     let server = Recorder::start().await;
     let sender = sender(

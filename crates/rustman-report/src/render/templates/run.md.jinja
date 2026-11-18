@@ -1,0 +1,36 @@
+# Run report
+
+| | |
+|---|---|
+| Started | {{ r.started_at }} |
+| Environment | {{ r.environment or "none" }} |
+| Duration | {{ duration }} |
+{%- if r.summary.interrupted %}
+| Interrupted | yes: the results are partial |
+{%- endif %}
+
+## Summary
+
+| Total | Passed | Failed | Errored | Skipped |
+|---:|---:|---:|---:|---:|
+| {{ r.summary.total }} | {{ r.summary.passed }} | {{ r.summary.failed }} | {{ r.summary.errored }} | {{ r.summary.skipped }} |
+
+## Requests
+
+| Request | Result | Exchange | Duration |
+|---|---|---|---:|
+{% for q in requests -%}
+| `{{ q.name | cell }}` | {{ q.status }} | {{ q.exchange | cell }} | {{ q.duration }} |
+{% endfor %}
+{%- if failures %}
+## Failures
+{% for q in failures %}
+### {{ q.name }}
+
+File: `{{ q.file }}`
+
+{% for reason in q.reasons -%}
+- {{ reason | cell }}
+{% endfor %}
+{%- endfor %}
+{%- endif %}

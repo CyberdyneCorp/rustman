@@ -1,0 +1,19 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Print the JSON Schema of rustman.report/v1
+
+Usage: rustman report schema [OPTIONS]
+
+Options:
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

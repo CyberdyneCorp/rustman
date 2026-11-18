@@ -14,6 +14,7 @@ rustman-core = { path = "crates/rustman-core", version = "0.1.0" }
 rustman-http = { path = "crates/rustman-http", version = "0.1.0" }
 rustman-report = { path = "crates/rustman-report", version = "0.1.0" }
 rustman-import = { path = "crates/rustman-import", version = "0.1.0" }
+rustman-explore = { path = "crates/rustman-explore", version = "0.1.0" }
 # Test servers shared by the integration tests; never published.
 rustman-test-support = { path = "crates/rustman-test-support" }
 rustman-tui = { path = "crates/rustman-tui", version = "0.1.0" }
@@ -108,8 +109,19 @@ rustix = { version = "1.1", default-features = false, features = ["std", "proces
 # Peak heap usage in the body memory-ceiling test (a counting global allocator).
 peak_alloc = "0.3"
 
+# OpenAPI 3.0/3.1 model (add-openapi-explorer design D1), lowered into the
+# explorer's own IR. `openapiv3` (3.0 only) is rejected; `yaml-spec` is off
+# because YAML goes through rustman_core::format.
+oas3 = { version = "0.22", default-features = false }
+
 # Reporters (design D11 and the cli-runner spec): JUnit XML for CI.
 quick-junit = "0.8"
+# Report renderers (add-openapi-explorer design D9): the exploration part of
+# the report JSON Schema derived from the Rust types, and Markdown/HTML
+# templates with inlined assets (minijinja, shared with snippet export below).
+# SARIF is a small typed serde writer: serde-sarif was rejected for its
+# build-time code generation (schemafy, syn).
+schemars = { version = "1.2", default-features = false, features = ["derive", "std"] }
 # Terminal output (design D11): color that honors NO_COLOR, TERM=dumb, TTYs
 # and `--color`; completions; logs for `-v` and RUST_LOG.
 anstream = "1"
@@ -135,7 +147,8 @@ aws-sigv4 = { version = "1.6.6", default-features = false, features = ["sign-htt
 aws-credential-types = { version = "1", default-features = false }
 jsonwebtoken = { version = "9.3.1", default-features = false, features = ["use_pem"] }
 md-5 = { version = "0.11", default-features = false }
-# Snippet export (runner parity D7): one sandboxed template per language.
+# Snippet export (runner parity D7): one sandboxed template per language;
+# also the Markdown/HTML report templates.
 minijinja = { version = "3.1", default-features = false, features = ["builtins", "serde"] }
 
 assert_cmd = "2"

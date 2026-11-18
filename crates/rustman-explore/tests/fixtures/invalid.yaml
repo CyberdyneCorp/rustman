@@ -1,0 +1,19 @@
+openapi: 3.0.3
+info:
+  version: '1'
+paths:
+  /users:
+    get:
+      parameters:
+        - name: limit
+          in: body
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Missing'
+  users/{id}:
+    get:
+      responses: {}

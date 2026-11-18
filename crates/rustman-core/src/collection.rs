@@ -31,6 +31,21 @@ pub struct CollectionMeta {
     /// Data columns whose values are secrets, besides the ones named like
     /// secrets.
     pub secret_columns: Option<Vec<String>>,
+    /// The document a generated collection was imported from, so a later
+    /// import can sync it (`rustman import openapi --sync`).
+    pub source: Option<Box<CollectionSource>>,
+}
+
+/// `source:` in `_collection.yaml`: where an imported collection came from.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CollectionSource {
+    /// The importer, e.g. `openapi`.
+    pub format: String,
+    /// The path or URL the document was read from, never with credentials.
+    pub location: String,
+    /// The SHA-256 of the document text, in lower-case hex.
+    pub sha256: String,
 }
 
 /// A folder of requests. The workspace root is the top-level collection.

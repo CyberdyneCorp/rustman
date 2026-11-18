@@ -9,7 +9,7 @@ use rustman_core::data_rows::DataRows;
 use rustman_core::run::{DataRun, Filter, Plan, RunRecord, collection_data, plan, secret_columns};
 use rustman_core::{ConfigError, Workspace};
 use rustman_http::runner::{BailScope, RunContext, Runner};
-use rustman_report::Reporter;
+use rustman_report::{Report, ReportTarget, Reporter, RunReport};
 
 use super::exec::{SendFlags, cancel_on_ctrl_c, history_store, runtime, secret_store};
 use super::{EnvSelection, current_dir, print_warnings};
@@ -62,10 +62,14 @@ pub struct RunArgs {
     /// on stdout)
     #[arg(long, value_name = "FORMAT[:PATH]")]
     reporter: Vec<Reporter>,
+    /// Also render the report as json, junit, markdown, html or sarif,
+    /// written to a file or stdout, as in html=out/report.html (repeatable)
+    #[arg(long = "report", value_name = "FORMAT[=PATH]")]
+    report: Vec<ReportTarget>,
 }
 
 pub fn run(args: &RunArgs) -> Result<u8, CliError> {
-    one_stdout_reporter(&args.reporter)?;
+    one_stdout_reporter(&args.reporter, &args.report)?;
     let ws = args.selection.workspace()?;
     let env = args.selection.environment(&ws)?;
     let cwd = current_dir()?;
@@ -106,7 +110,7 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
         print_warnings(&[e.to_string()]);
     }
     print_warnings(&store.take_warnings());
-    write_reports(&args.reporter, &record)?;
+    write_reports(&args.reporter, &args.report, &record)?;
     Ok(run_code(&record.summary))
 }
 
@@ -202,12 +206,21 @@ fn scopes(ws: &Workspace, cwd: &Path, paths: &[PathBuf]) -> Result<Vec<PathBuf>,
 }
 
 /// Two reports on stdout would be concatenated into a document no tool
-/// can read, so at most one reporter may go there.
-fn one_stdout_reporter(reporters: &[Reporter]) -> Result<(), ConfigError> {
+/// can read, so at most one reporter (or `--report`) may go there.
+fn one_stdout_reporter(
+    reporters: &[Reporter],
+    targets: &[ReportTarget],
+) -> Result<(), ConfigError> {
     let to_stdout: Vec<String> = reporters
         .iter()
         .filter(|r| r.path.is_none())
         .map(|r| r.format.to_string())
+        .chain(
+            targets
+                .iter()
+                .filter(|t| t.path.is_none())
+                .map(|t| t.format.to_string()),
+        )
         .collect();
     if to_stdout.len() <= 1 {
         return Ok(());
@@ -218,10 +231,17 @@ fn one_stdout_reporter(reporters: &[Reporter]) -> Result<(), ConfigError> {
     )))
 }
 
-/// Write every report: to its file, or to stdout (pretty by default).
-fn write_reports(reporters: &[Reporter], record: &RunRecord) -> Result<(), ConfigError> {
+/// Write every report: to its file, or to stdout (pretty by default, unless
+/// a `--report` goes there).
+fn write_reports(
+    reporters: &[Reporter],
+    targets: &[ReportTarget],
+    record: &RunRecord,
+) -> Result<(), CliError> {
+    write_targets(targets, record)?;
     let default = ["pretty".parse::<Reporter>().expect("pretty is a reporter")];
-    let reporters = if reporters.is_empty() {
+    let to_stdout = targets.iter().any(|t| t.path.is_none());
+    let reporters = if reporters.is_empty() && !to_stdout {
         &default[..]
     } else {
         reporters
@@ -243,4 +263,12 @@ fn write_reports(reporters: &[Reporter], record: &RunRecord) -> Result<(), Confi
     }
     let _ = stdout.flush();
     Ok(())
+}
+
+/// Render the `--report` targets from the run's canonical report.
+fn write_targets(targets: &[ReportTarget], record: &RunRecord) -> Result<(), CliError> {
+    if targets.is_empty() {
+        return Ok(());
+    }
+    super::report::write_all(targets, &Report::Run(RunReport::new(record)))
 }

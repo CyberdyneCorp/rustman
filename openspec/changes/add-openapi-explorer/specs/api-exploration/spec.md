@@ -163,6 +163,11 @@ A target SHALL be treated as production when its environment is marked `producti
 ### Requirement: Cleanup of created resources
 Every resource created by a probe and identified by a captured id SHALL be recorded in the journal. At the end of execution, or on interrupt, the system SHALL attempt to delete those resources in reverse creation order if `--allow-destructive` was given, and SHALL otherwise list them as `left behind` in the report.
 
+#### Scenario: Cleanup after the budget ran out
+- **GIVEN** a run with `--allow-destructive` whose probe budget ran out after its probes created users
+- **WHEN** the run completes
+- **THEN** the cleanup deletes SHALL still be sent, checked by the safety policy and paced, but not counted against or refused by the budgets
+
 #### Scenario: Leftovers listed
 - **GIVEN** a run with `--allow-mutations` but not `--allow-destructive` that created 3 users
 - **WHEN** the run completes

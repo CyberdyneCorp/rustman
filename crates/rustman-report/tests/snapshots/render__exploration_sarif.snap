@@ -1,0 +1,321 @@
+---
+source: crates/rustman-report/tests/render.rs
+expression: "rendered(&report, format)"
+---
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "rustman",
+          "version": "0.1.0",
+          "informationUri": "https://github.com/CyberdyneCorp/rustman",
+          "rules": [
+            {
+              "id": "auth-not-enforced",
+              "shortDescription": {
+                "text": "auth-not-enforced"
+              },
+              "fullDescription": {
+                "text": "The auth-not-enforced rule."
+              },
+              "help": {
+                "text": "Fix auth-not-enforced."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "api"
+                ],
+                "security-severity": "9.5"
+              }
+            },
+            {
+              "id": "server-error-on-invalid-input",
+              "shortDescription": {
+                "text": "server-error-on-invalid-input"
+              },
+              "fullDescription": {
+                "text": "The server-error-on-invalid-input rule."
+              },
+              "help": {
+                "text": "Fix server-error-on-invalid-input."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "api"
+                ],
+                "security-severity": "8.0"
+              }
+            },
+            {
+              "id": "response-schema-violation",
+              "shortDescription": {
+                "text": "response-schema-violation"
+              },
+              "fullDescription": {
+                "text": "The response-schema-violation rule."
+              },
+              "help": {
+                "text": "Fix response-schema-violation."
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "api"
+                ],
+                "security-severity": "5.5"
+              }
+            },
+            {
+              "id": "undocumented-method-allowed",
+              "shortDescription": {
+                "text": "undocumented-method-allowed"
+              },
+              "fullDescription": {
+                "text": "The undocumented-method-allowed rule."
+              },
+              "help": {
+                "text": "Fix undocumented-method-allowed."
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "api"
+                ],
+                "security-severity": "5.5"
+              }
+            },
+            {
+              "id": "missing-content-type-options",
+              "shortDescription": {
+                "text": "missing-content-type-options"
+              },
+              "fullDescription": {
+                "text": "The missing-content-type-options rule."
+              },
+              "help": {
+                "text": "Fix missing-content-type-options."
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "api"
+                ],
+                "security-severity": "3.0"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "auth-not-enforced",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "GET /admin/users: auth-not-enforced on GET /admin/users | got 200"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "api.yaml"
+                },
+                "region": {
+                  "startLine": 4
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "GET /admin/users",
+                  "fullyQualifiedName": "/paths/~1admin~1users/get",
+                  "kind": "object"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "rustmanFinding/v1": "auth-not-enforced|GET /admin/users"
+          },
+          "properties": {
+            "finding": "f001",
+            "occurrences": "2",
+            "operation": "GET /admin/users",
+            "pointer": "/paths/~1admin~1users/get",
+            "severity": "critical"
+          }
+        },
+        {
+          "ruleId": "server-error-on-invalid-input",
+          "ruleIndex": 1,
+          "level": "error",
+          "message": {
+            "text": "POST /users: server-error-on-invalid-input on POST /users | got 500"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "api.yaml"
+                },
+                "region": {
+                  "startLine": 7
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "POST /users",
+                  "fullyQualifiedName": "/paths/~1users/post",
+                  "kind": "object"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "rustmanFinding/v1": "server-error-on-invalid-input|POST /users"
+          },
+          "properties": {
+            "finding": "f002",
+            "occurrences": "2",
+            "operation": "POST /users",
+            "pointer": "/paths/~1users/post",
+            "severity": "high"
+          }
+        },
+        {
+          "ruleId": "response-schema-violation",
+          "ruleIndex": 2,
+          "level": "warning",
+          "message": {
+            "text": "GET /users/{id}: response-schema-violation on GET /users/{id} | got 200"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "api.yaml"
+                },
+                "region": {
+                  "startLine": 10
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "GET /users/{id}",
+                  "fullyQualifiedName": "/paths/~1users~1{id}/get",
+                  "kind": "object"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "rustmanFinding/v1": "response-schema-violation|GET /users/{id}"
+          },
+          "properties": {
+            "finding": "f003",
+            "occurrences": "2",
+            "operation": "GET /users/{id}",
+            "pointer": "/paths/~1users~1{id}/get",
+            "severity": "medium"
+          }
+        },
+        {
+          "ruleId": "undocumented-method-allowed",
+          "ruleIndex": 3,
+          "level": "warning",
+          "message": {
+            "text": "PUT /users: undocumented-method-allowed on PUT /users | got 200"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "api.yaml"
+                },
+                "region": {
+                  "startLine": 6
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "PUT /users",
+                  "fullyQualifiedName": "/paths/~1users",
+                  "kind": "object"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "rustmanFinding/v1": "undocumented-method-allowed|PUT /users"
+          },
+          "properties": {
+            "finding": "f004",
+            "occurrences": "2",
+            "operation": "PUT /users",
+            "pointer": "/paths/~1users",
+            "severity": "medium"
+          }
+        },
+        {
+          "ruleId": "missing-content-type-options",
+          "ruleIndex": 4,
+          "level": "note",
+          "message": {
+            "text": "POST /users: missing-content-type-options on POST /users | got 500"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "api.yaml"
+                },
+                "region": {
+                  "startLine": 7
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "POST /users",
+                  "fullyQualifiedName": "/paths/~1users/post",
+                  "kind": "object"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "rustmanFinding/v1": "missing-content-type-options|POST /users"
+          },
+          "properties": {
+            "finding": "f005",
+            "occurrences": "2",
+            "operation": "POST /users",
+            "pointer": "/paths/~1users/post",
+            "severity": "low"
+          }
+        }
+      ],
+      "automationDetails": {
+        "id": "rustman/explore/exp-20261118-0a1b2c"
+      }
+    }
+  ]
+}

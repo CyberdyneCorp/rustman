@@ -1,0 +1,69 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Discover and plan probes without sending any request (a dry run)
+
+Usage: rustman explore plan [OPTIONS] --spec <SOURCE> --target <URL>
+
+Options:
+      --spec <SOURCE>
+          The OpenAPI document: a file path or an http(s) URL
+
+      --target <URL>
+          The base URL probes are sent to; its origin is the only one allowed
+
+      --probes <LIST>
+          Probe families, comma-separated (default: all but bola): conformance, auth, negative-input, method-not-allowed, lifecycle, bola, fuzz, undocumented-status, error-leakage, security-headers
+
+      --operations <GLOB>
+          Only operations matching a glob over operationId, path or "METHOD /path" (repeatable)
+
+      --seed <U64>
+          Seed of the fuzz cases (default: random, printed with the plan)
+
+      --fuzz-cases <N>
+          At most this many fuzz cases per operation
+          
+          [default: 50]
+
+      --allow-mutations
+          Also allow POST, PUT and PATCH
+
+      --allow-destructive
+          Also allow DELETE (implies --allow-mutations; never against production)
+
+      --allow-host <ORIGIN>
+          Allow another origin, scheme://host[:port] (repeatable)
+
+      --production <HOST>
+          Confirm a production target by repeating its exact host
+
+      --identity-b <ENV>
+          The environment of a second identity, for bola probes
+
+      --allow-remote-refs
+          Fetch $refs to other http(s) documents instead of refusing them
+
+      --env <NAME>
+          Environment (default: RUSTMAN_ENV, then default_environment)
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --graph
+          Also print the resource graph (producers of each path parameter)
+
+      --json
+          Print the plan as JSON
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

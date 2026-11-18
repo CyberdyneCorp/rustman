@@ -1,0 +1,87 @@
+---
+source: crates/rustman-explore/tests/plan.rs
+expression: render(&plan)
+---
+plan: 79 probes (27 allowed, 51 blocked, 1 skipped), seed 1234
+scans of every response: undocumented-status, error-leakage, security-headers
+
+ID     FAMILY              OPERATION                    METHOD   EXPECTED                                   STATUS
+p0001  conformance         GET /users                   GET      documented status and schema               allowed
+p0002  conformance         POST /users                  POST     documented status and schema               blocked: mutations not allowed
+p0003  conformance         GET /users/{id}              GET      documented status and schema               allowed
+p0004  conformance         PUT /users/{id}              PUT      documented status and schema               blocked: mutations not allowed
+p0005  conformance         DELETE /users/{id}           DELETE   documented status and schema               blocked: destructive not allowed
+p0006  conformance         GET /admin/users             GET      documented status and schema               allowed
+p0007  conformance         POST /orders                 POST     documented status and schema               blocked: mutations not allowed
+p0008  conformance         GET /orders/{orderId}        GET      documented status and schema               blocked: mutations not allowed
+p0009  conformance         GET /search                  GET      documented status and schema               allowed
+p0010  conformance         GET /reports/{reportId}      GET      documented status and schema               skipped: no producer
+p0011  conformance         GET /status                  GET      documented status and schema               allowed
+p0012  auth                GET /admin/users             GET      401 or 403                                 allowed
+p0013  auth                GET /admin/users             GET      401 or 403                                 allowed
+p0014  auth                POST /orders                 POST     401 or 403                                 blocked: mutations not allowed
+p0015  auth                POST /orders                 POST     401 or 403                                 blocked: mutations not allowed
+p0016  auth                GET /orders/{orderId}        GET      401 or 403                                 allowed
+p0017  auth                GET /orders/{orderId}        GET      401 or 403                                 allowed
+p0018  auth                GET /search                  GET      401 or 403                                 allowed
+p0019  auth                GET /search                  GET      401 or 403                                 allowed
+p0020  negative-input      POST /users                  POST     4xx                                        blocked: mutations not allowed
+p0021  negative-input      POST /users                  POST     4xx                                        blocked: mutations not allowed
+p0022  negative-input      POST /users                  POST     4xx                                        blocked: mutations not allowed
+p0023  negative-input      POST /users                  POST     4xx                                        blocked: mutations not allowed
+p0024  negative-input      POST /users                  POST     4xx                                        blocked: mutations not allowed
+p0025  negative-input      POST /users                  POST     4xx                                        blocked: mutations not allowed
+p0026  negative-input      POST /users                  POST     4xx                                        blocked: mutations not allowed
+p0027  negative-input      POST /users                  POST     4xx                                        blocked: mutations not allowed
+p0028  negative-input      POST /users                  POST     4xx                                        blocked: mutations not allowed
+p0029  negative-input      GET /users/{id}              GET      4xx                                        allowed
+p0030  negative-input      GET /users/{id}              GET      4xx                                        allowed
+p0031  negative-input      PUT /users/{id}              PUT      4xx                                        blocked: mutations not allowed
+p0032  negative-input      PUT /users/{id}              PUT      4xx                                        blocked: mutations not allowed
+p0033  negative-input      PUT /users/{id}              PUT      4xx                                        blocked: mutations not allowed
+p0034  negative-input      PUT /users/{id}              PUT      4xx                                        blocked: mutations not allowed
+p0035  negative-input      PUT /users/{id}              PUT      4xx                                        blocked: mutations not allowed
+p0036  negative-input      PUT /users/{id}              PUT      4xx                                        blocked: mutations not allowed
+p0037  negative-input      PUT /users/{id}              PUT      4xx                                        blocked: mutations not allowed
+p0038  negative-input      PUT /users/{id}              PUT      4xx                                        blocked: mutations not allowed
+p0039  negative-input      PUT /users/{id}              PUT      4xx                                        blocked: mutations not allowed
+p0040  negative-input      PUT /users/{id}              PUT      4xx                                        blocked: mutations not allowed
+p0041  negative-input      PUT /users/{id}              PUT      4xx                                        blocked: mutations not allowed
+p0042  negative-input      DELETE /users/{id}           DELETE   4xx                                        blocked: destructive not allowed
+p0043  negative-input      DELETE /users/{id}           DELETE   4xx                                        blocked: destructive not allowed
+p0044  negative-input      POST /orders                 POST     4xx                                        blocked: mutations not allowed
+p0045  negative-input      POST /orders                 POST     4xx                                        blocked: mutations not allowed
+p0046  negative-input      POST /orders                 POST     4xx                                        blocked: mutations not allowed
+p0047  negative-input      POST /orders                 POST     4xx                                        blocked: mutations not allowed
+p0048  negative-input      POST /orders                 POST     4xx                                        blocked: mutations not allowed
+p0049  negative-input      POST /orders                 POST     4xx                                        blocked: mutations not allowed
+p0050  negative-input      POST /orders                 POST     4xx                                        blocked: mutations not allowed
+p0051  negative-input      POST /orders                 POST     4xx                                        blocked: mutations not allowed
+p0052  negative-input      GET /search                  GET      4xx                                        allowed
+p0053  negative-input      GET /search                  GET      4xx                                        allowed
+p0054  method-not-allowed  OPTIONS /users               OPTIONS  405 or 404                                 allowed
+p0055  method-not-allowed  OPTIONS /users/{id}          OPTIONS  405 or 404                                 allowed
+p0056  method-not-allowed  OPTIONS /admin/users         OPTIONS  405 or 404                                 allowed
+p0057  method-not-allowed  GET /orders                  GET      405 or 404                                 allowed
+p0058  method-not-allowed  OPTIONS /orders/{orderId}    OPTIONS  405 or 404                                 allowed
+p0059  method-not-allowed  OPTIONS /search              OPTIONS  405 or 404                                 allowed
+p0060  method-not-allowed  OPTIONS /reports/{reportId}  OPTIONS  405 or 404                                 allowed
+p0061  method-not-allowed  OPTIONS /status              OPTIONS  405 or 404                                 allowed
+p0062  lifecycle           GET /users/{id}              GET      update reflected, 404 or 410 after delete  blocked: mutations not allowed
+p0063  lifecycle           GET /orders/{orderId}        GET      documented status and schema               blocked: mutations not allowed
+p0064  fuzz                POST /users                  POST     no 5xx, documented status and schema       blocked: mutations not allowed
+p0065  fuzz                POST /users                  POST     no 5xx, documented status and schema       blocked: mutations not allowed
+p0066  fuzz                POST /users                  POST     no 5xx, documented status and schema       blocked: mutations not allowed
+p0067  fuzz                POST /users                  POST     no 5xx, documented status and schema       blocked: mutations not allowed
+p0068  fuzz                PUT /users/{id}              PUT      no 5xx, documented status and schema       blocked: mutations not allowed
+p0069  fuzz                PUT /users/{id}              PUT      no 5xx, documented status and schema       blocked: mutations not allowed
+p0070  fuzz                PUT /users/{id}              PUT      no 5xx, documented status and schema       blocked: mutations not allowed
+p0071  fuzz                PUT /users/{id}              PUT      no 5xx, documented status and schema       blocked: mutations not allowed
+p0072  fuzz                POST /orders                 POST     no 5xx, documented status and schema       blocked: mutations not allowed
+p0073  fuzz                POST /orders                 POST     no 5xx, documented status and schema       blocked: mutations not allowed
+p0074  fuzz                POST /orders                 POST     no 5xx, documented status and schema       blocked: mutations not allowed
+p0075  fuzz                POST /orders                 POST     no 5xx, documented status and schema       blocked: mutations not allowed
+p0076  fuzz                GET /search                  GET      no 5xx, documented status and schema       allowed
+p0077  fuzz                GET /search                  GET      no 5xx, documented status and schema       allowed
+p0078  fuzz                GET /search                  GET      no 5xx, documented status and schema       allowed
+p0079  fuzz                GET /search                  GET      no 5xx, documented status and schema       allowed

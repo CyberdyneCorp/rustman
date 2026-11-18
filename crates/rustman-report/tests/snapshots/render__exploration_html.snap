@@ -1,0 +1,207 @@
+---
+source: crates/rustman-report/tests/render.rs
+expression: "rendered(&report, format)"
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Exploration exp-20261118-0a1b2c</title>
+<style>:root { --fg: #1f2328; --muted: #59636e; --bg: #ffffff; --panel: #f6f8fa; --line: #d1d9e0;
+  --critical: #a40e26; --high: #d1242f; --medium: #9a6700; --low: #0969da; --info: #59636e; --ok: #1a7f37; }
+@media (prefers-color-scheme: dark) {
+  :root { --fg: #e6edf3; --muted: #9198a1; --bg: #0d1117; --panel: #151b23; --line: #3d444d;
+    --critical: #ff8182; --high: #f85149; --medium: #d29922; --low: #4493f8; --info: #9198a1; --ok: #3fb950; }
+}
+* { box-sizing: border-box; }
+body { margin: 0 auto; max-width: 72rem; padding: 1.5rem 1rem 3rem; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--fg); background: var(--bg); }
+h1 { font-size: 1.5rem; margin: 0 0 1rem; }
+h2 { font-size: 1.15rem; margin: 2rem 0 0.75rem; border-bottom: 1px solid var(--line); padding-bottom: 0.25rem; }
+code, pre { font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+pre { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 0.75rem; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+table { border-collapse: collapse; width: 100%; margin: 0.5rem 0; }
+th, td { text-align: left; padding: 0.35rem 0.6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.meta { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem; margin: 0; }
+.meta dt { color: var(--muted); }
+.meta dd { margin: 0; word-break: break-all; }
+.sev { display: inline-block; min-width: 4.5rem; font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.03em; }
+.sev-critical { color: var(--critical); } .sev-high { color: var(--high); } .sev-medium { color: var(--medium); }
+.sev-low { color: var(--low); } .sev-info { color: var(--info); }
+.state-observed, .status-passed { color: var(--ok); } .state-blocked, .status-skipped { color: var(--muted); }
+.state-not-observed { color: var(--medium); } .status-failed, .status-errored { color: var(--high); }
+.filters { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0.5rem 0 1rem; }
+.filters label { color: var(--muted); }
+.filters select { margin-left: 0.35rem; font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 0.15rem 0.35rem; }
+.finding { border: 1px solid var(--line); border-radius: 6px; margin: 0.5rem 0; background: var(--bg); }
+.finding > summary { cursor: pointer; padding: 0.5rem 0.75rem; display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; align-items: baseline; }
+.finding > div { padding: 0 0.75rem 0.75rem; }
+.finding .op { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.muted { color: var(--muted); }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<h1>Exploration exp-20261118-0a1b2c</h1>
+<dl class="meta">
+<dt>Target</dt><dd><code>http:&#x2f;&#x2f;127.0.0.1:8080</code></dd>
+<dt>Document</dt><dd><code>api.yaml</code></dd>
+<dt>Environment</dt><dd>dev</dd>
+<dt>Seed</dt><dd>7</dd>
+<dt>Started</dt><dd>2026-11-18T09:00:00.000Z</dd>
+<dt>Finished</dt><dd>2026-11-18T09:00:01.500Z</dd>
+<dt>Duration</dt><dd>1.5 s</dd>
+<dt>Safety</dt><dd>read-only; 10 requests&#x2f;s, 4 at once; budget 2000 requests</dd>
+</dl>
+
+<h2>Summary</h2>
+<p>2 findings at or above <strong>high</strong>. Findings by severity: 1 critical, 1 high, 2 medium, 1 low, 0 info.</p>
+<table>
+<thead><tr><th class="n">Probes</th><th class="n">Passed</th><th class="n">Finding</th><th class="n">Blocked</th><th class="n">Skipped</th><th class="n">Not run</th><th class="n">Failed</th></tr></thead>
+<tbody><tr><td class="n">5</td><td class="n">0</td><td class="n">3</td><td class="n">2</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr></tbody>
+</table>
+
+<h2>Findings</h2>
+<div class="filters" id="filters" hidden>
+<label>Severity<select id="filter-severity"><option value="">all</option><option value="critical">critical</option><option value="high">high</option><option value="medium">medium</option><option value="low">low</option></select></label>
+<label>Operation<select id="filter-operation"><option value="">all</option><option value="GET &#x2f;admin&#x2f;users">GET &#x2f;admin&#x2f;users</option><option value="GET &#x2f;users&#x2f;{id}">GET &#x2f;users&#x2f;{id}</option><option value="POST &#x2f;users">POST &#x2f;users</option><option value="PUT &#x2f;users">PUT &#x2f;users</option></select></label>
+</div>
+<details class="finding" data-severity="critical" data-operation="GET &#x2f;admin&#x2f;users">
+<summary><span class="sev sev-critical">critical</span> <span>f001</span> <strong>auth-not-enforced</strong> <span class="op">GET &#x2f;admin&#x2f;users</span> <span class="muted">2&times;</span></summary>
+<div>
+<p>auth-not-enforced on GET &#x2f;admin&#x2f;users | got 200</p>
+<p class="muted">The auth-not-enforced rule. Remediation: Fix auth-not-enforced.</p>
+
+<p>Request</p>
+<pre>GET http:&#x2f;&#x2f;127.0.0.1:8080&#x2f;admin&#x2f;users
+Authorization: Bearer «redacted:bearerAuth_token»</pre>
+<p>Response</p>
+<pre>HTTP 200
+content-type: text&#x2f;plain
+
+echo: authorization: Bearer «redacted:bearerAuth_token»
+&lt;script&gt;alert(1)&lt;&#x2f;script&gt;</pre>
+<p>Reproduce</p>
+<pre>curl &#x27;http:&#x2f;&#x2f;127.0.0.1:8080&#x2f;admin&#x2f;users&#x27; -H &#x27;Authorization: Bearer {{bearerAuth_token}}&#x27;</pre>
+</div>
+</details>
+<details class="finding" data-severity="high" data-operation="POST &#x2f;users">
+<summary><span class="sev sev-high">high</span> <span>f002</span> <strong>server-error-on-invalid-input</strong> <span class="op">POST &#x2f;users</span> <span class="muted">2&times;</span></summary>
+<div>
+<p>server-error-on-invalid-input on POST &#x2f;users | got 500</p>
+<p class="muted">The server-error-on-invalid-input rule. Remediation: Fix server-error-on-invalid-input.</p>
+
+<p>Request</p>
+<pre>POST http:&#x2f;&#x2f;127.0.0.1:8080&#x2f;users
+Authorization: Bearer «redacted:bearerAuth_token»
+
+{&quot;age&quot;: &quot;x&quot;} &lt;b&gt;</pre>
+<p>Response</p>
+<pre>HTTP 500
+content-type: text&#x2f;plain
+
+echo: authorization: Bearer «redacted:bearerAuth_token»
+&lt;script&gt;alert(1)&lt;&#x2f;script&gt;</pre>
+<p>Reproduce</p>
+<pre>curl &#x27;http:&#x2f;&#x2f;127.0.0.1:8080&#x2f;users&#x27; -H &#x27;Authorization: Bearer {{bearerAuth_token}}&#x27;</pre>
+</div>
+</details>
+<details class="finding" data-severity="medium" data-operation="GET &#x2f;users&#x2f;{id}">
+<summary><span class="sev sev-medium">medium</span> <span>f003</span> <strong>response-schema-violation</strong> <span class="op">GET &#x2f;users&#x2f;{id}</span> <span class="muted">2&times;</span></summary>
+<div>
+<p>response-schema-violation on GET &#x2f;users&#x2f;{id} | got 200</p>
+<p class="muted">The response-schema-violation rule. Remediation: Fix response-schema-violation.</p>
+
+<p>Request</p>
+<pre>GET http:&#x2f;&#x2f;127.0.0.1:8080&#x2f;users&#x2f;{id}
+Authorization: Bearer «redacted:bearerAuth_token»</pre>
+<p>Response</p>
+<pre>HTTP 200
+content-type: text&#x2f;plain
+
+echo: authorization: Bearer «redacted:bearerAuth_token»
+&lt;script&gt;alert(1)&lt;&#x2f;script&gt;</pre>
+<p>Reproduce</p>
+<pre>curl &#x27;http:&#x2f;&#x2f;127.0.0.1:8080&#x2f;users&#x2f;{id}&#x27; -H &#x27;Authorization: Bearer {{bearerAuth_token}}&#x27;</pre>
+</div>
+</details>
+<details class="finding" data-severity="medium" data-operation="PUT &#x2f;users">
+<summary><span class="sev sev-medium">medium</span> <span>f004</span> <strong>undocumented-method-allowed</strong> <span class="op">PUT &#x2f;users</span> <span class="muted">2&times;</span></summary>
+<div>
+<p>undocumented-method-allowed on PUT &#x2f;users | got 200</p>
+<p class="muted">The undocumented-method-allowed rule. Remediation: Fix undocumented-method-allowed.</p>
+
+<p>Request</p>
+<pre>PUT http:&#x2f;&#x2f;127.0.0.1:8080&#x2f;users
+Authorization: Bearer «redacted:bearerAuth_token»</pre>
+<p>Response</p>
+<pre>HTTP 200
+content-type: text&#x2f;plain
+
+echo: authorization: Bearer «redacted:bearerAuth_token»
+&lt;script&gt;alert(1)&lt;&#x2f;script&gt;</pre>
+<p>Reproduce</p>
+<pre>curl &#x27;http:&#x2f;&#x2f;127.0.0.1:8080&#x2f;users&#x27; -H &#x27;Authorization: Bearer {{bearerAuth_token}}&#x27;</pre>
+</div>
+</details>
+<details class="finding" data-severity="low" data-operation="POST &#x2f;users">
+<summary><span class="sev sev-low">low</span> <span>f005</span> <strong>missing-content-type-options</strong> <span class="op">POST &#x2f;users</span> <span class="muted">2&times;</span></summary>
+<div>
+<p>missing-content-type-options on POST &#x2f;users | got 500</p>
+<p class="muted">The missing-content-type-options rule. Remediation: Fix missing-content-type-options.</p>
+
+<p>Request</p>
+<pre>POST http:&#x2f;&#x2f;127.0.0.1:8080&#x2f;users
+Authorization: Bearer «redacted:bearerAuth_token»
+
+{&quot;age&quot;: &quot;x&quot;} &lt;b&gt;</pre>
+<p>Response</p>
+<pre>HTTP 500
+content-type: text&#x2f;plain
+
+echo: authorization: Bearer «redacted:bearerAuth_token»
+&lt;script&gt;alert(1)&lt;&#x2f;script&gt;</pre>
+<p>Reproduce</p>
+<pre>curl &#x27;http:&#x2f;&#x2f;127.0.0.1:8080&#x2f;users&#x27; -H &#x27;Authorization: Bearer {{bearerAuth_token}}&#x27;</pre>
+</div>
+</details>
+
+
+<h2>Coverage</h2>
+<p>Operations exercised: 3/4 (75.0%). Documented statuses observed: 3/6 (50.0%).</p>
+<table>
+<thead><tr><th>Operation</th><th>Statuses</th></tr></thead>
+<tbody>
+<tr><td><code>GET &#x2f;admin&#x2f;users</code></td><td><span class="state-observed">200 observed</span>, <span class="state-not-observed">401 not-observed</span></td></tr>
+<tr><td><code>POST &#x2f;users</code></td><td><span class="state-not-observed">201 not-observed</span></td></tr>
+<tr><td><code>GET &#x2f;users&#x2f;{id}</code></td><td><span class="state-observed">200 observed</span>, <span class="state-observed">404 observed</span></td></tr>
+<tr><td><code>DELETE &#x2f;users&#x2f;{id}</code></td><td><span class="state-blocked">204 blocked</span></td></tr>
+</tbody>
+</table>
+<h2>Left behind</h2>
+<ul>
+<li><code>http:&#x2f;&#x2f;127.0.0.1:8080&#x2f;users&#x2f;9</code> <span class="muted">created by POST &#x2f;users; delete with DELETE &#x2f;users&#x2f;{id}</span></li>
+</ul>
+<script>(function () {
+  var severity = document.getElementById("filter-severity");
+  var operation = document.getElementById("filter-operation");
+  if (!severity || !operation) { return; }
+  document.getElementById("filters").hidden = false;
+  function apply() {
+    var items = document.querySelectorAll("[data-severity]");
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      var show = (!severity.value || item.getAttribute("data-severity") === severity.value) &&
+        (!operation.value || item.getAttribute("data-operation") === operation.value);
+      item.hidden = !show;
+    }
+  }
+  severity.addEventListener("change", apply);
+  operation.addEventListener("change", apply);
+})();
+</script>
+</body>
+</html>

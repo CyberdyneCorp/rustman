@@ -1,0 +1,85 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Discover, plan, send the probes and report the findings
+
+Usage: rustman explore run [OPTIONS] --spec <SOURCE> --target <URL>
+
+Options:
+      --spec <SOURCE>
+          The OpenAPI document: a file path or an http(s) URL
+
+      --target <URL>
+          The base URL probes are sent to; its origin is the only one allowed
+
+      --probes <LIST>
+          Probe families, comma-separated (default: all but bola): conformance, auth, negative-input, method-not-allowed, lifecycle, bola, fuzz, undocumented-status, error-leakage, security-headers
+
+      --operations <GLOB>
+          Only operations matching a glob over operationId, path or "METHOD /path" (repeatable)
+
+      --seed <U64>
+          Seed of the fuzz cases (default: random, printed with the plan)
+
+      --fuzz-cases <N>
+          At most this many fuzz cases per operation
+          
+          [default: 50]
+
+      --allow-mutations
+          Also allow POST, PUT and PATCH
+
+      --allow-destructive
+          Also allow DELETE (implies --allow-mutations; never against production)
+
+      --allow-host <ORIGIN>
+          Allow another origin, scheme://host[:port] (repeatable)
+
+      --production <HOST>
+          Confirm a production target by repeating its exact host
+
+      --identity-b <ENV>
+          The environment of a second identity, for bola probes
+
+      --allow-remote-refs
+          Fetch $refs to other http(s) documents instead of refusing them
+
+      --env <NAME>
+          Environment (default: RUSTMAN_ENV, then default_environment)
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --rate <N>
+          Requests per second at the start (default: [safety].rate, 10)
+
+      --concurrency <N>
+          Probes in flight at once (default: [safety].concurrency, 4)
+
+      --max-probes <N>
+          Probe budget: at most this many requests
+          
+          [default: 2000]
+
+      --max-duration <DURATION>
+          Time budget: 90s, 15m, or milliseconds (default: 15m)
+
+      --fail-on <SEVERITY>
+          Exit 1 when a finding is at or above this severity: critical, high, medium, low or info
+          
+          [default: high]
+
+      --report <FORMAT[=PATH]>
+          Also render the report as json, junit, markdown, html or sarif, written to a file or stdout, as in sarif=out/r.sarif (repeatable)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

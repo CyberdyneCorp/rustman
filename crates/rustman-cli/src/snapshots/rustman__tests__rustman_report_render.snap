@@ -1,0 +1,32 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Render a JSON report as json, junit, markdown, html or sarif
+
+Usage: rustman report render [OPTIONS] --format <FORMAT> <REPORT>
+
+Arguments:
+  <REPORT>
+          The JSON report (from `rustman run --reporter json` or `rustman explore run`)
+
+Options:
+      --format <FORMAT>
+          Output format: json, junit, markdown, html or sarif
+
+  -o, --output <FILE>
+          Write to this file instead of stdout
+
+      --fail-on <SEVERITY>
+          JUnit fails operations with findings at or above this severity (default: the exploration's --fail-on)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

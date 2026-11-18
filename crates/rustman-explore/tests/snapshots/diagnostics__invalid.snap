@@ -1,0 +1,9 @@
+---
+source: crates/rustman-explore/tests/diagnostics.rs
+expression: render(diagnostics)
+---
+error: /info/title: required string 'title' is missing
+error: /paths/~1users/get/responses/200/content/application~1json/schema/$ref: unresolved reference '#/components/schemas/Missing'
+error: /paths/~1users/get/parameters/0: a parameter needs a 'name' and 'in' (path, query, header or cookie)
+error: /paths/users~1{id}: a path must start with '/'
+warning: /paths/~1users/get: operation has no operationId; its request file is named from the method and path

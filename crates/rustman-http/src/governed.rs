@@ -108,6 +108,21 @@ impl GovernedSender {
             .map_err(|e| e.redacted(&Redactor::for_request(request)))
     }
 
+    /// Send `request` to clean up after the probes (delete what they
+    /// created): checked against the policy and paced like a probe, every
+    /// redirect hop included, but neither counted against nor refused by the
+    /// budgets, which have usually run out by then. Error messages are
+    /// redacted.
+    pub async fn send_cleanup(
+        &self,
+        request: &ResolvedRequest,
+        options: &SendOptions,
+    ) -> Result<Exchange, GovernedError> {
+        self.send_cleanup_unredacted(request, options)
+            .await
+            .map_err(|e| e.redacted(&Redactor::for_request(request)))
+    }
+
     async fn send_unredacted(
         &self,
         request: &ResolvedRequest,
@@ -120,12 +135,23 @@ impl GovernedSender {
         let paced = governor.pace().await.map_err(GovernedError::NotRun)?;
         let mut options = options.clone();
         options.timeout = options.timeout.min(governor.remaining());
-        let gate = PolicyGate {
-            sender: self,
-            paced: Mutex::new(paced),
-        };
+        let gate = PolicyGate::new(self, paced, Budgeted::Yes);
         self.engine
             .dispatch(request, prepared, &options, &gate)
+            .await
+    }
+
+    async fn send_cleanup_unredacted(
+        &self,
+        request: &ResolvedRequest,
+        options: &SendOptions,
+    ) -> Result<Exchange, GovernedError> {
+        let prepared = HttpEngine::prepare(request, None).await?;
+        check(&self.policy, &prepared.outgoing)?;
+        let paced = self.governor.pace_cleanup().await;
+        let gate = PolicyGate::new(self, paced, Budgeted::No);
+        self.engine
+            .dispatch(request, prepared, options, &gate)
             .await
     }
 
@@ -143,11 +169,29 @@ fn check(policy: &SafetyPolicy, request: &Request<Full<Bytes>>) -> Result<(), Go
         .map_err(|reason| GovernedError::Blocked { reason, url })
 }
 
-/// The policy check and pacing of one probe's redirect hops.
+/// Whether the budgets stop a request's redirect hops.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Budgeted {
+    Yes,
+    No,
+}
+
+/// The policy check and pacing of one request's redirect hops.
 struct PolicyGate<'a> {
     sender: &'a GovernedSender,
     /// How the hop in flight was paced.
     paced: Mutex<Paced>,
+    budgeted: Budgeted,
+}
+
+impl<'a> PolicyGate<'a> {
+    fn new(sender: &'a GovernedSender, paced: Paced, budgeted: Budgeted) -> Self {
+        Self {
+            sender,
+            paced: Mutex::new(paced),
+            budgeted,
+        }
+    }
 }
 
 impl Gate for PolicyGate<'_> {
@@ -155,8 +199,11 @@ impl Gate for PolicyGate<'_> {
 
     async fn before_redirect(&self, request: &Request<Full<Bytes>>) -> Result<(), GovernedError> {
         check(self.sender.policy(), request)?;
-        let paced = self.sender.governor().pace().await;
-        let paced = paced.map_err(GovernedError::NotRun)?;
+        let governor = self.sender.governor();
+        let paced = match self.budgeted {
+            Budgeted::Yes => governor.pace().await.map_err(GovernedError::NotRun)?,
+            Budgeted::No => governor.pace_cleanup().await,
+        };
         *self.paced.lock().unwrap_or_else(PoisonError::into_inner) = paced;
         Ok(())
     }

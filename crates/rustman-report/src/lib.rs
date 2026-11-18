@@ -1,17 +1,32 @@
-//! Run reports for Rustman (`rustman.report/v1`, `kind: run`) and their
-//! writers: pretty, json, junit and tap. Reports are built from
-//! [`RunRecord`]s, whose every text field is already redacted.
-//!
-//! [`RunRecord`]: rustman_core::run::RunRecord
+//! Reports for Rustman (`rustman.report/v1`): the canonical [`Report`] of a
+//! run (`kind: run`) or an exploration (`kind: exploration`), its JSON
+//! Schema, the renderers (JSON, JUnit XML, SARIF, Markdown, HTML), `report
+//! diff`, and the `rustman run --reporter` writers (pretty, json, junit,
+//! tap). Reports are built from records whose every text field is already
+//! redacted, so no renderer can show a secret.
 
+pub mod diff;
+pub mod exploration;
 mod json;
-mod junit;
 mod pretty;
+pub mod render;
+mod report;
 mod reporter;
+pub mod run;
+mod schema;
 mod tap;
 
-pub use json::{KIND_RUN, SCHEMA, json};
-pub use junit::junit;
+pub use diff::{Diff, KindMismatch, diff};
+pub use json::json;
 pub use pretty::{pretty, pretty_styled};
+pub use render::{RenderFormat, RenderOptions, ReportTarget, render};
+pub use report::{ReadError, Report, SCHEMA};
 pub use reporter::{Format, Reporter, ReporterError};
+pub use run::{KIND_RUN, RunReport};
+pub use schema::report_schema;
 pub use tap::tap;
+
+/// `run` as a JUnit XML document, ending in a newline.
+pub fn junit(run: &rustman_core::run::RunRecord) -> String {
+    render::junit::run_junit(&RunReport::new(run))
+}

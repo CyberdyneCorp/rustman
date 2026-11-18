@@ -1,0 +1,15 @@
+Pet:
+  type: object
+  required: [name]
+  properties:
+    name:
+      type: string
+    category:
+      $ref: '#/Category'
+    parent:
+      $ref: '#/Pet'
+    owner:
+      $ref: '../root.yaml#/components/schemas/Node'
+Category:
+  type: string
+  enum: [dog, cat]

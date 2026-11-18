@@ -1,0 +1,40 @@
+---
+source: crates/rustman-report/tests/render.rs
+expression: "rendered(&report, format)"
+---
+# Run report
+
+| | |
+|---|---|
+| Started | 2026-11-17T09:30:00.123Z |
+| Environment | staging |
+| Duration | 0.0 s |
+
+## Summary
+
+| Total | Passed | Failed | Errored | Skipped |
+|---:|---:|---:|---:|---:|
+| 4 | 1 | 1 | 1 | 1 |
+
+## Requests
+
+| Request | Result | Exchange | Duration |
+|---|---|---|---:|
+| `users/list` | passed | GET http://localhost:1/x -> 200 | 0 ms |
+| `users/create` | failed | POST http://localhost:1/x -> 404 | 0 ms |
+| `users/slow` | errored |  | 0 ms |
+| `users/delete` | skipped | bail | 0 ms |
+
+## Failures
+
+### users/create
+
+File: `users/create.rman.yaml`
+
+- status: expected 201, got 404
+
+### users/slow
+
+File: `users/slow.rman.yaml`
+
+- timeout after 500 ms (response)

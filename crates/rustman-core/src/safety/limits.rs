@@ -209,6 +209,24 @@ impl Governor {
         }
     }
 
+    /// Wait until a cleanup request may be sent: past a `Retry-After` pause
+    /// that ends within the time budget, then for the rate limit. Cleanup is
+    /// not a probe: no budget counts or stops it, so what the probes created
+    /// is still deleted once the budgets ran out.
+    pub async fn pace_cleanup(&self) -> Paced {
+        if !self.state().halted {
+            while let Some(left) = self.pause_left() {
+                futures_timer::Delay::new(left).await;
+            }
+        }
+        let (limiter, generation) = {
+            let pace = self.state();
+            (pace.limiter.clone(), pace.generation)
+        };
+        limiter.until_ready().await;
+        Paced { generation }
+    }
+
     /// Account for a response to a request sent after `paced`. A 429 halves
     /// the rate (once per rate: the 429s of other requests sent at the same
     /// rate don't halve it again) and pauses sending for its `Retry-After`.
@@ -393,6 +411,16 @@ mod tests {
             block_on(governor.pace()).unwrap_err(),
             BudgetExhausted::Duration
         );
+        assert_eq!(governor.admitted(), 0);
+    }
+
+    #[test]
+    fn cleanup_is_paced_after_the_budgets_ran_out() {
+        let governor = Governor::new(limits(1000, 1, 0, Duration::ZERO));
+        assert!(block_on(governor.admit()).is_err());
+        assert!(block_on(governor.pace()).is_err());
+        let paced = block_on(governor.pace_cleanup());
+        assert_eq!(governor.observe(paced, 204, None), None);
         assert_eq!(governor.admitted(), 0);
     }
 

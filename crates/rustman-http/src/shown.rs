@@ -5,7 +5,7 @@ use std::borrow::Cow;
 
 use rustman_core::Redactor;
 use rustman_core::redact::sensitive_header;
-use rustman_core::secret::placeholder;
+use rustman_core::secret::{placeholder, placeholders};
 use rustman_core::vars::{Resolved, ResolvedRequest};
 
 /// Redacted values, or the values as they are with `--show-secrets`.
@@ -77,19 +77,6 @@ fn or_placeholder(found: String, name: &str) -> String {
 
 const START: &str = "«redacted:";
 
-/// Every `«redacted:...»` placeholder in `text`, concatenated.
-pub(crate) fn placeholders(text: &str) -> String {
-    let mut found = String::new();
-    let mut rest = text;
-    while let Some(start) = rest.find(START) {
-        let tail = &rest[start..];
-        let end = tail.find('»').map_or(tail.len(), |e| e + '»'.len_utf8());
-        found.push_str(&tail[..end]);
-        rest = &tail[end..];
-    }
-    found
-}
-
 /// Whether `text` is placeholders (or, in placeholder mode, `{{name}}`
 /// markers), optionally after one auth scheme word.
 fn is_scheme_and_placeholders(text: &str) -> bool {
@@ -122,16 +109,6 @@ fn is_tokens(text: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn placeholders_are_collected_in_order() {
-        assert_eq!(
-            placeholders("Bearer «redacted:a»x«redacted:b»"),
-            "«redacted:a»«redacted:b»"
-        );
-        assert_eq!(placeholders("plain"), "");
-        assert_eq!(placeholders("«redacted:open"), "«redacted:open");
-    }
 
     #[test]
     fn only_a_scheme_may_stay_next_to_placeholders() {

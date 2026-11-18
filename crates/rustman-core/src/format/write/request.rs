@@ -1,7 +1,7 @@
 //! Walks the typed model in schema order and builds the [`Node`] tree.
 
 use super::{MapBuilder, Node, render};
-use crate::collection::CollectionMeta;
+use crate::collection::{CollectionMeta, CollectionSource};
 use crate::environment::Environment;
 use crate::model::signed_auth::DEFAULT_JWT_TTL_SECS;
 use crate::model::{
@@ -29,8 +29,23 @@ pub fn collection_to_yaml(meta: &CollectionMeta) -> String {
         .opt("headers", meta.headers.as_deref().map(name_values))
         .opt("auth", meta.auth.as_ref().map(auth))
         .opt("variables", meta.variables.as_ref().map(variables))
+        .opt("parallel", meta.parallel.map(Node::plain))
+        .opt_str("data", meta.data.as_deref())
+        .opt(
+            "secret_columns",
+            meta.secret_columns.as_deref().map(strings),
+        )
+        .opt("source", meta.source.as_deref().map(source))
         .build();
     render(&node)
+}
+
+fn source(s: &CollectionSource) -> Node {
+    MapBuilder::new()
+        .str("format", &s.format)
+        .str("location", &s.location)
+        .str("sha256", &s.sha256)
+        .build()
 }
 
 /// The YAML text of an `assertions:` list (the TUI's Assertions editor).

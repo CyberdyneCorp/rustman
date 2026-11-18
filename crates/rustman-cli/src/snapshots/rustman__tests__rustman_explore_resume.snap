@@ -1,0 +1,26 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Continue an interrupted exploration with the probes not yet run
+
+Usage: rustman explore resume [OPTIONS] <ID>
+
+Arguments:
+  <ID>
+          The exploration id, exp-<date>-<hex>
+
+Options:
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards, else the current directory)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

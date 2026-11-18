@@ -12,8 +12,10 @@ Commands:
   secret       Manage secret values (stored in the OS keychain, never in workspace files)
   cookies      Manage the cookie jars kept per environment
   auth         Log in to OAuth2-protected APIs
-  import       Import collections (Postman, Insomnia, Bruno, HAR, .http) and curl commands
+  import       Import collections (Postman, Insomnia, Bruno, HAR, .http, OpenAPI) and curl commands
   export       Export requests and collections (curl, code snippets, Postman, .http)
+  explore      Explore an API from its OpenAPI document under the safety policy
+  report       Print the report schema, render reports in other formats, diff them
   send         Send one request (a file, id or name, or an ad-hoc METHOD URL) and print the response
   run          Run the requests under files or folders and report the results
   history      List, inspect, replay and clear past exchanges (redacted)

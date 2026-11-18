@@ -1,0 +1,12 @@
+---
+source: crates/rustman-explore/tests/diagnostics.rs
+expression: render(&imported.warnings)
+---
+warning: /paths/~1users/get: operation has no operationId; its request file is named from the method and path
+warning: /paths/~1users~1{id}/get/parameters/0: path parameter 'userId' must be required
+warning: /paths/~1users~1{id}/get: operationId 'createUser' is also used at /paths/~1users/post
+warning: /paths/~1users~1{id}/get: operation declares no responses
+warning: /paths/~1users~1{id}/get: path parameter 'id' is not declared
+warning: /paths/~1users~1{id}/get: path parameter 'userId' is not in the path
+warning: /paths/~1users~1{id}/put: path parameter 'id' is not declared
+warning: /paths/~1users/post/requestBody/content/application~1json/example: example does not match its schema: /name: 7 is not of type "string"

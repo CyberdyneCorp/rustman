@@ -1,0 +1,451 @@
+{
+  "run_report": {
+    "description": "A `rustman run` (or `rustman send`) report.",
+    "type": "object",
+    "required": [
+      "schema",
+      "kind",
+      "rustman_version",
+      "started_at",
+      "environment",
+      "summary",
+      "requests"
+    ],
+    "properties": {
+      "schema": {
+        "const": "rustman.report/v1"
+      },
+      "kind": {
+        "const": "run"
+      },
+      "rustman_version": {
+        "type": "string"
+      },
+      "started_at": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "environment": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "summary": {
+        "$ref": "#/$defs/summary"
+      },
+      "requests": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/request"
+        }
+      }
+    }
+  },
+  "count": {
+    "type": "integer",
+    "minimum": 0
+  },
+  "ms": {
+    "type": "number",
+    "minimum": 0
+  },
+  "optional_ms": {
+    "type": [
+      "number",
+      "null"
+    ],
+    "minimum": 0
+  },
+  "summary": {
+    "type": "object",
+    "required": [
+      "total",
+      "passed",
+      "failed",
+      "errored",
+      "skipped",
+      "duration_ms",
+      "interrupted"
+    ],
+    "properties": {
+      "total": {
+        "$ref": "#/$defs/count"
+      },
+      "passed": {
+        "$ref": "#/$defs/count"
+      },
+      "failed": {
+        "$ref": "#/$defs/count"
+      },
+      "errored": {
+        "$ref": "#/$defs/count"
+      },
+      "skipped": {
+        "$ref": "#/$defs/count"
+      },
+      "duration_ms": {
+        "$ref": "#/$defs/ms"
+      },
+      "interrupted": {
+        "type": "boolean",
+        "description": "Stopped by Ctrl+C; the requests are partial."
+      }
+    }
+  },
+  "request": {
+    "type": "object",
+    "required": [
+      "id",
+      "name",
+      "file",
+      "iteration",
+      "status",
+      "skip_reason",
+      "error",
+      "exchange",
+      "assertions",
+      "captures",
+      "warnings",
+      "duration_ms"
+    ],
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "file": {
+        "type": "string"
+      },
+      "iteration": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "data_row": {
+        "$ref": "#/$defs/data_row"
+      },
+      "status": {
+        "enum": [
+          "passed",
+          "failed",
+          "errored",
+          "skipped"
+        ]
+      },
+      "skip_reason": {
+        "enum": [
+          "bail",
+          "interrupted",
+          "unsupported_kind",
+          null
+        ]
+      },
+      "error": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "exchange": {
+        "oneOf": [
+          {
+            "type": "null"
+          },
+          {
+            "$ref": "#/$defs/exchange"
+          }
+        ]
+      },
+      "assertions": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/assertion"
+        }
+      },
+      "captures": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/capture"
+        }
+      },
+      "warnings": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "duration_ms": {
+        "$ref": "#/$defs/ms"
+      }
+    }
+  },
+  "data_row": {
+    "type": "object",
+    "description": "The data row a data-driven (--data) run used; absent from every run without --data (--iterations included). Added in v0.2.",
+    "required": [
+      "index",
+      "total",
+      "label"
+    ],
+    "properties": {
+      "index": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "total": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "label": {
+        "type": "string",
+        "description": "The --data-label column's value, else row <index>."
+      }
+    }
+  },
+  "header": {
+    "type": "object",
+    "required": [
+      "name",
+      "value"
+    ],
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "value": {
+        "type": "string"
+      }
+    }
+  },
+  "headers": {
+    "type": "array",
+    "items": {
+      "$ref": "#/$defs/header"
+    }
+  },
+  "exchange": {
+    "type": "object",
+    "required": [
+      "request",
+      "response",
+      "timings",
+      "redirects",
+      "insecure"
+    ],
+    "properties": {
+      "request": {
+        "type": "object",
+        "required": [
+          "method",
+          "url",
+          "headers",
+          "body"
+        ],
+        "properties": {
+          "method": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "headers": {
+            "$ref": "#/$defs/headers"
+          },
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "response": {
+        "type": "object",
+        "required": [
+          "status",
+          "http_version",
+          "headers",
+          "body",
+          "body_bytes",
+          "body_truncated",
+          "binary"
+        ],
+        "properties": {
+          "status": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 999
+          },
+          "http_version": {
+            "enum": [
+              "HTTP/1.0",
+              "HTTP/1.1",
+              "HTTP/2"
+            ]
+          },
+          "headers": {
+            "$ref": "#/$defs/headers"
+          },
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "body_bytes": {
+            "$ref": "#/$defs/count"
+          },
+          "body_truncated": {
+            "type": "boolean"
+          },
+          "binary": {
+            "type": "boolean"
+          }
+        }
+      },
+      "timings": {
+        "type": "object",
+        "required": [
+          "dns_ms",
+          "connect_ms",
+          "tls_ms",
+          "ttfb_ms",
+          "download_ms",
+          "total_ms"
+        ],
+        "properties": {
+          "dns_ms": {
+            "$ref": "#/$defs/optional_ms"
+          },
+          "connect_ms": {
+            "$ref": "#/$defs/optional_ms"
+          },
+          "tls_ms": {
+            "$ref": "#/$defs/optional_ms"
+          },
+          "ttfb_ms": {
+            "$ref": "#/$defs/ms"
+          },
+          "download_ms": {
+            "$ref": "#/$defs/ms"
+          },
+          "total_ms": {
+            "$ref": "#/$defs/ms"
+          },
+          "auth_ms": {
+            "$ref": "#/$defs/ms"
+          }
+        }
+      },
+      "redirects": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "status",
+            "url"
+          ],
+          "properties": {
+            "status": {
+              "type": "integer"
+            },
+            "url": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "insecure": {
+        "type": "boolean"
+      }
+    }
+  },
+  "assertion": {
+    "type": "object",
+    "required": [
+      "kind",
+      "outcome",
+      "label",
+      "expected",
+      "actual",
+      "message"
+    ],
+    "properties": {
+      "kind": {
+        "enum": [
+          "status",
+          "header",
+          "json",
+          "schema",
+          "body",
+          "latency"
+        ]
+      },
+      "outcome": {
+        "enum": [
+          "pass",
+          "fail",
+          "error"
+        ]
+      },
+      "label": {
+        "type": "string"
+      },
+      "expected": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "actual": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "message": {
+        "type": "string"
+      }
+    }
+  },
+  "capture": {
+    "type": "object",
+    "required": [
+      "var",
+      "outcome",
+      "message",
+      "required",
+      "persisted",
+      "secret"
+    ],
+    "properties": {
+      "var": {
+        "type": "string"
+      },
+      "outcome": {
+        "enum": [
+          "captured",
+          "no_match",
+          "error"
+        ]
+      },
+      "message": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "required": {
+        "type": "boolean"
+      },
+      "persisted": {
+        "type": "boolean"
+      },
+      "secret": {
+        "type": "boolean"
+      }
+    }
+  }
+}

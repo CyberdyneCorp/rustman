@@ -386,6 +386,8 @@ variables:
 
 With this file, `users/get-user.rman.yaml` above is sent with `X-Team: core` and the bearer token, while a request with `auth: {type: none}` is sent without `Authorization`.
 
+A collection created by `rustman import openapi` also records its `source` (`format`, `location` and the `sha256` of the document), which `--sync` uses; see [OpenAPI import](import-openapi.md#import-snapshot).
+
 ## File paths
 
 Paths in `body.path`, multipart `file`, `settings.ca_bundle`, `settings.client_cert`, `settings.client_key`, `settings.client_pkcs12` and schema `file` are relative to the request file. The `[http]` file paths in `rustman.toml` (`ca_bundle`, `client_cert`, `client_key`, `client_pkcs12`) are relative to the workspace root. A path that leaves the workspace, through `..`, an absolute path or a symlink, fails to load:
