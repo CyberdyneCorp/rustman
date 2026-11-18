@@ -9,8 +9,8 @@ mod request;
 mod scalar;
 
 pub use request::{
-    assertions_to_yaml, auth_node, collection_to_yaml, environment_to_yaml, json_node,
-    name_values_node, request_to_yaml,
+    assertions_to_yaml, auth_node, collection_to_yaml, environment_to_yaml, graphql_to_yaml,
+    json_node, name_values_node, request_to_yaml,
 };
 
 /// A YAML node ready to print.

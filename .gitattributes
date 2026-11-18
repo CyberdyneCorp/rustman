@@ -15,3 +15,4 @@ crates/rustman-report/src/render/templates/** text eol=lf
 crates/rustman-report/src/*.json text eol=lf
 docs/schemas/*.json text eol=lf
 crates/rustman-viz-protocol/schema/*.json text eol=lf
+crates/rustman-graphql/tests/fixtures/** text eol=lf

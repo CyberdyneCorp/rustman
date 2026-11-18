@@ -100,6 +100,19 @@ Below them, the editor tabs: `Params`, `Headers`, `Body`, `Auth` and `Assertions
 - **Auth**: `Alt+M` cycles `inherit` (no `auth:`, the nearest collection's applies), `none`, `basic`, `bearer` and `api_key`; their fields form a table. OAuth2 is shown and kept as is; edit it in the file.
 - **Assertions**: the request's `assertions:` as YAML, the same syntax as in the file (see [Assertions](assertions.md)). A list that does not parse cannot be saved: the error names the problem.
 
+### The GraphQL editor
+
+A `kind: graphql` request (see [GraphQL](graphql.md)) opens in its own editor. The first row shows how the operation travels (`POST`, `GET`, `WS` or `SSE`) and the endpoint, a one-line text field. The editor tabs are `Query`, `Variables` and `Schema` (`1`–`3` with the tab bar focused).
+
+- **Query** is the document, with syntax colours. Its first line says where the schema comes from (`Schema: schema_file schema.graphql · 42 types`, `Schema: cache, fetched …`), or `No schema: syntax only` when there is none. The document is checked as you type, without sending: every problem is underlined where it starts (in the error colour, the warning colour for deprecated fields) and the last line shows the one at the cursor, e.g. `✖ 2:8: Cannot query field "emial" on type "User".`, or `✔ Valid`. A document from `document_file` is shown read-only; edit the file.
+- `Ctrl+Space` opens the completion popup at the cursor: fields, arguments, enum values, variables, directives and fragments, each with its signature. `↑`/`↓` choose, `Enter` or `Tab` inserts, typing narrows the list and `Esc` closes it.
+- **Variables** is the `variables:` map as a JSON object; `{{variables}}` in it are resolved on send. JSON that does not parse is reported on the last line, and the request cannot be saved or sent until it does.
+- **Schema** browses the schema: the types with their kind, then (`Enter`) a type's fields with their arguments and types, input fields, enum values, interfaces and possible types; deprecated members are struck through with their reason. `Enter` on a field opens its type; `Backspace` goes back.
+
+The schema is the request's `schema_file`, the `schema_file` of its endpoint in `rustman.toml`, or the cached introspection result, read when the tab opens. Opening or sending never introspects: `Ctrl+G` (**Refresh GraphQL schema**) runs the introspection query against the endpoint, in the active environment, and replaces the cache. Edits are saved to the request file with `Ctrl+S`; fields the editor does not show (headers, auth, transport, assertions) are kept.
+
+Sending a document with errors asks first: **Send anyway** sends it without the check, **Cancel** (the default) does not send. A query or mutation shows its result in the response viewer's `Data`, `Errors` and `Extensions` tabs. Each of these tabs starts with a summary line: the operation, the result (`ok`, `partial`, `errors`), the subscription protocol (`graphql-transport-ws`, `legacy subscriptions-transport-ws` or `sse`) and the APQ outcome, when there are any (`subscription OnMessage · ok · legacy subscriptions-transport-ws`). `Alt+S` (**Start GraphQL subscription**, or `Ctrl+Enter`) starts a `transport: ws` or `sse` subscription; it runs until the server completes it or you stop it, with no `max_events` or `duration` limit. While it runs, the response viewer counts the events and lists the newest (`⠋ Subscribed: 3 events · 2.4 s`). `Alt+X` (**Stop GraphQL subscription**) stops it and keeps what arrived: the `Events` tab lists every event with its time since the start and why it ended (`Ended: stopped, 3 events`). `Esc` cancels it instead, like any request.
+
 ### Variables
 
 Every `{{variable}}` in the URL, params, headers, auth and body is highlighted: in the accent colour when it resolves, in the error colour (and underlined, so it shows without colour) when no layer defines it. When the cursor is on a variable (in the URL, a text body, or the selected table row) a line at the bottom of the editor shows its value and the layer it comes from, e.g. `{{base_url}} = http://localhost:8080 · environment`, or `{{base_url}} is not defined in any layer`. Variables are looked up with the request's own precedence (request, collection, active environment, `rustman.toml`). Secrets are never read for this and show masked, `{{token}} = •••••••• · secret (environment)`, unless you [reveal secrets](#environments-and-secrets).
@@ -128,7 +141,7 @@ While certificate verification is off for the active environment's sends (`verif
 
 The response pane starts with a summary line: the status and reason, coloured by class (2xx ok, 3xx accent, 4xx warn, 5xx error, with `✔`/`✖` so it reads without colour), the total time, the body size and the assertion tally, e.g. `✔ 201 Created · 84 ms · 1.2 KiB · 3/3 passed`. An exchange sent with TLS verification off ends with `TLS: INSECURE`. When no response arrived the line names the error category and the engine's message instead (`✖ DNS error · cannot resolve api.test: …`; also `TLS error`, `Timeout`, `Connection error`, `Proxy error`, `Auth error`, `Redirect error`).
 
-Below it are the viewer tabs `Body`, `Headers`, `Timing` and `Assertions`; with the response focused, `]` and `[` switch between them, and `↑`/`↓`, `PageUp`/`PageDown`, `Home`/`End` (`j`/`k`, `Ctrl+D`/`Ctrl+U`, `gg`/`G` with vim keys) scroll.
+Below it are the viewer tabs `Body`, `Headers`, `Timing` and `Assertions` (a GraphQL exchange adds `Data`, `Errors`, `Extensions` and `Events` in front, see [The GraphQL editor](#the-graphql-editor)); with the response focused, `]` and `[` switch between them, and `↑`/`↓`, `PageUp`/`PageDown`, `Home`/`End` (`j`/`k`, `Ctrl+D`/`Ctrl+U`, `gg`/`G` with vim keys) scroll.
 
 Everything the viewer shows is redacted with the exchange's secrets, as in history: a server echoing a token shows `«redacted:token»`, and copying or saving the body copies or saves the redacted text.
 
@@ -311,6 +324,7 @@ The table below is generated from the action registry; a test fails if it drifts
 | Reveal secrets | `secrets.reveal` | `Alt+R` |  |
 | Edit in external editor | `editor.external` | `Ctrl+E` (editor) |  |
 | Change body mode or auth type | `editor.mode` | `Alt+M` (editor) |  |
+| Show GraphQL completions | `editor.complete` | `Ctrl+Space` (editor) |  |
 | Open in viz companion | `viz.open` | `v` (response) |  |
 | Show notification log | `notifications.show` |  |  |
 | Move up | `list.up` | `Up` (sidebar, response) | `k` (sidebar, response) |
@@ -336,6 +350,9 @@ The table below is generated from the action registry; a test fails if it drifts
 | Save body… | `response.save_body` | `s` (response) |  |
 | Export HTML report | `report.html` | `H` (response) |  |
 | Webhook inspector | `webhook.open` | `Alt+W` |  |
+| Refresh GraphQL schema | `graphql.refresh_schema` | `Ctrl+G` |  |
+| Start GraphQL subscription | `graphql.subscription_start` | `Alt+S` |  |
+| Stop GraphQL subscription | `graphql.subscription_stop` | `Alt+X` |  |
 | Quit | `app.quit` | `Ctrl+Q` |  |
 
 In vim mode, text areas (the request body) are modal:

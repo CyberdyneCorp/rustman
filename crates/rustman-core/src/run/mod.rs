@@ -7,11 +7,15 @@
 
 mod data;
 mod filter;
+mod graphql;
 mod plan;
 mod record;
 
 pub use data::{CollectionData, DataRun, collection_data, secret_columns};
 pub use filter::{Filter, glob_matches};
+pub use graphql::{
+    EventRecord, GraphqlRecord, MAX_RECORDED_EVENTS, SubscriptionRecord, redact_value,
+};
 pub use plan::{Plan, plan};
 pub use record::{
     DataRowRecord, ExchangeRecord, HeaderRecord, RedirectRecord, RequestRecord, RequestStatus,

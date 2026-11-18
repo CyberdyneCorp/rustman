@@ -17,6 +17,12 @@ pub mod external;
 pub mod files;
 pub mod focus;
 pub mod glyphs;
+pub mod graphql;
+pub mod graphql_pane;
+pub mod graphql_schema;
+#[cfg(test)]
+mod graphql_tests;
+mod graphql_view;
 pub mod help;
 pub mod http_pane;
 mod http_view;

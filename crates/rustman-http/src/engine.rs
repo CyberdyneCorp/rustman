@@ -255,7 +255,7 @@ impl HttpEngine {
         Ok(exchange)
     }
 
-    fn transport(&self, options: &SendOptions) -> Result<Arc<Transport>, RequestError> {
+    pub(crate) fn transport(&self, options: &SendOptions) -> Result<Arc<Transport>, RequestError> {
         let key = options.transport_key();
         let mut transports = self
             .transports
@@ -399,7 +399,7 @@ impl<G: Gate> Hops<'_, G> {
 }
 
 /// Add the credential of every sensitive header in `headers`.
-fn add_credentials(credentials: &mut Redactor, headers: &http::HeaderMap) {
+pub(crate) fn add_credentials(credentials: &mut Redactor, headers: &http::HeaderMap) {
     for (name, value) in headers {
         if let Ok(value) = value.to_str() {
             credentials.add_header_value(name.as_str(), value);
@@ -418,7 +418,10 @@ fn discard_spill(received: &Received) {
 /// `request` as sent: the jar's cookies (unless the request sets `Cookie`
 /// itself), and, for plain HTTP forwarded by an HTTP proxy, the proxy's
 /// credentials (tunnels send them in `CONNECT` instead).
-fn on_the_wire(request: &Request<Full<Bytes>>, options: &SendOptions) -> Request<Full<Bytes>> {
+pub(crate) fn on_the_wire(
+    request: &Request<Full<Bytes>>,
+    options: &SendOptions,
+) -> Request<Full<Bytes>> {
     let mut wire = wire::duplicate(request);
     let cookie = options
         .cookies

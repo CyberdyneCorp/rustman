@@ -50,7 +50,7 @@ client_key = "certs/client.key"
 api_version = "v2"
 ```
 
-Only `[workspace]` with `name` and `version = 1` is required; every other key has the default shown above (`default_environment`, `ca_bundle`, `proxy` and the client certificate keys are unset by default). The `[http]` client certificate (`client_cert` and `client_key`, or `client_pkcs12` and `client_pkcs12_password`) applies to every request that sets none of its own. The optional `[safety]` table (`allowed_hosts`, `production_hosts`, `rate`, `concurrency`) configures the [safety policy](safety.md#safety-in-rustmantoml) for automated senders. Unknown keys produce a warning, not an error (except in `[safety]`, where they are errors). A `version` newer than this build supports fails with `error: rustman.toml version 2 is newer than this rustman supports (1)`.
+Only `[workspace]` with `name` and `version = 1` is required; every other key has the default shown above (`default_environment`, `ca_bundle`, `proxy` and the client certificate keys are unset by default). The `[http]` client certificate (`client_cert` and `client_key`, or `client_pkcs12` and `client_pkcs12_password`) applies to every request that sets none of its own. The optional `[safety]` table (`allowed_hosts`, `production_hosts`, `rate`, `concurrency`) configures the [safety policy](safety.md#safety-in-rustmantoml) for automated senders. Optional `[[graphql.endpoints]]` entries set a `schema_file` per GraphQL endpoint (see [graphql.md](graphql.md#schema-file)), and `[explore]` configures [OpenAPI exploration](exploration.md). Unknown keys produce a warning, not an error (except in `[safety]`, where they are errors). A `version` newer than this build supports fails with `error: rustman.toml version 2 is newer than this rustman supports (1)`.
 
 ## Common fields
 
@@ -67,7 +67,7 @@ Every request file has these fields, in this order:
 | `assertions` | no | Checks on the response (see [assertions.md](assertions.md)). |
 | `captures` | no | Values extracted from the response for later requests. |
 
-`graphql` and `mcp` files are parsed and listed, but executing them reports them as skipped with `request kind '<kind>' is not supported by this build` until the GraphQL and MCP client changes land.
+`graphql` files have their own fields (see [GraphQL requests](#graphql-requests)); their `variables` are GraphQL variables sent with the operation, not a layer of Rustman variables. `mcp` files are parsed and listed. `rustman run` reports both kinds as skipped with `request kind '<kind>' is not supported by this build` until runner support for them lands.
 
 ## HTTP requests
 
@@ -357,6 +357,28 @@ captures:
     from: cookie
     name: sid
     persist: true
+```
+
+## GraphQL requests
+
+A `kind: graphql` file names an `endpoint` and exactly one of `document` (inline) or `document_file` (a path relative to the request file). `{{variables}}` are interpolated in the endpoint, headers, auth and the string values of `variables`, never in the document. [graphql.md](graphql.md) lists every field.
+
+```yaml
+# graphql/get-user.rman.yaml
+version: 1
+kind: graphql
+name: User by id
+endpoint: '{{base_url}}/graphql'
+document: |
+  query GetUser($id: ID!) {
+    user(id: $id) { name email }
+  }
+operation_name: GetUser
+variables:
+  id: '{{user_id}}'
+headers:
+  - name: X-Client
+    value: rustman
 ```
 
 ## Collections

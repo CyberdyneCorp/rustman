@@ -10,6 +10,7 @@ use rustman_explore::collection::WriteError;
 use rustman_explore::explore::export::ExportError;
 use rustman_explore::explore::session::SessionError;
 use rustman_explore::sync::SyncError;
+use rustman_graphql::GraphqlError;
 use rustman_http::{CurlError, RequestError, SnippetError};
 use rustman_import::ImportError;
 
@@ -74,6 +75,9 @@ pub enum CliError {
     /// The webhook listener cannot start (address refused or in use).
     #[error(transparent)]
     Webhook(#[from] rustman_webhook::ListenError),
+    /// A GraphQL schema that cannot be fetched, read or written.
+    #[error(transparent)]
+    Graphql(#[from] GraphqlError),
 }
 
 impl CliError {
@@ -83,6 +87,7 @@ impl CliError {
             Self::Request(_) | Self::Resolve(_) => REQUEST,
             Self::OpenApi(err) if err.is_request_failure() => REQUEST,
             Self::Policy(err) if err.is_refusal() => SAFETY,
+            Self::Graphql(err) => graphql_code(err),
             Self::Curl(_)
             | Self::History(_)
             | Self::Import(_)
@@ -99,6 +104,20 @@ impl CliError {
 
     pub fn render(&self) -> String {
         render(self)
+    }
+}
+
+/// The exit code of a GraphQL error: a server that could not be reached
+/// or refused introspection is a request failure, anything else (a schema
+/// file, an invalid endpoint) a configuration error.
+fn graphql_code(err: &GraphqlError) -> u8 {
+    match err {
+        GraphqlError::IntrospectionFailed(_)
+        | GraphqlError::Transport(_)
+        | GraphqlError::Resolve(_)
+        | GraphqlError::AckTimeout
+        | GraphqlError::Subscription(_) => REQUEST,
+        _ => CONFIG,
     }
 }
 
@@ -275,6 +294,19 @@ mod tests {
             CliError::from(PolicyError::InvalidTarget("x".into())).code(),
             2
         );
+    }
+
+    #[test]
+    fn graphql_errors_exit_3_when_the_server_fails_and_2_otherwise() {
+        let failed = GraphqlError::IntrospectionFailed("not allowed".into());
+        let err = CliError::from(failed);
+        assert_eq!(err.code(), 3);
+        assert_eq!(
+            err.render(),
+            "error: graphql: introspection failed: not allowed; set schema_file to validate offline"
+        );
+        let endpoint = GraphqlError::InvalidEndpoint("x".into());
+        assert_eq!(CliError::from(endpoint).code(), 2);
     }
 
     #[test]

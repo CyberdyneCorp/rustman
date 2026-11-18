@@ -166,7 +166,7 @@ impl RequestPane for HttpPane {
     fn open(&self, request: &Request) -> Option<Box<dyn PaneEditor>> {
         match request {
             Request::Http(http) => Some(Box::new(HttpEditor::new(http))),
-            Request::Opaque(_) => None,
+            Request::Graphql(_) | Request::Opaque(_) => None,
         }
     }
 }
@@ -757,7 +757,7 @@ mod tests {
         let full = format!("version: 1\nkind: http\nname: R\n{text}");
         match KindRegistry::default().load(Path::new("r"), &full).unwrap() {
             Request::Http(http) => *http,
-            Request::Opaque(_) => unreachable!(),
+            _ => unreachable!(),
         }
     }
 

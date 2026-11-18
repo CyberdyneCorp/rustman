@@ -1,0 +1,31 @@
+---
+source: crates/rustman-graphql/tests/explorer.rs
+expression: pretty(&role)
+---
+{
+  "name": "Role",
+  "kind": "ENUM",
+  "description": null,
+  "fields": [],
+  "input_fields": [],
+  "enum_values": [
+    {
+      "name": "ADMIN",
+      "description": null,
+      "deprecated": null
+    },
+    {
+      "name": "MEMBER",
+      "description": null,
+      "deprecated": null
+    },
+    {
+      "name": "GUEST",
+      "description": null,
+      "deprecated": "Guests were removed"
+    }
+  ],
+  "interfaces": [],
+  "possible_types": [],
+  "specified_by": null
+}

@@ -149,6 +149,17 @@ impl Transport {
     }
 }
 
+impl Transport {
+    /// Send `request` and hand back the response as soon as its head
+    /// arrives, with the body unread (streamed responses).
+    pub async fn open(
+        &self,
+        request: Request<Full<Bytes>>,
+    ) -> Result<http::Response<hyper::body::Incoming>, RequestError> {
+        self.client.request(request).await.map_err(client_error)
+    }
+}
+
 fn timings(
     started: Instant,
     head_at: Instant,

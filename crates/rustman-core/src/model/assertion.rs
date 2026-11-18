@@ -19,6 +19,16 @@ pub enum Assertion {
     Schema(Checked<SchemaAssertion>),
     Body(Checked<BodyAssertion>),
     Latency(Checked<LatencyAssertion>),
+    /// `no_errors: true`: a GraphQL result without `errors` (`false`: with).
+    NoErrors(bool),
+    /// `errors_count: 0` or `errors_count: {gt: 0}`.
+    ErrorsCount(CountExpectation),
+    /// `error_message_contains: text`: some GraphQL error's message has it.
+    ErrorMessageContains(String),
+    /// `error_code: CODE`: some GraphQL error's `extensions.code` is it.
+    ErrorCode(String),
+    /// `data: {path, <op>: value}`: a JSONPath check rooted at `data`.
+    Data(Box<Checked<JsonAssertion>>),
 }
 
 /// The key naming an assertion's type.
@@ -31,6 +41,11 @@ enum AssertionKey {
     Schema,
     Body,
     Latency,
+    NoErrors,
+    ErrorsCount,
+    ErrorMessageContains,
+    ErrorCode,
+    Data,
 }
 
 impl<'de> Deserialize<'de> for Assertion {
@@ -61,6 +76,13 @@ impl<'de> Visitor<'de> for AssertionVisitor {
             AssertionKey::Schema => Assertion::Schema(map.next_value()?),
             AssertionKey::Body => Assertion::Body(map.next_value()?),
             AssertionKey::Latency => Assertion::Latency(map.next_value()?),
+            AssertionKey::NoErrors => Assertion::NoErrors(map.next_value()?),
+            AssertionKey::ErrorsCount => Assertion::ErrorsCount(map.next_value()?),
+            AssertionKey::ErrorMessageContains => {
+                Assertion::ErrorMessageContains(map.next_value()?)
+            }
+            AssertionKey::ErrorCode => Assertion::ErrorCode(map.next_value()?),
+            AssertionKey::Data => Assertion::Data(map.next_value()?),
         };
         if let Some(extra) = map.next_key::<String>()? {
             return Err(de::Error::custom(format!(
@@ -81,6 +103,11 @@ impl AssertionKey {
             Self::Schema => "schema",
             Self::Body => "body",
             Self::Latency => "latency",
+            Self::NoErrors => "no_errors",
+            Self::ErrorsCount => "errors_count",
+            Self::ErrorMessageContains => "error_message_contains",
+            Self::ErrorCode => "error_code",
+            Self::Data => "data",
         }
     }
 }
@@ -270,6 +297,123 @@ impl Validate for LatencyAssertion {
     }
 }
 
+/// The expected number of GraphQL errors: `errors_count: 2`, or one
+/// comparison such as `errors_count: {gt: 0}`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CountExpectation {
+    pub op: CountOp,
+    pub value: u64,
+}
+
+/// How [`CountExpectation`] compares.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CountOp {
+    Equals,
+    Gt,
+    Gte,
+    Lt,
+    Lte,
+}
+
+impl CountOp {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Equals => "equals",
+            Self::Gt => "gt",
+            Self::Gte => "gte",
+            Self::Lt => "lt",
+            Self::Lte => "lte",
+        }
+    }
+
+    /// Whether `actual` satisfies the comparison with `expected`.
+    pub fn holds(self, actual: u64, expected: u64) -> bool {
+        match self {
+            Self::Equals => actual == expected,
+            Self::Gt => actual > expected,
+            Self::Gte => actual >= expected,
+            Self::Lt => actual < expected,
+            Self::Lte => actual <= expected,
+        }
+    }
+}
+
+/// The mapping form of `errors_count`.
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CountComparison {
+    equals: Option<u64>,
+    gt: Option<u64>,
+    gte: Option<u64>,
+    lt: Option<u64>,
+    lte: Option<u64>,
+}
+
+impl Validate for CountComparison {
+    fn validate(&self) -> Result<(), String> {
+        exactly_one(
+            "errors_count assertion",
+            &[
+                ("equals", given(self.equals.is_some())),
+                ("gt", given(self.gt.is_some())),
+                ("gte", given(self.gte.is_some())),
+                ("lt", given(self.lt.is_some())),
+                ("lte", given(self.lte.is_some())),
+            ],
+        )
+    }
+}
+
+impl CountComparison {
+    fn expectation(&self) -> Option<CountExpectation> {
+        [
+            (CountOp::Equals, self.equals),
+            (CountOp::Gt, self.gt),
+            (CountOp::Gte, self.gte),
+            (CountOp::Lt, self.lt),
+            (CountOp::Lte, self.lte),
+        ]
+        .into_iter()
+        .find_map(|(op, value)| value.map(|value| CountExpectation { op, value }))
+    }
+}
+
+impl<'de> Deserialize<'de> for CountExpectation {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(CountVisitor)
+    }
+}
+
+struct CountVisitor;
+
+impl<'de> Visitor<'de> for CountVisitor {
+    type Value = CountExpectation;
+
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("a number of errors, or one of equals, gt, gte, lt, lte")
+    }
+
+    fn visit_u64<E: de::Error>(self, value: u64) -> Result<Self::Value, E> {
+        Ok(CountExpectation {
+            op: CountOp::Equals,
+            value,
+        })
+    }
+
+    fn visit_i64<E: de::Error>(self, v: i64) -> Result<Self::Value, E> {
+        let v = u64::try_from(v).map_err(|_| E::custom(format!("invalid errors_count {v}")))?;
+        self.visit_u64(v)
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Self::Value, A::Error> {
+        let checked: Checked<CountComparison> =
+            Deserialize::deserialize(de::value::MapAccessDeserializer::new(map))?;
+        checked
+            .expectation()
+            .ok_or_else(|| de::Error::custom("errors_count needs a comparison"))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -303,8 +447,34 @@ mod tests {
 - schema: {inline: {type: object}}
 - body: {matches: 'order-[0-9]{6}'}
 - latency: {total_lt: 200}
+- no_errors: true
+- errors_count: 0
+- errors_count: {gte: 1}
+- error_message_contains: forbidden
+- error_code: FORBIDDEN
+- data: {path: $.user.name, equals: Ada}
 ";
-        assert_eq!(list(text).unwrap().len(), 6);
+        let all = list(text).unwrap();
+        assert_eq!(all.len(), 12);
+        assert_eq!(all[6], Assertion::NoErrors(true));
+        let count = |op, value| Assertion::ErrorsCount(CountExpectation { op, value });
+        assert_eq!(all[7], count(CountOp::Equals, 0));
+        assert_eq!(all[8], count(CountOp::Gte, 1));
+        assert_eq!(all[10], Assertion::ErrorCode("FORBIDDEN".into()));
+        assert!(matches!(&all[11], Assertion::Data(d) if d.path == "$.user.name"));
+    }
+
+    #[test]
+    fn errors_count_needs_one_comparison() {
+        let err = list("- errors_count: {gt: 1, lt: 3}\n").unwrap_err();
+        assert!(
+            err.message
+                .starts_with("errors_count assertion needs exactly one of: equals, gt"),
+            "{err}"
+        );
+        assert!(list("- errors_count: -1\n").is_err());
+        assert!(list("- errors_count: {between: 1}\n").is_err());
+        assert!(CountOp::Lte.holds(2, 2) && !CountOp::Lt.holds(2, 2));
     }
 
     #[test]

@@ -54,26 +54,7 @@ fn overrides(vars: &[String]) -> Result<Variables, ConfigError> {
     parse_overrides(vars).map_err(ConfigError::Usage)
 }
 
-/// `500ms`, `5s`, `2m`, or a bare number of milliseconds.
-pub fn parse_duration(text: &str) -> Result<Duration, String> {
-    let text = text.trim();
-    let (number, unit) = match text.find(|c: char| !c.is_ascii_digit()) {
-        Some(at) => text.split_at(at),
-        None => (text, "ms"),
-    };
-    let invalid = || format!("invalid duration '{text}' (use 500ms, 5s, 2m or milliseconds)");
-    let value: u64 = number.parse().map_err(|_| invalid())?;
-    let duration = match unit {
-        "ms" => Duration::from_millis(value),
-        "s" => Duration::from_secs(value),
-        "m" => Duration::from_secs(value.saturating_mul(60)),
-        _ => return Err(invalid()),
-    };
-    if duration.is_zero() {
-        return Err(invalid());
-    }
-    Ok(duration)
-}
+pub use rustman_core::duration::parse_duration;
 
 /// Where exchanges are recorded: the workspace's history, or for ad-hoc
 /// requests outside one the platform data directory. `None` with

@@ -11,6 +11,7 @@ publish = false
 [dependencies]
 rustman-core.workspace = true
 rustman-http.workspace = true
+rustman-graphql.workspace = true
 rustman-viz-protocol.workspace = true
 rustman-webhook.workspace = true
 ratatui.workspace = true
@@ -18,7 +19,7 @@ crossterm.workspace = true
 thiserror.workspace = true
 serde.workspace = true
 toml.workspace = true
-tokio = { workspace = true, features = ["rt", "sync", "time", "signal"] }
+tokio = { workspace = true, features = ["rt", "sync", "time", "signal", "macros"] }
 tokio-util.workspace = true
 nucleo-matcher.workspace = true
 dunce.workspace = true

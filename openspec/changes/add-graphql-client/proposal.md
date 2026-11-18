@@ -37,5 +37,5 @@ None (greenfield; specs from `bootstrap-core-engine` are not archived yet — th
 
 - New crate `crates/rustman-graphql`; TUI pane in `crates/rustman-tui`; subcommands in `crates/rustman-cli`.
 - Reuses the `rustman-http` transport (TLS, proxies, auth, timings) for HTTP operations.
-- New dependencies: `apollo-compiler` (parse/validate), `tokio-tungstenite` (WebSocket), an SSE client (`eventsource-stream`). Rationale in design.md.
+- New dependencies: `apollo-compiler` (parse/validate), `tokio-tungstenite` (WebSocket handshake and framing, no TLS features). SSE is parsed in-crate. Rationale in design.md.
 - Extends the request-file schema for `kind: graphql` (version stays `1`; fields are additive).

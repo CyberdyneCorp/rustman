@@ -11,14 +11,17 @@ pub mod kind;
 pub mod signed_auth;
 
 pub use assertion::{
-    Assertion, BodyAssertion, HeaderAssertion, JsonAssertion, LatencyAssertion, SchemaAssertion,
-    StatusExpectation,
+    Assertion, BodyAssertion, CountExpectation, CountOp, HeaderAssertion, JsonAssertion,
+    LatencyAssertion, SchemaAssertion, StatusExpectation,
 };
 pub use auth::{ApiKeyLocation, Auth, OAuth2, OAuth2Grant};
 pub use body::{Body, JsonContent, Part, PartSource};
 pub use capture::{Capture, CaptureSource};
 pub use common::{Checked, NameValue, Validate, VarValue, Variables};
-pub use graphql::{GRAPHQL_ACCEPT, graphql_as_http};
+pub use graphql::{
+    DEFAULT_DURATION, DEFAULT_MAX_EVENTS, DOCUMENT_SOURCE_ERROR, DocumentSource, GRAPHQL_ACCEPT,
+    GraphqlMethod, GraphqlRequest, GraphqlTransport, WsProtocol, graphql_as_http,
+};
 pub use http::{HttpRequest, Method, RequestSettings};
 pub use kind::{KindLoader, KindRegistry, OpaqueRequest, REQUEST_VERSION, Request};
 pub use signed_auth::{AwsCredentials, AwsSigV4, Jwt, JwtAlgorithm};

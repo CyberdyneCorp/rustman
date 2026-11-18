@@ -56,6 +56,8 @@ enum Command {
     Send(commands::send::SendArgs),
     /// Run the requests under files or folders and report the results
     Run(commands::run::RunArgs),
+    /// Introspect GraphQL schemas and send GraphQL operations
+    Graphql(commands::graphql::GraphqlArgs),
     /// List, inspect, replay and clear past exchanges (redacted)
     History(commands::history::HistoryArgs),
     /// Print a shell completion script: rustman completions zsh > _rustman
@@ -106,6 +108,7 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
         Command::Report(args) => commands::report::run(&args),
         Command::Send(args) => commands::send::run(&args),
         Command::Run(args) => commands::run::run(&args),
+        Command::Graphql(args) => commands::graphql::run(&args),
         Command::History(args) => commands::history::run(&args),
         Command::Completions(args) => {
             commands::completions::run(&args, &mut Cli::command());

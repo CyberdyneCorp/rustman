@@ -23,6 +23,7 @@ mod shown;
 mod signed;
 mod sigv4;
 pub mod snippet;
+mod stream;
 mod timing;
 mod tls;
 mod transport;
@@ -50,6 +51,7 @@ pub use oauth2::{
 pub use proxy::{NoProxy, ProxyKind, ProxySettings, ProxyUrl};
 pub use redirect::RedirectHop;
 pub use snippet::{Lang, Snippet, SnippetError, SnippetOptions, snippet};
+pub use stream::{StreamedResponse, request_head};
 pub use timing::{Timings, millis};
 pub use tls::{ALPN_HTTP, TlsSettings};
 pub use wire::USER_AGENT_VALUE;

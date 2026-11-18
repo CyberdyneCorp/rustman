@@ -5,9 +5,10 @@ use crate::collection::{CollectionMeta, CollectionSource};
 use crate::environment::Environment;
 use crate::model::signed_auth::DEFAULT_JWT_TTL_SECS;
 use crate::model::{
-    ApiKeyLocation, Assertion, Auth, AwsCredentials, AwsSigV4, Body, Capture, HeaderAssertion,
-    HttpRequest, JsonAssertion, JsonContent, Jwt, NameValue, OAuth2, Part, PartSource, Request,
-    RequestSettings, StatusExpectation, VarValue, Variables,
+    ApiKeyLocation, Assertion, Auth, AwsCredentials, AwsSigV4, Body, Capture, CountExpectation,
+    CountOp, GraphqlMethod, GraphqlRequest, GraphqlTransport, HeaderAssertion, HttpRequest,
+    JsonAssertion, JsonContent, Jwt, NameValue, OAuth2, Part, PartSource, Request, RequestSettings,
+    StatusExpectation, VarValue, Variables, WsProtocol,
 };
 
 /// The YAML text Rustman writes for a request file.
@@ -16,6 +17,7 @@ use crate::model::{
 pub fn request_to_yaml(request: &Request) -> String {
     match request {
         Request::Http(http) => render(&http_node(http)),
+        Request::Graphql(graphql) => graphql.source.clone(),
         Request::Opaque(opaque) => opaque.source.clone(),
     }
 }
@@ -85,6 +87,90 @@ pub fn name_values_node(pairs: &[NameValue]) -> Node {
 /// A JSON value as a YAML node.
 pub fn json_node(value: &serde_json::Value) -> Node {
     json(value)
+}
+
+/// The YAML text of a `kind: graphql` request, every field in schema
+/// order. [`request_to_yaml`] keeps a loaded file's text as it is; this is
+/// for a request that was edited (the TUI's GraphQL pane).
+pub fn graphql_to_yaml(r: &GraphqlRequest) -> String {
+    let node = MapBuilder::new()
+        .node("version", Node::plain(r.version))
+        .str("kind", &r.kind)
+        .str("name", &r.name)
+        .opt_str("description", r.description.as_deref())
+        .opt("tags", r.tags.as_deref().map(strings))
+        .str("endpoint", &r.endpoint)
+        .opt_str("document", r.document.as_deref())
+        .opt_str("document_file", r.document_file.as_deref())
+        .opt_str("operation_name", r.operation_name.as_deref())
+        .opt("variables", r.variables.as_ref().map(json_map))
+        .opt("headers", r.headers.as_deref().map(name_values))
+        .opt("auth", r.auth.as_ref().map(auth))
+        .opt_str("transport", r.transport.map(transport_name))
+        .opt_str("method", r.method.map(graphql_method_name))
+        .opt_plain("apq", r.apq)
+        .opt_str("schema_file", r.schema_file.as_deref())
+        .opt_str("ws_protocol", r.ws_protocol.map(ws_protocol_name))
+        .opt(
+            "connection_params",
+            r.connection_params.as_ref().map(json_map),
+        )
+        .opt_plain("max_events", r.max_events)
+        .opt("duration", r.duration.map(duration_node))
+        .opt(
+            "assertions",
+            r.assertions
+                .as_deref()
+                .map(|a| Node::Seq(a.iter().map(assertion).collect())),
+        )
+        .opt(
+            "captures",
+            r.captures
+                .as_deref()
+                .map(|c| Node::Seq(c.iter().map(|c| capture(c)).collect())),
+        )
+        .build();
+    render(&node)
+}
+
+fn json_map(map: &serde_json::Map<String, serde_json::Value>) -> Node {
+    Node::Map(map.iter().map(|(k, v)| (k.clone(), json(v))).collect())
+}
+
+fn transport_name(transport: GraphqlTransport) -> &'static str {
+    match transport {
+        GraphqlTransport::Http => "http",
+        GraphqlTransport::Ws => "ws",
+        GraphqlTransport::Sse => "sse",
+    }
+}
+
+fn graphql_method_name(method: GraphqlMethod) -> &'static str {
+    match method {
+        GraphqlMethod::Post => "POST",
+        GraphqlMethod::Get => "GET",
+    }
+}
+
+fn ws_protocol_name(protocol: WsProtocol) -> &'static str {
+    match protocol {
+        WsProtocol::Auto => "auto",
+        WsProtocol::GraphqlTransportWs => "graphql-transport-ws",
+        WsProtocol::GraphqlWs => "graphql-ws",
+    }
+}
+
+/// `2m`, `30s` or `1500ms`: the largest unit that writes it exactly.
+fn duration_node(duration: std::time::Duration) -> Node {
+    let ms = duration.as_millis();
+    let text = if ms.is_multiple_of(60_000) {
+        format!("{}m", ms / 60_000)
+    } else if ms.is_multiple_of(1000) {
+        format!("{}s", ms / 1000)
+    } else {
+        format!("{ms}ms")
+    };
+    Node::str(text)
 }
 
 fn http_node(r: &HttpRequest) -> Node {
@@ -346,6 +432,11 @@ fn assertion(a: &Assertion) -> Node {
                 .opt_plain("ttfb_lt", l.ttfb_lt)
                 .build(),
         ),
+        Assertion::NoErrors(expected) => ("no_errors", Node::plain(expected)),
+        Assertion::ErrorsCount(count) => ("errors_count", count_node(count)),
+        Assertion::ErrorMessageContains(text) => ("error_message_contains", Node::str(text)),
+        Assertion::ErrorCode(code) => ("error_code", Node::str(code)),
+        Assertion::Data(j) => ("data", json_assertion(j)),
     };
     Node::Map(vec![(key.to_owned(), node)])
 }
@@ -355,6 +446,15 @@ fn status_node(status: &StatusExpectation) -> Node {
         StatusExpectation::Code(code) => Node::plain(code),
         StatusExpectation::AnyOf(codes) => Node::Seq(codes.iter().map(Node::plain).collect()),
         StatusExpectation::Class(digit) => Node::str(format!("{digit}xx")),
+    }
+}
+
+fn count_node(count: &CountExpectation) -> Node {
+    match count.op {
+        CountOp::Equals => Node::plain(count.value),
+        op => MapBuilder::new()
+            .opt_plain(op.as_str(), Some(count.value))
+            .build(),
     }
 }
 

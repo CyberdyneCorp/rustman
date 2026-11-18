@@ -59,6 +59,15 @@ pub fn render(frame: &mut Frame, rect: Rect, tab: Option<&Tab>, ctx: &Ctx) {
         |tab| summary_line(tab, ctx),
     );
     frame.render_widget(Paragraph::new(summary), row(inner, 0, 1));
+    if let Some(flight) = tab.and_then(|t| t.in_flight.as_ref()) {
+        live_events(
+            frame,
+            row(inner, 1, inner.height.saturating_sub(1)),
+            flight,
+            ui,
+        );
+        return;
+    }
     let Some((tab, received)) = tab.and_then(|t| t.exchange.as_deref().map(|r| (t, r))) else {
         return;
     };
@@ -108,12 +117,34 @@ fn sending_line(flight: &InFlight, ctx: &Ctx) -> Line<'static> {
     let elapsed = ctx.now.saturating_duration_since(flight.started);
     let frames = ctx.ui.glyphs.spinner;
     let frame = usize::try_from(elapsed.as_millis() / 100).unwrap_or(0) % frames.len();
-    let text = format!(
-        "{} Sending… {:.1} s  (Esc cancels)",
-        frames[frame],
-        elapsed.as_secs_f64()
-    );
+    let events = flight.live_count();
+    let text = if events > 0 {
+        format!(
+            "{} Subscribed: {events} events {} {:.1} s  (Alt+X stops, Esc cancels)",
+            frames[frame],
+            ctx.ui.glyphs.dot,
+            elapsed.as_secs_f64()
+        )
+    } else {
+        format!(
+            "{} Sending… {:.1} s  (Esc cancels)",
+            frames[frame],
+            elapsed.as_secs_f64()
+        )
+    };
     Line::styled(text, ctx.ui.theme.fg(Token::Info))
+}
+
+/// The newest events of a subscription that is still running: one line
+/// each, as many as fit.
+fn live_events(frame: &mut Frame, rect: Rect, flight: &InFlight, ui: &UiOptions) {
+    let (first, events) = flight.newest_live(usize::from(rect.height));
+    if events.is_empty() {
+        return;
+    }
+    let rows = super::graphql::live_rows(&events);
+    let lines = super::graphql::event_lines(&rows, first, None, ui);
+    frame.render_widget(Paragraph::new(lines), rect);
 }
 
 fn outcome_line(received: &Received, ui: &UiOptions) -> Line<'static> {
@@ -219,11 +250,9 @@ fn failure_line(record: &RequestRecord, ui: &UiOptions) -> Line<'static> {
 
 fn tabs_bar(frame: &mut Frame, rect: Rect, viewer: &Viewer, ctx: &Ctx) {
     let ui = ctx.ui;
-    let labels: Vec<String> = ResponseTab::ALL
-        .iter()
-        .map(|t| t.label().to_owned())
-        .collect();
-    for (tab, at) in ResponseTab::ALL.iter().zip(label_rects(rect, &labels)) {
+    let tabs = viewer.tabs();
+    let labels: Vec<String> = tabs.iter().map(|t| t.label().to_owned()).collect();
+    for (tab, at) in tabs.iter().zip(label_rects(rect, &labels)) {
         let style = if *tab == viewer.tab {
             ui.theme
                 .fg(Token::Accent)
@@ -285,6 +314,10 @@ pub fn tab_lines(
         ResponseTab::Timing => timing_lines(received, width, ui),
         ResponseTab::Assertions => assertion_lines(&received.record, ui),
         ResponseTab::Body => Vec::new(),
+        tab => match &received.graphql {
+            Some(view) => super::graphql::lines(view, tab.label(), ui),
+            None => vec![hint("Not a GraphQL exchange.", ui)],
+        },
     }
 }
 

@@ -1,7 +1,7 @@
 version: 1
 kind: graphql
 name: List users
-description: Runs once add-graphql-client lands
-url: '{{base_url}}/graphql'
-query: |
+description: A query sent with rustman graphql query
+endpoint: '{{base_url}}/graphql'
+document: |
   { users { id } }

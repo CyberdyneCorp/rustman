@@ -29,6 +29,8 @@ pub enum Decision {
     LoadFromDisk(TabId),
     /// Start the webhook listener on a network-reachable address.
     WebhookStart,
+    /// Send the tab's GraphQL request without checking its document.
+    SendUnvalidated(TabId),
     Cancel,
 }
 
@@ -110,6 +112,20 @@ impl Confirm {
             message: format!("Start anyway? {warning}."),
             choices: vec![
                 ("Start", Decision::WebhookStart),
+                ("Cancel", Decision::Cancel),
+            ],
+            selected: 1,
+        }
+    }
+
+    /// The GraphQL document has errors: send it anyway? Cancel is
+    /// preselected (spec: Pre-send validation).
+    pub fn invalid_graphql(id: TabId, error: &str) -> Self {
+        Self {
+            title: " Invalid GraphQL ".into(),
+            message: format!("The document has errors: {error}"),
+            choices: vec![
+                ("Send anyway", Decision::SendUnvalidated(id)),
                 ("Cancel", Decision::Cancel),
             ],
             selected: 1,

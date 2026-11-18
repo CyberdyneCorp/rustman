@@ -44,6 +44,7 @@ pub enum ActionId {
     SecretsReveal,
     EditorExternal,
     EditorMode,
+    EditorComplete,
     VizOpen,
     NotificationsShow,
     ListUp,
@@ -69,6 +70,9 @@ pub enum ActionId {
     ResponseSaveBody,
     ReportHtml,
     WebhookOpen,
+    GraphqlRefreshSchema,
+    GraphqlSubscriptionStart,
+    GraphqlSubscriptionStop,
     Quit,
 }
 
@@ -87,7 +91,7 @@ const fn def(action: ActionId, id: &'static str, title: &'static str) -> ActionD
 }
 
 /// Every action, in the order the palette and the docs list them.
-pub const REGISTRY: [ActionDef; 63] = [
+pub const REGISTRY: [ActionDef; 67] = [
     def(ActionId::RequestSend, "request.send", "Send request"),
     def(ActionId::RequestCancel, "request.cancel", "Cancel request"),
     def(ActionId::RequestSave, "request.save", "Save request"),
@@ -141,6 +145,11 @@ pub const REGISTRY: [ActionDef; 63] = [
         "editor.mode",
         "Change body mode or auth type",
     ),
+    def(
+        ActionId::EditorComplete,
+        "editor.complete",
+        "Show GraphQL completions",
+    ),
     def(ActionId::VizOpen, "viz.open", "Open in viz companion"),
     def(
         ActionId::NotificationsShow,
@@ -190,6 +199,21 @@ pub const REGISTRY: [ActionDef; 63] = [
     ),
     def(ActionId::ReportHtml, "report.html", "Export HTML report"),
     def(ActionId::WebhookOpen, "webhook.open", "Webhook inspector"),
+    def(
+        ActionId::GraphqlRefreshSchema,
+        "graphql.refresh_schema",
+        "Refresh GraphQL schema",
+    ),
+    def(
+        ActionId::GraphqlSubscriptionStart,
+        "graphql.subscription_start",
+        "Start GraphQL subscription",
+    ),
+    def(
+        ActionId::GraphqlSubscriptionStop,
+        "graphql.subscription_stop",
+        "Stop GraphQL subscription",
+    ),
     def(ActionId::Quit, "app.quit", "Quit"),
 ];
 

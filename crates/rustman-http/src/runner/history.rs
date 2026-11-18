@@ -47,7 +47,7 @@ impl Runner<'_> {
             request: request.as_deref(),
             environment: self.ctx.environment.map(|e| e.name.as_str()),
             spill,
-            replay: Some(replay),
+            replay: replayable(&sent.record).then_some(replay),
         });
         let keeps_spill = entry.spill.is_some();
         if let Err(e) = store.record(&entry) {
@@ -92,6 +92,15 @@ impl Runner<'_> {
         log_record(&sent.record);
         sent
     }
+}
+
+/// Whether `rustman history replay` can re-send what `record` sent: not a
+/// GraphQL subscription, whose handshake or stream is not a plain exchange.
+fn replayable(record: &RequestRecord) -> bool {
+    record
+        .graphql
+        .as_ref()
+        .is_none_or(|graphql| graphql.transport == "http")
 }
 
 fn replayed(mut record: RequestRecord, resolved: &ResolvedRequest, exchange: Exchange) -> Sent {

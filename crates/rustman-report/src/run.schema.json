@@ -380,7 +380,12 @@
           "json",
           "schema",
           "body",
-          "latency"
+          "latency",
+          "no_errors",
+          "errors_count",
+          "error_message_contains",
+          "error_code",
+          "data"
         ]
       },
       "outcome": {

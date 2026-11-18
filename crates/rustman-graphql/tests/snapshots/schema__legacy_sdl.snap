@@ -1,0 +1,27 @@
+---
+source: crates/rustman-graphql/tests/schema.rs
+expression: schema.sdl()
+---
+"""Apollo cache hints."""
+directive @cacheControl(maxAge: Int) on FIELD_DEFINITION | OBJECT
+
+type Query {
+  """A user by id."""
+  user(id: ID!): User
+}
+
+type Subscription {
+  onMessage: String!
+}
+
+"""A person."""
+type User {
+  email: String
+  username: String @deprecated(reason: "Use handle")
+  role: Role
+}
+
+enum Role {
+  ADMIN
+  GUEST @deprecated(reason: "No longer supported")
+}

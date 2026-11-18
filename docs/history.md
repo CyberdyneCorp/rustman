@@ -10,7 +10,7 @@ Every request that was resolved and sent is recorded as one exchange, whether it
 - `timestamp` (RFC 3339, UTC), `request` (the request file relative to the workspace root, or `adhoc` for `rustman send <METHOD> <URL>`) and `environment`;
 - `sent`: the method, URL with its query, headers and text body as sent;
 - `status`, `total_ms` and `error`;
-- `record`: the response (status, headers, body), timings, redirects, assertion results and captures, as in a JSON report;
+- `record`: the response (status, headers, body), timings, redirects, assertion results and captures, as in a JSON report; for a GraphQL request also `graphql`, with the operation, its redacted variables, the result status and a subscription's events (see [GraphQL](graphql.md#history));
 - `spill`: for a body too large to keep in memory (see `[http] max_body_bytes` in [HTTP requests](http.md)), the file under `.rustman/bodies/` that holds it; `record` then keeps only its start;
 - `replay`: the request as `rustman history replay` sends it again (see [Replay](#replay)).
 
@@ -73,6 +73,7 @@ Some exchanges cannot be replayed, because what they sent is deliberately not ke
 
 - a sensitive header (`Authorization`, `Cookie`...) or an auth credential written literally instead of through a secret variable (only a scheme such as `Bearer ` may be written around the secret);
 - a multipart or file body;
+- a GraphQL subscription (its WebSocket or event stream is not a plain exchange);
 - a value derived from a secret: a captured value that contained a secret (see [Captures](assertions.md#captures)). History stores `{{<var>}}` in its place, or, if any other stored part still held a secret, nothing but the method.
 
 Replaying one of them fails with `this exchange cannot be replayed: ...`; send the request from its file instead.

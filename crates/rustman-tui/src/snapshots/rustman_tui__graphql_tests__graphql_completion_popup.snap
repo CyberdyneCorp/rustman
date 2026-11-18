@@ -1,0 +1,28 @@
+---
+source: crates/rustman-tui/src/graphql_tests.rs
+expression: screen
+---
+┌ Sidebar ─────────────────┐┌ users ● ───────────────────────────────────┐┌ Response ──────────────────────────────────┐
+│ ▾ graph                  ││ POST     {{http}}/graphql                  ││ No response yet · press Ctrl+Enter to send │
+│   GQL    live            ││ Query  Variables  Schema                   ││                                            │
+│   GQL    me              ││ Schema: schema_file schema.graphql · 5 type││                                            │
+│   GQL    remote          ││ { user(id: 1) {                            ││                                            │
+│   GQL    users ●         ││   name                                     ││                                            │
+│                          ││     p                                      ││                                            │
+│                          ││ } }   posts: [Post!]!                      ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││ ✖ 3:5: Cannot query field "p" on type "User││                                            │
+└──────────────────────────┘└────────────────────────────────────────────┘└────────────────────────────────────────────┘
+ demo │ env: local │ TLS verified │ 0 in flight                                                             Ctrl+Q quit

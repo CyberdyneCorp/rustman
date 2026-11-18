@@ -15,6 +15,7 @@ rustman-http = { path = "crates/rustman-http", version = "0.1.0" }
 rustman-report = { path = "crates/rustman-report", version = "0.1.0" }
 rustman-import = { path = "crates/rustman-import", version = "0.1.0" }
 rustman-explore = { path = "crates/rustman-explore", version = "0.1.0" }
+rustman-graphql = { path = "crates/rustman-graphql", version = "0.1.0" }
 # Test servers shared by the integration tests; never published.
 rustman-test-support = { path = "crates/rustman-test-support" }
 rustman-tui = { path = "crates/rustman-tui", version = "0.1.0" }
@@ -194,6 +195,22 @@ notify = { version = "8.2", default-features = false, features = ["macos_fsevent
 syntect = { version = "5.3", default-features = false, features = ["default-syntaxes", "regex-fancy"] }
 # Line diffs of non-JSON bodies in the exchange diff.
 similar = { version = "3.2", default-features = false, features = ["std", "text"] }
+
+# GraphQL client (add-graphql-client design D1): parsing and spec validation
+# with source locations, typed schemas from SDL, and introspection execution
+# in the test server. Pinned to a minor version (API churn between majors).
+# `async-graphql-parser` and `graphql-parser` are rejected (parse only).
+# Known cost: apollo-compiler depends on serde_json_bytes with its default
+# features, which pull jsonpath-rust, pest and stacker/psm (C and assembly
+# built by `cc`) plus a second sha1/digest. apollo-compiler has no feature
+# to turn that off; the targets CI builds (Linux, macOS, Windows) compile it.
+apollo-compiler = "~1.33.1"
+apollo-parser = "~0.8.7"
+# GraphQL subscriptions over WebSocket (add-graphql-client design D3): the
+# handshake and framing only. TCP and rustls come from rustman-http's TLS
+# settings, so no TLS feature (native-tls or its own rustls) is enabled.
+# The `graphql-ws-client` crate is rejected (design D3).
+tokio-tungstenite = { version = "0.29", default-features = false, features = ["handshake"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

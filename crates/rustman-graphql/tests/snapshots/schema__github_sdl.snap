@@ -1,0 +1,310 @@
+---
+source: crates/rustman-graphql/tests/schema.rs
+expression: fetched.schema.sdl()
+---
+"""
+An excerpt of the GitHub GraphQL API schema: interfaces implementing
+interfaces, unions, connections, custom scalars, deprecations and
+repeatable directives.
+"""
+schema {
+  query: Query
+  mutation: Mutation
+}
+
+"""
+Marks an element of a GraphQL schema as only available via a preview header
+"""
+directive @preview(
+  """The identifier of the API preview that toggles this field."""
+  toggledBy: String!,
+) on SCALAR | OBJECT | INTERFACE | UNION | ENUM | INPUT_OBJECT | FIELD_DEFINITION | ARGUMENT_DEFINITION | INPUT_FIELD_DEFINITION | ENUM_VALUE
+
+"""
+Defines what type of global IDs are accepted for a mutation argument of type ID.
+"""
+directive @possibleTypes(
+  """Abstract type of accepted global ID"""
+  abstractType: String,
+  """Accepted types of global IDs."""
+  concreteTypes: [String!]!,
+) repeatable on INPUT_FIELD_DEFINITION
+
+"""An ISO-8601 encoded UTC date string."""
+scalar DateTime @specifiedBy(url: "https://datatracker.ietf.org/doc/html/rfc3339")
+
+"""An RFC 3986, RFC 3987, and RFC 6570 (level 4) compliant URI string."""
+scalar URI
+
+"""Git object ID"""
+scalar GitObjectID
+
+"""An object with an ID."""
+interface Node {
+  """ID of the object."""
+  id: ID!
+}
+
+"""Represents an object which can take actions on GitHub."""
+interface Actor implements Node {
+  id: ID!
+  """A URL pointing to the actor's public avatar."""
+  avatarUrl(
+    """The size of the resulting square image."""
+    size: Int = 40,
+  ): URI!
+  """The username of the actor."""
+  login: String!
+}
+
+"""Entities that can be starred."""
+interface Starrable implements Node {
+  id: ID!
+  """Returns a count of how many stargazers there are on this object"""
+  stargazerCount: Int!
+}
+
+"""The query root of GitHub's GraphQL interface."""
+type Query {
+  """Fetches an object given its ID."""
+  node(
+    """ID of the object."""
+    id: ID!,
+  ): Node
+  """Lookup a given repository by the owner and repository name."""
+  repository(
+    """The name of the repository"""
+    name: String!,
+    """The login field of a user or organization"""
+    owner: String!,
+    """Follow repository renames."""
+    followRenames: Boolean = true,
+  ): Repository
+  """Perform a search across resources."""
+  search(
+    """Returns the first _n_ elements from the list."""
+    first: Int,
+    """The search string to look for."""
+    query: String!,
+    """The types of search items to search within."""
+    type: SearchType!,
+  ): SearchResultItemConnection!
+  """The currently authenticated user."""
+  viewer: User!
+}
+
+"""The root query for implementing GraphQL mutations."""
+type Mutation {
+  """Creates a new issue."""
+  createIssue(
+    """Parameters for CreateIssue"""
+    input: CreateIssueInput!,
+  ): CreateIssuePayload
+  """Adds a star to a Starrable."""
+  addStar(input: AddStarInput!): AddStarPayload
+}
+
+"""
+A user is an individual's account on GitHub that owns repositories and can make new content.
+"""
+type User implements Node & Actor {
+  id: ID!
+  avatarUrl(size: Int = 40): URI!
+  login: String!
+  """The user's public profile name."""
+  name: String
+  """The user's public profile bio."""
+  bio: String
+  """Identifies the date and time when the object was created."""
+  createdAt: DateTime!
+  """The user's public profile location."""
+  location: String @deprecated(reason: "Use `profileLocation` instead.")
+  """A list of repositories that the user owns."""
+  repositories(
+    first: Int,
+    after: String,
+    privacy: RepositoryPrivacy,
+    orderBy: RepositoryOrder = {
+      field: CREATED_AT,
+      direction: ASC,
+    },
+    isFork: Boolean @deprecated(reason: "Use `affiliations` instead."),
+  ): RepositoryConnection!
+}
+
+"""
+An account on GitHub, with one or more owners, that has repositories, members and teams.
+"""
+type Organization implements Node & Actor {
+  id: ID!
+  avatarUrl(size: Int = 40): URI!
+  login: String!
+  """The organization's public profile name."""
+  name: String
+}
+
+"""A repository contains the content for a project."""
+type Repository implements Node & Starrable {
+  id: ID!
+  stargazerCount: Int!
+  """The name of the repository."""
+  name: String!
+  """The User owner of the repository."""
+  owner: Actor!
+  """Identifies if the repository is private or internal."""
+  isPrivate: Boolean!
+  """The Git object ID of the default branch head."""
+  headOid: GitObjectID
+  """A list of issues that have been opened in the repository."""
+  issues(first: Int, states: [IssueState!], labels: [String!]): IssueConnection!
+  """The HTTP URL for this repository"""
+  url: URI!
+}
+
+"""
+An Issue is a place to discuss ideas, enhancements, tasks, and bugs for a project.
+
+Issues are linked to a repository.
+"""
+type Issue implements Node {
+  id: ID!
+  """Identifies the issue title."""
+  title: String!
+  """Identifies the body of the issue."""
+  body: String!
+  """Identifies the state of the issue."""
+  state: IssueState!
+  """The actor who authored the comment."""
+  author: Actor
+  """The repository associated with this node."""
+  repository: Repository!
+}
+
+"""The connection type for Repository."""
+type RepositoryConnection {
+  """A list of nodes."""
+  nodes: [Repository]
+  """Identifies the total count of items in the connection."""
+  totalCount: Int!
+  """Information to aid in pagination."""
+  pageInfo: PageInfo!
+}
+
+"""The connection type for Issue."""
+type IssueConnection {
+  nodes: [Issue]
+  totalCount: Int!
+  pageInfo: PageInfo!
+}
+
+"""A list of results that matched against a search query."""
+type SearchResultItemConnection {
+  """The total number of issues that matched the search query."""
+  issueCount: Int!
+  """A list of nodes."""
+  nodes: [SearchResultItem]
+  pageInfo: PageInfo!
+}
+
+"""Information about pagination in a connection."""
+type PageInfo {
+  """When paginating forwards, the cursor to continue."""
+  endCursor: String
+  """When paginating forwards, are there more items?"""
+  hasNextPage: Boolean!
+}
+
+"""Autogenerated return type of CreateIssue."""
+type CreateIssuePayload {
+  """A unique identifier for the client performing the mutation."""
+  clientMutationId: String
+  """The new issue."""
+  issue: Issue
+}
+
+"""Autogenerated return type of AddStar."""
+type AddStarPayload {
+  clientMutationId: String
+  """The starrable."""
+  starrable: Starrable
+}
+
+"""The results of a search."""
+union SearchResultItem = Issue | Organization | Repository | User
+
+"""The possible states of an issue."""
+enum IssueState {
+  """An issue that is still open"""
+  OPEN
+  """An issue that has been closed"""
+  CLOSED
+  """An issue that was locked"""
+  LOCKED @deprecated(reason: "Locked issues are closed. Use `CLOSED`.")
+}
+
+"""Represents the individual results of a search."""
+enum SearchType {
+  """Returns results matching issues in repositories."""
+  ISSUE
+  """Returns results matching repositories."""
+  REPOSITORY
+  """Returns results matching users and organizations on GitHub."""
+  USER
+}
+
+"""The privacy of a repository"""
+enum RepositoryPrivacy {
+  """Private"""
+  PRIVATE
+  """Public"""
+  PUBLIC
+}
+
+"""Properties by which repository connections can be ordered."""
+enum RepositoryOrderField {
+  """Order repositories by creation time"""
+  CREATED_AT
+  """Order repositories by name"""
+  NAME
+}
+
+"""
+Possible directions in which to order a list of items when provided an `orderBy` argument.
+"""
+enum OrderDirection {
+  """Specifies an ascending order for a given `orderBy` argument."""
+  ASC
+  """Specifies a descending order for a given `orderBy` argument."""
+  DESC
+}
+
+"""Ordering options for repository connections"""
+input RepositoryOrder {
+  """The field to order repositories by."""
+  field: RepositoryOrderField!
+  """The ordering direction."""
+  direction: OrderDirection!
+}
+
+"""Autogenerated input type of CreateIssue"""
+input CreateIssueInput {
+  """A unique identifier for the client performing the mutation."""
+  clientMutationId: String
+  """The Node ID of the repository."""
+  repositoryId: ID!
+  """The title for the issue."""
+  title: String!
+  """The body for the issue description."""
+  body: String
+  """An array of Node IDs for the labels for this issue."""
+  labelIds: [ID!]
+  """The legacy milestone number."""
+  milestoneNumber: Int @deprecated(reason: "Use `milestoneId`.")
+}
+
+"""Autogenerated input type of AddStar"""
+input AddStarInput {
+  clientMutationId: String
+  """The Starrable ID to star."""
+  starrableId: ID!
+}

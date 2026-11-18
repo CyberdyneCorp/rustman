@@ -1,0 +1,89 @@
+---
+source: crates/rustman-graphql/tests/explorer.rs
+expression: pretty(&user)
+---
+{
+  "name": "User",
+  "kind": "OBJECT",
+  "description": "A person with an account.",
+  "fields": [
+    {
+      "name": "id",
+      "description": null,
+      "ty": "ID!",
+      "arguments": [],
+      "deprecated": null
+    },
+    {
+      "name": "name",
+      "description": null,
+      "ty": "String",
+      "arguments": [],
+      "deprecated": null
+    },
+    {
+      "name": "email",
+      "description": null,
+      "ty": "String",
+      "arguments": [],
+      "deprecated": null
+    },
+    {
+      "name": "username",
+      "description": null,
+      "ty": "String",
+      "arguments": [],
+      "deprecated": "Use handle"
+    },
+    {
+      "name": "handle",
+      "description": null,
+      "ty": "String",
+      "arguments": [],
+      "deprecated": null
+    },
+    {
+      "name": "role",
+      "description": null,
+      "ty": "Role!",
+      "arguments": [],
+      "deprecated": null
+    },
+    {
+      "name": "createdAt",
+      "description": null,
+      "ty": "DateTime",
+      "arguments": [],
+      "deprecated": null
+    },
+    {
+      "name": "books",
+      "description": null,
+      "ty": "[Book!]!",
+      "arguments": [
+        {
+          "name": "first",
+          "description": null,
+          "ty": "Int",
+          "default": "5",
+          "deprecated": null
+        },
+        {
+          "name": "after",
+          "description": null,
+          "ty": "String",
+          "default": null,
+          "deprecated": null
+        }
+      ],
+      "deprecated": null
+    }
+  ],
+  "input_fields": [],
+  "enum_values": [],
+  "interfaces": [
+    "Node"
+  ],
+  "possible_types": [],
+  "specified_by": null
+}

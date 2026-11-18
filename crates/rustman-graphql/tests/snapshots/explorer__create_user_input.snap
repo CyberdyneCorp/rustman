@@ -1,0 +1,37 @@
+---
+source: crates/rustman-graphql/tests/explorer.rs
+expression: pretty(&input)
+---
+{
+  "name": "CreateUserInput",
+  "kind": "INPUT_OBJECT",
+  "description": null,
+  "fields": [],
+  "input_fields": [
+    {
+      "name": "name",
+      "description": null,
+      "ty": "String!",
+      "default": null,
+      "deprecated": null
+    },
+    {
+      "name": "email",
+      "description": null,
+      "ty": "String",
+      "default": null,
+      "deprecated": null
+    },
+    {
+      "name": "role",
+      "description": null,
+      "ty": "Role",
+      "default": "MEMBER",
+      "deprecated": null
+    }
+  ],
+  "enum_values": [],
+  "interfaces": [],
+  "possible_types": [],
+  "specified_by": null
+}

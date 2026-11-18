@@ -84,7 +84,7 @@ Before sending, when a schema is available, the system SHALL parse and validate 
 #### Scenario: Unknown field
 - **GIVEN** a cached schema where `User` has no field `emial`
 - **WHEN** the user sends `{ user(id: 1) { emial } }`
-- **THEN** the send SHALL be blocked with `Cannot query field "emial" on type "User"` at `1:21`
+- **THEN** the send SHALL be blocked with `Cannot query field "emial" on type "User"` at `1:17`
 
 #### Scenario: Syntax only without schema
 - **GIVEN** no schema is available

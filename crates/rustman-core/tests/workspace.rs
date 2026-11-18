@@ -213,7 +213,7 @@ fn reserved_kinds_are_listed() {
     let f = Fixture::new();
     f.write(
         "api/q.rman.yaml",
-        "version: 1\nkind: graphql\nname: q\nquery: '{ a }'\n",
+        "version: 1\nkind: graphql\nname: q\nendpoint: http://x\ndocument: '{ a }'\n",
     );
     let ws = f.load().unwrap();
     let request = ws.find_by_name("q");

@@ -215,7 +215,7 @@ fn exchange(path: &Path, request: Option<&HttpRequest>, body: Vec<u8>) -> Receiv
 fn open_request(state: &State) -> Option<HttpRequest> {
     match state.tabs.active()?.editor.request().ok()? {
         Request::Http(request) => Some(*request),
-        Request::Opaque(_) => None,
+        Request::Graphql(_) | Request::Opaque(_) => None,
     }
 }
 

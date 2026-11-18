@@ -120,6 +120,8 @@ pub struct Received {
     /// Total times of the latest exchanges of the same request file, oldest
     /// first, this one last (spec: Latency sparkline from history).
     pub history: Vec<f64>,
+    /// The GraphQL result, for a GraphQL exchange.
+    pub graphql: Option<Box<super::graphql::GraphqlView>>,
 }
 
 /// The redacted body as received.
@@ -142,6 +144,7 @@ impl Received {
             body: BodyKind::Empty,
             captured: Vec::new(),
             history: Vec::new(),
+            graphql: None,
         }
     }
 
@@ -157,6 +160,7 @@ impl Received {
             body,
             captured: Vec::new(),
             history: Vec::new(),
+            graphql: None,
         }
     }
 

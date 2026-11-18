@@ -214,7 +214,7 @@ pub fn resolve_request(
 /// The workspace client certificate (`rustman.toml [http]`), for a request
 /// that sets neither `client_cert` nor `client_pkcs12`. Its paths are
 /// relative to the workspace root and contained here.
-fn inherit_client_identity(
+pub(super) fn inherit_client_identity(
     i: &mut Interpolator<'_, '_>,
     request: &RequestRef<'_>,
     settings: &mut RequestSettings,
@@ -249,7 +249,7 @@ fn inherit_client_identity(
 /// Check every interpolated file path stays inside the workspace and keep the
 /// contained path. Files already contained (from `rustman.toml`) are kept.
 /// The error shows the resolved path with any secret value redacted.
-fn contain_files(
+pub(super) fn contain_files(
     request: &RequestRef<'_>,
     resolved: &mut ResolvedRequest,
 ) -> Result<(), ResolveError> {
@@ -333,7 +333,7 @@ fn tls_files(settings: &RequestSettings) -> TlsFiles {
     }
 }
 
-fn pairs(i: &mut Interpolator<'_, '_>, items: &[NameValue]) -> Vec<ResolvedPair> {
+pub(super) fn pairs(i: &mut Interpolator<'_, '_>, items: &[NameValue]) -> Vec<ResolvedPair> {
     items
         .iter()
         .filter(|p| p.enabled)
@@ -383,7 +383,7 @@ fn json(i: &mut Interpolator<'_, '_>, value: &Value) -> Value {
     }
 }
 
-fn auth(i: &mut Interpolator<'_, '_>, auth: &Auth) -> Auth {
+pub(super) fn auth(i: &mut Interpolator<'_, '_>, auth: &Auth) -> Auth {
     let mut t = |s: &str| i.text(s).text;
     match auth {
         Auth::None => Auth::None,
@@ -456,7 +456,7 @@ fn jwt_auth(i: &mut Interpolator<'_, '_>, j: &Jwt) -> Jwt {
 
 /// Resolve a JWT `private_key_file` against the workspace root, keeping it
 /// inside the workspace; the resolved auth then holds the full path.
-fn contain_jwt_key(
+pub(super) fn contain_jwt_key(
     request: &RequestRef<'_>,
     resolved: &mut ResolvedRequest,
 ) -> Result<(), ResolveError> {

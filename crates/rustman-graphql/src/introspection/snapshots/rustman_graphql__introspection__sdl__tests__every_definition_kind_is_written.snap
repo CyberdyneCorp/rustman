@@ -1,0 +1,40 @@
+---
+source: crates/rustman-graphql/src/introspection/sdl.rs
+expression: sdl
+---
+schema {
+  query: Root
+  mutation: Mut
+}
+
+"The \"root\"\nline two"
+type Root implements Node {
+  id: ID!
+  node("Id" id: ID!): Node
+  old: [String!] @deprecated(reason: "Use node")
+}
+
+type Mut {
+  ping(n: Int = 3): Int
+}
+
+interface Node {
+  id: ID!
+}
+
+union Any = Root | Mut
+
+enum Color {
+  RED
+  GREY @deprecated
+}
+
+input Pick @oneOf {
+  a: Int
+}
+
+scalar Url @specifiedBy(url: "https://url.spec.whatwg.org/")
+
+directive @auth(role: String = "admin") repeatable on FIELD_DEFINITION | OBJECT
+
+directive @oneOf on INPUT_OBJECT
