@@ -459,3 +459,71 @@ fn a_send_with_fifty_long_secrets_stays_fast() {
     assert!(!has(&out, &values[7].1), "echoed secrets are redacted");
     assert!(has(&out, "«redacted:s7»"));
 }
+
+/// A token refreshed on every iteration (a 1 KiB login token captured and
+/// sent as a bearer token) keeps the run fast and small: no matcher is
+/// rebuilt over every token seen so far. A generous bound for a debug
+/// build; a release build runs 300 iterations in well under a second.
+#[test]
+fn a_token_refreshed_every_iteration_keeps_the_run_fast() {
+    let server = Server::http();
+    let ws = workspace(&server);
+    let login = "method: POST\nbody:\n  type: text\n  content: 'eyJ{{$randomString 1000}}'\n\
+                 captures:\n  - var: plain\n    from: json\n    path: $.body\n";
+    write(
+        ws.path(),
+        "flow/1-login.rman.yaml",
+        &request("login", "{{base_url}}/echo", login),
+    );
+    let use_it = "auth:\n  type: bearer\n  token: '{{plain}}'\n";
+    write(
+        ws.path(),
+        "flow/2-use.rman.yaml",
+        &request("use", "{{base_url}}/echo", use_it),
+    );
+    let started = std::time::Instant::now();
+    let out = rustman(ws.path())
+        .args(["-vv", "run", "flow", "--env", "dev", "--iterations", "100"])
+        .args(["--no-history", "--reporter", "json"])
+        .output()
+        .unwrap();
+    let elapsed = started.elapsed();
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(elapsed < std::time::Duration::from_secs(30), "{elapsed:?}");
+    let report: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(report["summary"]["passed"], 200);
+    let used = report["requests"][199]["exchange"]["response"]["body"]
+        .as_str()
+        .unwrap();
+    assert!(used.contains("Bearer «redacted:Authorization»"), "{used}");
+}
+
+/// A password nested in a DSN, the DSN echoed in a spilled body just before
+/// the 64 KiB chunk end: `send` prints the DSN redacted whole, never
+/// `postgres://u:«redacted:pw»@db.internal/prod`.
+#[test]
+fn a_nested_secret_in_a_spilled_body_is_printed_redacted_whole() {
+    let server = Server::http();
+    let ws = secret_workspace(
+        &server,
+        &[
+            ("pw", "m0nk3y-p4ss"),
+            ("dsn", "postgres://u:m0nk3y-p4ss@db.internal/prod"),
+        ],
+    );
+    let toml = fs::read_to_string(ws.path().join("rustman.toml")).unwrap();
+    write(
+        ws.path(),
+        "rustman.toml",
+        &format!("{toml}[http]\nmax_body_bytes = 1024\n"),
+    );
+    let body = "method: POST\nbody:\n  type: text\n  content: '{{dsn}} {{pw}}'\n";
+    for pad in [65_490, 65_500, 65_505, 65_510, 65_520] {
+        let url = format!("{{{{base_url}}}}/mirror?pad={pad}&tail=100");
+        write(ws.path(), "dsn.rman.yaml", &request("dsn", &url, body));
+        let out = stdout_of(ws.path(), &["send", "dsn", "--env", "dev", "--no-history"]);
+        assert!(!has(&out, "postgres"), "pad {pad}");
+        assert!(!has(&out, "db.internal"), "pad {pad}");
+        assert!(has(&out, "«redacted:dsn» «redacted:pw»"), "pad {pad}");
+    }
+}

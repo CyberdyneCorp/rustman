@@ -21,9 +21,19 @@
 /// The most forms one value can have.
 pub(super) const MAX_FORMS: usize = 26;
 
-/// Every form of `value`, the raw one first, without duplicates.
+/// Values longer than this many bytes are matched as is only: their encoded
+/// forms would make the matcher take memory out of proportion (a 1 MiB
+/// value of special characters has megabytes of forms, and building a
+/// matcher takes tens of bytes per pattern byte).
+pub(super) const MAX_ENCODED_VALUE: usize = 8 * 1024;
+
+/// Every form of `value`, the raw one first, without duplicates; only the
+/// raw one past [`MAX_ENCODED_VALUE`] bytes.
 pub(super) fn encoded_forms(value: &str) -> Vec<String> {
     let mut forms = vec![value.to_owned()];
+    if value.len() > MAX_ENCODED_VALUE {
+        return forms;
+    }
     let mut push = |form: String| {
         if !forms.contains(&form) {
             forms.push(form);
@@ -187,6 +197,13 @@ mod tests {
         );
         let line = encoded_forms("a\u{2028}<");
         assert!(line.iter().any(|f| f == r#"a\u2028\u003c"#), "{line:#?}");
+    }
+
+    #[test]
+    fn long_values_are_matched_as_is_only() {
+        let long = "a/".repeat(MAX_ENCODED_VALUE);
+        assert_eq!(encoded_forms(&long), std::slice::from_ref(&long));
+        assert!(encoded_forms(&long[..MAX_ENCODED_VALUE]).len() > 1);
     }
 
     #[test]

@@ -62,7 +62,7 @@ x-request-id: req-1
 {"id":42,"name":"Ana","email":"ana@example.com","roles":["admin","dev"],"address":{"city":"Lisbon"}}
 ```
 
-Headers and bodies are shown [redacted](environments.md#redaction): `Authorization`, `Cookie` and `Set-Cookie`, every secret the request references and every captured value that became a secret. A large body is streamed from its spill file, and a binary body (one that is not valid UTF-8) is redacted byte by byte. `--show-secrets` prints the headers and body as received instead, on the terminal only: history still stores them redacted. `--body-only` prints only the response body, redacted the same way (as received with `--show-secrets`). `-o <file>` writes the decoded body to a file, always byte for byte; use it to save an image or other binary body exactly:
+Headers and bodies are shown [redacted](environments.md#redaction): `Authorization`, `Proxy-Authorization`, `Cookie` and `Set-Cookie`, every secret the request references and every captured value that became a secret. A large body is streamed from its spill file, and a binary body (one that is not valid UTF-8) is redacted byte by byte. `--show-secrets` prints the headers and body as received instead, on the terminal only: history still stores them redacted. `--body-only` prints only the response body, redacted the same way (as received with `--show-secrets`). `-o <file>` writes the decoded body to a file, always byte for byte; use it to save an image or other binary body exactly:
 
 ```sh
 rustman send get-user --env staging --body-only | jq .id
