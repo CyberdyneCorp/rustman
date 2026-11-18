@@ -27,6 +27,23 @@ pub const SIZE_NOTICE: &str = "Smaller than the recommended minimum of 80x24";
 /// Draw the shell for `session`.
 pub fn shell(frame: &mut Frame, state: &State, session: &Session) {
     let regions = regions(frame.area(), &state.shell);
+    if state.webhook.open {
+        let area = frame.area();
+        let main = Rect {
+            height: regions.status.y.saturating_sub(area.y),
+            ..area
+        };
+        crate::webhook::render(frame, main, state);
+        status::render(
+            frame,
+            regions.status,
+            &session.title(),
+            &state.status,
+            &quit_key(&state.keymap),
+            &state.ui,
+        );
+        return;
+    }
     if let Some(rect) = regions.editor {
         workbench_view::editor(frame, rect, state);
     }

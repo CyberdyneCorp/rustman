@@ -1,0 +1,36 @@
+---
+source: crates/rustman-tui/src/webhook/tests.rs
+expression: screen(&mut state)
+---
+┌ Webhooks ──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ ✔ Listening on http://127.0.0.1:9090 · 3 captures, 22 B                                                    │
+│ ┌ Captures ──────────────────────────────┐┌ Capture · body: auto ────────────────────────────────────────┐ │
+│ │10:15:30 POST /hooks/github 18 B  valid ││#3 POST /hooks/github HTTP/1.1 from 127.0.0.1:53114 -> 200    │ │
+│ │10:15:30 PUT /hooks/shop 2 B  invalid   ││2025-11-18T10:15:30Z                                          │ │
+│ │10:15:30 POST /hooks/stripe 2 B  expired││Host: 127.0.0.1:9090                                          │ │
+│ │                                        ││Content-Type: application/json                                │ │
+│ │                                        ││Content-Length: 18                                            │ │
+│ │                                        ││                                                              │ │
+│ │                                        ││{                                                             │ │
+│ │                                        ││  "zen": "ok",                                                │ │
+│ │                                        ││  "n": 1                                                      │ │
+│ │                                        ││}                                                             │ │
+│ │                                        ││                                                              │ │
+│ │                                        ││                                                              │ │
+│ │                                        ││                                                              │ │
+│ │                                        ││                                                              │ │
+│ │                                        ││                                                              │ │
+│ │                                        ││                                                              │ │
+│ │                                        ││                                                              │ │
+│ │                                        ││                                                              │ │
+│ └────────────────────────────────────────┘└──────────────────────────────────────────────────────────────┘ │
+│ ┌ Event log ─────────────────────────────────────────────────────────────────────────────────────────────┐ │
+│ │Listening on http://127.0.0.1:9090                                                                      │ │
+│ │#1 POST /hooks/stripe from 127.0.0.1:53114 (2 B) -> 200 signature: expired                              │ │
+│ │#2 PUT /hooks/shop from 127.0.0.1:53114 (2 B) -> 200 signature: invalid                                 │ │
+│ │#3 POST /hooks/github from 127.0.0.1:53114 (18 B) -> 200 signature: valid                               │ │
+│ │                                                                                                        │ │
+│ └────────────────────────────────────────────────────────────────────────────────────────────────────────┘ │
+│ s stop · ↑↓ select · v view · r replay · w save · h history · y curl · c clear · m mocks · Esc close       │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ Scratch session │ no environment │ TLS verified │ 0 in flight            webhook 127.0.0.1:9090  Ctrl+Q quit

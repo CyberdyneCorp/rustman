@@ -71,6 +71,9 @@ pub enum CliError {
     /// Findings that cannot be exported.
     #[error(transparent)]
     ExportFindings(#[from] ExportError),
+    /// The webhook listener cannot start (address refused or in use).
+    #[error(transparent)]
+    Webhook(#[from] rustman_webhook::ListenError),
 }
 
 impl CliError {
@@ -89,7 +92,8 @@ impl CliError {
             | Self::Sync(_)
             | Self::Policy(_)
             | Self::Exploration(_)
-            | Self::ExportFindings(_) => CONFIG,
+            | Self::ExportFindings(_)
+            | Self::Webhook(_) => CONFIG,
         }
     }
 

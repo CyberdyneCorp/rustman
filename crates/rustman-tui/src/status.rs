@@ -37,6 +37,16 @@ pub struct StatusInfo {
     pub in_flight: usize,
     pub vim: Option<VimMode>,
     pub secrets_visible: bool,
+    /// The webhook listener, while it runs.
+    pub webhook: Option<WebhookBadge>,
+}
+
+/// The running webhook listener in the status bar.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WebhookBadge {
+    pub addr: String,
+    /// Reachable from the network: shown as a warning on every screen.
+    pub remote: bool,
 }
 
 /// Draw the status bar for `workspace` into the one-row `area`; `quit` is
@@ -100,6 +110,16 @@ fn right_spans(info: &StatusInfo, quit: &str, ui: &UiOptions) -> Vec<Span<'stati
             format!(" {} ", mode.label()),
             theme.badge(Token::Accent),
         ));
+        spans.push(Span::raw(" "));
+    }
+    if let Some(webhook) = &info.webhook {
+        spans.push(if webhook.remote {
+            let text = format!(" WEBHOOK ON NETWORK {} ", webhook.addr);
+            Span::styled(text, theme.badge(Token::Error))
+        } else {
+            let text = format!("webhook {} ", webhook.addr);
+            Span::styled(text, theme.fg(Token::Accent))
+        });
         spans.push(Span::raw(" "));
     }
     if info.secrets_visible {
@@ -212,8 +232,36 @@ mod tests {
             in_flight: 1,
             vim: Some(VimMode::Normal),
             secrets_visible: true,
+            webhook: None,
         };
         insta::assert_snapshot!(text(&info));
+    }
+
+    #[test]
+    fn a_network_reachable_webhook_listener_is_a_red_badge() {
+        // Spec: TUI webhook pane, the persistent non-loopback indicator.
+        let ui = UiOptions::default();
+        let remote = StatusInfo {
+            webhook: Some(WebhookBadge {
+                addr: "0.0.0.0:9090".into(),
+                remote: true,
+            }),
+            ..StatusInfo::default()
+        };
+        let buffer = draw(&remote, &ui);
+        assert!(buffer_text(&buffer).contains(" WEBHOOK ON NETWORK 0.0.0.0:9090 "));
+        let style = style_of(&buffer, "WEBHOOK ON NETWORK").unwrap();
+        assert_eq!(style.bg, ui.theme.color(Token::Error));
+        let local = StatusInfo {
+            webhook: Some(WebhookBadge {
+                addr: "127.0.0.1:9090".into(),
+                remote: false,
+            }),
+            ..StatusInfo::default()
+        };
+        let text = text(&local);
+        assert!(text.contains("webhook 127.0.0.1:9090"), "{text}");
+        assert!(!text.contains("NETWORK"), "{text}");
     }
 
     #[test]

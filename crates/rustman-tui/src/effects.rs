@@ -106,6 +106,7 @@ fn execute_other(effect: Effect) -> Action {
         },
         Effect::Viz(job) => Action::VizDone(viz::open(&job)),
         Effect::WriteReport(job) => Action::ReportWritten(html::write(&job)),
+        Effect::Webhook(job) => crate::webhook::execute(*job),
         other => Action::Abort(Abort::Failed(format!("unexpected effect {other:?}"))),
     }
 }
@@ -141,6 +142,9 @@ pub fn spawn_runner_with(
     let (tx, mut rx) = unbounded_channel::<Effect>();
     tokio::spawn(async move {
         while let Some(effect) = rx.recv().await {
+            let Some(effect) = crate::webhook::intercept(effect, &actions) else {
+                continue;
+            };
             let actions = actions.clone();
             tokio::spawn(async move {
                 let action = tokio::task::spawn_blocking(move || exec(effect))

@@ -113,6 +113,7 @@ pub const DEFAULT: &[Builtin] = &[
     (Context::Global, "Esc", ActionId::Escape),
     (Context::Global, "Alt+E", ActionId::EnvSwitch),
     (Context::Global, "Alt+R", ActionId::SecretsReveal),
+    (Context::Global, "Alt+W", ActionId::WebhookOpen),
     (Context::Global, "Ctrl+Q", ActionId::Quit),
     (Context::Editor, "Ctrl+E", ActionId::EditorExternal),
     (Context::Editor, "Alt+M", ActionId::EditorMode),

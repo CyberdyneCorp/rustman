@@ -68,6 +68,7 @@ pub enum ActionId {
     ResponseDiff,
     ResponseSaveBody,
     ReportHtml,
+    WebhookOpen,
     Quit,
 }
 
@@ -86,7 +87,7 @@ const fn def(action: ActionId, id: &'static str, title: &'static str) -> ActionD
 }
 
 /// Every action, in the order the palette and the docs list them.
-pub const REGISTRY: [ActionDef; 62] = [
+pub const REGISTRY: [ActionDef; 63] = [
     def(ActionId::RequestSend, "request.send", "Send request"),
     def(ActionId::RequestCancel, "request.cancel", "Cancel request"),
     def(ActionId::RequestSave, "request.save", "Save request"),
@@ -188,6 +189,7 @@ pub const REGISTRY: [ActionDef; 62] = [
         "Save body…",
     ),
     def(ActionId::ReportHtml, "report.html", "Export HTML report"),
+    def(ActionId::WebhookOpen, "webhook.open", "Webhook inspector"),
     def(ActionId::Quit, "app.quit", "Quit"),
 ];
 

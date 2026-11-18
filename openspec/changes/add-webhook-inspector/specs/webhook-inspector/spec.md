@@ -133,7 +133,7 @@ When a verifier `github` is configured for a path with secret `{{secret_name}}`,
 - **THEN** the capture SHALL be marked `signature: invalid`
 
 ### Requirement: Stripe signature verification
-A `stripe` verifier SHALL parse `Stripe-Signature` (`t=`, one or more `v1=`), compute HMAC-SHA256 over `<t>.<raw body>`, accept if any `v1` matches in constant time, and mark `expired` when `t` is older than the tolerance (default 300 s).
+A `stripe` verifier SHALL parse `Stripe-Signature` (`t=`, one or more `v1=`), compute HMAC-SHA256 over `<t>.<raw body>`, accept if any `v1` matches in constant time, and mark `expired` when `t` is older than the tolerance (default 300 s) or later than now by more than the tolerance.
 
 #### Scenario: Expired timestamp
 - **GIVEN** a correctly signed Stripe event with `t` 10 minutes old
