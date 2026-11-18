@@ -227,12 +227,17 @@ Every text written to a tracked file (URLs, headers, bodies, auth, variables, na
 - **THEN** the description SHALL read `Use key «redacted:github_token»` and the token SHALL be stored as a secret
 
 ### Requirement: Repeat replacement
-A moved value SHALL replace a repeat only when it is secret-like (8 characters or more from at least two of letters, digits and symbols) and either fills the whole field or sits on token boundaries. Other repeats SHALL be left unchanged and reported by secret name and field, never by value. Environment files SHALL only get whole-value replacements by their own secrets.
+A raw repeat of a secret-like moved value (8+ characters and two character classes or 16+ characters) SHALL become `{{name}}` only when it fills the field or sits on token boundaries (token shapes: anywhere). Encoded or in-word repeats of secret-like values SHALL become `«redacted:name»` with a report note. Repeats of other values SHALL be left unchanged and reported by secret name. Environment files SHALL only get whole-value replacements by their own secrets.
 
 #### Scenario: Repeated secret-like value
 - **GIVEN** `X-Api-Key: SAME-VAL-42` and the same value in another header and in the URL path
 - **WHEN** it is imported
 - **THEN** every occurrence SHALL be `{{x_api_key}}`
+
+#### Scenario: Encoded repeat
+- **GIVEN** a secret `Pa"ss&w0rd+1` that also appears JSON-escaped in a body and percent-encoded in a query
+- **WHEN** it is imported
+- **THEN** both SHALL become `«redacted:password»`, the report SHALL say the field contained secret `password` in encoded form, and no file SHALL hold the value in any form
 
 #### Scenario: Ordinary word as a secret
 - **GIVEN** a Basic password `password` and a body `{"grant_type":"password"}` and URL `/password/reset?type=password`
@@ -240,7 +245,12 @@ A moved value SHALL replace a repeat only when it is secret-like (8 characters o
 - **THEN** the body and URL SHALL be unchanged and the report SHALL note that the value of secret `password` also appears there
 
 ### Requirement: Fresh secret names
-A new secret name SHALL NOT be the name of any variable declared in the source (collection, folders, requests, environments) other than the variable being moved.
+A new secret name SHALL NOT be the name of any variable declared or referenced as `{{name}}` in the source, other than the variable being moved.
+
+#### Scenario: Undeclared reference
+- **GIVEN** a request header `Authorization: Bearer {{token}}` with no `token` declared, and another request's literal bearer token
+- **WHEN** it is imported
+- **THEN** the literal SHALL be stored as `token_2`, never as `token`
 
 #### Scenario: Plain variable with the suffixed name
 - **GIVEN** collection variables `token=A` and `token_2={{env_tok}}`, and folder variable `token=B`
@@ -254,6 +264,14 @@ Postman and Bruno path variables SHALL NOT shadow a variable of the same name: w
 - **GIVEN** a collection variable `token`, bearer auth `{{token}}` and a request URL `/:token/x`
 - **WHEN** it is imported
 - **THEN** the URL SHALL be `/{{path_token}}/x` and the request SHALL still send the collection's `{{token}}`
+
+### Requirement: One import at a time
+An import SHALL hold an exclusive lock on `.rustman/import.lock` from reading the workspace to writing its last file; a concurrent import SHALL wait for it.
+
+#### Scenario: Two imports at once
+- **GIVEN** two imports into one workspace that both add secrets to `environments/local.yaml`
+- **WHEN** they run at the same time
+- **THEN** `environments/local.yaml` SHALL list the secrets of both
 
 ### Requirement: Postman folder variables
 Postman folder `variable` lists SHALL be dropped with a report note, because Postman does not resolve them.

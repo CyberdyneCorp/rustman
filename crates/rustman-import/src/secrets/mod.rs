@@ -16,6 +16,7 @@ use rustman_core::{Environment, Secret};
 use crate::ir::{
     Folder, ImportedAuth, ImportedBody, ImportedCollection, ImportedEnvironment, ImportedPart,
     ImportedRequest, Item, Location, Note, NoteKind, Pair, PartValue, Script, Variable,
+    VisitStrings,
 };
 use crate::slug::{slug, var_name};
 
@@ -576,9 +577,16 @@ fn script_secret<'v>(name: &str, value: &'v str) -> (String, &'v str) {
     (var_name(name, "secret"), value)
 }
 
-/// Every variable name declared in `collection`.
-fn variable_names(collection: &ImportedCollection) -> HashSet<String> {
+/// Every variable name declared in `collection`, and every name it
+/// references as `{{name}}` (some are meant to come from the user's own
+/// environment).
+fn variable_names(collection: &mut ImportedCollection) -> HashSet<String> {
     let mut names = HashSet::new();
+    let mut refs = |text: &mut String| crate::pathvars::references(text, &mut names);
+    collection.root.visit_strings(&mut refs);
+    for env in &mut collection.environments {
+        env.variables.visit_strings(&mut refs);
+    }
     let mut folders = vec![&collection.root];
     while let Some(folder) = folders.pop() {
         names.extend(folder.variables.iter().map(|v| v.name.clone()));
@@ -659,7 +667,7 @@ fn looks_secret(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::{ApiKeyIn, Grant, ImportedOAuth2, VisitStrings};
+    use crate::ir::{ApiKeyIn, Grant, ImportedOAuth2};
     use rustman_core::model::{VarValue, Variables};
 
     fn at() -> Location {

@@ -35,7 +35,7 @@ mod envs;
 use std::io::Read;
 use std::path::Path;
 
-pub use apply::apply;
+pub use apply::{IMPORT_LOCK, apply, lock_workspace};
 pub use detect::{Format, detect, detect_dir};
 pub use error::ImportError;
 pub use har::HarFilter;

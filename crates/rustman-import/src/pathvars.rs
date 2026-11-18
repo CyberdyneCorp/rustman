@@ -96,7 +96,7 @@ fn separate_request(request: &mut ImportedRequest, used: &mut HashSet<String>) {
 }
 
 /// Add the names `text` references as `{{name}}` to `out`.
-fn references(text: &str, out: &mut HashSet<String>) {
+pub(crate) fn references(text: &str, out: &mut HashSet<String>) {
     let mut rest = text;
     while let Some(start) = rest.find("{{") {
         let inner = &rest[start + 2..];

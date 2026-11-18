@@ -17,6 +17,28 @@ use crate::plan::Plan;
 /// stays linear.
 pub type StoreSecret<'a> = &'a dyn Fn(&[(&str, &Secret<String>)]) -> Result<(), SecretError>;
 
+/// The lock file that serializes imports into one workspace.
+pub const IMPORT_LOCK: &str = ".rustman/import.lock";
+
+/// Take the workspace's import lock, waiting while another import holds
+/// it; released when the returned file is dropped. Hold it from reading
+/// the workspace (environments, existing files) to the end of [`apply`]:
+/// two imports planned from the same state would otherwise each rewrite
+/// `environments/<name>.yaml` without the other's changes.
+pub fn lock_workspace(root: &Path) -> Result<std::fs::File, ImportError> {
+    let path = root.join(IMPORT_LOCK);
+    let dir = path.parent().unwrap_or(root);
+    rustman_core::secrets::ensure_private_dir(dir).map_err(|e| ImportError::io(dir, e))?;
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&path)
+        .map_err(|e| ImportError::io(&path, e))?;
+    file.lock().map_err(|e| ImportError::io(&path, e))?;
+    Ok(file)
+}
+
 /// The suffix of a staged file, next to its target.
 const STAGED: &str = ".rmtmp";
 

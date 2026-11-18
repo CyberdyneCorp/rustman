@@ -4,15 +4,16 @@
 //!    keys, JWTs, PEM private keys), also when percent-encoded, are moved
 //!    wherever they appear: URLs, headers, bodies, variables, names and
 //!    descriptions;
-//! 2. every value moved so far is looked for where it repeats, and
-//!    replaced only when that cannot change non-secret data:
-//!    - a field whose whole value is a secret-like moved value
-//!      ([`is_secret_like`]) becomes its placeholder;
-//!    - a secret-like value inside a longer text is replaced only on token
-//!      boundaries (no letter or digit right before or after it);
-//!    - any other repeat (`password` in `grant_type=password`, `123456` in
-//!      an order number) is left as written, and a `review` note names the
-//!      secret and the field, never the value.
+//! 2. every value moved so far is looked for where it repeats, raw and
+//!    (for secret-like values) percent-, JSON- or HTML-encoded. Since
+//!    placeholders are substituted raw, only a change that sends the same
+//!    bytes uses `{{name}}`:
+//!    - a raw secret-like repeat ([`is_secret_like`]) that fills the field,
+//!      sits on token boundaries, or has a token shape becomes `{{name}}`;
+//!    - an encoded or in-word secret-like repeat becomes `«redacted:name»`,
+//!      with a report note;
+//!    - any other repeat (`password` in `grant_type=password`) is left as
+//!      written, with a `review` note naming the secret, never the value.
 //!
 //! Fields that take templates get the `{{name}}` placeholder; free text
 //! (names, descriptions, report notes and locations) gets
@@ -24,7 +25,7 @@ use std::ops::Range;
 
 use aho_corasick::{AhoCorasick, MatchKind};
 
-use super::{Extractor, has_literal, is_redaction_marker, known_tokens, splice};
+use super::{Extractor, has_literal, is_known_token, is_redaction_marker, known_tokens, splice};
 use crate::ir::{
     Folder, ImportedAuth, ImportedBody, ImportedCollection, ImportedRequest, Item, Location, Note,
     NoteKind, Pair, VisitStrings,
@@ -42,13 +43,22 @@ pub const MAX_REPEAT: usize = 16 * 1024;
 /// The shortest value replaced where it repeats (see [`is_secret_like`]).
 pub const MIN_SECRET_LIKE: usize = 8;
 
+/// Values this long are secret-like whatever their characters (a
+/// 16-digit key, a 32-letter token).
+pub const LONG_SECRET: usize = 16;
+
 /// Whether `value` looks like a credential rather than a word or number:
-/// at least [`MIN_SECRET_LIKE`] characters, from at least two of the
-/// classes letters, digits and symbols. `password`, `123456`, `example`
-/// and `application` are not; `p4ssw0rd!` and `sk-live-42ab` are.
+/// at least [`MIN_SECRET_LIKE`] characters, and either from at least two
+/// of the classes letters, digits and symbols or at least [`LONG_SECRET`]
+/// characters long. `password`, `123456`, `example` and `application` are
+/// not; `p4ssw0rd!`, `sk-live-42ab` and `8473629184736291` are.
 pub fn is_secret_like(value: &str) -> bool {
-    if value.chars().count() < MIN_SECRET_LIKE {
+    let len = value.chars().count();
+    if len < MIN_SECRET_LIKE {
         return false;
+    }
+    if len >= LONG_SECRET {
+        return true;
     }
     let letters = value.chars().any(char::is_alphabetic);
     let digits = value.chars().any(|c| c.is_ascii_digit());
@@ -237,40 +247,72 @@ pub fn redact_tokens(text: &str) -> String {
     }
 }
 
-/// `review` notes for repeats left as written, one per secret and field.
+/// Report notes about repeats, one per secret, field and reason.
 #[derive(Default)]
 struct Review {
-    seen: HashSet<(String, String)>,
+    seen: HashSet<(String, String, &'static str)>,
     notes: Vec<Note>,
 }
 
 impl Review {
-    fn add(&mut self, secret: &str, field: &Field<'_>) {
+    /// A weak value left as written.
+    fn kept(&mut self, secret: &str, field: &Field<'_>) {
         let place = format!("{}:{}", field.at.display(), field.label);
-        if self.seen.insert((secret.to_owned(), place.clone())) {
+        if self.seen.insert((secret.to_owned(), place.clone(), "kept")) {
             let message =
                 format!("the value of secret {secret} also appears in {place}; review it");
             self.notes
                 .push(Note::new(NoteKind::Review, message, field.at));
         }
     }
+
+    /// A secret-like value redacted where `{{name}}` would change the
+    /// bytes sent.
+    fn redacted(&mut self, secret: &str, field: &Field<'_>, how: &'static str) {
+        let place = field.at.display();
+        let key = (secret.to_owned(), format!("{place}:{}", field.label), how);
+        if self.seen.insert(key) {
+            let message = format!(
+                "request {place}: field {} contained secret {secret} {how}; it was redacted, edit the field to use {{{{{secret}}}}}",
+                field.label
+            );
+            self.notes
+                .push(Note::new(NoteKind::Review, message, field.at));
+        }
+    }
+}
+
+/// How a pattern of [`Repeats`] relates to its secret.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Form {
+    /// The value's exact bytes.
+    Raw,
+    /// Percent-encoded, JSON-escaped or HTML-escaped.
+    Encoded,
+}
+
+/// One pattern: a moved value in one form.
+struct Pattern {
+    name: String,
+    form: Form,
+    /// Secret-like ([`is_secret_like`]): replaced; otherwise only noted.
+    strong: bool,
+    /// A well-known token shape: matched anywhere, not only on token
+    /// boundaries.
+    token: bool,
 }
 
 /// The moved values, found in one pass over a text.
 struct Repeats {
     matcher: Option<AhoCorasick>,
-    /// The secret name of each pattern, by pattern index.
-    names: Vec<String>,
-    /// Whether each pattern is secret-like.
-    strong: Vec<bool>,
+    patterns: Vec<Pattern>,
 }
 
 impl Repeats {
     fn new<'s>(secrets: impl Iterator<Item = &'s rustman_core::Secret<String>>) -> Self {
         let mut seen: HashSet<String> = HashSet::new();
         let mut values: Vec<String> = Vec::new();
-        let mut names = Vec::new();
-        let mut strong = Vec::new();
+        let mut patterns = Vec::new();
         for secret in secrets {
             let value = secret.expose().as_str();
             let usable = value.len() <= MAX_REPEAT
@@ -280,17 +322,21 @@ impl Repeats {
             if !usable || !seen.insert(value.to_owned()) {
                 continue;
             }
-            let like = is_secret_like(value);
+            let strong = is_secret_like(value);
+            let token = is_known_token(value);
+            let pattern = |form| Pattern {
+                name: secret.name().to_owned(),
+                form,
+                strong,
+                token,
+            };
             values.push(value.to_owned());
-            names.push(secret.name().to_owned());
-            strong.push(like);
-            // The forms a secret-like value takes in a URL or a JSON string.
-            if like {
-                for form in [percent_encoded(value), json_escaped(value)] {
-                    if form != value && seen.insert(form.clone()) {
+            patterns.push(pattern(Form::Raw));
+            if strong {
+                for form in encoded_forms(value) {
+                    if seen.insert(form.clone()) {
                         values.push(form);
-                        names.push(secret.name().to_owned());
-                        strong.push(true);
+                        patterns.push(pattern(Form::Encoded));
                     }
                 }
             }
@@ -301,15 +347,19 @@ impl Repeats {
                 .build(&values)
                 .expect("literal patterns build")
         });
-        Self {
-            matcher,
-            names,
-            strong,
-        }
+        Self { matcher, patterns }
     }
 
-    /// Replace the moved values of `text` that are safe to replace, and
-    /// note the others in `review` (when given).
+    /// Replace the repeats of `text`:
+    /// - a raw secret-like repeat, as the whole field, on token boundaries
+    ///   or (a token shape) anywhere, becomes the field's placeholder: the
+    ///   bytes sent stay the same;
+    /// - an encoded or embedded secret-like repeat becomes
+    ///   `«redacted:name»`, with a note, since `{{name}}` would send
+    ///   different bytes;
+    /// - a weak repeat stays, with a note.
+    ///
+    /// Notes go to `review` when given.
     fn scan(&self, text: &mut String, field: &Field<'_>, mut review: Option<&mut Review>) {
         let Some(matcher) = &self.matcher else {
             return;
@@ -318,20 +368,79 @@ impl Repeats {
         for span in literal_spans(text) {
             for m in matcher.find_iter(&text[span.clone()]) {
                 let range = span.start + m.start()..span.start + m.end();
-                let i = m.pattern().as_usize();
-                let whole = range.start == 0 && range.end == text.len();
-                let replace = self.strong[i] && (whole || on_boundaries(text, &range));
-                if replace {
-                    edits.push((range, field.kind.placeholder(&self.names[i])));
-                } else if let Some(review) = review.as_deref_mut() {
-                    review.add(&self.names[i], field);
+                let p = &self.patterns[m.pattern().as_usize()];
+                if !p.strong {
+                    if let Some(review) = review.as_deref_mut() {
+                        review.kept(&p.name, field);
+                    }
+                    continue;
                 }
+                let whole = range.start == 0 && range.end == text.len();
+                let placed = whole || p.token || on_boundaries(text, &range);
+                let replacement = if p.form == Form::Raw && placed {
+                    field.kind.placeholder(&p.name)
+                } else {
+                    let how = match p.form {
+                        Form::Encoded => "in encoded form",
+                        Form::Raw => "inside other text",
+                    };
+                    if let Some(review) = review.as_deref_mut() {
+                        review.redacted(&p.name, field, how);
+                    }
+                    Kind::Free.placeholder(&p.name)
+                };
+                edits.push((range, replacement));
             }
         }
         if !edits.is_empty() {
             *text = splice(text, edits);
         }
     }
+}
+
+/// The forms `value` takes once encoded, other than itself: percent-encoded
+/// (upper and lower case hex), JSON-escaped (with and without `\/`) and
+/// HTML-escaped.
+fn encoded_forms(value: &str) -> Vec<String> {
+    let json = json_escaped(value);
+    let forms = [
+        percent_encoded(value),
+        lower_hex(&percent_encoded(value)),
+        json.replace('/', "\\/"),
+        json,
+        html_escaped(value),
+    ];
+    let mut out: Vec<String> = Vec::new();
+    for form in forms {
+        if form != value && !out.contains(&form) {
+            out.push(form);
+        }
+    }
+    out
+}
+
+/// `text` with the hex digits of its `%XX` escapes in lower case.
+fn lower_hex(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find('%') {
+        out.push_str(&rest[..i]);
+        let escape = rest.get(i..i + 3).unwrap_or(&rest[i..]);
+        out.push_str(&escape.to_ascii_lowercase());
+        rest = &rest[i + escape.len()..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// `value` with `&`, `<`, `>`, `"` and `'` as HTML entities.
+fn html_escaped(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
 }
 
 /// `value` with every byte outside the URL-unreserved set percent-encoded.
@@ -515,7 +624,14 @@ mod tests {
 
     #[test]
     fn secret_like_values_need_length_and_two_classes() {
-        for value in ["p4ssw0rd!", "sk-live-42ab", "CNRY2_SAMEVAL", "abc-defgh"] {
+        for value in [
+            "p4ssw0rd!",
+            "sk-live-42ab",
+            "CNRY2_SAMEVAL",
+            "abc-defgh",
+            "8473629184736291",
+            "AbCdEfGhIjKlMnOpQrStUvWxYzAbCdEf",
+        ] {
             assert!(is_secret_like(value), "{value}");
         }
         for value in [
@@ -525,6 +641,7 @@ mod tests {
             "application",
             "abcdefghij",
             "12345678",
+            "123456789012345",
         ] {
             assert!(!is_secret_like(value), "{value}");
         }
@@ -559,10 +676,16 @@ mod tests {
             scan(&[("k", "SAME-VAL-42")], "/keys/SAME-VAL-42?x=1"),
             ("/keys/{{k}}?x=1".into(), 0)
         );
-        // Not on a boundary: kept, noted.
+        // Not on a boundary: redacted, noted.
         assert_eq!(
             scan(&[("k", "SAME-VAL-42")], "xSAME-VAL-42"),
-            ("xSAME-VAL-42".into(), 1)
+            ("x«redacted:k»".into(), 1)
+        );
+        // A token shape is matched anywhere, raw: same bytes sent.
+        let gh = "ghp_abcdefghijklmnopqrstuvwxyz0123456789";
+        assert_eq!(
+            scan(&[("g", gh)], &format!("abc{gh}")),
+            ("abc{{g}}".into(), 0)
         );
         // (c) not secret-like: kept, noted, whole or embedded.
         assert_eq!(
@@ -577,10 +700,20 @@ mod tests {
 
     #[test]
     fn encoded_forms_of_secret_like_values_are_found_too() {
-        let (out, _) = scan(&[("p", "p@ss/w0rd!")], "?p=p%40ss%2Fw0rd%21&q=\"p@ss\"");
-        assert_eq!(out, "?p={{p}}&q=\"p@ss\"");
+        // Encoded repeats would change the bytes sent as `{{name}}`: they
+        // are redacted, with a note.
+        let (out, notes) = scan(
+            &[("p", "p@ss/w0rd!")],
+            "?p=p%40ss%2Fw0rd%21&l=p%40ss%2fw0rd%21",
+        );
+        assert_eq!(out, "?p=«redacted:p»&l=«redacted:p»");
+        assert_eq!(notes, 1);
         let (out, _) = scan(&[("q", "ab\"c-1234")], r#"{"x": "ab\"c-1234"}"#);
-        assert_eq!(out, r#"{"x": "{{q}}"}"#);
+        assert_eq!(out, r#"{"x": "«redacted:q»"}"#);
+        let (out, _) = scan(&[("s", "ab/cd-1234")], r#"{"s": "ab\/cd-1234"}"#);
+        assert_eq!(out, r#"{"s": "«redacted:s»"}"#);
+        let (out, _) = scan(&[("h", "a&b<c>-1234")], "x=a&amp;b&lt;c&gt;-1234");
+        assert_eq!(out, "x=«redacted:h»");
     }
 
     #[test]
