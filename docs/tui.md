@@ -166,6 +166,7 @@ Everything the viewer shows is redacted with the exchange's secrets, as in histo
 - **Headers**: every response header in the order received, duplicates included (two `Set-Cookie` headers are two rows), then the request's captured variables with their new values; secret ones show `••••••••`.
 - **Timing**: a waterfall of the phases the engine measures (DNS, connect, TLS, waiting for the first byte, download), each bar placed and sized by its share of the total, with its duration. Phases that did not happen, such as DNS, connect and TLS on a reused connection, show `—`. Below it, a sparkline of the total times of the last 30 exchanges of the same request file from history, the newest highlighted, with the min, median, p95 and max; with fewer than two exchanges it says `not enough history`.
 - **Assertions**: each assertion as passed or failed, with the expected and actual values of failures (`✖ failed status == 200 · expected 200 · actual 404`).
+- **Snapshot** (only when a [snapshot](snapshots.md#reviewing-in-the-tui) failed, is missing or was just recorded): each snapshot with its file and diff. `a` approves (writes the received snapshot) and `r` rejects (keeps the stored file); `Alt+A` opens a queue over every failing snapshot in the open tabs. Approving is disabled in CI mode (`CI=true`).
 
 `D` diffs the current exchange against an earlier one: a picker lists the exchanges in history, those of the same request first (`Enter` picks, `Esc` closes), and the diff compares the status, the headers and the body. JSON bodies are compared by path with key order ignored, so `{"a":1,"b":2}` against `{"b":3,"a":1}` reports only `$.b: 2 → 3`; other bodies are compared line by line.
 
@@ -367,6 +368,7 @@ The table below is generated from the action registry; a test fails if it drifts
 | Stop GraphQL subscription | `graphql.subscription_stop` | `Alt+X` |  |
 | Copy as… | `request.copy_as` | `Alt+C` |  |
 | Import… | `import.open` |  |  |
+| Review snapshots | `snapshot.review` | `Alt+A` |  |
 | Quit | `app.quit` | `Ctrl+Q` |  |
 
 In vim mode, text areas (the request body) are modal:

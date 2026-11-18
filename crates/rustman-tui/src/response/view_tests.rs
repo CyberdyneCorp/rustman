@@ -73,6 +73,7 @@ fn assertion(label: &str, passed: bool, expected: &str, actual: &str) -> Asserti
         expected: Some(expected.into()),
         actual: Some(actual.into()),
         message: String::new(),
+        snapshot: None,
     }
 }
 

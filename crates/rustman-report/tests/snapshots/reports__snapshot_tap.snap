@@ -1,0 +1,25 @@
+---
+source: crates/rustman-report/tests/reports.rs
+expression: tap(&run)
+---
+TAP version 14
+1..4
+ok 1 - users/new
+# snapshot default recorded: users/__snapshots__/get-user.default.snap.yaml
+ok 2 - users/changed
+# snapshot default updated: users/__snapshots__/get-user.default.snap.yaml
+not ok 3 - users/get-user
+  ---
+  status: failed
+  file: "users/get-user.rman.yaml"
+  reasons:
+    - "snapshot mismatch: users/__snapshots__/get-user.default.snap.yaml\nchanged $.user.role: \"admin\" → \"viewer\""
+  ...
+not ok 4 - users/ci
+  ---
+  status: failed
+  file: "users/ci.rman.yaml"
+  reasons:
+    - "snapshot missing: users/__snapshots__/get-user.default.snap.yaml (run without --ci to record)"
+  ...
+# 1 snapshot recorded, 1 snapshot updated, 1 snapshot failed, 1 snapshot missing

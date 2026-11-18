@@ -74,6 +74,7 @@ pub struct GraphqlRequest {
     #[serde(default, deserialize_with = "duration")]
     pub duration: Option<Duration>,
     /// Checks of the result, HTTP and GraphQL ones (`no_errors`, `data`...).
+    #[serde(default, deserialize_with = "super::snapshot::unique_snapshot_names")]
     pub assertions: Option<Vec<Assertion>>,
     /// Values taken from the result for later requests, such as
     /// `$.data.login.token`.

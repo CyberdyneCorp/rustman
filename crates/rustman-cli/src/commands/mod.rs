@@ -16,6 +16,7 @@ pub mod report;
 pub mod run;
 pub mod secret;
 pub mod send;
+pub mod snapshot;
 pub mod tui;
 pub mod webhook;
 

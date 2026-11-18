@@ -82,6 +82,8 @@ pub struct RunArgs {
 
 pub fn run(args: &RunArgs) -> Result<u8, CliError> {
     one_stdout_reporter(&args.reporter, &args.report)?;
+    // Checked before anything else, so the usage error comes first.
+    args.flags.snapshot_mode()?;
     let ws = args.selection.workspace()?;
     let env = args.selection.environment(&ws)?;
     let cwd = current_dir()?;
@@ -197,7 +199,11 @@ fn usage(message: String) -> ConfigError {
 
 /// The run paths relative to the workspace root. Every path must exist and
 /// lie inside the workspace.
-fn scopes(ws: &Workspace, cwd: &Path, paths: &[PathBuf]) -> Result<Vec<PathBuf>, ConfigError> {
+pub(super) fn scopes(
+    ws: &Workspace,
+    cwd: &Path,
+    paths: &[PathBuf],
+) -> Result<Vec<PathBuf>, ConfigError> {
     let root = dunce::canonicalize(&ws.root).map_err(|e| ConfigError::Io {
         path: ws.root.clone(),
         source: e,
@@ -288,5 +294,5 @@ fn write_targets(targets: &[ReportTarget], record: &RunRecord) -> Result<(), Cli
     if targets.is_empty() {
         return Ok(());
     }
-    super::report::write_all(targets, &Report::Run(RunReport::new(record)))
+    super::report::write_all(targets, &Report::Run(Box::new(RunReport::new(record))))
 }

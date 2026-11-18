@@ -6,6 +6,9 @@ use rustman_core::run::{
     DataRowRecord, ExchangeRecord, HeaderRecord, RequestRecord, RequestStatus, ResponseRecord,
     RunRecord, SentRequest, SkipReason, Summary, TimingsRecord,
 };
+use rustman_core::snapshot::{
+    Change, ChangeKind, SnapshotCounts, SnapshotDiff, SnapshotResult, SnapshotState,
+};
 use rustman_report::{Format, KIND_RUN, Reporter, SCHEMA, json, junit, pretty, pretty_styled, tap};
 
 fn exchange(method: &str, status: u16) -> ExchangeRecord {
@@ -58,6 +61,7 @@ fn run() -> RunRecord {
         expected: Some("201".into()),
         actual: Some("404".into()),
         message: "status: expected 201, got 404".into(),
+        snapshot: None,
     });
     let errored = record("users/slow", RequestStatus::Errored)
         .errored("timeout after 500 ms (response)".into());
@@ -418,4 +422,172 @@ fn reporters_write_devices_in_place_and_follow_symlinks() {
     reporter.write(&run()).unwrap();
     assert!(link.is_symlink());
     assert_eq!(std::fs::read_to_string(&real).unwrap(), json(&run()));
+}
+
+/// A snapshot assertion result in `state`, with `message` and `diff`.
+fn snapshot(state: SnapshotState, message: &str, diff: Option<SnapshotDiff>) -> AssertionResult {
+    let passed = state.passed();
+    AssertionResult {
+        kind: "snapshot",
+        outcome: if passed { Outcome::Pass } else { Outcome::Fail },
+        label: "snapshot default".into(),
+        expected: None,
+        actual: None,
+        message: message.into(),
+        snapshot: Some(SnapshotResult {
+            name: "default".into(),
+            state,
+            path: "users/__snapshots__/get-user.default.snap.yaml".into(),
+            diff,
+        }),
+    }
+}
+
+const FAILED: &str = "snapshot mismatch: users/__snapshots__/get-user.default.snap.yaml\n\
+                      changed $.user.role: \"admin\" → \"viewer\"";
+
+/// A run with a recorded, an updated, a failed and a missing snapshot.
+fn snapshot_run() -> RunRecord {
+    let diff = SnapshotDiff {
+        changes: vec![Change {
+            path: "$.user.role".into(),
+            kind: ChangeKind::Changed,
+            old: Some(serde_json::json!("admin")),
+            new: Some(serde_json::json!("viewer")),
+        }],
+        ..SnapshotDiff::default()
+    };
+    let missing = "snapshot missing: users/__snapshots__/get-user.default.snap.yaml \
+                   (run without --ci to record)";
+    let cases = [
+        (
+            "users/new",
+            RequestStatus::Passed,
+            snapshot(SnapshotState::Recorded, "", None),
+        ),
+        (
+            "users/changed",
+            RequestStatus::Passed,
+            snapshot(SnapshotState::Updated, "", Some(diff.clone())),
+        ),
+        (
+            "users/get-user",
+            RequestStatus::Failed,
+            snapshot(SnapshotState::Failed, FAILED, Some(diff)),
+        ),
+        (
+            "users/ci",
+            RequestStatus::Failed,
+            snapshot(SnapshotState::Missing, missing, None),
+        ),
+    ];
+    let requests: Vec<RequestRecord> = cases
+        .into_iter()
+        .map(|(id, status, assertion)| {
+            let mut r = record(id, status);
+            r.exchange = Some(exchange("GET", 200));
+            r.assertions.push(assertion);
+            r
+        })
+        .collect();
+    RunRecord {
+        started_at: "2026-11-17T09:30:00.123Z".into(),
+        environment: None,
+        summary: Summary::of(&requests, 9.0, false),
+        requests,
+    }
+}
+
+#[test]
+fn snapshot_outcomes_appear_in_every_reporter() {
+    let run = snapshot_run();
+    insta::assert_snapshot!("snapshot_pretty", pretty(&run));
+    insta::assert_snapshot!(
+        "snapshot_pretty_styled",
+        pretty_styled(&run).replace('\x1b', "\\e")
+    );
+    insta::assert_snapshot!("snapshot_junit", junit(&run));
+    insta::assert_snapshot!("snapshot_tap", tap(&run));
+    insta::assert_snapshot!("snapshot_json", json_snapshot(&run));
+    assert_eq!(strip_ansi(&pretty_styled(&run)), pretty(&run));
+}
+
+#[test]
+fn the_snapshot_summary_counts_every_state() {
+    let snapshots = snapshot_run();
+    let counts = snapshots.summary.snapshots;
+    assert_eq!(
+        counts,
+        SnapshotCounts {
+            matched: 0,
+            recorded: 1,
+            updated: 1,
+            failed: 1,
+            missing: 1
+        }
+    );
+    assert!(pretty(&snapshots).contains(
+        "1 snapshot recorded, 1 snapshot updated, 1 snapshot failed, 1 snapshot missing\n"
+    ));
+    assert!(
+        !pretty(&run()).contains("snapshot"),
+        "absent without snapshots"
+    );
+}
+
+#[test]
+fn json_snapshot_fields_validate_against_the_published_schema() {
+    let report: serde_json::Value = serde_json::from_str(&json(&snapshot_run())).unwrap();
+    let errors: Vec<String> = schema()
+        .iter_errors(&report)
+        .map(|e| e.to_string())
+        .collect();
+    assert!(errors.is_empty(), "{errors:#?}");
+    assert_eq!(report["summary"]["snapshots"]["recorded"], 1);
+    let failed = &report["requests"][2]["assertions"][0];
+    assert_eq!(failed["kind"], "snapshot");
+    assert_eq!(failed["snapshot"]["state"], "failed");
+    assert_eq!(
+        failed["snapshot"]["path"],
+        "users/__snapshots__/get-user.default.snap.yaml"
+    );
+    assert_eq!(
+        failed["snapshot"]["diff"]["changes"][0]["path"],
+        "$.user.role"
+    );
+    let mut bad = report.clone();
+    bad["requests"][2]["assertions"][0]["snapshot"]["state"] = "approved".into();
+    assert!(!schema().is_valid(&bad), "states are an enum");
+    let read_back = rustman_report::Report::parse(&report.to_string()).unwrap();
+    let rustman_report::Report::Run(read_back) = read_back else {
+        panic!("a run report");
+    };
+    assert_eq!(
+        read_back.summary.snapshots,
+        snapshot_run().summary.snapshots
+    );
+}
+
+#[test]
+fn junit_puts_the_snapshot_diff_in_the_failure_message() {
+    let xml = junit(&snapshot_run());
+    let doc = roxmltree::Document::parse(&xml).expect("well-formed XML");
+    let failure = doc
+        .descendants()
+        .find(|n| n.has_tag_name("failure"))
+        .unwrap();
+    let message = failure.attribute("message").unwrap();
+    assert!(
+        message.contains("changed $.user.role: \"admin\" → \"viewer\""),
+        "{message}"
+    );
+    let out = doc
+        .descendants()
+        .find(|n| n.has_tag_name("system-out"))
+        .and_then(|n| n.text())
+        .unwrap();
+    assert_eq!(
+        out,
+        "snapshot default recorded: users/__snapshots__/get-user.default.snap.yaml"
+    );
 }

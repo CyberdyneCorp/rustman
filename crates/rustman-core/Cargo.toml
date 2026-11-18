@@ -21,6 +21,8 @@ serde.workspace = true
 serde-saphyr.workspace = true
 serde_json.workspace = true
 serde_json_path.workspace = true
+sha2.workspace = true
+similar.workspace = true
 jsonschema.workspace = true
 regex.workspace = true
 thiserror.workspace = true
@@ -46,6 +48,7 @@ futures-lite.workspace = true
 
 [dev-dependencies]
 futures-lite.workspace = true
+proptest.workspace = true
 tempfile.workspace = true
 
 [lints]

@@ -9,6 +9,7 @@ use rustman_core::run::{
     DataRowRecord, ExchangeRecord, HeaderRecord, RequestRecord, RequestStatus, RunRecord,
     SentRequest, SkipReason, Summary,
 };
+use rustman_core::snapshot::{SnapshotCounts, SnapshotResult};
 use serde::{Deserialize, Serialize};
 
 use crate::SCHEMA;
@@ -37,6 +38,9 @@ pub struct RunSummary {
     pub skipped: usize,
     pub duration_ms: f64,
     pub interrupted: bool,
+    /// How the run's snapshot assertions ended (additive); absent without any.
+    #[serde(default, skip_serializing_if = "SnapshotCounts::is_empty")]
+    pub snapshots: SnapshotCounts,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -132,6 +136,9 @@ pub struct Assertion {
     pub expected: Option<String>,
     pub actual: Option<String>,
     pub message: String,
+    /// A `snapshot` assertion's state, file and structured diff (additive).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snapshot: Option<SnapshotResult>,
 }
 
 impl Assertion {
@@ -200,6 +207,18 @@ impl RunRequest {
     }
 }
 
+impl RunRequest {
+    /// The snapshots this request recorded or updated, one line each.
+    pub fn snapshot_notes(&self) -> Vec<String> {
+        self.assertions
+            .iter()
+            .filter_map(|a| a.snapshot.as_ref())
+            .filter(|s| s.wrote())
+            .map(SnapshotResult::note)
+            .collect()
+    }
+}
+
 impl Assertion {
     /// As a failure lists it (the `Display` of [`AssertionResult`]).
     fn reason(&self) -> String {
@@ -220,6 +239,7 @@ fn summary(s: &Summary) -> RunSummary {
         skipped: s.skipped,
         duration_ms: s.duration_ms,
         interrupted: s.interrupted,
+        snapshots: s.snapshots,
     }
 }
 
@@ -311,6 +331,7 @@ fn assertion(a: &AssertionResult) -> Assertion {
         expected: a.expected.clone(),
         actual: a.actual.clone(),
         message: a.message.clone(),
+        snapshot: a.snapshot.clone(),
     }
 }
 

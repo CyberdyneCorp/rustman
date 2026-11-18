@@ -32,6 +32,7 @@ pub struct HttpRequest {
     pub auth: Option<Auth>,
     pub settings: Option<RequestSettings>,
     pub variables: Option<Variables>,
+    #[serde(default, deserialize_with = "super::snapshot::unique_snapshot_names")]
     pub assertions: Option<Vec<Assertion>>,
     pub captures: Option<Vec<Checked<Capture>>>,
 }

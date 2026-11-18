@@ -387,9 +387,10 @@ It exits 0 on success, 3 when the server cannot be reached or refuses introspect
 rustman graphql query <request | --endpoint <url> --query <text>> [--env <name>] [--var k=v]...
                       [--no-validate] [--json] [--max-events <n>] [--duration <duration>]
                       [--timeout <duration>] [--insecure] [--no-history]
+                      [-u | --update-snapshots] [--ci]
 ```
 
-Validates the operation, sends it and prints the result. The request is a graphql request file, its id or its name; `--endpoint` with `--query` sends an ad-hoc operation without a workspace (a `ws://` or `wss://` endpoint subscribes over WebSocket). `--no-validate` sends even when validation fails. The request's assertions are checked and the exchange is recorded in history, as in `rustman run`.
+Validates the operation, sends it and prints the result. The request is a graphql request file, its id or its name; `--endpoint` with `--query` sends an ad-hoc operation without a workspace (a `ws://` or `wss://` endpoint subscribes over WebSocket). `--no-validate` sends even when validation fails. The request's assertions are checked and the exchange is recorded in history, as in `rustman run`; [snapshots](snapshots.md#recording-updating-and-ci) honor `--update-snapshots`, `--ci` and the `CI` variable the same way.
 
 The output starts with the HTTP status, the result status and the time, then `data`, `errors` and `extensions` apart; a subscription prints its protocol, event count and why it ended, the failure when there is one (`failed: ...`), then each event. Everything is redacted. `--json` prints one JSON object instead (`status`, `result`, `data`, `errors`, `extensions`, `apq`, or for a subscription `protocol`, `ended`, `event_count`, `failure` and `events`).
 

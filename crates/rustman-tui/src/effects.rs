@@ -110,6 +110,7 @@ fn execute_other(effect: Effect) -> Action {
         Effect::GraphqlSchema(job) => graphql_schema::execute(&job),
         Effect::Snippet(job) => crate::copy_as::execute(&job),
         Effect::Import(job) => crate::import_dialog::execute(&job),
+        Effect::ApproveSnapshot(job) => crate::review::execute(&job),
         other => Action::Abort(Abort::Failed(format!("unexpected effect {other:?}"))),
     }
 }

@@ -23,6 +23,7 @@ pub mod safety;
 pub mod secret;
 pub mod secrets;
 pub mod settings;
+pub mod snapshot;
 pub mod vars;
 pub mod workspace;
 

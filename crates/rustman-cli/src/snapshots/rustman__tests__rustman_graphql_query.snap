@@ -47,6 +47,12 @@ Options:
       --no-history
           Do not record the exchanges in history
 
+  -u, --update-snapshots
+          Overwrite snapshots that differ from the response (not in CI mode)
+
+      --ci
+          CI mode: never write snapshots, and fail on a missing one (also on when the CI variable is true or 1)
+
       --color <WHEN>
           Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
           

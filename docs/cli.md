@@ -47,9 +47,11 @@ This page covers sending and running requests, reporters, terminal behavior, log
 | `rustman history clear` | Delete every recorded exchange | [History](history.md#retention) |
 | `rustman mcp serve` | Serve the workspace to AI agents over MCP: stdio by default, or Streamable HTTP with `--http [<addr>]`, `--allow-remote` and `--token-file` | [Agents (MCP)](agent.md) |
 | `rustman completions <shell>` | Print a shell completion script | [below](#completions) |
+| `rustman snapshot list [path]` | List snapshot files with their request, name and state (`ok`, `orphaned`, `unreferenced name`); `--json` | [Snapshots](snapshots.md#listing-and-pruning) |
+| `rustman snapshot prune [path]` | Delete snapshot files no request uses anymore; `--yes`, `--dry-run` | [Snapshots](snapshots.md#listing-and-pruning) |
 | `rustman webhook listen` | Capture inbound webhooks on a local port, answer with mocks, check signatures and print the event log; `--host`, `--port`, `--allow-remote`, `--max-body`, `--max-captures`, `--jsonl`, `--env`, `--workspace` | [Webhook inspector](webhooks.md) |
 
-The command groups `rustman env`, `rustman secret`, `rustman cookies`, `rustman auth`, `rustman import`, `rustman export`, `rustman explore`, `rustman report`, `rustman graphql`, `rustman history`, `rustman mcp` and `rustman webhook` only hold the commands above: on their own they print their subcommands and exit with 2. `rustman import` also takes a source file or folder directly (`rustman import export.json`), which is the same as `rustman import auto export.json`.
+The command groups `rustman env`, `rustman secret`, `rustman cookies`, `rustman auth`, `rustman import`, `rustman export`, `rustman explore`, `rustman report`, `rustman graphql`, `rustman history`, `rustman mcp`, `rustman snapshot` and `rustman webhook` only hold the commands above: on their own they print their subcommands and exit with 2. `rustman import` also takes a source file or folder directly (`rustman import export.json`), which is the same as `rustman import auto export.json`.
 
 `rustman --help` and `rustman <command> --help` document every flag; `rustman --version` prints `rustman <version>`, such as `rustman 0.1.0`.
 
@@ -66,6 +68,7 @@ These work before or after the command name (`rustman -v run .` or `rustman run 
 
 ```text
 rustman send <REQUEST> [--env <name>] [--var k=v]... [--timeout <duration>] [--insecure] [--body-only | -o <file>] [--show-secrets]
+             [-u | --update-snapshots] [--ci]
 rustman send <METHOD> <URL> [-H 'K: V']... [-d <body> | --json <body>] [same flags]
 rustman send <URL>                                    # an ad-hoc GET
 ```
@@ -93,7 +96,7 @@ rustman send get-user --env staging --body-only | jq .id
 rustman send logo --env staging -o logo.png
 ```
 
-The request's assertions and captures run as in `rustman run`. Failed assertions are listed on stderr (`fail: status: expected 200, got 404`) and the exit code is 1; a request that gets no response prints `error: <reason>` and exits with 3.
+The request's assertions and captures run as in `rustman run`. Failed assertions are listed on stderr (`fail: status: expected 200, got 404`) and the exit code is 1; a request that gets no response prints `error: <reason>` and exits with 3. [Snapshot assertions](snapshots.md#recording-updating-and-ci) are recorded, compared and updated as in `rustman run`, with the same `--update-snapshots` (`-u`) and `--ci` flags and the same `CI` variable; a recorded or updated snapshot is noted on stderr (`snapshot default recorded: users/__snapshots__/get-user.default.snap.yaml`).
 
 ### Ad-hoc requests
 
@@ -120,7 +123,7 @@ rustman run [<PATH>...] [--env <name>] [--var k=v]... [--timeout <duration>] [--
             [--bail[=iteration]] [--filter <tag:name | glob>]... [--iterations <n>] [--parallel <n>]
             [--data <file> | --no-data] [--data-label <column>] [--secret-columns <a,b>]
             [--reporter <format>[:<path>]]... [--report <format>[=<path>]]...
-            [--max-events <n>] [--duration <duration>]
+            [--max-events <n>] [--duration <duration>] [-u | --update-snapshots] [--ci]
 ```
 
 Runs every request file (`kind: http` and [`kind: graphql`](graphql.md#in-rustman-run)) under the given files and folders (default: the current folder), in collection order: file-name order, or the folder's `_collection.yaml` `order:` (see [collections](request-files.md)). Paths must exist and lie inside the workspace. Values captured by one request are available to every later request of the run.
@@ -143,6 +146,8 @@ Runs every request file (`kind: http` and [`kind: graphql`](graphql.md#in-rustma
 | `--report <format>[=<path>]` | Also render the canonical report as `json`, `junit`, `markdown`, `html` or `sarif` (repeatable), to `<path>` or stdout; see [Reports](reports.md). With a `--report` on stdout and no `--reporter`, the `pretty` report is not printed. At most one reporter or report may write to stdout. |
 | `--max-events <n>` | GraphQL subscriptions stop after `n` events, replacing each request's `max_events` (default 10). |
 | `--duration <duration>` | GraphQL subscriptions stop after this long, replacing each request's `duration` (default `30s`). |
+| `--update-snapshots`, `-u` | Overwrite [snapshots](snapshots.md) that differ from the response and report them `updated`; matching files are left untouched. |
+| `--ci` | CI mode: never write snapshots, and fail a request whose snapshot is missing. Also on when the `CI` environment variable is `true` or `1`. Combined with `--update-snapshots` it is a usage error (exit code 2): `--update-snapshots cannot be used in CI mode`. |
 
 A filter or path that selects no request fails with `error: no requests to run (check the paths and --filter)` (exit code 2).
 
@@ -208,6 +213,8 @@ not ok 2 - users/create
 ```
 
 Every reporter writes from the same redacted records: secret values and sensitive headers appear as `«redacted:<name>»` in all of them.
+
+Runs with [`snapshot` assertions](snapshots.md#in-reports) add a summary line such as `1 snapshot recorded, 1 snapshot failed` to `pretty`, a `snapshot` object to each snapshot assertion and `summary.snapshots` to `json`, the diff to the JUnit failure message, and `#` comments to `tap`.
 
 ## Exit codes
 

@@ -10,8 +10,10 @@ use clap::Args;
 use rustman_core::Workspace;
 use rustman_core::history::HistoryStore;
 use rustman_core::model::Variables;
+use rustman_core::run::RequestRecord;
 use rustman_core::secrets::BACKEND_VAR;
 use rustman_core::settings::{HistorySettings, Settings};
+use rustman_core::snapshot::{CI_ENV, SnapshotMode};
 use rustman_core::vars::parse_overrides;
 use rustman_core::{ConfigError, SecretBackend, SecretStore};
 use rustman_http::RequestError;
@@ -34,6 +36,13 @@ pub struct SendFlags {
     /// Do not record the exchanges in history
     #[arg(long)]
     pub no_history: bool,
+    /// Overwrite snapshots that differ from the response (not in CI mode)
+    #[arg(short = 'u', long)]
+    pub update_snapshots: bool,
+    /// CI mode: never write snapshots, and fail on a missing one (also on
+    /// when the CI variable is true or 1)
+    #[arg(long)]
+    pub ci: bool,
 }
 
 impl SendFlags {
@@ -45,8 +54,30 @@ impl SendFlags {
             timeout: self.timeout,
             insecure: self.insecure,
             login: login_mode(),
+            snapshots: self.snapshot_mode()?,
             ..RunOptions::default()
         })
+    }
+
+    /// How snapshot files are treated: `--update-snapshots`, `--ci` and the
+    /// `CI` variable; updating in CI mode is a usage error.
+    pub fn snapshot_mode(&self) -> Result<SnapshotMode, ConfigError> {
+        let ci_env = std::env::var(CI_ENV).ok();
+        SnapshotMode::detect(self.update_snapshots, self.ci, ci_env.as_deref())
+            .map_err(|message| ConfigError::Usage(message.to_owned()))
+    }
+}
+
+/// Print, on stderr, each snapshot a sent request recorded or updated, such
+/// as `snapshot default recorded: users/__snapshots__/get-user.default.snap.yaml`.
+pub fn print_snapshot_notes(record: &RequestRecord) {
+    let written = record
+        .assertions
+        .iter()
+        .filter_map(|a| a.snapshot.as_ref())
+        .filter(|s| s.wrote());
+    for snapshot in written {
+        eprintln!("{}", snapshot.note());
     }
 }
 

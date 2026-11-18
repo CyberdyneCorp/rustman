@@ -1,0 +1,29 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+List the snapshot files with their request, name and state (ok, orphaned or unreferenced name)
+
+Usage: rustman snapshot list [OPTIONS] [PATH]
+
+Arguments:
+  [PATH]
+          A folder or request file to limit the listing to (default: the whole workspace)
+
+Options:
+      --json
+          Print a JSON array instead of one line per snapshot
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

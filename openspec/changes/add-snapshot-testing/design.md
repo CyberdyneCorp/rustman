@@ -45,7 +45,7 @@ Deleting tracked files needs `--yes` or a TTY confirmation, and non-interactive 
 ## Risks / Trade-offs
 
 - [Over-broad ignore rules hide real regressions] → `snapshot list --json` and reports include the rules in effect, and placeholders stay visible in files and diffs.
-- [Locale or timezone-dependent responses flap] → the `timestamps` and `dates` presets are on by default, and users can add `replace` rules.
+- [Locale or timezone-dependent responses flap] → the `timestamps` and `uuids` presets are on by default (the `dates` preset is opt-in), and users can add `replace` rules.
 - [Large bodies make huge snapshot files] → bodies above 1 MiB after normalization are stored as `{size, sha256}`, with a warning suggesting `ignore` rules.
 - [Approving in the TUI while a run is writing] → snapshot writes go through the same atomic temp-file-and-rename path with a per-file lock.
 

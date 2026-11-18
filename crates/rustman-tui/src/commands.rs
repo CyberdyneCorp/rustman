@@ -13,7 +13,7 @@ use crate::shell::{self, Command};
 use crate::status::VimMode;
 use crate::toast::Severity;
 use crate::tree::{self, Filter};
-use crate::{copy_as, graphql, import_dialog, reveal, send, viewer_keys, viz, workbench};
+use crate::{copy_as, graphql, import_dialog, reveal, review, send, viewer_keys, viz, workbench};
 
 /// Handle a key while the shell is showing.
 pub fn shell_key(state: &mut State, chord: Chord) -> Vec<Effect> {
@@ -29,7 +29,10 @@ pub fn shell_key(state: &mut State, chord: Chord) -> Vec<Effect> {
             Vec::new()
         }
         Some(Overlay::Import(_)) => import_dialog::key(state, chord),
-        _ => match crate::webhook::key(state, chord).or_else(|| viewer_keys::box_key(state, chord))
+        Some(Overlay::SnapshotQueue(_)) => review::queue_key(state, chord),
+        _ => match crate::webhook::key(state, chord)
+            .or_else(|| viewer_keys::box_key(state, chord))
+            .or_else(|| review::key(state, chord))
         {
             Some(effects) => effects,
             None => {
@@ -255,6 +258,7 @@ pub fn run(state: &mut State, action: ActionId) -> Vec<Effect> {
         ActionId::ImportOpen => import_dialog::open(state),
         ActionId::VizOpen => return viz::start(state),
         ActionId::WebhookOpen => crate::webhook::toggle_pane(state),
+        ActionId::SnapshotReview => review::open_queue(state),
         ActionId::ReportHtml => return crate::response::html::start(state),
         ActionId::GraphqlRefreshSchema => return graphql::refresh(state),
         ActionId::GraphqlSubscriptionStart => return graphql::start_subscription(state),

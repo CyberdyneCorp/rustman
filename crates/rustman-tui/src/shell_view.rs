@@ -177,6 +177,7 @@ pub fn overlay(frame: &mut Frame, state: &State) {
             crate::copy_as_view::pane(frame, frame.area(), pane, &state.ui);
         }
         Some(Overlay::Import(dialog)) => crate::import_dialog::render(frame, dialog, &state.ui),
+        Some(Overlay::SnapshotQueue(queue)) => crate::review::render_queue(frame, state, queue),
     }
 }
 

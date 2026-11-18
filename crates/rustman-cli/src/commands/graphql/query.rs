@@ -19,7 +19,8 @@ use rustman_http::runner::{RunContext, Runner, Sent};
 
 use super::{is_url, print};
 use crate::commands::exec::{
-    SendFlags, cancel_on_ctrl_c, history_store, parse_duration, runtime, secret_store,
+    SendFlags, cancel_on_ctrl_c, history_store, parse_duration, print_snapshot_notes, runtime,
+    secret_store,
 };
 use crate::commands::{EnvSelection, current_dir, print_warnings};
 use crate::exit::{ASSERTION, CliError, INTERRUPTED, REQUEST, SUCCESS};
@@ -160,6 +161,7 @@ fn send(
     }
     print_warnings(&store.take_warnings());
     print_warnings(&sent.record.warnings);
+    print_snapshot_notes(&sent.record);
     finish(args, &sent, cancel.is_cancelled())
 }
 

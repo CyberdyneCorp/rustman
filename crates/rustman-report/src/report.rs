@@ -13,7 +13,8 @@ const SUPPORTED_MAJORS: [u32; 1] = [1];
 /// A report of either kind.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Report {
-    Run(RunReport),
+    /// Boxed, like an exploration report, so the enum stays small.
+    Run(Box<RunReport>),
     /// Boxed: an exploration report is several times larger than a run's.
     Exploration(Box<ExplorationReport>),
 }
@@ -47,7 +48,7 @@ impl Report {
         check_version(schema)?;
         match value.get("kind").and_then(serde_json::Value::as_str) {
             Some(KIND_RUN) => serde_json::from_value(value)
-                .map(Self::Run)
+                .map(|r| Self::Run(Box::new(r)))
                 .map_err(|error| ReadError::Invalid {
                     kind: KIND_RUN,
                     error,

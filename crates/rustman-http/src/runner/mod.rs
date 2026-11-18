@@ -23,6 +23,7 @@ mod graphql;
 mod history;
 mod record;
 mod seed;
+mod snapshots;
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -37,6 +38,7 @@ use rustman_core::run::{
     DataRowRecord, DataRun, Plan, RequestRecord, RunRecord, Summary, now_rfc3339,
 };
 use rustman_core::settings::Settings;
+use rustman_core::snapshot::{SnapshotMode, SnapshotReview};
 use rustman_core::vars::ResolvedRequest;
 use rustman_core::{Environment, Redactor, SecretStore};
 use tokio::sync::Semaphore;
@@ -108,6 +110,9 @@ pub struct RunOptions<'a> {
     /// Sends `kind: graphql` requests; without one they are skipped as an
     /// unsupported kind.
     pub graphql: Option<&'a dyn GraphqlExecutor>,
+    /// How `snapshot` assertions treat their files: record, update
+    /// (`--update-snapshots`) or CI (`--ci`, `CI=true`).
+    pub snapshots: SnapshotMode,
     /// Sends every request instead of the engine; `None` for the CLI and
     /// the TUI.
     pub gate: Option<&'a dyn SendGate>,
@@ -143,6 +148,7 @@ impl Default for RunOptions<'_> {
             ad_hoc: false,
             graphql: None,
             gate: None,
+            snapshots: SnapshotMode::Record,
         }
     }
 }
@@ -169,6 +175,9 @@ pub struct Sent {
     /// Every secret of the run, and the credentials of this exchange: what
     /// printing the response must redact.
     pub redactor: Redactor,
+    /// The failed, missing and new snapshots of this exchange, for a review
+    /// after the send (redacted).
+    pub snapshots: Vec<SnapshotReview>,
 }
 
 impl Sent {

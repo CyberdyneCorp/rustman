@@ -1,0 +1,34 @@
+---
+source: crates/rustman-tui/src/review_tests.rs
+expression: screen(&mut state)
+---
+┌ untitled ────────────────────────────────────────────────────────────────────────────────────────┐
+│ GET      Type a URL, e.g. {{base_url}}/users                                                     │
+│ Params  Headers  Body  Auth  Assertions                                                          │
+│ No rows · press a to add                                                                         │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌ › Response ──────────────────────────────────────────────────────────────────────────────────────┐
+│ ✔ 200 OK · 84 ms · 22 B                                                                          │
+│  Body  Headers  Timing  Assertions  Snapshot                                                     │
+│ snapshot default failed · users/__snapshots__/get-user.default.snap.yaml · rejected              │
+│ changed $.name: "Bob" → "Ana"                                                                    │
+│ added $.role: "admin"                                                                            │
+│                                                                                                  │
+│ a approve · r reject · Alt+A review all                                                          │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ Scratch session │ no environment │ TLS verified │ 0 in flight                          Ctrl+Q quit

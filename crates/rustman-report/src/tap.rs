@@ -1,17 +1,21 @@
 //! The TAP report (Test Anything Protocol, version 14): one test point per
 //! request, with a YAML diagnostic block listing why a request did not pass.
+//! Recorded and updated snapshots, and the snapshot counts, are comments.
 
 use std::fmt::Write as _;
 
 use rustman_core::run::{RequestRecord, RequestStatus, RunRecord};
 
-use crate::pretty::reasons;
+use crate::pretty::{reasons, snapshot_notes};
 
 /// `run` as a TAP version 14 stream, ending in a newline.
 pub fn tap(run: &RunRecord) -> String {
     let mut out = format!("TAP version 14\n1..{}\n", run.requests.len());
     for (number, record) in (1..).zip(&run.requests) {
         point(&mut out, number, record);
+    }
+    if let Some(line) = run.summary.snapshots.line() {
+        let _ = writeln!(out, "# {line}");
     }
     if run.summary.interrupted {
         out.push_str("Bail out! interrupted: the results are partial\n");
@@ -44,6 +48,10 @@ fn point(out: &mut String, number: usize, record: &RequestRecord) {
         RequestStatus::Failed | RequestStatus::Errored
     ) {
         diagnostics(out, record);
+    }
+    // Comments: TAP consumers show them without counting them.
+    for note in snapshot_notes(record) {
+        let _ = writeln!(out, "# {note}");
     }
 }
 

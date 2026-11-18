@@ -1,0 +1,15 @@
+version: 1
+kind: http
+name: Get user snapshot
+url: '{{base_url}}/users/1'
+assertions:
+  - status: 200
+  - snapshot
+  - snapshot:
+      name: headers
+      compare:
+        - status
+        - headers
+      replace:
+        - pattern: ORD-\d+
+          with: ORD-«n»

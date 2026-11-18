@@ -91,10 +91,43 @@ fn line(out: &mut String, record: &RequestRecord, styled: bool) {
         (None, None) => {}
     }
     out.push('\n');
-    let dim = Style::new().dimmed();
     for reason in reasons(record) {
-        let _ = writeln!(out, "      {}", paint(&reason, dim, styled));
+        reason_lines(out, &reason, styled);
     }
+    let dim = Style::new().dimmed();
+    for note in snapshot_notes(record) {
+        let _ = writeln!(out, "      {}", paint(&note, dim, styled));
+    }
+}
+
+/// One reason, indented under its request. The lines after the first (a
+/// snapshot diff) keep the indentation; removed and added lines of a text
+/// diff are red and green.
+fn reason_lines(out: &mut String, reason: &str, styled: bool) {
+    let dim = Style::new().dimmed();
+    for (index, text) in reason.lines().enumerate() {
+        let style = match text.chars().next() {
+            Some('-') if index > 0 && !text.starts_with("---") => color(AnsiColor::Red),
+            Some('+') if index > 0 && !text.starts_with("+++") => color(AnsiColor::Green),
+            _ => dim,
+        };
+        let _ = writeln!(out, "      {}", paint(text, style, styled));
+    }
+}
+
+fn color(color: AnsiColor) -> Style {
+    Style::new().fg_color(Some(color.into()))
+}
+
+/// The snapshots a request recorded or updated, one line each.
+pub(crate) fn snapshot_notes(record: &RequestRecord) -> Vec<String> {
+    record
+        .assertions
+        .iter()
+        .filter_map(|a| a.snapshot.as_ref())
+        .filter(|s| s.wrote())
+        .map(|s| s.note())
+        .collect()
 }
 
 /// Why a request did not pass: its error, failed assertions and warnings.
@@ -126,6 +159,10 @@ fn summary(summary: &Summary) -> String {
         summary.skipped,
         summary.duration_ms
     );
+    if let Some(line) = summary.snapshots.line() {
+        text.push_str(&line);
+        text.push('\n');
+    }
     if summary.interrupted {
         text.push_str("interrupted: the results are partial\n");
     }

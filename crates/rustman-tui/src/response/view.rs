@@ -313,6 +313,7 @@ pub fn tab_lines(
         ResponseTab::Headers => header_lines(received, ui),
         ResponseTab::Timing => timing_lines(received, width, ui),
         ResponseTab::Assertions => assertion_lines(&received.record, ui),
+        ResponseTab::Snapshot => crate::review::lines(&received.snapshots, ui),
         ResponseTab::Body => Vec::new(),
         tab => match &received.graphql {
             Some(view) => super::graphql::lines(view, tab.label(), ui),
