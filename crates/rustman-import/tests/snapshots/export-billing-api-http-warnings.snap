@@ -1,0 +1,11 @@
+---
+source: crates/rustman-import/tests/export.rs
+expression: "warnings.join(\"\\n\")"
+---
+export: billing-api/auth/login.rman.yaml: 1 assertions, 2 captures not exported (no equivalent)
+export: billing-api/users/list.rman.yaml: 2 assertions not exported (no equivalent)
+export: billing-api: prerequest script not exported
+export: billing-api/auth/login.rman.yaml: prerequest script not exported
+export: billing-api/auth/login.rman.yaml: test script not exported
+export: billing-api/users/list.rman.yaml: test script not exported
+export: billing-api/partner-token.rman.yaml: oauth2 auth not exported (no .http equivalent)

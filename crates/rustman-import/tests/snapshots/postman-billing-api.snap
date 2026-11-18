@@ -1,0 +1,233 @@
+---
+source: crates/rustman-import/tests/postman.rs
+expression: tree(&plan)
+---
+=== billing-api/auth/login.rman.yaml (create)
+# imported-script: prerequest (not executed)
+# pm.environment.set('apiSecret', '«redacted:apisecret»');
+# imported-script: test (not executed)
+# pm.test("logged in", () => pm.response.to.have.status(200));
+# pm.environment.set("token", pm.response.json().data.token);
+# pm.environment.set("refresh", pm.response.headers.get("X-Refresh"));
+version: 1
+kind: http
+name: Login
+method: POST
+url: '{{base_url}}/auth/login'
+headers:
+  - name: Content-Type
+    value: application/x-www-form-urlencoded
+body:
+  type: form
+  fields:
+    - name: username
+      value: billing-bot
+    - name: password
+      value: '{{password}}'
+auth:
+  type: none
+assertions:
+  - status: 200
+captures:
+  - var: token
+    from: json
+    path: $.data.token
+    persist: true
+  - var: refresh
+    from: header
+    name: X-Refresh
+    persist: true
+=== billing-api/auth/_collection.yaml (create)
+name: Auth
+order:
+  - login
+=== billing-api/users/list.rman.yaml (create)
+# imported-script: test (not executed)
+# pm.expect(pm.response.code).to.eql(200);
+# pm.response.to.have.header("X-Total-Count");
+version: 1
+kind: http
+name: List
+method: GET
+url: '{{base_url}}/users'
+query:
+  - name: page
+    value: '1'
+  - name: per_page
+    value: '50'
+headers:
+  - name: Accept
+    value: application/json
+  - name: X-API-Key
+    value: '{{x_api_key}}'
+assertions:
+  - status: 200
+  - header:
+      name: X-Total-Count
+      exists: true
+=== billing-api/users/create.rman.yaml (create)
+version: 1
+kind: http
+name: Create
+method: POST
+url: '{{base_url}}/users'
+headers:
+  - name: Content-Type
+    value: application/json
+  - name: Idempotency-Key
+    value: '{{$uuid}}'
+body:
+  type: json
+  content: |-
+    {
+      "name": "Ada",
+      "password": "{{password_2}}",
+      "city": "{{$randomCity}}",
+      "created": {{$timestamp}}
+    }
+=== billing-api/users/statement.rman.yaml (create)
+version: 1
+kind: http
+name: Statement
+method: GET
+url: https://admin:{{url_password}}@billing.example.com/v1/statements/{{token_2}}
+=== billing-api/users/delete.rman.yaml (create)
+version: 1
+kind: http
+name: Delete
+method: DELETE
+url: '{{base_url}}/users/{{id}}'
+variables:
+  id: '42'
+=== billing-api/users/_collection.yaml (create)
+name: Users
+order:
+  - list
+  - create
+  - statement
+  - delete
+=== billing-api/invoices/list-invoices.rman.yaml (create)
+version: 1
+kind: http
+name: List invoices
+method: GET
+url: '{{base_url}}/invoices'
+query:
+  - name: status
+    value: open
+headers:
+  - name: Authorization
+    value: Bearer {{authorization_token}}
+  - name: Cookie
+    value: '{{cookie}}'
+=== billing-api/invoices/upload-attachment.rman.yaml (create)
+version: 1
+kind: http
+name: Upload attachment
+method: POST
+url: '{{base_url}}/invoices/inv_1/attachments'
+body:
+  type: multipart
+  parts:
+    - name: invoice_id
+      value: inv_1
+    - name: file
+      file: invoice.pdf
+auth:
+  type: basic
+  username: uploader
+  password: '{{password_3}}'
+=== billing-api/invoices/legacy-export.rman.yaml (create)
+version: 1
+kind: http
+name: Legacy export
+method: GET
+url: '{{base_url}}/invoices/export.csv'
+auth:
+  type: none
+=== billing-api/invoices/_collection.yaml (create)
+name: Invoices
+order:
+  - list-invoices
+  - upload-attachment
+  - legacy-export
+auth:
+  type: api_key
+  name: X-Billing-Key
+  value: '{{api_key}}'
+  in: header
+=== billing-api/get-user.rman.yaml (create)
+version: 1
+kind: http
+name: Get User
+method: GET
+url: '{{base_url}}/me'
+=== billing-api/get-user-2.rman.yaml (create)
+version: 1
+kind: http
+name: get user!
+method: GET
+url: '{{base_url}}/me'
+query:
+  - name: verbose
+    value: '1'
+=== billing-api/payments-graphql.rman.yaml (create)
+version: 1
+kind: graphql
+name: Payments (GraphQL)
+endpoint: '{{base_url}}/graphql'
+document: |-
+  query Payments($first: Int) {
+    payments(first: $first) { id amount }
+  }
+variables:
+  first: 10
+=== billing-api/partner-token.rman.yaml (create)
+version: 1
+kind: http
+name: Partner token
+method: GET
+url: '{{base_url}}/partners/me'
+auth:
+  type: oauth2
+  grant: client_credentials
+  token_url: https://auth.example.com/oauth/token
+  client_id: billing-partner
+  client_secret: '{{client_secret}}'
+  scopes:
+    - invoices:read
+    - payments:read
+=== billing-api/_collection.yaml (create)
+# imported-script: prerequest (not executed)
+# // refresh with «redacted:token» when it expires
+# pm.request.headers.add({key: 'X-Request-Id', value: pm.variables.replaceIn('{{$guid}}')});
+name: Billing API
+description: Invoices, customers and payments.
+order:
+  - auth
+  - users
+  - invoices
+  - get-user
+  - get-user-2
+  - payments-graphql
+  - partner-token
+auth:
+  type: bearer
+  token: '{{token}}'
+variables:
+  base_url: https://billing.example.com/v1
+=== environments/local.yaml (create)
+secrets:
+  - api_key
+  - webhook_secret
+  - token
+  - password
+  - x_api_key
+  - password_2
+  - url_password
+  - token_2
+  - authorization_token
+  - cookie
+  - password_3
+  - client_secret
+  - apisecret

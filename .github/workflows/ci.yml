@@ -36,6 +36,14 @@ jobs:
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      # add-importers task 2.3: imported scripts are never executed, so no
+      # JavaScript engine may enter the dependency tree.
+      - name: No JavaScript engine in the dependency tree
+        run: |
+          if cargo tree --workspace --locked --edges normal --prefix none \
+              | grep -Ei '^(boa_engine|rquickjs|quickjs[a-z_-]*|deno_core|v8|mozjs|js-sandbox) '; then
+            echo "a JavaScript engine is in the dependency tree"; exit 1
+          fi
 
   test:
     name: test (${{ matrix.os }})

@@ -1,0 +1,169 @@
+---
+source: crates/rustman-import/tests/sources.rs
+expression: tree(&plan)
+---
+=== shop-capture/api-example-com/get-v1-products.rman.yaml (create)
+version: 1
+kind: http
+name: GET /v1/products
+method: GET
+url: https://api.example.com/v1/products
+query:
+  - name: page
+    value: '1'
+  - name: size
+    value: '20'
+headers:
+  - name: accept
+    value: application/json
+  - name: user-agent
+    value: Mozilla/5.0
+  - name: authorization
+    value: Bearer {{authorization_token}}
+  - name: cookie
+    value: '{{cookie}}'
+=== shop-capture/api-example-com/post-v1-cart.rman.yaml (create)
+version: 1
+kind: http
+name: POST /v1/cart
+method: POST
+url: https://api.example.com/v1/cart
+headers:
+  - name: accept
+    value: application/json
+  - name: user-agent
+    value: Mozilla/5.0
+  - name: authorization
+    value: Bearer {{authorization_token}}
+  - name: cookie
+    value: '{{cookie}}'
+  - name: content-type
+    value: application/json
+body:
+  type: json
+  content: '{"product": 7, "qty": 2, "card_token": "{{card_token}}"}'
+=== shop-capture/api-example-com/get-v1-pseudo.rman.yaml (create)
+version: 1
+kind: http
+name: GET /v1/pseudo
+method: GET
+url: https://api.example.com/v1/pseudo
+headers:
+  - name: Accept
+    value: application/json
+=== shop-capture/api-example-com/post-v1-login.rman.yaml (create)
+version: 1
+kind: http
+name: POST /v1/login
+method: POST
+url: https://api.example.com/v1/login
+headers:
+  - name: Content-Type
+    value: application/x-www-form-urlencoded
+  - name: Origin
+    value: https://shop.example.com
+body:
+  type: form
+  fields:
+    - name: user
+      value: ada
+    - name: password
+      value: '{{password}}'
+=== shop-capture/api-example-com/delete-v1-cart-7.rman.yaml (create)
+version: 1
+kind: http
+name: DELETE /v1/cart/7
+method: DELETE
+url: https://api.example.com/v1/cart/7
+query:
+  - name: api_key
+    value: '{{api_key}}'
+headers:
+  - name: accept
+    value: application/json
+  - name: user-agent
+    value: Mozilla/5.0
+=== shop-capture/api-example-com/get-v1-orders.rman.yaml (create)
+version: 1
+kind: http
+name: GET /v1/orders
+method: GET
+url: https://api.example.com/v1/orders
+headers:
+  - name: accept
+    value: application/json
+  - name: user-agent
+    value: Mozilla/5.0
+  - name: authorization
+    value: Bearer {{authorization_token}}
+  - name: cookie
+    value: '{{cookie}}'
+=== shop-capture/api-example-com/put-v1-orders-1.rman.yaml (create)
+version: 1
+kind: http
+name: PUT /v1/orders/1
+method: PUT
+url: https://api.example.com/v1/orders/1
+headers:
+  - name: accept
+    value: application/json
+  - name: user-agent
+    value: Mozilla/5.0
+  - name: authorization
+    value: Bearer {{authorization_token}}
+  - name: cookie
+    value: '{{cookie}}'
+  - name: content-type
+    value: text/plain
+body:
+  type: text
+  content: note
+=== shop-capture/api-example-com/_collection.yaml (create)
+name: api.example.com
+order:
+  - get-v1-products
+  - post-v1-cart
+  - get-v1-pseudo
+  - post-v1-login
+  - delete-v1-cart-7
+  - get-v1-orders
+  - put-v1-orders-1
+=== shop-capture/cdn-example-com/get-config-json.rman.yaml (create)
+version: 1
+kind: http
+name: GET /config.json
+method: GET
+url: https://cdn.example.com/config.json
+headers:
+  - name: accept
+    value: application/json
+  - name: user-agent
+    value: Mozilla/5.0
+=== shop-capture/cdn-example-com/get-flags.rman.yaml (create)
+version: 1
+kind: http
+name: GET /flags
+method: GET
+url: https://cdn.example.com/flags
+headers:
+  - name: accept
+    value: application/json
+  - name: user-agent
+    value: Mozilla/5.0
+=== shop-capture/cdn-example-com/_collection.yaml (create)
+name: cdn.example.com
+order:
+  - get-config-json
+  - get-flags
+=== shop-capture/_collection.yaml (create)
+name: shop-capture
+order:
+  - api-example-com
+  - cdn-example-com
+=== environments/local.yaml (create)
+secrets:
+  - authorization_token
+  - cookie
+  - card_token
+  - password
+  - api_key

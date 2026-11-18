@@ -13,6 +13,7 @@ repository = "https://github.com/CyberdyneCorp/rustman"
 rustman-core = { path = "crates/rustman-core", version = "0.1.0" }
 rustman-http = { path = "crates/rustman-http", version = "0.1.0" }
 rustman-report = { path = "crates/rustman-report", version = "0.1.0" }
+rustman-import = { path = "crates/rustman-import", version = "0.1.0" }
 # Test servers shared by the integration tests; never published.
 rustman-test-support = { path = "crates/rustman-test-support" }
 rustman-tui = { path = "crates/rustman-tui", version = "0.1.0" }

@@ -1,0 +1,73 @@
+---
+source: crates/rustman-import/tests/sources.rs
+expression: tree(&plan)
+---
+=== shop-api/users/get-user.rman.yaml (create)
+version: 1
+kind: http
+name: Get user
+method: GET
+url: '{{base_url}}/users/1'
+headers:
+  - name: X-User
+    value: '{% response ''body'', ''req_create'', ''b64::JC5pZA==::46b'', ''never'', 60 %}'
+=== shop-api/users/list-users.rman.yaml (create)
+version: 1
+kind: http
+name: List users
+method: GET
+url: '{{base_url}}/users'
+query:
+  - name: limit
+    value: '10'
+  - name: page
+    value: '1'
+headers:
+  - name: Accept
+    value: application/json
+=== shop-api/users/create-user.rman.yaml (create)
+# imported-script: after-response (not executed)
+# const body = insomnia.response.json();
+# insomnia.environment.set("user_id", body.id);
+version: 1
+kind: http
+name: Create user
+method: POST
+url: '{{base_url}}/users'
+body:
+  type: json
+  content: '{"name": "Ada"}'
+auth:
+  type: bearer
+  token: '{{token}}'
+=== shop-api/users/_collection.yaml (create)
+name: Users
+order:
+  - get-user
+  - list-users
+  - create-user
+variables:
+  page_size: '25'
+=== shop-api/search-products.rman.yaml (create)
+version: 1
+kind: graphql
+name: Search products
+endpoint: '{{base_url}}/graphql'
+document: '{ products { id } }'
+=== shop-api/_collection.yaml (create)
+name: Shop API
+description: The shop
+order:
+  - users
+  - search-products
+=== environments/prod.yaml (create)
+variables:
+  base_url: https://shop.example.com
+=== environments/private.yaml (create)
+variables:
+  base_url: http://localhost:8080
+secrets:
+  - plain
+=== environments/local.yaml (create)
+secrets:
+  - token

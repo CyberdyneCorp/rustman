@@ -1,0 +1,16 @@
+---
+source: crates/rustman-import/tests/postman.rs
+expression: plan.report.summary_text()
+---
+imported Shop scripts (postman) into shop-scripts/
+written: 4 requests, 1 collections, 1 environments; skipped: 0; dropped: 0; secrets moved: 2; unsupported: 0; unmapped: 0
+5 scripts preserved as comments, not executed
+scripts: 31/40 statements converted (77%)
+secret: token -> environment 'local' (migration.postman_collection.json)
+secret: x_token -> environment 'local' (migration.postman_collection.json > Login)
+script not executed: prerequest (migration.postman_collection.json > Login)
+script not executed: test (migration.postman_collection.json > Login)
+script not executed: test (migration.postman_collection.json > List orders)
+script not executed: test (migration.postman_collection.json > Get user)
+script not executed: test (migration.postman_collection.json > Checkout)
+info: secrets stored in new environment 'local' (migration.postman_collection.json)

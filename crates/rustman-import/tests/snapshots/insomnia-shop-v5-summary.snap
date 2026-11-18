@@ -1,0 +1,14 @@
+---
+source: crates/rustman-import/tests/sources.rs
+expression: plan.report.summary_text()
+---
+imported Shop API (insomnia) into shop-api/
+written: 4 requests, 2 collections, 3 environments; skipped: 0; dropped: 1; secrets moved: 2; unsupported: 1; unmapped: 0
+1 scripts preserved as comments, not executed
+scripts: 0/2 statements converted (0%)
+secret: token -> environment 'local' (shop-v5.yaml > Users / Create user)
+secret: plain -> environment 'private' (shop-v5.yaml > Private)
+dropped: disabled query parameter debug dropped (shop-v5.yaml > Users / List users)
+unsupported: unsupported template tag: response (shop-v5.yaml > Users / Get user)
+script not executed: after-response (shop-v5.yaml > Users / Create user)
+info: secrets stored in new environment 'local' (shop-v5.yaml)

@@ -1,0 +1,49 @@
+---
+source: crates/rustman-import/tests/postman.rs
+expression: tree(&plan)
+---
+=== legacy-v2-0/status.rman.yaml (create)
+version: 1
+kind: http
+name: Status
+method: GET
+url: https://legacy.example.com/status
+query:
+  - name: verbose
+    value: '1'
+=== legacy-v2-0/search.rman.yaml (create)
+version: 1
+kind: http
+name: Search
+method: POST
+url: https://legacy.example.com/search
+headers:
+  - name: Content-Type
+    value: application/json
+  - name: X-Trace
+    value: 'on'
+body:
+  type: json
+  content: '{"q": "{{query}}"}'
+auth:
+  type: bearer
+  token: '{{token}}'
+=== legacy-v2-0/built-url.rman.yaml (create)
+version: 1
+kind: http
+name: Built URL
+method: GET
+url: https://api.legacy.example.com:8443/v2/items
+=== legacy-v2-0/_collection.yaml (create)
+name: Legacy v2.0
+order:
+  - status
+  - search
+  - built-url
+auth:
+  type: basic
+  username: admin
+  password: '{{admin_password}}'
+=== environments/local.yaml (create)
+secrets:
+  - token

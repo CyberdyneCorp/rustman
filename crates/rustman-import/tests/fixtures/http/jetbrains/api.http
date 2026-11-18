@@ -1,0 +1,20 @@
+@api_version = v1
+
+### List items
+GET {{host}}/{{api_version}}/items
+Accept: application/json
+
+###
+# @name create-item
+POST {{host}}/{{api_version}}/items
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "lamp",
+  "id": "{{$uuid}}"
+}
+
+> {%
+  client.global.set("item_id", response.body.id);
+%}

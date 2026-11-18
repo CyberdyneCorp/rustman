@@ -1,0 +1,24 @@
+meta {
+  name: Health
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/health
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.status: eq "ok"
+  res.body.uptime: gt 0
+  res.headers.content-type: contains json
+}
+
+tests {
+  test("is healthy", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

@@ -1,0 +1,86 @@
+---
+source: crates/rustman-import/tests/export.rs
+expression: http
+---
+@base_url = https://billing.example.com/v1
+@id = 42
+
+### Login
+POST {{base_url}}/auth/login
+Content-Type: application/x-www-form-urlencoded
+
+username=billing-bot&password={{password}}
+
+### List
+GET {{base_url}}/users?page=1&per_page=50
+Accept: application/json
+X-API-Key: {{x_api_key}}
+Authorization: Bearer {{token}}
+
+### Create
+POST {{base_url}}/users
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+Authorization: Bearer {{token}}
+
+{
+  "name": "Ada",
+  "password": "{{password_2}}",
+  "city": "{{$randomCity}}",
+  "created": {{$timestamp}}
+}
+
+### Statement
+GET https://admin:{{url_password}}@billing.example.com/v1/statements/{{token_2}}
+Authorization: Bearer {{token}}
+
+### Delete
+DELETE {{base_url}}/users/{{id}}
+Authorization: Bearer {{token}}
+
+### List invoices
+GET {{base_url}}/invoices?status=open
+Authorization: Bearer {{authorization_token}}
+Cookie: {{cookie}}
+X-Billing-Key: {{api_key}}
+
+### Upload attachment
+POST {{base_url}}/invoices/inv_1/attachments
+Authorization: Basic uploader {{password_3}}
+Content-Type: multipart/form-data; boundary=rustman-boundary
+
+--rustman-boundary
+Content-Disposition: form-data; name="invoice_id"
+
+inv_1
+--rustman-boundary
+Content-Disposition: form-data; name="file"; filename="invoice.pdf"
+
+< invoice.pdf
+--rustman-boundary--
+
+### Legacy export
+GET {{base_url}}/invoices/export.csv
+
+### Get User
+GET {{base_url}}/me
+Authorization: Bearer {{token}}
+
+### get user!
+GET {{base_url}}/me?verbose=1
+Authorization: Bearer {{token}}
+
+### Payments (GraphQL)
+POST {{base_url}}/graphql
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "query": "query Payments($first: Int) {\n  payments(first: $first) { id amount }\n}",
+  "variables": {
+    "first": 10
+  }
+}
+
+### Partner token
+GET {{base_url}}/partners/me

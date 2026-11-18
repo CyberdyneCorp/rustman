@@ -1,0 +1,7 @@
+---
+source: crates/rustman-import/tests/sources.rs
+expression: plan.report.summary_text()
+---
+imported rest-client (http) into rest-client/
+written: 2 requests, 2 collections, 2 environments; skipped: 0; dropped: 0; secrets moved: 1; unsupported: 0; unmapped: 0
+secret: password -> environment 'local' (.vscode/settings.json > local)

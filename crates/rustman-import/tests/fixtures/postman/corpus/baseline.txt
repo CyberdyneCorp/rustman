@@ -1,0 +1,9 @@
+# Script migration baseline over public Postman collections (task 6.6).
+# Raise a line when the mapping table grows; tests/corpus.rs fails when a
+# collection converts fewer statements than recorded here.
+# name found mapped
+echo-v2.postman_collection.json 96 62
+head-requests.postman_collection.json 7 2
+multi-level-folders-v2.postman_collection.json 24 6
+request-chaining-test.postman_collection.json 11 5
+set-next-request.postman_collection.json 24 1

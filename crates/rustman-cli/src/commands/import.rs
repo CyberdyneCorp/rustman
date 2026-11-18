@@ -1,28 +1,141 @@
-//! `rustman import curl`: write a request file from a curl command.
+//! `rustman import`: collections from other tools (Postman, Insomnia,
+//! Bruno, HAR, `.http` files), and `rustman import curl` for a single curl
+//! command.
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-use clap::{Args, Subcommand};
-use rustman_core::ConfigError;
+use clap::{Args, Subcommand, ValueEnum};
 use rustman_core::format::write::request_to_yaml;
 use rustman_core::model::Request;
+use rustman_core::secrets::BACKEND_VAR;
 use rustman_core::workspace::check_new_request_file;
+use rustman_core::{ConfigError, Redactor, SecretBackend, SecretStore};
 use rustman_http::{CurlError, import_curl, import_curl_words};
+use rustman_import::secrets::Existing;
+use rustman_import::{
+    DEFAULT_MAX_SIZE, Format, HarFilter, ImportError, OnConflict, PlanOptions, SourceOptions,
+    apply, load, plan,
+};
 
-use super::print_warnings;
-use crate::exit::CliError;
+use super::{EnvSelection, current_dir, print_warnings};
+use crate::exit::{self, CliError};
 
 #[derive(Debug, Args)]
+#[command(args_conflicts_with_subcommands = true, arg_required_else_help = true)]
 pub struct ImportArgs {
     #[command(subcommand)]
-    command: ImportCommand,
+    command: Option<ImportCommand>,
+    /// A source file or folder whose format is detected from its content
+    #[arg(value_name = "SRC")]
+    src: Option<PathBuf>,
+    #[command(flatten)]
+    options: ImportOptions,
 }
 
 #[derive(Debug, Subcommand)]
 enum ImportCommand {
     /// Convert a curl command (an argument, or stdin) into a request file
     Curl(CurlArgs),
+    /// Import a source file or folder, detecting its format from the content
+    Auto(SourceArgs),
+    /// Import a Postman Collection v2.0 or v2.1 export
+    Postman(SourceArgs),
+    /// Import a Postman environment export into environments/
+    #[command(name = "postman-env")]
+    PostmanEnv(SourceArgs),
+    /// Import an Insomnia v4 (JSON) or v5 (YAML) export
+    Insomnia(SourceArgs),
+    /// Import a Bruno collection folder (or a single .bru file)
+    Bruno(SourceArgs),
+    /// Import the requests of a HAR 1.2 capture, grouped by host
+    Har(HarArgs),
+    /// Import .http / .rest files (a file or a folder) and their environments
+    Http(SourceArgs),
+}
+
+#[derive(Debug, Args)]
+struct HarArgs {
+    #[command(flatten)]
+    source: SourceArgs,
+    /// Keep only requests to this host (repeatable)
+    #[arg(long, value_name = "HOST")]
+    host: Vec<String>,
+    /// Keep only requests with this method (repeatable)
+    #[arg(long, value_name = "METHOD")]
+    method: Vec<String>,
+    /// Keep only requests whose request or response has this MIME type (repeatable)
+    #[arg(long, value_name = "TYPE")]
+    content_type: Vec<String>,
+    /// Keep images, fonts, stylesheets and scripts (dropped by default)
+    #[arg(long)]
+    include_static: bool,
+}
+
+impl HarArgs {
+    fn filter(&self) -> HarFilter {
+        HarFilter {
+            hosts: self.host.clone(),
+            methods: self.method.clone(),
+            content_types: self.content_type.clone(),
+            include_static: self.include_static,
+        }
+    }
+}
+
+#[derive(Debug, Args)]
+struct SourceArgs {
+    /// The exported file (or folder, for Bruno and .http sources)
+    #[arg(value_name = "SRC")]
+    src: PathBuf,
+    #[command(flatten)]
+    options: ImportOptions,
+}
+
+#[derive(Debug, Args)]
+struct ImportOptions {
+    /// Collection folder to write into, inside the workspace
+    /// (default: the slug of the source collection's name)
+    #[arg(long, value_name = "DIR")]
+    into: Option<PathBuf>,
+    /// Convert and print the planned files and secrets without writing anything
+    #[arg(long)]
+    dry_run: bool,
+    /// When a file already exists: keep it, replace it, or write next to it
+    #[arg(long, value_name = "POLICY", value_enum, default_value_t)]
+    on_conflict: ConflictPolicy,
+    /// Also write the report as JSON (rustman.import-report/v1) to FILE
+    #[arg(long, value_name = "FILE")]
+    report: Option<PathBuf>,
+    /// Write the unconverted script statements, with suggestions, as Markdown to FILE
+    #[arg(long, value_name = "FILE")]
+    migration_report: Option<PathBuf>,
+    /// Refuse sources larger than this (bytes, or with K, M or G; default 100M)
+    #[arg(long, value_name = "SIZE", value_parser = parse_size)]
+    max_size: Option<u64>,
+    /// Exit with 1 when a feature was unsupported, dropped or unmapped
+    #[arg(long)]
+    fail_on_unsupported: bool,
+    #[command(flatten)]
+    selection: EnvSelection,
+}
+
+#[derive(Clone, Copy, Debug, Default, ValueEnum)]
+enum ConflictPolicy {
+    #[default]
+    Skip,
+    Overwrite,
+    Rename,
+}
+
+impl From<ConflictPolicy> for OnConflict {
+    fn from(policy: ConflictPolicy) -> Self {
+        match policy {
+            ConflictPolicy::Skip => Self::Skip,
+            ConflictPolicy::Overwrite => Self::Overwrite,
+            ConflictPolicy::Rename => Self::Rename,
+        }
+    }
 }
 
 #[derive(Debug, Args)]
@@ -39,10 +152,143 @@ struct CurlArgs {
     command: Vec<String>,
 }
 
-pub fn run(args: &ImportArgs) -> Result<(), CliError> {
-    match &args.command {
-        ImportCommand::Curl(a) => curl(a),
+/// Run the command; `Ok` carries the exit code.
+pub fn run(args: &ImportArgs) -> Result<u8, CliError> {
+    let Some(command) = &args.command else {
+        let src = args
+            .src
+            .as_ref()
+            .ok_or_else(|| ConfigError::Usage("import: missing source".to_owned()))?;
+        return source(None, src, &args.options, HarFilter::default());
+    };
+    let all = HarFilter::default;
+    let (format, a, filter) = match command {
+        ImportCommand::Curl(a) => return curl(a).map(|()| exit::SUCCESS),
+        ImportCommand::Har(h) => (Some(Format::Har), &h.source, h.filter()),
+        ImportCommand::Auto(a) => (None, a, all()),
+        ImportCommand::Postman(a) => (Some(Format::Postman), a, all()),
+        ImportCommand::PostmanEnv(a) => (Some(Format::PostmanEnv), a, all()),
+        ImportCommand::Insomnia(a) => (Some(Format::Insomnia), a, all()),
+        ImportCommand::Bruno(a) => (Some(Format::Bruno), a, all()),
+        ImportCommand::Http(a) => (Some(Format::Http), a, all()),
+    };
+    source(format, &a.src, &a.options, filter)
+}
+
+/// Import the file or folder `src` in `format` (detected when `None`).
+fn source(
+    format: Option<Format>,
+    src: &Path,
+    o: &ImportOptions,
+    har: HarFilter,
+) -> Result<u8, CliError> {
+    let ws = o.selection.workspace()?;
+    let env = o.selection.environment(&ws)?;
+    let shown = src.display().to_string();
+    let source_options = SourceOptions {
+        max_size: o.max_size.unwrap_or(DEFAULT_MAX_SIZE),
+        har,
+    };
+    let (format, collection) = load(format, src, &shown, &source_options)?;
+    let destination = o
+        .into
+        .as_deref()
+        .map(|into| destination(&ws.root, into))
+        .transpose()?;
+    let backend = SecretBackend::from_env_value(std::env::var(BACKEND_VAR).ok().as_deref())
+        .map_err(ConfigError::from)?;
+    let store = SecretStore::open(&ws.root, backend);
+    let lookup = |env: &str, name: &str| store.get(env, name).ok().flatten();
+    let options = PlanOptions {
+        root: &ws.root,
+        source: shown,
+        format,
+        destination,
+        on_conflict: o.on_conflict.into(),
+        environment: env.map(|e| e.name.clone()),
+        existing: Existing {
+            environments: &ws.environments,
+            lookup: &lookup,
+        },
+        dry_run: o.dry_run,
+    };
+    let plan = plan(collection, &options)?;
+    if !o.dry_run {
+        let save = |env: &str, secret: &_| store.set(env, secret).map(|_| ());
+        let applied = apply(&plan, &ws.root, &save);
+        print_warnings(&store.take_warnings());
+        applied?;
     }
+    // Reports name secrets only; redacting them as well guards every output.
+    let redactor = plan
+        .secrets
+        .iter()
+        .fold(Redactor::new(), |r, m| r.with(&m.secret));
+    print!("{}", redactor.text(&plan.report.summary_text()));
+    if let Some(path) = &o.report {
+        write_report(path, &redactor.text(&plan.report.to_json()))?;
+    }
+    if let Some(path) = &o.migration_report {
+        let markdown = rustman_import::migration::markdown(&plan.report);
+        write_report(path, &redactor.text(&markdown))?;
+    }
+    let strict_failure = o.fail_on_unsupported && plan.report.has_losses();
+    Ok(if strict_failure {
+        exit::ASSERTION
+    } else {
+        exit::SUCCESS
+    })
+}
+
+/// `into`, relative to the workspace root with `/` separators; it must be
+/// inside the workspace.
+fn destination(root: &Path, into: &Path) -> Result<String, CliError> {
+    let io = |source| ConfigError::Io {
+        path: root.to_path_buf(),
+        source,
+    };
+    let root = dunce::canonicalize(root).map_err(io)?;
+    let cwd = dunce::canonicalize(current_dir()?).map_err(io)?;
+    let outside = || CliError::from(ImportError::OutsideWorkspace);
+    let raw = into.to_str().ok_or_else(outside)?;
+    let joined = rustman_core::paths::contain(&root, &cwd, raw).map_err(|_| outside())?;
+    let rel = joined.strip_prefix(&root).map_err(|_| outside())?;
+    let parts: Vec<String> = rel
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect();
+    Ok(parts.join("/"))
+}
+
+fn write_report(path: &Path, text: &str) -> Result<(), CliError> {
+    let io = |source| ImportError::io(path, source);
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        std::fs::create_dir_all(parent).map_err(io)?;
+    }
+    std::fs::write(path, text).map_err(io)?;
+    Ok(())
+}
+
+/// A size in bytes: `1048576`, `512K`, `100M`, `2G` (or `KiB`, `MiB`, `GiB`).
+fn parse_size(text: &str) -> Result<u64, String> {
+    let trimmed = text.trim();
+    let digits_end = trimmed
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(trimmed.len());
+    let (digits, unit) = trimmed.split_at(digits_end);
+    let shift = match unit.trim().to_ascii_uppercase().as_str() {
+        "" | "B" => 0,
+        "K" | "KB" | "KIB" => 10,
+        "M" | "MB" | "MIB" => 20,
+        "G" | "GB" | "GIB" => 30,
+        _ => return Err(format!("invalid size '{text}' (e.g. 1048576, 512K, 100M)")),
+    };
+    digits
+        .parse::<u64>()
+        .ok()
+        .and_then(|n| n.checked_mul(1 << shift))
+        .filter(|n| *n > 0)
+        .ok_or_else(|| format!("invalid size '{text}' (e.g. 1048576, 512K, 100M)"))
 }
 
 fn curl(args: &CurlArgs) -> Result<(), CliError> {
@@ -85,4 +331,20 @@ fn write_new(path: &Path, text: &str) -> Result<(), ConfigError> {
         .open(path)
         .map_err(io)?;
     file.write_all(text.as_bytes()).map_err(io)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_size;
+
+    #[test]
+    fn sizes_take_binary_suffixes() {
+        assert_eq!(parse_size("1048576"), Ok(1 << 20));
+        assert_eq!(parse_size("512K"), Ok(512 << 10));
+        assert_eq!(parse_size("100MiB"), Ok(100 << 20));
+        assert_eq!(parse_size("2g"), Ok(2 << 30));
+        assert!(parse_size("0").is_err());
+        assert!(parse_size("ten").is_err());
+        assert!(parse_size("5T").is_err());
+    }
 }

@@ -8,7 +8,10 @@
 mod request;
 mod scalar;
 
-pub use request::{assertions_to_yaml, collection_to_yaml, request_to_yaml};
+pub use request::{
+    assertions_to_yaml, auth_node, collection_to_yaml, environment_to_yaml, json_node,
+    name_values_node, request_to_yaml,
+};
 
 /// A YAML node ready to print.
 #[derive(Clone, Debug, PartialEq)]

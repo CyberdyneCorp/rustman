@@ -15,6 +15,7 @@ path = "src/main.rs"
 [dependencies]
 rustman-core.workspace = true
 rustman-http.workspace = true
+rustman-import.workspace = true
 rustman-report.workspace = true
 rustman-tui.workspace = true
 clap.workspace = true
@@ -30,6 +31,7 @@ tokio-util.workspace = true
 
 [dev-dependencies]
 assert_cmd.workspace = true
+base64.workspace = true
 insta.workspace = true
 jsonschema.workspace = true
 roxmltree.workspace = true

@@ -1,0 +1,9 @@
+---
+source: crates/rustman-import/tests/postman.rs
+expression: plan.report.summary_text()
+---
+imported Body modes (postman) into body-modes/
+written: 8 requests, 1 collections, 0 environments; skipped: 0; dropped: 1; secrets moved: 0; unsupported: 1; unmapped: 0
+dropped: form part empty has no file; dropped (body-modes.postman_collection.json > Formdata)
+unsupported: body mode 'binary-stream' unsupported (body-modes.postman_collection.json > Unknown mode)
+review: graphql variables are not a flat JSON object; kept as a comment (body-modes.postman_collection.json > GraphQL nested variables)

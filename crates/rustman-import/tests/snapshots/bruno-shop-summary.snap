@@ -1,0 +1,23 @@
+---
+source: crates/rustman-import/tests/sources.rs
+expression: plan.report.summary_text()
+---
+imported Shop (Bruno) (bruno) into shop-bruno/
+written: 4 requests, 2 collections, 2 environments; skipped: 0; dropped: 3; secrets moved: 7; unsupported: 2; unmapped: 0
+2 scripts preserved as comments, not executed
+scripts: 0/4 statements converted (0%)
+secret: x_api_key -> environment 'local' (shop/users/create-user.bru:7)
+secret: password -> environment 'local' (shop/users/create-user.bru:7)
+secret: token -> environment 'local' (shop/users/create-user.bru:7)
+secret: password_2 -> environment 'local' (shop/users/upload-avatar.bru:7)
+secret: authorization_token -> environment 'local' (shop/users/create-user.bru:40)
+secret: session_ref -> environment 'local' (shop/environments/local.bru)
+secret: api_password -> environment 'staging' (shop/environments/staging.bru)
+unsupported: assert res.headers.content-type: contains json unsupported (shop/health.bru:17)
+unsupported: post-response variable stamp unsupported (shop/users/create-user.bru:37)
+dropped: disabled query parameter debug dropped (shop/users/list-users.bru:15)
+dropped: disabled header X-Debug dropped (shop/users/list-users.bru:20)
+dropped: disabled variable legacy_url dropped (shop/environments/local.bru:3)
+script not executed: tests (shop/health.bru:20)
+script not executed: pre-request (shop/users/create-user.bru:40)
+info: secrets stored in new environment 'local' (shop)

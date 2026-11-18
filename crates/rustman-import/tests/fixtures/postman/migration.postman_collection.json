@@ -1,0 +1,185 @@
+{
+  "info": {
+    "name": "Shop scripts",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "sk_live_CANARY_mig_77aa",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://shop.example.com"
+    }
+  ],
+  "item": [
+    {
+      "name": "Login",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.variables.set(\"ts\", Date.now());",
+              "pm.request.headers.add({key: \"X-Token\", value: \"sk_live_CANARY_mig_77aa\"});"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"ok\", () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.environment.set(\"token\", body.data.token);",
+              "pm.environment.set(\"etag\", pm.response.headers.get(\"ETag\"));",
+              "pm.globals.set(\"session\", pm.cookies.get(\"sid\"));",
+              "pm.test(\"fast\", () => pm.expect(pm.response.responseTime).to.be.below(300));",
+              "pm.expect(body.data.expires_in).to.be.above(60);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/auth/login",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "List orders",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"list\", function () {",
+              "    pm.response.to.be.ok;",
+              "    pm.response.to.have.header(\"Content-Type\", \"application/json\");",
+              "    pm.response.to.have.header(\"X-Total-Count\");",
+              "    const d = pm.response.json();",
+              "    pm.expect(d.items[0].tags).to.have.lengthOf(2);",
+              "    pm.expect(d.items).to.be.an(\"array\");",
+              "    pm.expect(d.total).to.be.above(0);",
+              "    pm.expect(d.page).to.eql(1);",
+              "    pm.expect(pm.response.json().items.every(i => i.price > 0)).to.be.true;",
+              "    pm.expect(d.items.length).to.eql(20);",
+              "    pm.collectionVariables.set(\"firstId\", d.items[0].id);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/orders",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "orders"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Get user",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const user = pm.response.json();",
+              "pm.expect(user.user.id).to.eql(42);",
+              "pm.expect(user.user.name).to.be.a('string');",
+              "pm.expect(user.user.email).to.exist;",
+              "pm.expect(pm.response.text()).to.include(\"Ada\");",
+              "pm.expect(pm.response.code).to.equal(200);",
+              "if (user.user.admin) {",
+              "    postman.setNextRequest(\"Admin panel\");",
+              "}",
+              "pm.expect(user.user.roles).to.include(\"viewer\");"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/users/42",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "users",
+            "42"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Checkout",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"created\", () => pm.response.to.have.status(201));",
+              "const order = pm.response.json();",
+              "pm.collectionVariables.set(\"orderId\", order.order.id);",
+              "pm.variables.set(\"total\", order.order[\"grand total\"]);",
+              "pm.expect(order.order.status).to.not.eql(\"failed\");",
+              "_.each(order.items, (i) => pm.expect(i.qty).to.be.above(0));",
+              "pm.sendRequest(\"https://audit.example.com/log\", () => {});",
+              "pm.expect(order.order.lines).to.have.lengthOf(3);",
+              "var tax = order.order.total * 0.2;",
+              "pm.expect(tax).to.be.below(100);",
+              "pm.expect(order.order.id).to.exist;"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/checkout",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "checkout"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}

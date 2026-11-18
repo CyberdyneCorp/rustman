@@ -1,0 +1,125 @@
+---
+source: crates/rustman-import/tests/postman.rs
+expression: tree(&plan)
+---
+=== auth-types/no-auth.rman.yaml (create)
+version: 1
+kind: http
+name: No auth
+method: GET
+url: '{{base_url}}/no-auth'
+auth:
+  type: none
+=== auth-types/basic.rman.yaml (create)
+version: 1
+kind: http
+name: Basic
+method: GET
+url: '{{base_url}}/basic'
+auth:
+  type: basic
+  username: u
+  password: '{{password}}'
+=== auth-types/bearer.rman.yaml (create)
+version: 1
+kind: http
+name: Bearer
+method: GET
+url: '{{base_url}}/bearer'
+auth:
+  type: bearer
+  token: '{{token}}'
+=== auth-types/api-key-in-query.rman.yaml (create)
+version: 1
+kind: http
+name: API key in query
+method: GET
+url: '{{base_url}}/api-key-in-query'
+auth:
+  type: api_key
+  name: api_key
+  value: '{{api_key}}'
+  in: query
+=== auth-types/oauth2-client-credentials.rman.yaml (create)
+version: 1
+kind: http
+name: OAuth2 client credentials
+method: GET
+url: '{{base_url}}/oauth2-client-credentials'
+auth:
+  type: oauth2
+  grant: client_credentials
+  token_url: https://auth/token
+  client_id: cid
+  client_secret: '{{client_secret}}'
+  scopes:
+    - a
+    - b
+=== auth-types/oauth2-authorization-code.rman.yaml (create)
+version: 1
+kind: http
+name: OAuth2 authorization code
+method: GET
+url: '{{base_url}}/oauth2-authorization-code'
+auth:
+  type: oauth2
+  grant: authorization_code
+  token_url: https://auth/token
+  auth_url: https://auth/authorize
+  client_id: cid
+=== auth-types/oauth2-implicit.rman.yaml (create)
+version: 1
+kind: http
+name: OAuth2 implicit
+method: GET
+url: '{{base_url}}/oauth2-implicit'
+auth:
+  type: none
+=== auth-types/hawk.rman.yaml (create)
+version: 1
+kind: http
+name: Hawk
+method: GET
+url: '{{base_url}}/hawk'
+auth:
+  type: none
+=== auth-types/digest.rman.yaml (create)
+version: 1
+kind: http
+name: Digest
+method: GET
+url: '{{base_url}}/digest'
+auth:
+  type: none
+=== auth-types/aws-signature.rman.yaml (create)
+version: 1
+kind: http
+name: AWS Signature
+method: GET
+url: '{{base_url}}/aws-signature'
+auth:
+  type: none
+=== auth-types/ntlm.rman.yaml (create)
+version: 1
+kind: http
+name: NTLM
+method: GET
+url: '{{base_url}}/ntlm'
+auth:
+  type: none
+=== auth-types/_collection.yaml (create)
+name: Auth types
+order:
+  - no-auth
+  - basic
+  - bearer
+  - api-key-in-query
+  - oauth2-client-credentials
+  - oauth2-authorization-code
+  - oauth2-implicit
+  - hawk
+  - digest
+  - aws-signature
+  - ntlm
+variables:
+  base_url: http://localhost:8080

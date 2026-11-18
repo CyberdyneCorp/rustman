@@ -1,0 +1,8 @@
+---
+source: crates/rustman-import/tests/postman.rs
+expression: plan.report.summary_text()
+---
+imported Legacy v2.0 (postman) into legacy-v2-0/
+written: 3 requests, 1 collections, 1 environments; skipped: 0; dropped: 0; secrets moved: 1; unsupported: 0; unmapped: 0
+secret: token -> environment 'local' (legacy-v20.postman_collection.json > Search)
+info: secrets stored in new environment 'local' (legacy-v20.postman_collection.json)

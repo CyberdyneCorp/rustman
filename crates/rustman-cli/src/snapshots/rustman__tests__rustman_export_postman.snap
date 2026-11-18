@@ -1,0 +1,32 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Write a collection folder or request file as a Postman Collection v2.1
+
+Usage: rustman export postman [OPTIONS] <PATH>
+
+Arguments:
+  <PATH>
+          A collection folder or request file of the workspace
+
+Options:
+  -o, --output <FILE>
+          Write to FILE instead of standard output
+
+      --env <NAME>
+          Environment (default: RUSTMAN_ENV, then default_environment)
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

@@ -1,0 +1,16 @@
+{
+  // REST Client environments
+  "editor.tabSize": 2,
+  "rest-client.environmentVariables": {
+    "$shared": {
+      "host": "http://localhost:9000"
+    },
+    "local": {
+      "password": "CANARY-rest-client-password-d4"
+    },
+    /* production */
+    "production": {
+      "host": "https://api.example.com"
+    }
+  }
+}

@@ -63,7 +63,14 @@ Body modes SHALL map as `raw` (JSON → `json`, otherwise `text`), `urlencoded` 
 #### Scenario: Unsupported auth
 - **GIVEN** a request using Postman `hawk` auth
 - **WHEN** it is imported
-- **THEN** the request SHALL be written without auth and the report SHALL list `hawk auth unsupported` with the item path
+- **THEN** the request SHALL be written with `auth: {type: none}` and the report SHALL list `hawk auth unsupported` with the item path
+
+### Requirement: Unsupported auth disables inheritance
+A Postman, Insomnia or Bruno request or folder whose auth type is unsupported SHALL be written with `auth: {type: none}`, so it never inherits a folder or collection credential the source would not have sent.
+#### Scenario: Unsupported auth does not inherit the parent credential
+- **GIVEN** a collection with bearer auth `{{internal_token}}` and a request using `awsv4` auth
+- **WHEN** it is imported and the request is exported to `.http`
+- **THEN** the exported request SHALL NOT carry `Authorization: Bearer {{internal_token}}`
 
 ### Requirement: Postman environments
 `rustman import postman-env <file>` (and auto-detect of a Postman environment export) SHALL create `environments/<slug>.yaml`. Values of variables Postman marks `secret`, and values detected as secrets, SHALL be stored as `environments` secrets, not in the YAML file.
@@ -74,12 +81,17 @@ Body modes SHALL map as `raw` (JSON → `json`, otherwise `text`), `urlencoded` 
 - **THEN** `environments/staging.yaml` SHALL list `api_key` under `secrets` and the value SHALL be stored in the keychain
 
 ### Requirement: Scripts are never executed
-Postman pre-request and test scripts, and Insomnia and Bruno scripts, SHALL NOT be executed during or after import. Their source SHALL be preserved verbatim in a `# imported-script` comment block in the request file, and each SHALL be listed in the report with its location.
+Postman pre-request and test scripts, and Insomnia and Bruno scripts, SHALL NOT be executed during or after import. Their source SHALL be preserved verbatim in a `# imported-script` comment block in the request file, except that any literal value moved out as a secret SHALL appear as `«redacted:<name>»`, and each SHALL be listed in the report with its location.
 
 #### Scenario: Test script preserved
 - **GIVEN** an item whose test script calls `pm.environment.set("token", ...)`
 - **WHEN** it is imported
 - **THEN** no code SHALL run, the script SHALL appear as a comment block in the file, and the report SHALL list it as `script not executed`
+
+#### Scenario: Secret literal in a preserved script
+- **GIVEN** a pre-request script `pm.environment.set('apiSecret', 's3cr3t-value');`
+- **WHEN** it is imported
+- **THEN** the value SHALL be stored as a secret and the comment block SHALL read `# pm.environment.set('apiSecret', '«redacted:apisecret»');`
 
 ### Requirement: Script-to-assertion suggestions
 For trivially mappable script statements, the importer SHALL write an equivalent declarative entry: `pm.response.to.have.status(N)` and `pm.expect(pm.response.code).to.eql(N)` → `status: N`; `pm.response.to.have.header("H")` → `header: {name: H, exists: true}`; `pm.environment.set("v", pm.response.json().a.b)` → a `json` capture of `$.a.b` into `v`. Everything else SHALL remain comment-only.
@@ -102,6 +114,16 @@ Insomnia v4 JSON exports and v5 YAML exports SHALL import request groups as coll
 - **WHEN** it is imported
 - **THEN** `environments/prod.yaml` SHALL contain the overridden `host`
 
+#### Scenario: Nested environment values
+- **GIVEN** an Insomnia environment with `{"auth": {"token": "t-1"}}`
+- **WHEN** it is imported
+- **THEN** it SHALL become the variable `auth.token`, `{{ _.auth.token }}` SHALL become `{{auth.token}}`, and `t-1` SHALL be stored as a secret, never written to a tracked file
+
+#### Scenario: Private environment
+- **GIVEN** an Insomnia environment with `isPrivate: true` and `data: {plain: v-1}`
+- **WHEN** it is imported
+- **THEN** `plain` SHALL be listed under `secrets` without a value, `v-1` SHALL be stored as a secret, and no tracked file SHALL contain `v-1`
+
 #### Scenario: Unsupported template tag
 - **GIVEN** a header value `{% response 'body', 'req_1', '$.id' %}`
 - **WHEN** it is imported
@@ -109,6 +131,11 @@ Insomnia v4 JSON exports and v5 YAML exports SHALL import request groups as coll
 
 ### Requirement: Bruno collections
 A Bruno collection folder SHALL import each `.bru` file (meta, method block, headers, query, body, auth, `vars:pre-request`, `assert` block) as a request file, `bruno.json` ordering (`meta.seq`) into `_collection.yaml`, and `environments/*.bru` into `environments/*.yaml`. Bruno `assert` entries with `eq`, `neq`, `gt`, `lt`, `contains` and `isDefined` on `res.status` or `res.body.*` SHALL map to declarative assertions.
+
+#### Scenario: Symbolic link loop
+- **GIVEN** a Bruno folder with a symbolic link to its parent folder
+- **WHEN** it is imported
+- **THEN** the link SHALL NOT be followed, the import SHALL finish, and the report SHALL list `symlinked folder <path> skipped`
 
 #### Scenario: Bruno assert block
 - **GIVEN** a `.bru` file with `assert { res.status: eq 200 }`
@@ -175,6 +202,14 @@ Before writing, the importer SHALL detect secrets: `Authorization`, `Proxy-Autho
 - **WHEN** a secret is extracted
 - **THEN** it SHALL be stored in a new environment named after the source collection and the report SHALL say so
 
+### Requirement: Value-based secret detection
+Any variable or header value starting with `Bearer `, `Basic ` or `Digest ` (case-insensitive), and any header whose name ends in `-auth`, `-token`, `-key`, `-secret` or `-signature` (case-insensitive), SHALL be treated as a secret, whatever the name patterns say.
+
+#### Scenario: Credential-shaped header
+- **GIVEN** headers `X-Custom-Auth: ca-1` and `X-Upstream: Bearer up-1`
+- **WHEN** they are imported
+- **THEN** they SHALL be written as `{{x_custom_auth}}` and `Bearer {{x_upstream}}`, and `ca-1` and `up-1` SHALL be stored as secrets
+
 ### Requirement: Secret report
 The import summary and report SHALL list every moved secret by variable name, source location and target environment, never by value. `--keep-secrets-inline` SHALL NOT exist; the only way to put a literal secret into a file is to edit it by hand.
 
@@ -191,13 +226,18 @@ File names SHALL be the slug of the item name (lowercase ASCII, `-` separators, 
 - **WHEN** they are imported
 - **THEN** the files SHALL be `get-user.rman.yaml` and `get-user-2.rman.yaml`
 
+#### Scenario: Path length limit
+- **GIVEN** a source whose folder names and nesting would give a path over 180 characters or 20 levels below the workspace root
+- **WHEN** it is imported
+- **THEN** the import SHALL fail before writing anything with `generated path too long`, showing the path shortened, never in full
+
 #### Scenario: Reproducible output
 - **GIVEN** the same Postman file imported into two empty workspaces
 - **WHEN** the trees are compared
 - **THEN** they SHALL be byte-identical
 
 ### Requirement: Re-import conflict policy
-When a target file already exists, `--on-conflict` SHALL decide: `skip` (default: keep the existing file), `overwrite` (replace it), or `rename` (write with the next free suffix). Every conflict and its resolution SHALL appear in the report.
+When a target file already exists, `--on-conflict` SHALL decide: `skip` (default: keep the existing file), `overwrite` (replace it), or `rename` (write with the next free suffix, appending renamed requests to the existing `_collection.yaml` `order:`). Every conflict and its resolution SHALL appear in the report. A file whose content would not change SHALL be reported as `unchanged`, under every policy, and SHALL NOT be reported as a conflict.
 
 #### Scenario: Default skip
 - **GIVEN** `billing-api/list-invoices.rman.yaml` already exists and was edited
@@ -207,6 +247,11 @@ When a target file already exists, `--on-conflict` SHALL decide: `skip` (default
 #### Scenario: Overwrite
 - **WHEN** the import runs with `--on-conflict overwrite`
 - **THEN** the file SHALL be replaced with the freshly converted request
+
+#### Scenario: Unchanged file under rename
+- **GIVEN** `billing-api/users/create.rman.yaml` exists with exactly the content the import would write
+- **WHEN** the collection is imported with `--on-conflict rename`
+- **THEN** the file SHALL be listed as `unchanged`, no `create-2.rman.yaml` SHALL be written, and no conflict SHALL be reported for it
 
 ### Requirement: Import report
 Every import SHALL print a summary (requests, collections, environments written; skipped; dropped; secrets moved; unsupported features). `--report <file>` SHALL write the same data as JSON with schema `rustman.import-report/v1`, where each unsupported feature has a kind, message and source location (file and item path or line).

@@ -1,0 +1,117 @@
+---
+source: crates/rustman-import/tests/sources.rs
+expression: tree(&plan)
+---
+=== shop-api/users/create-user.rman.yaml (create)
+version: 1
+kind: http
+name: Create user
+method: POST
+url: '{{base_url}}/users'
+headers:
+  - name: Content-Type
+    value: application/json
+body:
+  type: json
+  content: '{"name": "Ada", "password": "{{password}}", "id": "{{$uuid}}"}'
+auth:
+  type: bearer
+  token: '{{token}}'
+=== shop-api/users/list-users.rman.yaml (create)
+version: 1
+kind: http
+name: List users
+method: GET
+url: '{{base_url}}/users'
+query:
+  - name: limit
+    value: '10'
+  - name: page
+    value: '1'
+headers:
+  - name: Accept
+    value: application/json
+  - name: X-Trace
+    value: '{% uuid ''v4'' %}'
+=== shop-api/users/get-user.rman.yaml (create)
+version: 1
+kind: http
+name: Get user
+method: GET
+url: '{{base_url}}/users/1'
+headers:
+  - name: X-User
+    value: '{% response ''body'', ''req_create'', ''b64::JC5pZA==::46b'', ''never'', 60 %}'
+auth:
+  type: none
+=== shop-api/users/_collection.yaml (create)
+name: Users
+description: User management
+order:
+  - create-user
+  - list-users
+  - get-user
+variables:
+  page_size: '25'
+=== shop-api/search-products.rman.yaml (create)
+version: 1
+kind: graphql
+name: Search products
+endpoint: '{{base_url}}/graphql'
+document: 'query Search($q: String) { products(q: $q) { id } }'
+variables:
+  q: lamp
+  apiKey: '{{apikey}}'
+auth:
+  type: api_key
+  name: X-Api-Key
+  value: '{{x_api_key}}'
+  in: header
+=== shop-api/login.rman.yaml (create)
+# imported-script: after-response (not executed)
+# insomnia.environment.set("token", insomnia.response.json().token);
+version: 1
+kind: http
+name: Login
+method: POST
+url: '{{base_url}}/login'
+body:
+  type: form
+  fields:
+    - name: username
+      value: ada
+    - name: password
+      value: '{{password_2}}'
+auth:
+  type: none
+=== shop-api/_collection.yaml (create)
+name: Shop API
+description: The shop
+order:
+  - users
+  - search-products
+  - login
+=== environments/dev.yaml (create)
+variables:
+  base_url: https://dev.shop.example.com
+  trace: '{% now ''iso-8601'', '''' %}'
+secrets:
+  - api_token
+=== environments/prod.yaml (create)
+variables:
+  base_url: https://shop.example.com
+secrets:
+  - api_token
+=== environments/private.yaml (create)
+variables:
+  base_url: http://localhost:8080
+secrets:
+  - api_token
+  - plain
+=== environments/local.yaml (create)
+secrets:
+  - token
+  - password
+  - x_api_key
+  - apikey
+  - password_2
