@@ -198,6 +198,8 @@ Rustman tracks which bytes of a request came from a secret, and also scans every
 - percent-encoding in upper- or lowercase hex: every byte but `A-Z a-z 0-9 - . _ ~` encoded, with a space as `%20` or as `+` (form encoding); the same leaving `/` as is (Python's `quote`); or leaving `!'()*` as is (JavaScript's `encodeURIComponent`);
 - HTML escapes of `&`, `<` and `>` as `&amp;`, `&lt;` and `&gt;`, with `"` and `'` as `&quot;` and `&#x27;` (Python), `&quot;` and `&#39;`, or `&#34;` and `&#39;` (Go); or every character but letters and digits as a decimal entity such as `&#47;`.
 
+A secret value longer than 8 KiB is matched as is only, not in these encoded forms: building a matcher over the encoded forms of very long values would take memory out of proportion.
+
 Not covered: Java's `URLEncoder` and PHP's `urlencode` (which keep `*` and encode `~`), XML escapes (`&apos;`), hexadecimal HTML entities other than `&#x27;`, and Go's `\u0008` and `\u000c` for backspace and form feed.
 
 Redaction happens before anything is quoted or shortened: an assertion message that quotes 200 characters of a body, or the 64 KiB preview of a large body, never ends with the start of a secret, and never splits a `«redacted:<name>»` placeholder.

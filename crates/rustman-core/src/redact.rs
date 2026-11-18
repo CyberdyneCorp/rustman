@@ -52,14 +52,14 @@ pub fn sensitive_header(header: &str) -> Option<&'static str> {
 ///
 /// It is a short list of shared [`Layer`]s: cloning it copies no values,
 /// a clone that adds values adds a layer of its own, and every layer builds
-/// its matchers once, on first use.
+/// its matcher once, on first use. Values added after a layer's matcher is
+/// built go to a new layer, and adjacent layers of similar size are merged
+/// (see [`Redactor::settle`]), so adding values one at a time between uses
+/// rebuilds O(log n) times per value, not once per value over all of them.
 #[derive(Clone, Default)]
 pub struct Redactor {
     layers: Vec<Arc<Layer>>,
 }
-
-/// The most layers a redactor keeps before merging them into one.
-const MAX_LAYERS: usize = 8;
 
 impl fmt::Debug for Redactor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -169,24 +169,37 @@ impl Redactor {
             return;
         }
         self.own_layer().add(name, value);
+        self.settle();
     }
 
-    /// The last layer, when no clone shares it; otherwise a new one (or,
-    /// past [`MAX_LAYERS`], every layer merged into one).
+    /// The last layer, when no clone shares it and its matcher is not
+    /// built yet; otherwise a new one.
     fn own_layer(&mut self) -> &mut Layer {
-        let owned = self
+        let open = self
             .layers
             .last_mut()
-            .is_some_and(|l| Arc::get_mut(l).is_some());
-        if !owned {
-            if self.layers.len() >= MAX_LAYERS {
-                self.layers = vec![Arc::new(Layer::compacted(&self.layers))];
-            } else {
-                self.layers.push(Arc::default());
-            }
+            .and_then(Arc::get_mut)
+            .is_some_and(|l| !l.is_built());
+        if !open {
+            self.layers.push(Arc::default());
         }
         let last = self.layers.last_mut().and_then(Arc::get_mut);
         last.expect("the last layer was just made unshared")
+    }
+
+    /// Merge the last two layers while the last is at least half the size
+    /// of the one before: sizes then shrink geometrically, so there are
+    /// O(log n) layers and each value is merged O(log n) times.
+    fn settle(&mut self) {
+        while let [.., before, last] = self.layers.as_slice() {
+            if before.size() > 2 * last.size() {
+                return;
+            }
+            let at = self.layers.len() - 2;
+            let merged = Layer::compacted(&self.layers[at..]);
+            self.layers.truncate(at);
+            self.layers.push(Arc::new(merged));
+        }
     }
 
     /// Also redact every value `other` knows, under the same names. Shares
@@ -197,9 +210,7 @@ impl Redactor {
                 self.layers.push(layer.clone());
             }
         }
-        if self.layers.len() > MAX_LAYERS {
-            self.layers = vec![Arc::new(Layer::compacted(&self.layers))];
-        }
+        self.settle();
     }
 
     /// The names of the secrets this redactor knows.
@@ -215,7 +226,7 @@ impl Redactor {
 
     /// Whether this redactor knows no secret value.
     pub fn is_empty(&self) -> bool {
-        self.layers.iter().all(|l| l.matcher().is_none())
+        self.layers.iter().all(|l| l.is_empty())
     }
 
     /// Whether `text` holds a known secret value, in any form it is matched in.
@@ -228,10 +239,7 @@ impl Redactor {
     /// matched part of an echoed secret, straddled one or kept the end of a
     /// masked one).
     pub fn reveals_secret(&self, text: &str) -> bool {
-        let piece = self.layers.iter().any(|l| {
-            l.piece_matcher()
-                .is_some_and(|m| m.is_match(text.as_bytes()))
-        });
+        let piece = self.layers.iter().any(|l| l.has_piece_in(text));
         piece || self.finds_secret(text)
     }
 
@@ -386,10 +394,16 @@ struct Stream {
 }
 
 impl Stream {
-    /// Write what no later chunk can change: everything but the last
-    /// `longest - 1` bytes (where a match could still start) and, for a run
-    /// reaching into them, its placeholders now and its last `longest - 1`
-    /// bytes kept, so an overlapping occurrence can continue it.
+    /// Write what no later chunk can change. The last `longest - 1` bytes
+    /// are held back: a match starting there may be incomplete. A run
+    /// starting at or after `keep` (a longer secret around it may still
+    /// complete) or reaching past it (a later occurrence may extend it) is
+    /// held back whole, with everything after it, so the output is exactly
+    /// what [`Redactor::bytes`] gives for the whole input. Only a run held
+    /// back past [`HOLD_LIMIT`] bytes (a periodic body matching everywhere)
+    /// is written early: its placeholders now, its last `longest - 1` bytes
+    /// kept so an overlapping occurrence continues it without a new
+    /// placeholder.
     fn flush(&mut self, redactor: &Redactor, at_end: bool) -> Vec<u8> {
         let tail = redactor.longest().saturating_sub(1);
         let len = self.pending.len();
@@ -400,43 +414,52 @@ impl Stream {
         };
         let mut out = Vec::with_capacity(keep);
         let mut copied = self.covered;
-        let mut consumed = None;
+        let mut stop = None;
         for run in redactor.runs(&self.pending, &[]) {
             if run.range.end <= copied {
                 continue;
             }
-            if run.range.start < self.covered {
-                self.show_new(&mut out, &run.placeholders);
-            } else {
+            let continues = run.range.start < self.covered;
+            let open = run.range.end > keep;
+            if !continues && (run.range.start >= keep || (open && len < HOLD_LIMIT)) {
+                stop = Some(Stop::Before(run.range.start));
+                break;
+            }
+            if !continues {
                 out.extend_from_slice(&self.pending[copied..run.range.start]);
                 self.shown.clear();
-                self.show_new(&mut out, &run.placeholders);
             }
+            self.show_new(&mut out, &run.placeholders);
             copied = run.range.end;
-            if run.range.end > keep {
-                consumed = Some(run.range.end.saturating_sub(tail).max(run.range.start));
+            if open {
+                let at = run.range.end.saturating_sub(tail).max(run.range.start);
+                stop = Some(Stop::Within(at));
                 break;
             }
         }
-        if consumed.is_none() && copied > keep {
-            // A run written earlier still reaches past `keep` (small reads).
-            consumed = Some(copied.saturating_sub(tail));
+        if copied > keep && !matches!(stop, Some(Stop::Within(_))) {
+            // A run written early still reaches past `keep` (small reads):
+            // keep its tail covered so an occurrence can still continue it.
+            stop = Some(Stop::Within(copied.saturating_sub(tail)));
         }
-        let next = match consumed {
-            Some(at) => {
+        let next = match stop {
+            Some(Stop::Within(at)) => {
                 self.covered = copied - at;
                 at
             }
-            None => {
-                let to = keep.max(copied);
-                out.extend_from_slice(&self.pending[copied..to]);
-                self.covered = 0;
-                self.shown.clear();
-                to
-            }
+            Some(Stop::Before(at)) => self.write_raw(&mut out, copied, at.min(keep)),
+            None => self.write_raw(&mut out, copied, keep.max(copied)),
         };
         self.pending.drain(..next);
         out
+    }
+
+    /// Write `pending[from..to]` as is; nothing written is covered any more.
+    fn write_raw(&mut self, out: &mut Vec<u8>, from: usize, to: usize) -> usize {
+        out.extend_from_slice(&self.pending[from..to]);
+        self.covered = 0;
+        self.shown.clear();
+        to
     }
 
     fn show_new(&mut self, out: &mut Vec<u8>, placeholders: &[Arc<str>]) {
@@ -448,6 +471,18 @@ impl Stream {
         }
     }
 }
+
+/// Where [`Stream::flush`] stopped writing.
+enum Stop {
+    /// Before a run held back whole: write raw bytes up to it, keep the rest.
+    Before(usize),
+    /// Inside a run written early: keep from here, as covered.
+    Within(usize),
+}
+
+/// How many pending bytes [`Stream::flush`] holds back for one run before
+/// writing it early.
+const HOLD_LIMIT: usize = 1024 * 1024;
 
 /// The shortest piece of a secret value that counts as revealing it; shorter
 /// ones are too common to tell.
@@ -505,14 +540,20 @@ fn log_secrets() -> &'static RwLock<Redactor> {
 
 /// Make [`redact_logs`] redact every value `redactor` knows. Call it as soon
 /// as secrets are resolved, before anything about the request is logged.
+/// Only values not remembered yet are added (to one layer, never shared),
+/// and its matcher is built when a log line is actually written.
 pub fn remember_for_logs(redactor: &Redactor) {
     if redactor.is_empty() {
         return;
     }
-    log_secrets()
+    let mut logs = log_secrets()
         .write()
-        .unwrap_or_else(PoisonError::into_inner)
-        .merge(redactor);
+        .unwrap_or_else(PoisonError::into_inner);
+    for layer in &redactor.layers {
+        for (name, value) in layer.entries() {
+            logs.add_value(name, value);
+        }
+    }
 }
 
 /// `line` with every secret value remembered by [`remember_for_logs`]

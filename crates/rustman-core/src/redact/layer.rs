@@ -28,18 +28,55 @@ pub(super) struct Layer {
     /// Built on first use, dropped when a value is added.
     matcher: OnceLock<Option<AhoCorasick>>,
     /// Every [`MIN_SECRET_PIECE`]-character window of every raw value, for
-    /// taint checks only (never for output); built on first use.
-    pieces: OnceLock<Option<AhoCorasick>>,
+    /// taint checks only (never for output), kept up to date as values are
+    /// added: nothing to rebuild.
+    pieces: HashSet<Piece>,
 }
 
 impl Layer {
-    /// One layer holding every value of `layers`.
+    /// One layer holding every value of `layers`, from their forms as
+    /// they are (nothing is encoded again).
     pub(super) fn compacted(layers: &[Arc<Layer>]) -> Self {
         let mut layer = Self::default();
-        for (name, value) in layers.iter().flat_map(|l| &l.entries) {
-            layer.add(name, value);
+        for other in layers {
+            for (name, value) in &other.entries {
+                if layer.values.insert(value.clone()) {
+                    layer.entries.push((name.clone(), value.clone()));
+                }
+            }
+            for name in &other.names {
+                if !layer.names.contains(name) {
+                    layer.names.push(name.clone());
+                }
+            }
+            for (needle, placeholder) in other.needles.iter().zip(&other.placeholders) {
+                if layer.forms.insert(needle.clone()) {
+                    layer.needles.push(needle.clone());
+                    layer.placeholders.push(placeholder.clone());
+                }
+            }
+            layer.pieces.extend(&other.pieces);
         }
         layer
+    }
+
+    pub(super) fn is_empty(&self) -> bool {
+        self.needles.is_empty()
+    }
+
+    /// Whether the matcher was built: adding a value would throw it away.
+    pub(super) fn is_built(&self) -> bool {
+        self.matcher.get().is_some()
+    }
+
+    /// The bytes of every form held, to compare layer sizes.
+    pub(super) fn size(&self) -> usize {
+        self.needles.iter().map(Vec::len).sum::<usize>().max(1)
+    }
+
+    /// Every value of this layer, with its name, in the order added.
+    pub(super) fn entries(&self) -> &[(String, String)] {
+        &self.entries
     }
 
     pub(super) fn has_value(&self, value: &str) -> bool {
@@ -71,31 +108,18 @@ impl Layer {
                 self.placeholders.push(placeholder.clone());
             }
         }
+        self.pieces.extend(pieces(value));
         self.matcher = OnceLock::new();
-        self.pieces = OnceLock::new();
     }
 
     pub(super) fn matcher(&self) -> Option<&AhoCorasick> {
         self.matcher.get_or_init(|| build(&self.needles)).as_ref()
     }
 
-    pub(super) fn piece_matcher(&self) -> Option<&AhoCorasick> {
-        self.pieces
-            .get_or_init(|| {
-                let mut seen = HashSet::new();
-                let mut pieces = Vec::new();
-                for (_, value) in &self.entries {
-                    let chars: Vec<char> = value.chars().collect();
-                    for window in chars.windows(MIN_SECRET_PIECE) {
-                        let piece: String = window.iter().collect();
-                        if seen.insert(piece.clone()) {
-                            pieces.push(piece);
-                        }
-                    }
-                }
-                build(&pieces)
-            })
-            .as_ref()
+    /// Whether `text` holds any [`MIN_SECRET_PIECE`]-character piece of a
+    /// value of this layer.
+    pub(super) fn has_piece_in(&self, text: &str) -> bool {
+        !self.pieces.is_empty() && pieces(text).any(|p| self.pieces.contains(&p))
     }
 
     pub(super) fn placeholder(&self, pattern: usize) -> &Arc<str> {
@@ -107,15 +131,29 @@ impl Layer {
     }
 }
 
-/// Pattern bytes above which a matcher is a contiguous NFA: a DFA over
-/// that many long patterns takes long to build and much memory.
-const LARGE_PATTERNS: usize = 64 * 1024;
+type Piece = [char; MIN_SECRET_PIECE];
 
+/// Every [`MIN_SECRET_PIECE`]-character window of `text`.
+fn pieces(text: &str) -> impl Iterator<Item = Piece> + '_ {
+    let mut window: Vec<char> = Vec::with_capacity(MIN_SECRET_PIECE);
+    text.chars().filter_map(move |c| {
+        if window.len() == MIN_SECRET_PIECE {
+            window.remove(0);
+        }
+        window.push(c);
+        window.as_slice().try_into().ok()
+    })
+}
+
+/// A matcher over `patterns`: a contiguous NFA, whose memory stays
+/// proportional to the pattern bytes (a DFA over long secrets in many
+/// encoded forms takes hundreds of KiB each, and long to build).
 fn build<P: AsRef<[u8]>>(patterns: &[P]) -> Option<AhoCorasick> {
     if patterns.is_empty() {
         return None;
     }
-    let total: usize = patterns.iter().map(|p| p.as_ref().len()).sum();
-    let kind = (total > LARGE_PATTERNS).then_some(AhoCorasickKind::ContiguousNFA);
-    AhoCorasickBuilder::new().kind(kind).build(patterns).ok()
+    AhoCorasickBuilder::new()
+        .kind(Some(AhoCorasickKind::ContiguousNFA))
+        .build(patterns)
+        .ok()
 }
