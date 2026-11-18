@@ -2,17 +2,15 @@
 //! command (design D13). Every value goes through the [`Redactor`] unless
 //! secrets are shown on purpose.
 
-use std::borrow::Cow;
+use std::path::Path;
 
-use rustman_core::Redactor;
-use rustman_core::model::{ApiKeyLocation, Auth};
-use rustman_core::redact::sensitive_header;
-use rustman_core::secret::placeholder;
+use rustman_core::model::{ApiKeyLocation, Auth, AwsCredentials, AwsSigV4};
 use rustman_core::vars::{
-    Resolved, ResolvedBody, ResolvedPair, ResolvedPart, ResolvedPartSource, ResolvedRequest,
+    Resolved, ResolvedBody, ResolvedFile, ResolvedPart, ResolvedPartSource, ResolvedRequest,
 };
 
-use crate::wire;
+use crate::shown::Shown;
+use crate::snippet::{shell_word, url};
 
 /// A curl command and what it leaves out.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -24,12 +22,41 @@ pub struct Exported {
 /// `request` as a curl command. Secret values are redacted unless
 /// `show_secrets`.
 pub fn export_curl(request: &ResolvedRequest, show_secrets: bool) -> Exported {
-    let shown = Shown {
-        redactor: (!show_secrets).then(|| Redactor::for_request(request)),
+    curl_command(
+        request,
+        &CurlOptions {
+            show_secrets,
+            ..CurlOptions::default()
+        },
+    )
+}
+
+/// What a curl command is built for: `export curl`, or a snippet.
+#[derive(Default)]
+pub(crate) struct CurlOptions<'a> {
+    pub show_secrets: bool,
+    /// Snippets: curl's own Digest and SigV4 options instead of a warning.
+    pub signature_helpers: bool,
+    /// Placeholder mode: `{{name}}` markers are kept unencoded.
+    pub keep_markers: bool,
+    /// Snippets: files named relative to this workspace root.
+    pub root: Option<&'a Path>,
+}
+
+/// `request` as a curl command, built for `options`.
+pub(crate) fn curl_command(request: &ResolvedRequest, options: &CurlOptions<'_>) -> Exported {
+    let shown = Shown::new(request, options.show_secrets);
+    let mut out = Command {
+        options,
+        words: Vec::new(),
+        warnings: Vec::new(),
     };
-    let mut out = Command::default();
     out.method(request);
-    out.arg(shown.text(&url(request)).into_owned());
+    out.url(
+        shown
+            .text(&url::request_url(request, options.keep_markers))
+            .into_owned(),
+    );
     out.auth(request, &shown);
     for pair in &request.headers {
         if !computed_by_engine(&pair.name.text) {
@@ -47,77 +74,6 @@ pub fn export_curl(request: &ResolvedRequest, show_secrets: bool) -> Exported {
         out.arg("-L");
     }
     out.finish()
-}
-
-/// How values are shown: redacted, or as they are with `--show-secrets`.
-struct Shown {
-    redactor: Option<Redactor>,
-}
-
-impl Shown {
-    fn text<'a>(&self, text: &'a str) -> Cow<'a, str> {
-        match &self.redactor {
-            Some(redactor) => redactor.text(text),
-            None => Cow::Borrowed(text),
-        }
-    }
-
-    fn resolved(&self, value: &Resolved) -> String {
-        match &self.redactor {
-            Some(redactor) => redactor.resolved(value),
-            None => value.text.clone(),
-        }
-    }
-
-    /// A header value; credentials (`Authorization`, `Cookie`, ...) are
-    /// replaced whole, by the placeholders of the secrets they contain, or by
-    /// the header's own placeholder.
-    fn header(&self, name: &str, value: &Resolved) -> String {
-        let redacted = self.resolved(value);
-        match sensitive_header(name) {
-            Some(canonical) if self.redactor.is_some() => {
-                let secrets = placeholders(&redacted);
-                if secrets.is_empty() {
-                    placeholder(canonical)
-                } else {
-                    secrets
-                }
-            }
-            _ => redacted,
-        }
-    }
-}
-
-/// Every `«redacted:...»` placeholder in `text`, concatenated.
-fn placeholders(text: &str) -> String {
-    const START: &str = "«redacted:";
-    let mut found = String::new();
-    let mut rest = text;
-    while let Some(start) = rest.find(START) {
-        let tail = &rest[start..];
-        let end = tail.find('»').map_or(tail.len(), |e| e + '»'.len_utf8());
-        found.push_str(&tail[..end]);
-        rest = &tail[end..];
-    }
-    found
-}
-
-/// The URL as sent: query appended, no fragment.
-fn url(request: &ResolvedRequest) -> String {
-    let mut query = request.query.clone();
-    if let Some(Auth::ApiKey {
-        name,
-        value,
-        location: Some(ApiKeyLocation::Query),
-    }) = &request.auth
-    {
-        query.push(ResolvedPair {
-            name: Resolved::literal(name.clone()),
-            value: Resolved::literal(value.clone()),
-        });
-    }
-    wire::uri(&request.url.text, &query)
-        .map_or_else(|_| request.url.text.clone(), |uri| uri.to_string())
 }
 
 fn computed_by_engine(header: &str) -> bool {
@@ -147,13 +103,13 @@ fn implied_content_type(request: &ResolvedRequest) -> Option<&'static str> {
 }
 
 /// The command's words, quoted when written out.
-#[derive(Default)]
-struct Command {
+struct Command<'o> {
+    options: &'o CurlOptions<'o>,
     words: Vec<String>,
     warnings: Vec<String>,
 }
 
-impl Command {
+impl Command<'_> {
     fn arg(&mut self, word: impl Into<String>) {
         self.words.push(word.into());
     }
@@ -163,8 +119,31 @@ impl Command {
         self.arg(value);
     }
 
+    /// The URL, after `--url` when curl would read it as an option.
+    fn url(&mut self, url: String) {
+        if url.starts_with('-') {
+            self.option("--url", url);
+        } else {
+            self.arg(url);
+        }
+    }
+
+    /// `-H 'Name: value'`, or `-H 'Name;'` for an empty value: curl reads
+    /// `Name:` with nothing after it as "do not send this header". A name
+    /// that is not an HTTP token is left out (the engine refuses it too):
+    /// `-H @file` would read headers from a file.
     fn header(&mut self, name: &str, value: &str) {
-        self.option("-H", format!("{name}: {value}"));
+        if !is_token(name) {
+            self.warnings.push(format!(
+                "header '{name}' is not a valid header name; it is left out"
+            ));
+            return;
+        }
+        if value.is_empty() {
+            self.option("-H", format!("{name};"));
+        } else {
+            self.option("-H", format!("{name}: {value}"));
+        }
     }
 
     /// `-X` unless curl's own choice (GET, or POST with a body) matches.
@@ -199,8 +178,68 @@ impl Command {
                 "the OAuth2 access token is not included; send the request with rustman to acquire it"
                     .into(),
             ),
+            Some(auth) if self.options.signature_helpers => self.signature(auth, shown),
+            Some(Auth::Digest { .. }) => self.signature_warning("digest"),
+            Some(Auth::AwsSigV4(_)) => self.signature_warning("aws_sigv4"),
+            Some(Auth::Jwt(_)) => self.signature_warning("jwt"),
             _ => {}
         }
+    }
+
+    /// curl's `--digest` and `--aws-sigv4`. JWT has no curl option; the
+    /// snippet says so itself.
+    fn signature(&mut self, auth: &Auth, shown: &Shown) {
+        match auth {
+            Auth::Digest { username, password } => {
+                self.arg("--digest");
+                let password = shown.credential(password, "password");
+                self.option("-u", format!("{}:{password}", shown.text(username)));
+            }
+            Auth::AwsSigV4(sigv4) => self.sigv4(sigv4, shown),
+            _ => {}
+        }
+    }
+
+    fn sigv4(&mut self, sigv4: &AwsSigV4, shown: &Shown) {
+        let provider = format!("aws:amz:{}:{}", sigv4.region, sigv4.service);
+        self.option("--aws-sigv4", provider);
+        let (access_key, secret_key, token) = match &sigv4.credentials {
+            AwsCredentials::Fields {
+                access_key,
+                secret_key,
+                session_token,
+            } => (
+                shown.text(access_key).into_owned(),
+                shown.credential(secret_key, "aws_secret_key"),
+                session_token
+                    .as_deref()
+                    .map(|t| shown.credential(t, "aws_session_token")),
+            ),
+            AwsCredentials::Env | AwsCredentials::Profile(_) => {
+                self.warnings.push(
+                    "aws_sigv4 credentials from the environment or a profile are not included"
+                        .into(),
+                );
+                let key = rustman_core::secret::placeholder("aws_access_key");
+                (
+                    key,
+                    rustman_core::secret::placeholder("aws_secret_key"),
+                    None,
+                )
+            }
+        };
+        self.option("-u", format!("{access_key}:{secret_key}"));
+        if let Some(token) = token {
+            self.header("x-amz-security-token", &token);
+        }
+    }
+
+    /// Signature auth is computed per request, so it cannot be written as
+    /// a fixed header.
+    fn signature_warning(&mut self, auth: &str) {
+        self.warnings.push(format!(
+            "{auth} auth is not included; send the request with rustman to sign it"
+        ));
     }
 
     fn body(&mut self, body: &ResolvedBody, shown: &Shown) {
@@ -214,9 +253,13 @@ impl Command {
                 self.option("--data-raw", shown.resolved(text));
             }
             ResolvedBody::Form(fields) => {
-                self.option("--data-raw", shown.text(&wire::form(fields)).into_owned());
+                let form = url::form(fields, self.options.keep_markers);
+                self.option("--data-raw", shown.text(&form).into_owned());
             }
-            ResolvedBody::File(file) => self.option("--data-binary", format!("@{}", file.raw)),
+            ResolvedBody::File(file) => {
+                let path = self.path(file);
+                self.option("--data-binary", format!("@{path}"));
+            }
             ResolvedBody::Multipart(parts) => {
                 for part in parts {
                     self.part(part, shown);
@@ -226,13 +269,30 @@ impl Command {
     }
 
     /// `--form-string name=value` for plain text; `-F` with a quoted value
-    /// when there is a type, or a file.
+    /// when there is a type, or a file. `--form-string` never reads a file;
+    /// `-F` does for a value starting with `@` or `<` and for a `headers=@`
+    /// parameter, so its value is quoted and its type must be a plain media
+    /// type. Both split at the first `=`, so a name holding one cannot be
+    /// written.
     fn part(&mut self, part: &ResolvedPart, shown: &Shown) {
-        let type_param = part
-            .content_type
-            .as_deref()
-            .map(|ct| format!(";type={ct}"))
-            .unwrap_or_default();
+        let type_param = match part.content_type.as_deref() {
+            Some(ct) if plain_media_type(ct) => format!(";type={ct}"),
+            Some(ct) => {
+                self.warnings.push(format!(
+                    "the content type '{ct}' of part '{}' cannot be written for curl -F; it is left out",
+                    part.name
+                ));
+                String::new()
+            }
+            None => String::new(),
+        };
+        if part.name.contains('=') {
+            self.warnings.push(format!(
+                "part '{}' has '=' in its name, which curl cannot send; it is left out",
+                part.name
+            ));
+            return;
+        }
         match &part.source {
             ResolvedPartSource::Text(text) if type_param.is_empty() => {
                 let value = shown.resolved(text);
@@ -243,17 +303,21 @@ impl Command {
                 self.option("-F", format!("{}={value}{type_param}", part.name));
             }
             ResolvedPartSource::File(file) => {
-                let path = quote_if_needed(&file.raw);
+                let path = quote_if_needed(&self.path(file));
                 self.option("-F", format!("{}=@{path}{type_param}", part.name));
             }
         }
+    }
+
+    fn path(&self, file: &ResolvedFile) -> String {
+        url::file_path(file, self.options.root)
     }
 
     fn finish(self) -> Exported {
         let mut command = String::from("curl");
         for word in &self.words {
             command.push(' ');
-            command.push_str(&shell_escape::unix::escape(Cow::Borrowed(word.as_str())));
+            command.push_str(&shell_word(word));
         }
         Exported {
             command,
@@ -268,11 +332,44 @@ fn quote(value: &str) -> String {
 }
 
 fn quote_if_needed(value: &str) -> String {
-    if value.contains([';', '"', '\\']) {
+    if value.contains([';', ',', '"', '\\']) {
         quote(value)
     } else {
         value.to_owned()
     }
+}
+
+/// Whether `name` is an RFC 9110 token (a valid header name).
+fn is_token(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&b))
+}
+
+/// Whether `content_type` can follow `;type=` in a curl `-F` value: curl
+/// cuts the type at `,` and reads `;headers=@file` (or `filename=`,
+/// `encoder=`) after it as its own parameters, quoted or not, so only plain
+/// `type/subtype` with token parameters (`; charset=utf-8`) is written.
+fn plain_media_type(content_type: &str) -> bool {
+    let mut parts = content_type.split(';');
+    let essence = parts.next().unwrap_or_default();
+    let valid_essence = essence
+        .split_once('/')
+        .is_some_and(|(t, s)| is_token(t) && is_token(s));
+    valid_essence
+        && parts.all(|param| {
+            param
+                .trim_start()
+                .split_once('=')
+                .is_some_and(|(name, value)| {
+                    is_token(name)
+                        && is_token(value)
+                        && !["type", "filename", "headers", "encoder"]
+                            .iter()
+                            .any(|k| name.eq_ignore_ascii_case(k))
+                })
+        })
 }
 
 #[cfg(test)]
@@ -280,19 +377,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn placeholders_are_collected_in_order() {
-        assert_eq!(
-            placeholders("Bearer «redacted:a»x«redacted:b»"),
-            "«redacted:a»«redacted:b»"
-        );
-        assert_eq!(placeholders("plain"), "");
-        assert_eq!(placeholders("«redacted:open"), "«redacted:open");
-    }
-
-    #[test]
     fn form_values_are_quoted_for_curl() {
         assert_eq!(quote(r#"a"b\c"#), r#""a\"b\\c""#);
         assert_eq!(quote_if_needed("a.png"), "a.png");
         assert_eq!(quote_if_needed("a;b"), "\"a;b\"");
+        assert_eq!(quote_if_needed("a,b"), "\"a,b\"");
+    }
+
+    #[test]
+    fn only_plain_media_types_follow_type() {
+        for ok in ["image/png", "text/plain; charset=utf-8", "a/b;x=y"] {
+            assert!(plain_media_type(ok), "{ok}");
+        }
+        for bad in [
+            "text/plain;headers=@/etc/passwd",
+            "text/plain; filename=x",
+            "text/plain,x/y",
+            "text/plain; charset=\"x\"",
+            "@/etc/passwd",
+            "text",
+        ] {
+            assert!(!plain_media_type(bad), "{bad}");
+        }
     }
 }

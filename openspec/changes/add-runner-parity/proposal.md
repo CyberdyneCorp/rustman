@@ -58,4 +58,4 @@ All of these are added requirements. No existing requirement changes behavior.
 - `rustman-tui`: the picker dialog and an OSC 52 clipboard writer.
 - `rustman-import`: new mapping rules and the migration report writer.
 - New dependencies: `csv` (row parsing), `aws-sigv4` (request signing only, without the AWS SDK runtime), `jsonwebtoken` (JWT signing). Digest uses `md-5` and `sha2`. Snippets reuse `minijinja`.
-- Reports: each exchange gains an optional `iteration` object. This is an additive change to `rustman.report/v1`.
+- Reports: each exchange of a data-driven run gains an optional `data_row` object; the integer `iteration` is unchanged. This is an additive change to `rustman.report/v1`.

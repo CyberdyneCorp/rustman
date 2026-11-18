@@ -9,10 +9,9 @@ use crate::pretty::reasons;
 
 /// `run` as a TAP version 14 stream, ending in a newline.
 pub fn tap(run: &RunRecord) -> String {
-    let show_iteration = run.requests.iter().any(|r| r.iteration > 1);
     let mut out = format!("TAP version 14\n1..{}\n", run.requests.len());
     for (number, record) in (1..).zip(&run.requests) {
-        point(&mut out, number, record, show_iteration);
+        point(&mut out, number, record);
     }
     if run.summary.interrupted {
         out.push_str("Bail out! interrupted: the results are partial\n");
@@ -20,7 +19,7 @@ pub fn tap(run: &RunRecord) -> String {
     out
 }
 
-fn point(out: &mut String, number: usize, record: &RequestRecord, show_iteration: bool) {
+fn point(out: &mut String, number: usize, record: &RequestRecord) {
     let ok = if matches!(
         record.status,
         RequestStatus::Passed | RequestStatus::Skipped
@@ -30,10 +29,11 @@ fn point(out: &mut String, number: usize, record: &RequestRecord, show_iteration
         "not ok"
     };
     // `#` starts a directive in TAP, so it is escaped in descriptions.
-    let mut description = record.id.replace('#', "\\#");
-    if show_iteration {
-        let _ = write!(description, " [{}]", record.iteration);
+    let mut description = record.id.clone();
+    if let Some(label) = record.iteration_label() {
+        let _ = write!(description, " [{label}]");
     }
+    let description = description.replace('#', "\\#");
     let _ = write!(out, "{ok} {number} - {description}");
     if let Some(reason) = record.skip_reason {
         let _ = write!(out, " # SKIP {reason}");

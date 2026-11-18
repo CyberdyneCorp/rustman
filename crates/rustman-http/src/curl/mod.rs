@@ -5,5 +5,6 @@ mod export;
 mod import;
 mod options;
 
+pub(crate) use export::{CurlOptions, curl_command};
 pub use export::{Exported, export_curl};
 pub use import::{COMPRESSED_ACCEPT_ENCODING, CurlError, Imported, import_curl, import_curl_words};

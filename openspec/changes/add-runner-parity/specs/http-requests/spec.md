@@ -20,7 +20,7 @@
 - **THEN** the exchange SHALL complete with status `401` and no further retries
 
 ### Requirement: Digest nonce reuse
-Nonce and nonce count SHALL be cached per environment, realm and host, so later requests send credentials without a challenge. A `stale=true` challenge SHALL trigger one retry with the new nonce. `qop=auth-int` and `userhash` SHALL fail with `digest: unsupported qop auth-int`.
+Nonce and nonce count SHALL be cached per environment, realm and host, so later requests send credentials without a challenge. A `stale=true` challenge SHALL trigger one retry with the new nonce. A challenge offering only `qop=auth-int` SHALL fail with `digest: unsupported qop auth-int`, and one with `userhash=true` with `digest: unsupported userhash`.
 
 #### Scenario: Preemptive second request
 - **GIVEN** a successful digest exchange with host `api.example` in `staging`
@@ -41,7 +41,7 @@ Because a digest challenge requires resending, a `file` or multipart body SHALL 
 - **THEN** it SHALL fail as a request error (exit code 3) with that message, and no bytes SHALL be sent
 
 ### Requirement: AWS SigV4 auth
-`auth: {type: aws_sigv4, region, service}` SHALL sign requests with AWS Signature Version 4, adding `Authorization`, `X-Amz-Date`, `X-Amz-Content-Sha256` and, with a session token, `X-Amz-Security-Token`. Signing SHALL be the last step before sending, and every redirect hop SHALL be re-signed.
+`auth: {type: aws_sigv4, region, service}` SHALL sign requests with AWS Signature Version 4, adding `Authorization`, `X-Amz-Date`, `X-Amz-Content-Sha256` and, with a session token, `X-Amz-Security-Token`. Signing SHALL be the last step before sending. Same-origin redirect hops SHALL be re-signed; from the first hop that leaves the origin on, no hop SHALL be signed.
 
 #### Scenario: Signed S3 GET
 - **GIVEN** `auth: {type: aws_sigv4, region: us-east-1, service: s3, access_key: "{{aws_key}}", secret_key: "{{aws_secret}}"}`
@@ -52,6 +52,17 @@ Because a digest challenge requires resending, a `file` or multipart body SHALL 
 - **GIVEN** the AWS SigV4 test suite cases (`get-vanilla`, `post-x-www-form-urlencoded`, `get-utf8` and the rest)
 - **WHEN** each is signed with the suite's fixed credentials and date
 - **THEN** the canonical request, string to sign and signature SHALL match the suite exactly
+
+#### Scenario: Same-origin redirect
+- **GIVEN** a SigV4 request to `/a` that redirects with `302` to `/b` on the same origin
+- **WHEN** the redirect is followed
+- **THEN** the request to `/b` SHALL carry a new signature, valid for `/b`
+
+#### Scenario: Cross-origin redirect
+- **GIVEN** a SigV4 request that redirects to another host or port
+- **WHEN** the redirect is followed
+- **THEN** the request to the other origin SHALL carry no `Authorization`, no `X-Amz-*` header, no access key and no session token
+- **AND** a later redirect back to the original origin SHALL be unsigned too
 
 #### Scenario: Default headers are signed
 - **GIVEN** workspace default header `X-Trace: 1`

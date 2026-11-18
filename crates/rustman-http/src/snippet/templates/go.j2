@@ -1,0 +1,114 @@
+{% if auth_comment %}
+// {{ auth_comment }}
+{% endif %}
+package main
+
+import (
+{% if body.kind == "multipart" %}
+	"bytes"
+{% endif %}
+{% if not verify_tls %}
+	"crypto/tls"
+{% endif %}
+	"fmt"
+	"io"
+{% if body.kind == "multipart" %}
+	"mime/multipart"
+{% endif %}
+	"net/http"
+{% if body.any_typed %}
+	"net/textproto"
+{% endif %}
+{% if body.kind == "file" or body.any_file %}
+	"os"
+{% endif %}
+{% if body.kind == "text" %}
+	"strings"
+{% endif %}
+)
+
+func main() {
+{% for c in constants %}
+	const {{ c.name }} = {{ c.value | lit }}
+{% endfor %}
+{% if constants %}
+
+{% endif %}
+{% if body.kind == "text" %}
+	body := strings.NewReader({{ body.text | q }})
+
+{% elif body.kind == "file" %}
+	body, err := os.Open({{ body.path | q }})
+	if err != nil {
+		panic(err)
+	}
+	defer body.Close()
+
+{% elif body.kind == "multipart" %}
+	body := &bytes.Buffer{}
+	form := multipart.NewWriter(body)
+{% for p in body.parts %}
+{% if p.content_type %}
+	part{{ loop.index }}, err := form.CreatePart(textproto.MIMEHeader{
+		"Content-Disposition": {{ "{" }}{{ p.disposition | lit }}{{ "}" }},
+		"Content-Type":        {{ "{" }}{{ p.content_type | lit }}{{ "}" }},
+	})
+	if err != nil {
+		panic(err)
+	}
+{% if p.is_file %}
+	data{{ loop.index }}, err := os.ReadFile({{ p.path | q }})
+	if err != nil {
+		panic(err)
+	}
+	if _, err := part{{ loop.index }}.Write(data{{ loop.index }}); err != nil {
+		panic(err)
+	}
+{% else %}
+	if _, err := part{{ loop.index }}.Write([]byte({{ p.value | q }})); err != nil {
+		panic(err)
+	}
+{% endif %}
+{% else %}
+	if err := form.WriteField({{ p.name | lit }}, {{ p.value | q }}); err != nil {
+		panic(err)
+	}
+{% endif %}
+{% endfor %}
+	if err := form.Close(); err != nil {
+		panic(err)
+	}
+
+{% endif %}
+	req, err := http.NewRequest({{ method | lit }}, {{ url | q }}, {% if body.kind == "none" %}nil{% else %}body{% endif %})
+	if err != nil {
+		panic(err)
+	}
+{% for h in headers %}
+	req.Header.Add({{ h.name | lit }}, {{ h.value | q }})
+{% endfor %}
+{% if body.kind == "multipart" %}
+	req.Header.Set("Content-Type", form.FormDataContentType())
+{% endif %}
+
+	client := &http.Client{}
+{% if not follow_redirects %}
+	client.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+{% endif %}
+{% if not verify_tls %}
+	client.Transport = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
+{% endif %}
+	resp, err := client.Do(req)
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(resp.Status)
+	fmt.Println(string(data))
+}

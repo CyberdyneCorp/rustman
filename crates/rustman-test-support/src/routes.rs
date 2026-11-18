@@ -23,6 +23,8 @@
 //! | `/mirror?pad=<n>&tail=<m>` | `200` text: `<n>` `A`s, the request body as an ASCII-only JSON string (`"caf\u00e9 \"x\""`), `<m>` `B`s |
 //! | `/latin1` | `200` Latin-1 JSON (not valid UTF-8): `{"city":"Bel\xe9m","echo":"<request body>"}` |
 //! | `/me` | `200` JSON `{"id": 42}` with `Authorization: Bearer TOKEN`, else `401` |
+//! | `/aws-skew` | `403` with an AWS `RequestTimeTooSkewed` error body |
+//! | `/aws-credential` | `200` text: the `Credential=` scope and the `SignedHeaders=` list of a SigV4 `Authorization`, one per line (no signature) |
 
 use std::convert::Infallible;
 use std::pin::Pin;
@@ -58,6 +60,9 @@ pub const USER: &str = r#"{"id":42,"name":"Ana","email":"ana@example.com","roles
 pub const TOKEN: &str = "tok-7f3a";
 
 const CHUNK: usize = 64 * 1024;
+
+/// The error AWS returns for a request signed too far from its clock.
+const AWS_SKEW: &str = "<Error><Code>RequestTimeTooSkewed</Code><Message>The difference between the request time and the current time is too large.</Message></Error>";
 
 /// One `/timed` request as the server saw it.
 #[derive(Clone, Debug)]
@@ -147,11 +152,37 @@ pub async fn handle(req: Request<Incoming>) -> Result<Response<TestBody>, Infall
             &serde_json::json!({"access_token": TOKEN, "user": {"id": 42}}),
         ),
         ["me"] => me(&req),
+        ["aws-credential"] => aws_credential(&req),
+        ["aws-skew"] => Response::builder()
+            .status(StatusCode::FORBIDDEN)
+            .header(header::CONTENT_TYPE, "application/xml")
+            .body(Full::new(Bytes::from_static(AWS_SKEW.as_bytes())).boxed())
+            .unwrap(),
         ["users", "42"] => user(),
         ["orders"] => order(),
         _ => text(StatusCode::NOT_FOUND, "no such route"),
     };
     Ok(response)
+}
+
+/// The `Credential=<key>/<date>/<region>/<service>/aws4_request` scope and
+/// the `SignedHeaders=` list of a SigV4 `Authorization` header, which hold
+/// no secret.
+fn aws_credential(req: &Request<Incoming>) -> Response<TestBody> {
+    let authorization = req
+        .headers()
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default();
+    let field = |name: &str| {
+        authorization
+            .split_once(name)
+            .and_then(|(_, rest)| rest.split(',').next())
+            .unwrap_or_default()
+            .to_owned()
+    };
+    let text = format!("{}\n{}", field("Credential="), field("SignedHeaders="));
+    Response::new(Full::new(Bytes::from(text)).boxed())
 }
 
 fn millis(ms: &str) -> Duration {

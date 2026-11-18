@@ -445,6 +445,17 @@ fn export_covers_api_keys_files_multipart_and_oauth2() {
         exported.warnings,
         ["the OAuth2 access token is not included; send the request with rustman to acquire it"]
     );
+
+    request.auth = Some(Auth::Digest {
+        username: "u".into(),
+        password: "p".into(),
+    });
+    let exported = export_curl(&request, false);
+    assert_eq!(exported.command, "curl -X POST 'https://h/' -L");
+    assert_eq!(
+        exported.warnings,
+        ["digest auth is not included; send the request with rustman to sign it"]
+    );
 }
 
 #[test]

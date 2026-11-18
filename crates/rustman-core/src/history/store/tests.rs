@@ -10,7 +10,7 @@ fn settings(max_entries: usize) -> HistorySettings {
 }
 
 fn entry(url: &str, spill: Option<&str>) -> Entry {
-    let record = RequestRecord::new("a".into(), "A".into(), "a.rman.yaml".into(), 1);
+    let record = RequestRecord::new("a".into(), "A".into(), "a.rman.yaml".into());
     Entry::new(NewEntry {
         record: &record,
         sent: SentRequest {

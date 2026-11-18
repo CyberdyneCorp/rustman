@@ -7,6 +7,7 @@ use std::time::Instant;
 use rustman_core::Redactor;
 use rustman_core::assertions::{self, Context, needs_body};
 use rustman_core::captures::{self, CaptureReport, Persistence, RunCaptures};
+use rustman_core::data_rows::RowSource;
 use rustman_core::model::{HttpRequest, Request};
 use rustman_core::redact::remember_for_logs;
 use rustman_core::run::{RequestRecord, RequestStatus, SkipReason};
@@ -59,9 +60,13 @@ impl Runner<'_> {
         let started = Instant::now();
         let file = request.entry.path.to_string_lossy().replace('\\', "/");
         let name = request.request().name().to_owned();
-        let record = RequestRecord::new(request.entry.id(), name, file, iteration);
+        let record = RequestRecord::new(request.entry.id(), name, file).in_iteration(
+            iteration,
+            self.iterations(),
+            self.data_row(iteration),
+        );
         tracing::debug!(request = %record.id, iteration, "sending");
-        let mut sent = self.execute(request, record).await;
+        let mut sent = self.execute(request, record, iteration).await;
         sent.record.duration_ms = millis(started.elapsed());
         let file = (!self.options.ad_hoc).then(|| sent.record.file.clone());
         let redactor = self.sink_redactor(&sent);
@@ -80,7 +85,12 @@ impl Runner<'_> {
         sent
     }
 
-    async fn execute(&self, request: &RequestRef<'_>, record: RequestRecord) -> Sent {
+    async fn execute(
+        &self,
+        request: &RequestRef<'_>,
+        record: RequestRecord,
+        iteration: u32,
+    ) -> Sent {
         if self.options.cancel.is_cancelled() {
             return Sent::skipped(record, SkipReason::Interrupted);
         }
@@ -91,7 +101,7 @@ impl Runner<'_> {
             return Sent::skipped(record, SkipReason::UnsupportedKind);
         };
         let captured = self.lock_captures().clone();
-        let resolver = self.resolver(request, &captured);
+        let resolver = self.resolver(request, &captured, iteration);
         let mut resolved = match resolve_request(request, &resolver) {
             Ok(resolved) => resolved,
             Err(e) => return Sent::errored(record, e.to_string()),
@@ -165,8 +175,14 @@ impl Runner<'_> {
     }
 
     /// The precedence chain for `request`: `--var` overrides, the run's
-    /// captures and the persisted ones on top of the request's own chain.
-    fn resolver<'r>(&'r self, request: &RequestRef<'r>, captured: &'r RunCaptures) -> Resolver<'r> {
+    /// captures, the data row of `iteration` and the persisted captures on
+    /// top of the request's own chain.
+    fn resolver<'r>(
+        &'r self,
+        request: &RequestRef<'r>,
+        captured: &'r RunCaptures,
+        iteration: u32,
+    ) -> Resolver<'r> {
         let ctx = &self.ctx;
         let mut resolver =
             Resolver::for_request(ctx.settings, request, ctx.environment, ctx.secrets);
@@ -175,6 +191,11 @@ impl Runner<'_> {
             &self.options.overrides,
         ));
         resolver.push(captured);
+        if let Some(data) = &self.options.data
+            && let Some(row) = data.row(iteration)
+        {
+            resolver.push(RowSource::new(row, &data.secret));
+        }
         resolver.push(self.state.source());
         resolver
     }

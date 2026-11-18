@@ -25,8 +25,15 @@ pub struct Timings {
     /// Response head until the last body byte.
     #[serde(serialize_with = "ms")]
     pub download: Duration,
+    /// Both round trips when an auth challenge was answered.
     #[serde(serialize_with = "ms")]
     pub total: Duration,
+    /// The auth challenge round trip (Digest's `401`) before the final one.
+    #[serde(
+        serialize_with = "optional_ms",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub auth: Option<Duration>,
 }
 
 /// Milliseconds with microsecond precision.
@@ -84,6 +91,7 @@ mod tests {
             ttfb: Duration::from_micros(12_345),
             download: Duration::ZERO,
             total: Duration::from_millis(20),
+            auth: None,
         };
         let json = serde_json::to_value(timings).unwrap();
         assert_eq!(

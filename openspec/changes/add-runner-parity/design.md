@@ -42,7 +42,7 @@ The `environments` precedence chain gains one layer. Highest first: runtime over
 With `--data`, the iteration count is the row count. Combining the two is a usage error (exit 2). Newman's repeat-the-last-row behavior when `-n` is larger than the row count surprises people and hides short data files.
 
 ### D4. `aws-sigv4` crate for signing, not the AWS SDK
-The `aws-sigv4` crate is the signing core of the AWS Rust SDK, without the runtime, the credential chain or a hard dependency on any HTTP client. Signing is the last step before send, after interpolation, default headers and collection inheritance. Each redirect hop is re-signed. Credentials come from three sources:
+The `aws-sigv4` crate is the signing core of the AWS Rust SDK, without the runtime, the credential chain or a hard dependency on any HTTP client. Signing is the last step before send, after interpolation, default headers and collection inheritance. Each redirect hop on the request's origin is re-signed for its own URL; once a redirect leaves the origin, no further hop is signed (matching how `Authorization` is dropped for every other auth), so no other host ever receives a signature, access key or session token made with the request's credentials. Credentials come from three sources:
 - explicit fields, usually `{{secret}}` variables;
 - `from: env`, reading `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`;
 - `from: profile`, reading static keys from `~/.aws/credentials`.
@@ -87,4 +87,6 @@ The importer recognizes a fixed set of statement shapes with a small tokenizer a
 
 - **Postman users expect scripts.** The migration report makes the gap visible and actionable instead of silent. Plugins cover custom logic.
 - **SigV4 clock skew.** A clock off by more than 5 minutes makes AWS reject the request. The error message points at the `Date` header and suggests checking the system clock.
+- **Request bodies are buffered.** The engine sends every body as one in-memory buffer (a v0.1 design), so `unsigned_payload: true` skips hashing a large body but does not stream it. Streaming file bodies is an engine-wide change, left to a follow-up. Until then the unsigned-payload scenario's streaming clause is not met, and task 3.5 stays open pending the user's decision.
+- **`rustman.report/v1` stays compatible.** v0.1 writes a required integer `iteration` on every request; it keeps that type and meaning. The data row goes in a new optional `data_row` object, present only with `--data`, so the change is additive and a run without `--data` writes the v0.1 report unchanged.
 - **OSC 52 support varies by terminal.** The read-only pane fallback always works.

@@ -1,0 +1,15 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+// aws_sigv4 auth: sign with the AWS SDK signer
+import axios from "axios";
+
+const response = await axios.request({
+  method: "GET",
+  url: "https://api.example/private",
+  responseType: "text",
+  validateStatus: () => true,
+});
+console.log(response.status);
+console.log(response.data);

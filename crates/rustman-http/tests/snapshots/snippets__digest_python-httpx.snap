@@ -1,0 +1,14 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+import httpx
+
+response = httpx.request(
+    "GET",
+    "https://api.example/private",
+    auth=httpx.DigestAuth("alice", "«redacted:password»"),
+    follow_redirects=True,
+)
+print(response.status_code)
+print(response.text)

@@ -1,0 +1,5 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+curl 'https://api.example/private' --digest -u 'alice:«redacted:password»' -L

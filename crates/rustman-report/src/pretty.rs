@@ -1,5 +1,6 @@
 //! The human-readable report: one line per request, the reasons below each
-//! failure, and a summary line.
+//! failure, and a summary line. The requests of a data-driven or repeated
+//! run are grouped under one header line per iteration.
 //!
 //! The styled form adds ANSI colors; the terminal writer (`anstream` in the
 //! CLI) strips them when color is off, so the text is otherwise identical.
@@ -21,10 +22,16 @@ pub fn pretty_styled(run: &RunRecord) -> String {
 }
 
 fn render(run: &RunRecord, styled: bool) -> String {
-    let iterations = run.requests.iter().map(|r| r.iteration).max().unwrap_or(1);
     let mut out = String::new();
+    let mut current = None;
     for record in &run.requests {
-        line(&mut out, record, iterations > 1, styled);
+        let grouped = record.data_row.is_some() || record.iterations > 1;
+        let index = grouped.then_some(record.iteration);
+        if index != current {
+            current = index;
+            iteration_header(&mut out, record, styled);
+        }
+        line(&mut out, record, styled);
     }
     out.push('\n');
     out.push_str(&summary(&run.summary));
@@ -50,15 +57,26 @@ fn label(status: RequestStatus) -> (&'static str, Style) {
     }
 }
 
-fn line(out: &mut String, record: &RequestRecord, show_iteration: bool, styled: bool) {
+/// The line that opens the requests of one iteration: `iteration 2/3`,
+/// with the data row's label when it has one (`iteration 2/3 · bo@example.com`).
+fn iteration_header(out: &mut String, record: &RequestRecord, styled: bool) {
+    if !out.is_empty() {
+        out.push('\n');
+    }
+    let text = match &record.data_row {
+        Some(row) if row.label != row.index.to_string() => {
+            format!("iteration {}/{} · {}", row.index, row.total, row.label)
+        }
+        Some(row) => format!("iteration {}/{}", row.index, row.total),
+        None => format!("iteration {}/{}", record.iteration, record.iterations),
+    };
+    let _ = writeln!(out, "{}", paint(&text, Style::new().bold(), styled));
+}
+
+fn line(out: &mut String, record: &RequestRecord, styled: bool) {
     let (label, style) = label(record.status);
     let label = paint(label, style, styled);
-    let iteration = if show_iteration {
-        format!("[{}] ", record.iteration)
-    } else {
-        String::new()
-    };
-    let _ = write!(out, "{label} {iteration}{}", record.id);
+    let _ = write!(out, "{label} {}", record.id);
     match (&record.exchange, record.skip_reason) {
         (_, Some(reason)) => {
             let _ = write!(out, "  skipped ({reason})");

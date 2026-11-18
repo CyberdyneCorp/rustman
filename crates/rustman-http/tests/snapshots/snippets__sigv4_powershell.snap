@@ -1,0 +1,13 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+# aws_sigv4 auth: sign with the AWS SDK signer
+$params = @{
+    Uri = 'https://api.example/private'
+    Method = 'GET'
+    SkipHttpErrorCheck = $true
+}
+$response = Invoke-WebRequest @params
+$response.StatusCode
+$response.Content

@@ -1,0 +1,14 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+# aws_sigv4 auth: sign with the AWS SDK signer
+import httpx
+
+response = httpx.request(
+    "GET",
+    "https://api.example/private",
+    follow_redirects=True,
+)
+print(response.status_code)
+print(response.text)

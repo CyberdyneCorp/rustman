@@ -22,12 +22,12 @@ mod runs;
 use std::borrow::Cow;
 use std::fmt;
 use std::io::{self, Read, Write};
-use std::sync::{Arc, OnceLock, PoisonError, RwLock};
+use std::sync::{Arc, OnceLock, PoisonError, RwLock, Weak};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 
-use crate::model::Auth;
+use crate::model::{Auth, AwsCredentials};
 use crate::secret::{Secret, placeholder};
 use crate::vars::{Resolved, ResolvedRequest, SecretSpan};
 
@@ -104,13 +104,14 @@ impl Redactor {
     /// Redact every occurrence of the credential a sensitive header value
     /// carries, as `«redacted:<Header-Name>»`: the value after the scheme
     /// (`Bearer`, `Basic`, ...) or each cookie value. Other headers, and
-    /// credentials shorter than [`MIN_HEADER_CREDENTIAL`], are ignored.
+    /// credentials shorter than [`MIN_HEADER_CREDENTIAL`], and credentials
+    /// that are already a placeholder, are ignored.
     pub fn add_header_value(&mut self, header: &str, value: &str) {
         let Some(name) = sensitive_header(header) else {
             return;
         };
         for credential in header_credentials(name, value) {
-            if credential.chars().count() >= MIN_HEADER_CREDENTIAL {
+            if is_credential(credential) {
                 self.add_value(name, credential);
             }
         }
@@ -128,7 +129,34 @@ impl Redactor {
                 self.add_header_value("Authorization", &format!("Bearer {token}"));
             }
             Auth::ApiKey { name, value, .. } => self.add_header_value(name, value),
+            Auth::Digest { password, .. } => self.add_credential("password", password),
+            Auth::AwsSigV4(sigv4) => {
+                if let AwsCredentials::Fields {
+                    secret_key,
+                    session_token,
+                    ..
+                } = &sigv4.credentials
+                {
+                    self.add_credential("aws_secret_key", secret_key);
+                    let token = session_token.as_deref().unwrap_or_default();
+                    self.add_credential("aws_session_token", token);
+                }
+            }
+            Auth::Jwt(jwt) => {
+                self.add_credential("jwt_secret", jwt.secret.as_deref().unwrap_or_default());
+                let key = jwt.private_key.as_deref().unwrap_or_default();
+                self.add_credential("jwt_private_key", key);
+            }
             Auth::None | Auth::OAuth2(_) => {}
+        }
+    }
+
+    /// Redact a literal credential of an auth type, unless it is shorter
+    /// than [`MIN_HEADER_CREDENTIAL`] (a secret variable is redacted
+    /// whatever its length).
+    fn add_credential(&mut self, name: &str, value: &str) {
+        if is_credential(value) {
+            self.add_value(name, value);
         }
     }
 
@@ -547,27 +575,56 @@ fn into_string(bytes: Vec<u8>) -> String {
 /// Every secret value this process has resolved, for sinks that are not
 /// tied to one request: logs (`-v`, `RUST_LOG`) go through
 /// [`redact_logs`] as a safety net over events that are already redacted.
-fn log_secrets() -> &'static RwLock<Redactor> {
-    static SECRETS: OnceLock<RwLock<Redactor>> = OnceLock::new();
+fn log_secrets() -> &'static RwLock<LogSecrets> {
+    static SECRETS: OnceLock<RwLock<LogSecrets>> = OnceLock::new();
     SECRETS.get_or_init(RwLock::default)
+}
+
+/// The values logs redact, and the layers they were taken from.
+#[derive(Default)]
+struct LogSecrets {
+    redactor: Redactor,
+    /// Layers already absorbed. A run's redactor shares its layers with
+    /// every request's, so each is read once, not once per request (which
+    /// made a run quadratic in its number of secrets). Holding a `Weak`
+    /// also keeps a seen layer from growing: `Arc::get_mut` refuses it, so
+    /// new values go to a new layer, which is absorbed in turn.
+    seen: Vec<Weak<Layer>>,
+}
+
+impl LogSecrets {
+    /// Absorb the values of every layer of `redactor` not seen yet; how
+    /// many values were read.
+    fn remember(&mut self, redactor: &Redactor) -> usize {
+        self.seen.retain(|layer| layer.strong_count() > 0);
+        let mut read = 0;
+        for layer in &redactor.layers {
+            let ptr = Arc::as_ptr(layer);
+            if self.seen.iter().any(|seen| seen.as_ptr() == ptr) {
+                continue;
+            }
+            for (name, value) in layer.entries() {
+                self.redactor.add_value(name, value);
+            }
+            read += layer.entries().len();
+            self.seen.push(Arc::downgrade(layer));
+        }
+        read
+    }
 }
 
 /// Make [`redact_logs`] redact every value `redactor` knows. Call it as soon
 /// as secrets are resolved, before anything about the request is logged.
-/// Only values not remembered yet are added (to one layer, never shared),
-/// and its matcher is built when a log line is actually written.
+/// Only layers not remembered yet are read, and their values go to layers
+/// of the logs' own, whose matcher is built when a log line is written.
 pub fn remember_for_logs(redactor: &Redactor) {
     if redactor.is_empty() {
         return;
     }
-    let mut logs = log_secrets()
+    log_secrets()
         .write()
-        .unwrap_or_else(PoisonError::into_inner);
-    for layer in &redactor.layers {
-        for (name, value) in layer.entries() {
-            logs.add_value(name, value);
-        }
-    }
+        .unwrap_or_else(PoisonError::into_inner)
+        .remember(redactor);
 }
 
 /// `line` with every secret value remembered by [`remember_for_logs`]
@@ -576,8 +633,20 @@ pub fn redact_logs(line: &str) -> String {
     log_secrets()
         .read()
         .unwrap_or_else(PoisonError::into_inner)
+        .redactor
         .text(line)
         .into_owned()
+}
+
+/// Whether a literal credential is worth redacting: long enough, and not
+/// a `«redacted:<name>»` placeholder or a `{{name}}` marker, as
+/// placeholder-mode exports (which never read secrets) write them.
+fn is_credential(value: &str) -> bool {
+    let wrapped = |open: &str, close: &str| {
+        value.starts_with(open) && value.ends_with(close) && value.matches(open).count() == 1
+    };
+    let marker = wrapped("«redacted:", "»") || wrapped("{{", "}}");
+    !marker && value.chars().count() >= MIN_HEADER_CREDENTIAL
 }
 
 #[cfg(test)]
@@ -599,6 +668,18 @@ mod tests {
             r.text(r#"{"headers":{"x-token":"s3cr3t"},"again":"s3cr3ts3cr3t"}"#),
             r#"{"headers":{"x-token":"«redacted:api_token»"},"again":"«redacted:api_token»«redacted:api_token»"}"#
         );
+    }
+
+    #[test]
+    fn a_credential_that_is_already_a_placeholder_is_kept() {
+        let mut r = Redactor::new();
+        r.add_header_value("Authorization", "Bearer «redacted:api_token»");
+        assert!(r.is_empty());
+        r.add_header_value("Authorization", "Bearer «redacted:a»x-literal-token");
+        assert!(!r.is_empty());
+        assert!(is_credential("literal-token"));
+        assert!(!is_credential("{{api_token}}"));
+        assert!(!is_credential("short"));
     }
 
     #[test]
@@ -950,5 +1031,38 @@ mod tests {
         );
         remember_for_logs(&Redactor::new());
         assert_eq!(redact_logs("plain"), "plain");
+    }
+
+    /// A data run remembers its many secrets once, then each request's
+    /// redactor (the run's plus a few values): only the new values are read,
+    /// so remembering stays linear in the run's secrets, not quadratic.
+    #[test]
+    fn logs_read_each_shared_layer_once() {
+        let mut run = Redactor::new();
+        for i in 0..1000 {
+            run.add(&Secret::new("password", format!("pw-row-{i:05}")));
+        }
+        let mut logs = LogSecrets::default();
+        assert_eq!(logs.remember(&run), 1000);
+        for i in 0..50 {
+            let mut request = run.clone();
+            request.add(&Secret::new("api_token", format!("tok-req-{i:05}")));
+            assert_eq!(logs.remember(&request), 1, "request {i}");
+        }
+        assert_eq!(logs.remember(&run), 0);
+        let text = logs.redactor.text("pw-row-00999 tok-req-00049");
+        assert_eq!(text, "«redacted:password» «redacted:api_token»");
+    }
+
+    /// A layer the logs have read never grows: a value added later still
+    /// reaches the logs.
+    #[test]
+    fn values_added_after_remembering_reach_the_logs() {
+        let mut run = Redactor::new().with(&Secret::new("one", "first-secret".to_owned()));
+        let mut logs = LogSecrets::default();
+        logs.remember(&run);
+        run.add(&Secret::new("two", "second-secret".to_owned()));
+        assert!(logs.remember(&run) >= 1);
+        assert_eq!(logs.redactor.text("second-secret"), "«redacted:two»");
     }
 }

@@ -6,6 +6,7 @@
 pub mod assertions;
 pub mod captures;
 pub mod collection;
+pub mod data_rows;
 pub mod discovery;
 pub mod environment;
 pub mod error;

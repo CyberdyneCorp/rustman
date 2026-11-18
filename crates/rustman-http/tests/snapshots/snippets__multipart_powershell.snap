@@ -1,0 +1,20 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+$params = @{
+    Uri = 'https://api.example/users/42/avatar'
+    Method = 'PUT'
+    Headers = [ordered]@{
+        'X-Trace' = 't-1'
+    }
+    Form = [ordered]@{
+        'caption' = 'It''s me'
+        'meta' = '{"v":1}'
+        'file' = Get-Item -LiteralPath 'files/avatar.png'
+    }
+    SkipHttpErrorCheck = $true
+}
+$response = Invoke-WebRequest @params
+$response.StatusCode
+$response.Content

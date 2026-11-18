@@ -162,3 +162,67 @@ fn values_derived_from_a_secret_are_withheld() {
     assert_eq!(replay.withheld, ["a value derived from a secret"]);
     assert_eq!(replay.auth_cache_key.as_deref(), Some("key"));
 }
+
+#[test]
+fn signature_auth_round_trips_through_history() {
+    use crate::model::{AwsCredentials, AwsSigV4, Jwt, JwtAlgorithm};
+    let jwt = Auth::Jwt(Box::new(Jwt {
+        algorithm: JwtAlgorithm::HS256,
+        secret: Some("s3cr3t".into()),
+        private_key: None,
+        private_key_file: None,
+        claims: serde_json::json!({"sub": "42", "key": "s3cr3t"})
+            .as_object()
+            .unwrap()
+            .clone(),
+        header: serde_json::Map::new(),
+        ttl_secs: 60,
+        location: ApiKeyLocation::Query,
+        name: Some("t".into()),
+    }));
+    let sigv4 = |credentials| {
+        Auth::AwsSigV4(Box::new(AwsSigV4 {
+            region: "r".into(),
+            service: "s3".into(),
+            credentials,
+            unsigned_payload: true,
+        }))
+    };
+    let fields = AwsCredentials::Fields {
+        access_key: "AKID".into(),
+        secret_key: "s3cr3t".into(),
+        session_token: None,
+    };
+    let digest = Auth::Digest {
+        username: "u".into(),
+        password: "s3cr3t".into(),
+    };
+    let profile = AwsCredentials::Profile("dev".into());
+    for auth in [
+        jwt,
+        digest,
+        sigv4(fields),
+        sigv4(AwsCredentials::Env),
+        sigv4(profile),
+    ] {
+        let mut original = request(spanned("Bearer ", "s3cr3t"));
+        original.auth = Some(auth);
+        let replay = ReplayRequest::new(&original, None);
+        let json = serde_json::to_string(&replay).unwrap();
+        assert!(!json.contains("s3cr3t"), "{json}");
+        let stored: ReplayRequest = serde_json::from_str(&json).unwrap();
+        let again = stored.resolve(Some("dev"), &Store(Some("s3cr3t"))).unwrap();
+        assert_eq!(again.auth, original.auth);
+    }
+}
+
+#[test]
+fn literal_signature_credentials_are_withheld() {
+    let mut original = request(spanned("Bearer ", "s3cr3t"));
+    original.auth = Some(Auth::Digest {
+        username: "u".into(),
+        password: "pw-literal".into(),
+    });
+    let replay = ReplayRequest::new(&original, None);
+    assert_eq!(replay.withheld, ["the digest password"]);
+}

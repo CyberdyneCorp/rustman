@@ -2,12 +2,14 @@
 //! (design D8, environments spec).
 
 pub mod dynamic;
+pub mod placeholders;
 pub mod request;
 pub mod resolver;
 pub mod source;
 pub mod template;
 
 pub use dynamic::Dynamic;
+pub use placeholders::{PlaceholderVar, resolve_placeholders};
 pub use request::{
     ResolvedBody, ResolvedFile, ResolvedPair, ResolvedPart, ResolvedPartSource, ResolvedRequest,
     TlsFiles, resolve_request,

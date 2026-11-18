@@ -1,0 +1,29 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+using System;
+using System.IO;
+using System.Net.Http;
+using System.Text;
+
+using var handler = new HttpClientHandler
+{
+    AllowAutoRedirect = true,
+};
+using var client = new HttpClient(handler);
+using var request = new HttpRequestMessage(new HttpMethod("PUT"), "https://api.example/users/42/avatar");
+request.Headers.TryAddWithoutValidation("X-Trace", "t-1");
+var form = new MultipartFormDataContent();
+var part1 = new ByteArrayContent(Encoding.UTF8.GetBytes("It's me"));
+form.Add(part1, "caption");
+var part2 = new ByteArrayContent(Encoding.UTF8.GetBytes("{\"v\":1}"));
+part2.Headers.TryAddWithoutValidation("Content-Type", "application/json");
+form.Add(part2, "meta");
+var part3 = new ByteArrayContent(File.ReadAllBytes("files/avatar.png"));
+part3.Headers.TryAddWithoutValidation("Content-Type", "image/png");
+form.Add(part3, "file", "avatar.png");
+request.Content = form;
+using var response = await client.SendAsync(request);
+Console.WriteLine((int)response.StatusCode);
+Console.WriteLine(await response.Content.ReadAsStringAsync());

@@ -1,0 +1,59 @@
+{% if auth_comment %}
+# {{ auth_comment }}
+{% endif %}
+import requests
+{% if digest %}
+from requests.auth import HTTPDigestAuth
+{% endif %}
+{% if constants %}
+
+{% for c in constants %}
+{{ c.name }} = {{ c.value | lit }}
+{% endfor %}
+{% endif %}
+
+{% if standard_method %}
+response = requests.{{ method_lower }}(
+{% else %}
+response = requests.request(
+    {{ method | lit }},
+{% endif %}
+    {{ url | q }},
+{% if body.kind == "text" and body.is_json and body.code %}
+    json={{ body.code }},
+{% elif body.kind == "text" %}
+    data={{ body.text | qp }}.encode(),
+{% elif body.kind == "file" %}
+    data=open({{ body.path | q }}, "rb"),
+{% elif body.kind == "multipart" %}
+    files=[
+{% for p in body.parts %}
+{% if p.is_file %}
+        ({{ p.name | lit }}, ({{ p.filename | lit }}, open({{ p.path | q }}, "rb"), {{ p.content_type | lit }})),
+{% elif p.content_type %}
+        ({{ p.name | lit }}, (None, {{ p.value | q }}, {{ p.content_type | lit }})),
+{% else %}
+        ({{ p.name | lit }}, (None, {{ p.value | q }})),
+{% endif %}
+{% endfor %}
+    ],
+{% endif %}
+{% if headers %}
+    headers={
+{% for h in headers %}
+        {{ h.name | lit }}: {{ h.value | hv }},
+{% endfor %}
+    },
+{% endif %}
+{% if digest %}
+    auth=HTTPDigestAuth({{ digest.username | q }}, {{ digest.password | q }}),
+{% endif %}
+{% if not follow_redirects %}
+    allow_redirects=False,
+{% endif %}
+{% if not verify_tls %}
+    verify=False,
+{% endif %}
+)
+print(response.status_code)
+print(response.text)

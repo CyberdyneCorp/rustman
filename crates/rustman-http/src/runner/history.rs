@@ -70,7 +70,7 @@ impl Runner<'_> {
             .strip_suffix(REQUEST_FILE_SUFFIX)
             .unwrap_or(&entry.request)
             .to_owned();
-        let record = RequestRecord::new(id.clone(), id.clone(), entry.request.clone(), 1);
+        let record = RequestRecord::new(id.clone(), id.clone(), entry.request.clone());
         let cache_key = entry.replay.as_ref().and_then(|r| r.auth_cache_key.clone());
         let target = AuthTarget {
             request: id,

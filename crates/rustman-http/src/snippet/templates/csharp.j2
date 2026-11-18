@@ -1,0 +1,57 @@
+{% if auth_comment %}
+// {{ auth_comment }}
+{% endif %}
+using System;
+using System.IO;
+using System.Net.Http;
+using System.Text;
+{% if constants %}
+
+{% for c in constants %}
+const string {{ c.name }} = {{ c.value | lit }};
+{% endfor %}
+{% endif %}
+
+using var handler = new HttpClientHandler
+{
+    AllowAutoRedirect = {% if follow_redirects %}true{% else %}false{% endif %},
+{% if not verify_tls %}
+    ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator,
+{% endif %}
+};
+using var client = new HttpClient(handler);
+using var request = new HttpRequestMessage(new HttpMethod({{ method | lit }}), {{ url | q }});
+{% for h in headers if not h.is_content_type %}
+request.Headers.TryAddWithoutValidation({{ h.name | lit }}, {{ h.value | q }});
+{% endfor %}
+{% if body.kind == "text" %}
+request.Content = new ByteArrayContent(Encoding.UTF8.GetBytes({{ body.text | q }}));
+{% elif body.kind == "file" %}
+request.Content = new ByteArrayContent(File.ReadAllBytes({{ body.path | q }}));
+{% elif body.kind == "multipart" %}
+var form = new MultipartFormDataContent();
+{% for p in body.parts %}
+{% if p.is_file %}
+var part{{ loop.index }} = new ByteArrayContent(File.ReadAllBytes({{ p.path | q }}));
+{% else %}
+var part{{ loop.index }} = new ByteArrayContent(Encoding.UTF8.GetBytes({{ p.value | q }}));
+{% endif %}
+{% if p.content_type %}
+part{{ loop.index }}.Headers.TryAddWithoutValidation("Content-Type", {{ p.content_type | lit }});
+{% endif %}
+{% if p.is_file %}
+form.Add(part{{ loop.index }}, {{ p.name | lit }}, {{ p.filename | lit }});
+{% else %}
+form.Add(part{{ loop.index }}, {{ p.name | lit }});
+{% endif %}
+{% endfor %}
+request.Content = form;
+{% endif %}
+{% if body.kind != "none" and body.kind != "multipart" %}
+{% for h in headers if h.is_content_type %}
+request.Content.Headers.TryAddWithoutValidation({{ h.name | lit }}, {{ h.value | q }});
+{% endfor %}
+{% endif %}
+using var response = await client.SendAsync(request);
+Console.WriteLine((int)response.StatusCode);
+Console.WriteLine(await response.Content.ReadAsStringAsync());

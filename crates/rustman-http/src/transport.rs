@@ -163,6 +163,7 @@ fn timings(
         ttfb: head_at.saturating_duration_since(ready_at),
         download: done.saturating_duration_since(head_at),
         total: done.saturating_duration_since(started),
+        auth: None,
     }
 }
 

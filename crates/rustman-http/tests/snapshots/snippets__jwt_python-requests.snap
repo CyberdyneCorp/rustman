@@ -1,0 +1,12 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+# jwt auth: sign a JWT and send it as a bearer token
+import requests
+
+response = requests.get(
+    "https://api.example/private",
+)
+print(response.status_code)
+print(response.text)

@@ -29,6 +29,10 @@ pub struct Hit {
     pub at: Instant,
     pub method: String,
     pub path: String,
+    /// The `Authorization` header, when one was sent.
+    pub authorization: Option<String>,
+    /// Every header received.
+    pub headers: http::HeaderMap,
 }
 
 /// A running recorder; stops when dropped.
@@ -82,6 +86,12 @@ async fn handle(
         at: Instant::now(),
         method: req.method().to_string(),
         path: req.uri().path().to_owned(),
+        authorization: req
+            .headers()
+            .get(header::AUTHORIZATION)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned),
+        headers: req.headers().clone(),
     });
     let query = req.uri().query().unwrap_or_default();
     let param = |name: &str| {

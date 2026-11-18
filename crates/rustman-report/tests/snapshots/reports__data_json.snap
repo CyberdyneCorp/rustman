@@ -1,0 +1,222 @@
+---
+source: crates/rustman-report/tests/reports.rs
+expression: json_snapshot(&run)
+---
+{
+  "schema": "rustman.report/v1",
+  "kind": "run",
+  "rustman_version": "[version]",
+  "started_at": "2026-11-17T09:30:00.123Z",
+  "environment": null,
+  "summary": {
+    "total": 4,
+    "passed": 3,
+    "failed": 1,
+    "errored": 0,
+    "skipped": 0,
+    "duration_ms": 21.0,
+    "interrupted": false
+  },
+  "requests": [
+    {
+      "id": "get-profile",
+      "name": "get-profile",
+      "file": "get-profile.rman.yaml",
+      "iteration": 1,
+      "data_row": {
+        "index": 1,
+        "total": 2,
+        "label": "ana@example.com"
+      },
+      "status": "passed",
+      "skip_reason": null,
+      "error": null,
+      "exchange": {
+        "request": {
+          "method": "GET",
+          "url": "http://localhost:1/x",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "«redacted:Authorization»"
+            }
+          ],
+          "body": null
+        },
+        "response": {
+          "status": 200,
+          "http_version": "HTTP/1.1",
+          "headers": [],
+          "body": "{}",
+          "body_bytes": 2,
+          "body_truncated": false,
+          "binary": false
+        },
+        "timings": {
+          "dns_ms": null,
+          "connect_ms": 0.5,
+          "tls_ms": null,
+          "ttfb_ms": 3.2,
+          "download_ms": 0.0,
+          "total_ms": 4.0
+        },
+        "redirects": [],
+        "insecure": false
+      },
+      "assertions": [],
+      "captures": [],
+      "warnings": [],
+      "duration_ms": 0.0
+    },
+    {
+      "id": "update",
+      "name": "update",
+      "file": "update.rman.yaml",
+      "iteration": 1,
+      "data_row": {
+        "index": 1,
+        "total": 2,
+        "label": "ana@example.com"
+      },
+      "status": "passed",
+      "skip_reason": null,
+      "error": null,
+      "exchange": {
+        "request": {
+          "method": "PUT",
+          "url": "http://localhost:1/x",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "«redacted:Authorization»"
+            }
+          ],
+          "body": null
+        },
+        "response": {
+          "status": 200,
+          "http_version": "HTTP/1.1",
+          "headers": [],
+          "body": "{}",
+          "body_bytes": 2,
+          "body_truncated": false,
+          "binary": false
+        },
+        "timings": {
+          "dns_ms": null,
+          "connect_ms": 0.5,
+          "tls_ms": null,
+          "ttfb_ms": 3.2,
+          "download_ms": 0.0,
+          "total_ms": 4.0
+        },
+        "redirects": [],
+        "insecure": false
+      },
+      "assertions": [],
+      "captures": [],
+      "warnings": [],
+      "duration_ms": 0.0
+    },
+    {
+      "id": "get-profile",
+      "name": "get-profile",
+      "file": "get-profile.rman.yaml",
+      "iteration": 2,
+      "data_row": {
+        "index": 2,
+        "total": 2,
+        "label": "bo@example.com"
+      },
+      "status": "passed",
+      "skip_reason": null,
+      "error": null,
+      "exchange": {
+        "request": {
+          "method": "GET",
+          "url": "http://localhost:1/x",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "«redacted:Authorization»"
+            }
+          ],
+          "body": null
+        },
+        "response": {
+          "status": 200,
+          "http_version": "HTTP/1.1",
+          "headers": [],
+          "body": "{}",
+          "body_bytes": 2,
+          "body_truncated": false,
+          "binary": false
+        },
+        "timings": {
+          "dns_ms": null,
+          "connect_ms": 0.5,
+          "tls_ms": null,
+          "ttfb_ms": 3.2,
+          "download_ms": 0.0,
+          "total_ms": 4.0
+        },
+        "redirects": [],
+        "insecure": false
+      },
+      "assertions": [],
+      "captures": [],
+      "warnings": [],
+      "duration_ms": 0.0
+    },
+    {
+      "id": "update",
+      "name": "update",
+      "file": "update.rman.yaml",
+      "iteration": 2,
+      "data_row": {
+        "index": 2,
+        "total": 2,
+        "label": "bo@example.com"
+      },
+      "status": "failed",
+      "skip_reason": null,
+      "error": null,
+      "exchange": {
+        "request": {
+          "method": "PUT",
+          "url": "http://localhost:1/x",
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "«redacted:Authorization»"
+            }
+          ],
+          "body": null
+        },
+        "response": {
+          "status": 409,
+          "http_version": "HTTP/1.1",
+          "headers": [],
+          "body": "{}",
+          "body_bytes": 2,
+          "body_truncated": false,
+          "binary": false
+        },
+        "timings": {
+          "dns_ms": null,
+          "connect_ms": 0.5,
+          "tls_ms": null,
+          "ttfb_ms": 3.2,
+          "download_ms": 0.0,
+          "total_ms": 4.0
+        },
+        "redirects": [],
+        "insecure": false
+      },
+      "assertions": [],
+      "captures": [],
+      "warnings": [],
+      "duration_ms": 0.0
+    }
+  ]
+}

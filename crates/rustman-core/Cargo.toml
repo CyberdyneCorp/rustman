@@ -11,6 +11,7 @@ publish = false
 aho-corasick.workspace = true
 async-lock.workspace = true
 base64.workspace = true
+csv.workspace = true
 dunce.workspace = true
 futures-timer.workspace = true
 governor.workspace = true

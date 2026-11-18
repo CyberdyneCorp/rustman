@@ -10,13 +10,15 @@ use http::header::AUTHORIZATION;
 use http::{HeaderName, HeaderValue, Request, Uri};
 use http_body_util::Full;
 use rustman_core::Secret;
-use rustman_core::model::{ApiKeyLocation, Auth};
+use rustman_core::model::{ApiKeyLocation, Auth, Jwt};
 
 use crate::error::RequestError;
 use crate::redirect::Credentials;
 
 /// Add the credentials of `auth` to `request`. `oauth2_token` is the access
-/// token for `type: oauth2`.
+/// token for `type: oauth2`, or the signed token for `type: jwt`. Digest
+/// answers a challenge and SigV4 signs each hop, so neither adds anything
+/// here.
 pub(crate) fn apply(
     request: &mut Request<Full<Bytes>>,
     auth: Option<&Auth>,
@@ -52,6 +54,38 @@ pub(crate) fn apply(
                 AUTHORIZATION,
                 &format!("Bearer {}", token.expose()),
             )
+        }
+        Some(Auth::Jwt(jwt)) => {
+            let token = oauth2_token
+                .ok_or_else(|| RequestError::Auth("jwt: no token was signed".into()))?;
+            place_jwt(request, jwt, token.expose())
+        }
+        Some(Auth::Digest { .. } | Auth::AwsSigV4(_)) => Ok(()),
+    }
+}
+
+/// `Authorization: Bearer <jwt>` by default, else the named header or
+/// query parameter.
+fn place_jwt(
+    request: &mut Request<Full<Bytes>>,
+    jwt: &Jwt,
+    token: &str,
+) -> Result<(), RequestError> {
+    let name = jwt.name.as_deref();
+    match (jwt.location, name) {
+        (ApiKeyLocation::Query, name) => append_query(request, name.unwrap_or_default(), token),
+        (ApiKeyLocation::Header, None) => {
+            set_header(request, AUTHORIZATION, &format!("Bearer {token}"))
+        }
+        (ApiKeyLocation::Header, Some(name)) => {
+            let header = HeaderName::from_bytes(name.as_bytes())
+                .map_err(|_| RequestError::Invalid(format!("invalid jwt header name '{name}'")))?;
+            let value = if header == AUTHORIZATION {
+                format!("Bearer {token}")
+            } else {
+                token.to_owned()
+            };
+            set_header(request, header, &value)
         }
     }
 }

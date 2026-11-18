@@ -13,7 +13,8 @@ use serde_json::Value;
 use super::resolver::{Interpolator, ResolveError, Resolved, Resolver, UsedSecret};
 use crate::format::Located;
 use crate::model::{
-    Auth, Body, JsonContent, NameValue, OAuth2, PartSource, Request, RequestSettings,
+    Auth, AwsCredentials, AwsSigV4, Body, JsonContent, Jwt, NameValue, OAuth2, PartSource, Request,
+    RequestSettings,
 };
 use crate::paths::PathEscape;
 use crate::redact::Redactor;
@@ -206,6 +207,7 @@ pub fn resolve_request(
     let (mut resolved, secrets) = i.finish(resolved)?;
     resolved.secrets = secrets;
     contain_files(request, &mut resolved)?;
+    contain_jwt_key(request, &mut resolved)?;
     Ok(resolved)
 }
 
@@ -400,7 +402,73 @@ fn auth(i: &mut Interpolator<'_, '_>, auth: &Auth) -> Auth {
             location: *location,
         },
         Auth::OAuth2(oauth) => Auth::OAuth2(oauth2(i, oauth)),
+        Auth::Digest { username, password } => Auth::Digest {
+            username: t(username),
+            password: t(password),
+        },
+        Auth::AwsSigV4(sigv4) => Auth::AwsSigV4(Box::new(aws_sigv4(i, sigv4))),
+        Auth::Jwt(jwt) => Auth::Jwt(Box::new(jwt_auth(i, jwt))),
     }
+}
+
+fn aws_sigv4(i: &mut Interpolator<'_, '_>, s: &AwsSigV4) -> AwsSigV4 {
+    let mut t = |s: &str| i.text(s).text;
+    let credentials = match &s.credentials {
+        AwsCredentials::Fields {
+            access_key,
+            secret_key,
+            session_token,
+        } => AwsCredentials::Fields {
+            access_key: t(access_key),
+            secret_key: t(secret_key),
+            session_token: session_token.as_deref().map(&mut t),
+        },
+        AwsCredentials::Env => AwsCredentials::Env,
+        AwsCredentials::Profile(name) => AwsCredentials::Profile(t(name)),
+    };
+    AwsSigV4 {
+        region: t(&s.region),
+        service: t(&s.service),
+        credentials,
+        unsigned_payload: s.unsigned_payload,
+    }
+}
+
+/// A JWT config with its strings interpolated: claims and header values,
+/// the key material and the key file path (contained later, see
+/// [`contain_jwt_key`]).
+fn jwt_auth(i: &mut Interpolator<'_, '_>, j: &Jwt) -> Jwt {
+    let object = |i: &mut Interpolator<'_, '_>, map: &serde_json::Map<String, Value>| {
+        map.iter()
+            .map(|(k, v)| (i.text(k).text, json(i, v)))
+            .collect()
+    };
+    Jwt {
+        secret: optional(i, j.secret.as_deref()),
+        private_key: optional(i, j.private_key.as_deref()),
+        private_key_file: path(i, j.private_key_file.as_ref()),
+        claims: object(i, &j.claims),
+        header: object(i, &j.header),
+        name: optional(i, j.name.as_deref()),
+        ..j.clone()
+    }
+}
+
+/// Resolve a JWT `private_key_file` against the workspace root, keeping it
+/// inside the workspace; the resolved auth then holds the full path.
+fn contain_jwt_key(
+    request: &RequestRef<'_>,
+    resolved: &mut ResolvedRequest,
+) -> Result<(), ResolveError> {
+    let Some(Auth::Jwt(jwt)) = &mut resolved.auth else {
+        return Ok(());
+    };
+    let Some(file) = &jwt.private_key_file else {
+        return Ok(());
+    };
+    let path = request.contain_workspace_file(file)?;
+    jwt.private_key_file = Some(Located::new(path.to_string_lossy().into_owned()));
+    Ok(())
 }
 
 fn oauth2(i: &mut Interpolator<'_, '_>, oauth: &OAuth2) -> OAuth2 {

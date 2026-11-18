@@ -1,0 +1,5 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+curl 'https://api.example/private' --aws-sigv4 'aws:amz:eu-west-1:execute-api' -u 'AKIDEXAMPLE:«redacted:password»' -L

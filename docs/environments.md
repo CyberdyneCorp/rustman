@@ -111,12 +111,13 @@ When a name is defined in several places, the first source in this list wins:
 | # | Source |
 |---|--------|
 | 1 | Runtime overrides: `--var name=value` |
-| 2 | Captures from earlier requests in the same run |
-| 3 | The request file's `variables` |
-| 4 | `_collection.yaml` `variables`, nearest folder first |
-| 5 | Persisted captures (`.rustman/state/<env>.yaml`) |
-| 6 | The active environment, including its secrets |
-| 7 | `rustman.toml` `[variables]` |
+| 2 | Captures from earlier requests in the same run (in a [data-driven run](data-runs.md), of the same iteration) |
+| 3 | The current row of a [data file](data-runs.md) (`rustman run --data`) |
+| 4 | The request file's `variables` |
+| 5 | `_collection.yaml` `variables`, nearest folder first |
+| 6 | Persisted captures (`.rustman/state/<env>.yaml`) |
+| 7 | The active environment, including its secrets |
+| 8 | `rustman.toml` `[variables]` |
 
 Names are case-sensitive: `{{Token}}` and `{{token}}` are different variables.
 

@@ -126,6 +126,41 @@ jobs:
         working-directory: crates/rustman-viz-protocol
         run: cargo +nightly fuzz run decode -- -max_total_time=60
 
+  # Runner-parity task 4.4: every snippet language with an interpreter on the
+  # runner sends the same request to the local echo server. Languages listed
+  # in RUSTMAN_REQUIRE_SNIPPET_LANGS (all 11) fail the job when their tool
+  # is missing. axios is installed in a folder of its own, and reqwest is
+  # fetched by cargo for the rust-reqwest snippet.
+  snippets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Install HTTP tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget httpie python3-requests python3-httpx
+          mkdir -p "$RUNNER_TEMP/axios"
+          npm install --prefix "$RUNNER_TEMP/axios" axios@1
+      - run: cargo test -p rustman-cli --test snippet_run --locked -- --ignored --nocapture
+        env:
+          RUSTMAN_SNIPPET_NODE_DIR: ${{ runner.temp }}/axios
+          RUSTMAN_SNIPPET_CARGO: "1"
+          RUSTMAN_SNIPPET_CARGO_TARGET: ${{ runner.temp }}/reqwest-target
+          RUSTMAN_REQUIRE_SNIPPET_LANGS: curl,wget,httpie,python-requests,python-httpx,js-fetch,node-axios,go,rust-reqwest,powershell,csharp
+
   deny:
     runs-on: ubuntu-latest
     steps:

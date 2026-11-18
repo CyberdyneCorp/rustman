@@ -3,8 +3,8 @@
 
 use rustman_core::assertions::{AssertionResult, Outcome};
 use rustman_core::run::{
-    ExchangeRecord, HeaderRecord, RequestRecord, RequestStatus, ResponseRecord, RunRecord,
-    SentRequest, SkipReason, Summary, TimingsRecord,
+    DataRowRecord, ExchangeRecord, HeaderRecord, RequestRecord, RequestStatus, ResponseRecord,
+    RunRecord, SentRequest, SkipReason, Summary, TimingsRecord,
 };
 use rustman_report::{Format, KIND_RUN, Reporter, SCHEMA, json, junit, pretty, pretty_styled, tap};
 
@@ -40,7 +40,7 @@ fn exchange(method: &str, status: u16) -> ExchangeRecord {
 }
 
 fn record(id: &str, status: RequestStatus) -> RequestRecord {
-    let mut r = RequestRecord::new(id.into(), id.into(), format!("{id}.rman.yaml"), 1);
+    let mut r = RequestRecord::new(id.into(), id.into(), format!("{id}.rman.yaml"));
     r.status = status;
     r
 }
@@ -249,11 +249,106 @@ fn junit_escapes_markup_in_messages() {
 #[test]
 fn iterations_are_named_in_junit_and_tap() {
     let mut run = run();
+    for record in &mut run.requests {
+        record.iterations = 2;
+    }
     let mut second = run.requests[0].clone();
     second.iteration = 2;
     run.requests.push(second);
     assert!(junit(&run).contains("name=\"users/list [2]\""));
     assert!(tap(&run).contains("ok 5 - users/list [2]\n"));
+}
+
+fn data_row(index: u32, total: u32, label: &str) -> Option<DataRowRecord> {
+    Some(DataRowRecord::new(index, total, label.into()))
+}
+
+/// A data-driven run: `get-profile` and `update` for two rows labeled by
+/// email, the second row failing `update`.
+fn data_run() -> RunRecord {
+    let mut requests = Vec::new();
+    for (index, email) in [(1, "ana@example.com"), (2, "bo@example.com")] {
+        let mut get = record("get-profile", RequestStatus::Passed);
+        get.exchange = Some(exchange("GET", 200));
+        let status = if index == 1 {
+            RequestStatus::Passed
+        } else {
+            RequestStatus::Failed
+        };
+        let mut update = record("update", status);
+        update.exchange = Some(exchange("PUT", if index == 1 { 200 } else { 409 }));
+        for r in [get, update] {
+            requests.push(r.in_iteration(index, 2, data_row(index, 2, email)));
+        }
+    }
+    RunRecord {
+        started_at: "2026-11-17T09:30:00.123Z".into(),
+        environment: None,
+        summary: Summary::of(&requests, 21.0, false),
+        requests,
+    }
+}
+
+#[test]
+fn data_runs_label_every_reporter() {
+    let run = data_run();
+    insta::assert_snapshot!("data_pretty", pretty(&run));
+    insta::assert_snapshot!("data_junit", junit(&run));
+    insta::assert_snapshot!("data_tap", tap(&run));
+    insta::assert_snapshot!("data_json", json_snapshot(&run));
+    let xml = junit(&run);
+    assert!(xml.contains("name=\"get-profile [ana@example.com]\""));
+    assert!(xml.contains("name=\"get-profile [bo@example.com]\""));
+}
+
+#[test]
+fn json_data_rows_validate_and_are_absent_without_data() {
+    let report: serde_json::Value = serde_json::from_str(&json(&data_run())).unwrap();
+    let errors: Vec<String> = schema()
+        .iter_errors(&report)
+        .map(|e| e.to_string())
+        .collect();
+    assert!(errors.is_empty(), "{errors:#?}");
+    let second = &report["requests"][2];
+    assert_eq!(second["iteration"], 2, "iteration keeps its v0.1 integer");
+    assert_eq!(second["data_row"]["index"], 2);
+    assert_eq!(second["data_row"]["total"], 2);
+    assert_eq!(second["data_row"]["label"], "bo@example.com");
+    let single = json(&run());
+    assert!(!single.contains("\"data_row\""), "{single}");
+    let mut repeated = run();
+    for record in &mut repeated.requests {
+        (record.iteration, record.iterations) = (2, 3);
+    }
+    let repeated: serde_json::Value = serde_json::from_str(&json(&repeated)).unwrap();
+    assert_eq!(repeated["requests"][0]["iteration"], 2);
+    assert!(
+        repeated["requests"][0].get("data_row").is_none(),
+        "only --data runs carry data_row: {repeated}"
+    );
+    let mut bad = report.clone();
+    bad["requests"][0]["iteration"] = serde_json::json!({"index": 1});
+    assert!(!schema().is_valid(&bad), "iteration is an integer");
+}
+
+/// Regression: the data-row branch turned `iteration` into an object and
+/// dropped it from runs without `--data`, breaking `rustman.report/v1`. A
+/// report of a run without `--data` is byte for byte the v0.1 report.
+#[test]
+fn reports_without_data_keep_the_v0_1_shape() {
+    const V0_1: &str = include_str!("fixtures/report.v0.1.json");
+    assert_eq!(json_snapshot(&run()), V0_1);
+    let report: serde_json::Value = serde_json::from_str(&json(&run())).unwrap();
+    for request in report["requests"].as_array().unwrap() {
+        assert_eq!(request["iteration"], 1);
+        assert!(request.get("data_row").is_none());
+    }
+    let schema_v0_1: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/report.schema.v0.1.json")).unwrap();
+    let v0_1 = jsonschema::validator_for(&schema_v0_1).unwrap();
+    assert!(v0_1.is_valid(&report), "valid against the v0.1 schema");
+    let data: serde_json::Value = serde_json::from_str(&json(&data_run())).unwrap();
+    assert!(v0_1.is_valid(&data), "a --data report stays valid v0.1 too");
 }
 
 #[test]

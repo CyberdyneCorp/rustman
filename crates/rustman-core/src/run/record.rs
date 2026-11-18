@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::assertions::AssertionResult;
 use crate::captures::CaptureResult;
+use crate::model::{ApiKeyLocation, Auth};
 use crate::redact::Redactor;
+use crate::secret::placeholder;
 use crate::vars::{ResolvedBody, ResolvedRequest};
 
 /// How one request of a run ended.
@@ -76,7 +78,7 @@ impl SentRequest {
             url.push('=');
             url.push_str(&redactor.resolved(&pair.value));
         }
-        let headers = request
+        let mut headers: Vec<HeaderRecord> = request
             .headers
             .iter()
             .map(|p| HeaderRecord {
@@ -84,6 +86,7 @@ impl SentRequest {
                 value: redactor.resolved_header_value(&p.name.text, &p.value),
             })
             .collect();
+        add_jwt(request, &mut url, &mut headers);
         Self {
             method: request.method.clone(),
             url,
@@ -91,6 +94,34 @@ impl SentRequest {
             body: body_text(&request.body, redactor),
         }
     }
+}
+
+/// The JWT a `type: jwt` auth adds, shown as `«redacted:jwt»`: the
+/// generated token is never recorded.
+fn add_jwt(request: &ResolvedRequest, url: &mut String, headers: &mut Vec<HeaderRecord>) {
+    let Some(Auth::Jwt(jwt)) = &request.auth else {
+        return;
+    };
+    let token = placeholder("jwt");
+    let name = jwt.name.as_deref();
+    if jwt.location == ApiKeyLocation::Query {
+        url.push(if url.contains('?') { '&' } else { '?' });
+        url.push_str(&format!("{}={token}", name.unwrap_or_default()));
+        return;
+    }
+    let name = name.unwrap_or("Authorization");
+    if headers.iter().any(|h| h.name.eq_ignore_ascii_case(name)) {
+        return;
+    }
+    let value = if name.eq_ignore_ascii_case("Authorization") {
+        format!("Bearer {token}")
+    } else {
+        token
+    };
+    headers.push(HeaderRecord {
+        name: name.to_owned(),
+        value,
+    });
 }
 
 fn body_text(body: &ResolvedBody, redactor: &Redactor) -> Option<String> {
@@ -132,7 +163,11 @@ pub struct TimingsRecord {
     pub tls_ms: Option<f64>,
     pub ttfb_ms: f64,
     pub download_ms: f64,
+    /// Both round trips, when an auth challenge (Digest's `401`) was answered.
     pub total_ms: f64,
+    /// The challenge round trip that preceded the final one; absent without one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auth_ms: Option<f64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -152,6 +187,28 @@ pub struct ExchangeRecord {
     pub insecure: bool,
 }
 
+/// The data row a request of a data-driven (`--data`) run used
+/// (cli-runner "Iteration labels in reports"): the JSON `data_row` field.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct DataRowRecord {
+    /// 1-based: the row number, without the header.
+    pub index: u32,
+    /// How many rows the run iterates over.
+    pub total: u32,
+    /// The `--data-label` column's value, else `row <index>`.
+    pub label: String,
+}
+
+impl DataRowRecord {
+    pub fn new(index: u32, total: u32, label: String) -> Self {
+        Self {
+            index,
+            total,
+            label,
+        }
+    }
+}
+
 /// One request of a run.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct RequestRecord {
@@ -160,8 +217,15 @@ pub struct RequestRecord {
     pub name: String,
     /// The request file, relative to the workspace root, with `/`.
     pub file: String,
-    /// 1-based, for `--iterations`.
+    /// 1-based, for `--iterations` (with `--data`, one iteration per row).
     pub iteration: u32,
+    /// How many iterations the run has (1 for a single run). Reporters use
+    /// it to label iterations; `rustman.report/v1` has no such field.
+    #[serde(skip)]
+    pub iterations: u32,
+    /// The data row of a `--data` run; absent from every other run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data_row: Option<DataRowRecord>,
     pub status: RequestStatus,
     pub skip_reason: Option<SkipReason>,
     /// Why the request errored, or why a required capture failed it.
@@ -175,12 +239,14 @@ pub struct RequestRecord {
 
 impl RequestRecord {
     /// A record with no outcome yet, for `id`, `name` and `file`.
-    pub fn new(id: String, name: String, file: String, iteration: u32) -> Self {
+    pub fn new(id: String, name: String, file: String) -> Self {
         Self {
             id,
             name,
             file,
-            iteration,
+            iteration: 1,
+            iterations: 1,
+            data_row: None,
             status: RequestStatus::Skipped,
             skip_reason: None,
             error: None,
@@ -189,6 +255,30 @@ impl RequestRecord {
             captures: Vec::new(),
             warnings: Vec::new(),
             duration_ms: 0.0,
+        }
+    }
+
+    /// This record as part of iteration `iteration` of `iterations`, using
+    /// `data_row` in a data-driven run.
+    pub fn in_iteration(
+        mut self,
+        iteration: u32,
+        iterations: u32,
+        data_row: Option<DataRowRecord>,
+    ) -> Self {
+        self.iteration = iteration;
+        self.iterations = iterations;
+        self.data_row = data_row;
+        self
+    }
+
+    /// The label of this record's iteration in pretty, JUnit and TAP
+    /// reports: the data row's, else the index in a repeated run. `None`
+    /// for a single run.
+    pub fn iteration_label(&self) -> Option<String> {
+        match &self.data_row {
+            Some(row) => Some(row.label.clone()),
+            None => (self.iterations > 1).then(|| self.iteration.to_string()),
         }
     }
 
@@ -256,7 +346,7 @@ mod tests {
     use crate::vars::{Resolved, ResolvedPair, SecretSpan};
 
     fn record(status: RequestStatus) -> RequestRecord {
-        let mut r = RequestRecord::new("a".into(), "A".into(), "a.rman.yaml".into(), 1);
+        let mut r = RequestRecord::new("a".into(), "A".into(), "a.rman.yaml".into());
         r.status = status;
         r
     }

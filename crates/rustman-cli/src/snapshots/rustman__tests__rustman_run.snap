@@ -29,16 +29,28 @@ Options:
       --no-history
           Do not record the exchanges in history
 
-      --bail
-          Skip the remaining requests after the first failed or errored one
+      --bail[=<SCOPE>]
+          Skip the remaining requests after the first failed or errored one; --bail=iteration skips only the rest of the failing iteration
+          
+          [possible values: run, iteration]
 
       --filter <FILTER>
           Run only matching requests: tag:<name>, or a glob over request ids such as 'users/*' (repeatable; a request matching any runs)
 
       --iterations <N>
-          Run the selected requests this many times
-          
-          [default: 1]
+          Run the selected requests this many times (default 1)
+
+      --data <FILE>
+          Run the selected requests once per row of a CSV or JSON file, with the row's values as variables (default: the folder's _collection.yaml data)
+
+      --no-data
+          Ignore the data file a _collection.yaml names
+
+      --data-label <COLUMN>
+          Label each iteration with this column's value in reports (default: row <n>)
+
+      --secret-columns <A,B>
+          Data columns whose values are secrets and are redacted in every output, besides those named like password, token, secret or api_key
 
       --parallel <N>
           Run up to N folders at once; requests in one folder stay in order unless its _collection.yaml sets parallel: true

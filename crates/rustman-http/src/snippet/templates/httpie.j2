@@ -1,0 +1,10 @@
+{% if auth_comment %}
+# {{ auth_comment }}
+{% endif %}
+http{% if body.kind != "file" %} --ignore-stdin{% endif %}{% if digest %} --auth-type digest {{ ("--auth=" ~ digest.username ~ ":" ~ digest.password) | q }}{% endif %}{% if follow_redirects %} --follow{% endif %}{% if not verify_tls %} --verify=no{% endif %}{% if body.kind == "multipart" %} --multipart{% endif %}{% if body.kind == "text" %} {{ ("--raw=" ~ body.text) | q }}{% endif %}{% if url_is_option %} --{% endif %} {{ method | q }} {{ url | q }}
+{%- for item in items %} \
+  {{ item | q }}
+{%- endfor %}
+{%- if body.kind == "file" %} \
+  < {{ body.path | q }}
+{%- endif %}

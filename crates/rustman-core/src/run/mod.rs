@@ -5,13 +5,15 @@
 //! Executing a plan needs the transport, so it lives in `rustman-http`
 //! (`rustman_http::runner`); this module holds everything that does not.
 
+mod data;
 mod filter;
 mod plan;
 mod record;
 
+pub use data::{CollectionData, DataRun, collection_data, secret_columns};
 pub use filter::{Filter, glob_matches};
 pub use plan::{Plan, plan};
 pub use record::{
-    ExchangeRecord, HeaderRecord, RedirectRecord, RequestRecord, RequestStatus, ResponseRecord,
-    RunRecord, SentRequest, SkipReason, Summary, TimingsRecord, now_rfc3339,
+    DataRowRecord, ExchangeRecord, HeaderRecord, RedirectRecord, RequestRecord, RequestStatus,
+    ResponseRecord, RunRecord, SentRequest, SkipReason, Summary, TimingsRecord, now_rfc3339,
 };

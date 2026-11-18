@@ -20,7 +20,7 @@ mod record;
 mod seed;
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -28,7 +28,9 @@ use futures_util::future::join_all;
 use rustman_core::captures::{PersistedState, RunCaptures};
 use rustman_core::history::HistoryStore;
 use rustman_core::model::Variables;
-use rustman_core::run::{Plan, RequestRecord, RunRecord, Summary, now_rfc3339};
+use rustman_core::run::{
+    DataRowRecord, DataRun, Plan, RequestRecord, RunRecord, Summary, now_rfc3339,
+};
 use rustman_core::settings::Settings;
 use rustman_core::vars::ResolvedRequest;
 use rustman_core::{Environment, Redactor, SecretStore};
@@ -77,10 +79,17 @@ pub struct RunOptions<'a> {
     pub insecure: bool,
     /// `--bail`: skip every request not yet started after one fails or errors.
     pub bail: bool,
+    /// What `--bail` skips: the rest of the run, or (`--bail=iteration`)
+    /// the rest of the failing iteration only.
+    pub bail_scope: BailScope,
     /// `--parallel`: how many units run at once (at least 1).
     pub parallel: usize,
-    /// `--iterations`: how many times the plan runs (at least 1).
+    /// `--iterations`: how many times the plan runs (at least 1). Ignored
+    /// with `data`, which runs once per row.
     pub iterations: u32,
+    /// `--data`: run the plan once per row, with the row's values as
+    /// variables. In-run captures are cleared at the start of each row.
+    pub data: Option<DataRun>,
     pub login: LoginMode<'a>,
     /// Cancelled on Ctrl+C.
     pub cancel: CancellationToken,
@@ -98,14 +107,26 @@ impl Default for RunOptions<'_> {
             timeout: None,
             insecure: false,
             bail: false,
+            bail_scope: BailScope::Run,
             parallel: 1,
             iterations: 1,
+            data: None,
             login: LoginMode::NonInteractive,
             cancel: CancellationToken::new(),
             history: None,
             ad_hoc: false,
         }
     }
+}
+
+/// What `--bail` skips after a failed or errored request.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BailScope {
+    /// Every request not yet started, in every iteration.
+    #[default]
+    Run,
+    /// The rest of the failing iteration; the next one runs.
+    Iteration,
 }
 
 /// What sending one request produced: its record and, when a response
@@ -170,7 +191,7 @@ impl<'a> Runner<'a> {
         } else {
             (CookieJar::in_memory(), PersistedState::default())
         };
-        Ok(Self {
+        let runner = Self {
             engine: HttpEngine::new(),
             ctx,
             options,
@@ -180,7 +201,12 @@ impl<'a> Runner<'a> {
             known: Mutex::new(Redactor::new()),
             seeded: AtomicBool::new(false),
             bailed: AtomicBool::new(false),
-        })
+        };
+        // Every secret column value is redacted from the first request on.
+        if let Some(data) = &runner.options.data {
+            runner.remember(&data.rows.secrets(&data.secret));
+        }
+        Ok(runner)
     }
 
     /// Execute every request of `plan`, `iterations` times.
@@ -189,7 +215,8 @@ impl<'a> Runner<'a> {
         let started_at = now_rfc3339();
         let start = Instant::now();
         let mut requests = Vec::with_capacity(plan.len());
-        for iteration in 1..=self.options.iterations.max(1) {
+        for iteration in 1..=self.iterations() {
+            self.start_iteration();
             requests.extend(self.iteration(plan, iteration).await);
         }
         let interrupted = self.options.cancel.is_cancelled();
@@ -199,6 +226,34 @@ impl<'a> Runner<'a> {
             summary: Summary::of(&requests, millis(start.elapsed()), interrupted),
             requests,
         }
+    }
+
+    /// How many times the plan runs: once per data row, else `--iterations`.
+    fn iterations(&self) -> u32 {
+        match &self.options.data {
+            Some(data) => data.total(),
+            None => self.options.iterations.max(1),
+        }
+    }
+
+    /// Iterations of a data-driven run are independent: they start without
+    /// the in-run captures of the previous row (persisted ones stay), and
+    /// under `--bail=iteration` without its bail.
+    fn start_iteration(&self) {
+        if self.options.data.is_some() {
+            *self.lock_captures() = RunCaptures::new();
+        }
+        if self.options.bail_scope == BailScope::Iteration {
+            self.bailed.store(false, Ordering::SeqCst);
+        }
+    }
+
+    /// The data row of `iteration` in reports; `None` without `--data`.
+    fn data_row(&self, iteration: u32) -> Option<DataRowRecord> {
+        self.options
+            .data
+            .as_ref()
+            .map(|data| data.data_row(iteration))
     }
 
     /// Save the cookie jar. Call once the run is over.

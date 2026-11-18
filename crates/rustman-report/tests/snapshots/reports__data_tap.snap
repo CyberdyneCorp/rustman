@@ -1,0 +1,15 @@
+---
+source: crates/rustman-report/tests/reports.rs
+expression: tap(&run)
+---
+TAP version 14
+1..4
+ok 1 - get-profile [ana@example.com]
+ok 2 - update [ana@example.com]
+ok 3 - get-profile [bo@example.com]
+not ok 4 - update [bo@example.com]
+  ---
+  status: failed
+  file: "update.rman.yaml"
+  reasons:
+  ...

@@ -1,0 +1,5 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+curl -X PUT 'https://api.example/users/42/avatar' -H 'X-Trace: t-1' --form-string 'caption=It'\''s me' -F 'meta="{\"v\":1}";type=application/json' -F 'file=@files/avatar.png;type=image/png' -L

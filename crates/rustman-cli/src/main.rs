@@ -46,7 +46,7 @@ enum Command {
     Auth(commands::auth::AuthArgs),
     /// Import collections (Postman, Insomnia, Bruno, HAR, .http) and curl commands
     Import(commands::import::ImportArgs),
-    /// Export requests and collections (curl, Postman, .http)
+    /// Export requests and collections (curl, code snippets, Postman, .http)
     Export(commands::export::ExportArgs),
     /// Send one request (a file, id or name, or an ad-hoc METHOD URL) and print the response
     Send(commands::send::SendArgs),

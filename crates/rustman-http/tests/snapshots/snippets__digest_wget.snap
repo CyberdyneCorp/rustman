@@ -1,0 +1,9 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+wget --quiet --output-document=- --content-on-error \
+  --method=GET \
+  --user alice \
+  --password '«redacted:password»' \
+  'https://api.example/private'

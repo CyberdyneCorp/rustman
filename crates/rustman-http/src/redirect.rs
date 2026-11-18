@@ -8,7 +8,9 @@
 //! an explicit `Cookie` (the jar adds its own cookies for each hop) and the
 //! `api_key` header or query parameter. Any other header, and a kept
 //! `307`/`308` body, that carries one of the request's secrets is dropped
-//! too, with a warning naming what was left behind.
+//! too, with a warning naming what was left behind. The engine stops
+//! signing SigV4 at the first hop that leaves the origin (see
+//! `engine::Hops::follow`).
 
 use bytes::Bytes;
 use http::header::{
@@ -197,7 +199,7 @@ fn resolve(base: &Uri, location: &[u8]) -> Result<Uri, RequestError> {
     next.as_str().parse().map_err(|e| invalid(&e))
 }
 
-fn same_origin(a: &Uri, b: &Uri) -> bool {
+pub(crate) fn same_origin(a: &Uri, b: &Uri) -> bool {
     a.scheme() == b.scheme() && host(a) == host(b) && port(a) == port(b)
 }
 

@@ -1,0 +1,24 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+import axios from "axios";
+import { openAsBlob } from "node:fs";
+
+const form = new FormData();
+form.append("caption", "It's me");
+form.append("meta", new Blob(["{\"v\":1}"], { type: "application/json" }));
+form.append("file", await openAsBlob("files/avatar.png", { type: "image/png" }), "avatar.png");
+
+const response = await axios.request({
+  method: "PUT",
+  url: "https://api.example/users/42/avatar",
+  headers: {
+    "X-Trace": "t-1",
+  },
+  data: form,
+  responseType: "text",
+  validateStatus: () => true,
+});
+console.log(response.status);
+console.log(response.data);

@@ -1,0 +1,8 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+# aws_sigv4 auth: sign with the AWS SDK signer
+wget --quiet --output-document=- --content-on-error \
+  --method=GET \
+  'https://api.example/private'

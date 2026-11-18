@@ -1,0 +1,13 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+# digest auth: answer the server's challenge with an HTTP Digest helper
+$params = @{
+    Uri = 'https://api.example/private'
+    Method = 'GET'
+    SkipHttpErrorCheck = $true
+}
+$response = Invoke-WebRequest @params
+$response.StatusCode
+$response.Content
