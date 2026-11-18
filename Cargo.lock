@@ -3368,6 +3368,7 @@ dependencies = [
 name = "rustman-import"
 version = "0.1.0"
 dependencies = [
+ "aho-corasick",
  "insta",
  "jsonschema",
  "regex",

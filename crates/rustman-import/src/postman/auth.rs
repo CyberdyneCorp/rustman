@@ -1,8 +1,8 @@
 //! Postman auth: `basic`, `bearer`, `apikey` and `oauth2` (client
 //! credentials, authorization code) map to `http-requests` auth; `noauth`
-//! disables inherited auth; every other type is reported as unsupported and
-//! written as `none`, so the request never inherits a parent credential
-//! Postman would not have sent.
+//! disables inherited auth and `inherit` keeps it; every other type is
+//! reported as unsupported and written as `none`, so the request never
+//! inherits a parent credential Postman would not have sent.
 
 use serde_json::Value;
 
@@ -15,6 +15,8 @@ pub(super) fn parse(v: &Value, at: &Location, ctx: &mut Context) -> Option<Impor
     let kind = v["type"].as_str()?;
     let params = Params::of(&v[kind]);
     let auth = match kind {
+        // Postman's explicit "inherit auth from parent".
+        "inherit" => return None,
         "noauth" => ImportedAuth::None,
         "basic" => ImportedAuth::Basic {
             username: params.get("username"),

@@ -62,6 +62,7 @@ error: import: cannot detect format of data.json (expected postman, insomnia, br
 | Path variables (`/users/:id`) | `/users/{{id}}`, with `id` under the request's `variables` |
 | Disabled headers, query parameters, form fields and variables | Dropped, and listed in the report |
 | `noauth` on a request | `auth: {type: none}` (turns inherited auth off) |
+| `inherit` on a request or folder | No `auth` (inherits the parent's auth) |
 
 Body modes:
 
@@ -106,7 +107,7 @@ An existing environment file is merged: new variables and secrets are added, and
 | gRPC and WebSocket requests | Left out, reported as unsupported |
 | Disabled headers, parameters and form fields | Dropped, and listed in the report |
 
-Environments are flattened: each sub-environment becomes `environments/<slug>.yaml` holding the base environment's values with the sub-environment's overrides (a base `host` overridden by `Prod` gives `environments/prod.yaml` with Prod's `host`). A base environment without sub-environments becomes an environment of its own. Values that are objects or arrays become one variable per leaf, named as Insomnia templates reference them: `{"auth": {"token": "..."}}` gives `auth.token` (so `{{ _.auth.token }}` becomes `{{auth.token}}`) and `{"hosts": ["a"]}` gives `hosts[0]`. Each leaf is checked for secrets on its own, so `auth.token` is moved to the secret store. Every value set by an environment marked private (`isPrivate: true`) is a secret whatever its name, like the values of `http-client.private.env.json`: it goes to the secret store and is listed under `secrets` without a value. Base-environment values a private sub-environment does not override stay plain.
+Environments are flattened: each sub-environment becomes `environments/<slug>.yaml` holding the base environment's values with the sub-environment's overrides (a base `host` overridden by `Prod` gives `environments/prod.yaml` with Prod's `host`). A base environment without sub-environments becomes an environment of its own. Values that are objects or arrays become one variable per leaf, named as Insomnia templates reference them: `{"auth": {"token": "..."}}` gives `auth.token` (so `{{ _.auth.token }}` becomes `{{auth.token}}`) and `{"hosts": ["a"]}` gives `hosts[0]`. Each leaf is checked for secrets on its own, so `auth.token` is moved to the secret store. Every value set by an environment marked private (`isPrivate: true`) is a secret whatever its name, like the values of `http-client.private.env.json`: it goes to the secret store and is listed under `secrets` without a value. Base-environment values a private sub-environment does not override stay plain. Sub-environments whose names give the same file name (`Prod` and `prod`) are kept apart: the later one is imported as `prod-2`, and the report says so (this holds for every source's environments).
 
 `{{ _.name }}` becomes `{{name}}`. Template tags other than plain variables (`{% response ... %}`, `{% uuid %}`, `{% now %}`) have no Rustman equivalent: they are kept as written and each is reported once per request as `unsupported template tag: <tag>`, with the request's item path.
 
@@ -202,27 +203,38 @@ Environments come from the files next to the `.http` file (or in the folder):
 
 ## Secrets
 
-Before anything is written, the importer looks for secrets in:
+Before anything is written, the importer looks for secrets in three passes.
+
+**1. Named fields.** A literal value is a secret in:
 
 - `Authorization`, `Proxy-Authorization` and `Cookie` headers, headers whose name looks like a secret (`X-API-Key`) or ends in `-auth`, `-token`, `-key`, `-secret` or `-signature` (any case: `X-Custom-Auth`), and headers whose value starts with an auth scheme (see below);
-- query parameters and form fields whose name looks like a secret;
-- the password (or token) in a URL's userinfo: `https://admin:p4ss@host` becomes `https://admin:{{url_password}}@host`;
-- `"key": "value"` pairs of JSON, raw and GraphQL-variables bodies, and `key=value` pairs of form-encoded raw bodies, whose key looks like a secret (`"password": "{{password}}"`);
+- query parameters, form fields and multipart text parts whose name looks like a secret (HAR multipart bodies exported as raw `text`, as Chromium does, are split into parts first);
+- the password (or token) in the userinfo of a URL, of a request URL or of any variable holding one (`postgres://admin:p4ss@db/x`): `https://admin:p4ss@host` becomes `https://admin:{{url_password}}@host`, and a variable `db_url` gets `{{db_url_password}}`;
+- `"key": "value"` pairs of JSON, raw and GraphQL-variables bodies (also every string of a `"key": [...]` array, and numbers of four digits or more such as `"pin": 12345678`), and `key=value` pairs of form-encoded raw bodies, whose key looks like a secret (`"password": "{{password}}"`);
 - basic passwords, bearer tokens, API-key values and OAuth2 client secrets (a cached OAuth2 access token is dropped and reported: Rustman fetches its own);
 - collection, folder, request (Postman path variables, Bruno `vars:pre-request`) and environment variables whose name looks like a secret, whose value starts with an auth scheme, or that the source marks secret (Postman `type: secret`, Bruno `vars:secret`, Insomnia private environments, `http-client.private.env.json`);
-- literal values that scripts give to secret-named variables, headers or keys (`pm.environment.set('apiSecret', '...')`, `req.setHeader("Authorization", "Bearer ...")`). Scripts are kept as written, so these values are stored as secrets and redacted wherever the script is shown; other string literals that look like secrets are listed as `review` notes.
+- literal values that scripts give to secret-named variables, headers or keys (`pm.environment.set('apiSecret', '...')`, `req.setHeader("Authorization", "Bearer ...")`, `const apiKey = '...'`, `secret = '...'`), and the literal passed to `btoa(...)` or `atob(...)` (a Basic credential, stored as `basic_credentials`).
 
-A name looks like a secret when it matches `token|secret|password|passwd|api[_-]?key|client[_-]?secret` (case-insensitive), or names a session, cookie, credential, bearer, JWT, access or private key, a signature, passcode or passphrase, or is exactly `auth`, `key`, `sid`, `code` or `auth_code` (OAuth authorization codes), or ends in `sig`, `pass` or `otp` (`X-Sig`). Whatever its name, a value is also a secret when it holds a token of a well-known format: GitHub (`ghp_...`, `github_pat_...`), GitLab (`glpat-...`), Slack (`xoxb-...`), Stripe live keys (`sk_live_...`), AWS access key ids (`AKIA...`) and JWTs. A variable or header value that starts with `Bearer `, `Basic ` or `Digest ` (any case, after leading spaces) is a secret whatever its name; in a header the scheme stays and only the credentials move (`X-Upstream: Bearer {{x_upstream}}`). A literal value found there is replaced by a placeholder and stored as a secret of the target environment: `Authorization: Bearer eyJhbGciOi...` becomes `Authorization: Bearer {{authorization_token}}`. Values that are already placeholders are left alone.
+A name looks like a secret when it matches `token|secret|password|passwd|api[_-]?key|client[_-]?secret` (case-insensitive); or names a session, cookie, credential, bearer, JWT, access or private key, a signature, passcode or passphrase; or is exactly `auth`, `key`, `sid`, `code` or `auth_code` (OAuth authorization codes); or ends in `sig`, `pass` or `otp` (`X-Sig`); or has `pwd`, `pass`, `passwd`, `pin`, `otp`, `sid`, `verifier`, `csrf` or `xsrf` as a whole segment, split at punctuation and lowercase-to-uppercase changes (`X-Pwd`, `pinCode`, `code_verifier`; `spinner` and `bypass` stay plain). A variable or header value that starts with an auth scheme and a credential (`Bearer`, `Basic`, `Digest`, `Token`, `ApiKey`, `Bot`, `SSWS`, `Negotiate` or `NTLM`, any case) is a secret whatever its name; in a header the scheme stays and only the credentials move (`X-Client: Token {{x_client}}`).
+
+**2. Well-known tokens, everywhere.** Every text the import writes is scanned for tokens of these formats, whatever field holds them: URLs (paths included), query parameters, headers, bodies, auth fields, variables, request, folder and collection names, descriptions (Bruno `docs` included), and string literals in scripts. The formats are GitHub (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`), GitLab (`glpat-`), Slack (`xoxa-`, `xoxb-`, `xoxp-`, ...), Stripe live keys (`sk_live_`, `rk_live_`), AWS access key ids (`AKIA`/`ASIA` and 16 characters), Google API keys (`AIza` and 35 characters), JWTs (three base64url segments starting `eyJ`) and PEM private-key blocks. Each is stored under a name for its kind (`github_token`, `jwt`, `aws_access_key`, `google_api_key`, `private_key`, ...).
+
+**3. Repeats.** Every value moved by the first two passes is then replaced wherever it repeats verbatim in those same texts: another header, the URL path or query, a body, a description. Values shorter than 6 characters (which would match unrelated text) or longer than 16 KiB are not looked for.
+
+Where a field takes templates (URLs, headers, bodies, auth, variables) the value becomes the `{{name}}` placeholder; in free text (names, descriptions, report notes and locations) it becomes `«redacted:name»`. In scripts, which are kept as written, every moved value is shown as `«redacted:name»`, as in the report's unconverted statements. For example `Authorization: Bearer eyJhbGciOi...` becomes `Authorization: Bearer {{authorization_token}}`, and a description `Use key ghp_...` becomes `Use key «redacted:github_token»`. Values that are already placeholders are left alone.
+
+Variables keep their scope: a folder variable moved under another name (`password_2`, because the collection's `password` holds another value) is renamed only in that folder's requests and subfolders, not where the collection's `password` applies, and not below a subfolder or request that declares `password` again.
 
 The target environment is `--env`, else the active one. Without either, secrets go to a new environment named after the collection (`environments/billing-api.yaml`), and the report says so. A name already used in that environment is reused only when it holds the same value; otherwise the next free name (`token_2`) is used, so an import never replaces a stored secret.
 
 Secret values are stored in the OS keychain, or `.rustman/secrets.yaml` when there is none (see [Secret storage](environments.md)). The report lists every moved secret by name, environment and source location, never by value, and there is no option to keep secrets inline: the only way to put a literal secret into a file is to edit it by hand. As a last guard, the writer refuses any file whose secret fields still hold a literal value. Values that look like secrets (24 characters or more, letters and digits, no spaces) but are kept as plain variables are listed as `review` notes, by name only.
 
-Known limits: detection is by name, auth scheme and well-known token format, so some secrets are not found and are written as they are. Review these by hand after an import:
+Known limits: outside the named fields above, only well-known token formats and repeats of moved values are found, so some secrets are written as they are. Review these by hand after an import:
 
 - XML bodies and other raw text that is neither `"key": "value"` nor `key=value` (`<password>p4ss</password>`), and literals inside a GraphQL query document (`login(password: "p4ss")`; GraphQL *variables* are scanned);
-- descriptions and docs (`description`, Bruno `docs`), which are copied as written;
-- string literals in scripts that are not given to a secret-named variable, header or key: the script is kept as written and only a `review` note points at it.
+- descriptions and docs, beyond well-known tokens and repeats of moved values;
+- string literals in scripts that are not given to a secret-named variable, header or key, `btoa` or `atob`, and are not a well-known token: the script is kept as written and only a `review` note points at it;
+- expected values in assertions suggested from scripts (`pm.expect(body.token).to.eql("...")`), which are written as checks.
 
 ## Scripts
 

@@ -12,6 +12,7 @@ publish = false
 workspace = true
 
 [dependencies]
+aho-corasick.workspace = true
 rustman-core.workspace = true
 regex.workspace = true
 serde.workspace = true

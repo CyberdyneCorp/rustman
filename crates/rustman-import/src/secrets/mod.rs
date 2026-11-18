@@ -2,104 +2,29 @@
 //! writing. Literal secret values are replaced by `{{name}}` placeholders and
 //! handed out as [`Secret`]s, to be stored as `environments` secrets.
 
+mod detect;
+mod scope;
+mod scrub;
 mod text;
 
 use std::collections::HashMap;
 use std::ops::Range;
-use std::sync::LazyLock;
 
-use regex::Regex;
 use rustman_core::vars::{Segment, Template};
 use rustman_core::{Environment, Secret};
 
 use crate::ir::{
     Folder, ImportedAuth, ImportedBody, ImportedCollection, ImportedEnvironment, ImportedPart,
     ImportedRequest, Item, Location, Note, NoteKind, Pair, PartValue, Script, Variable,
-    VisitStrings,
 };
 use crate::slug::{slug, var_name};
 
-/// Variable, header, parameter and field names that hold secrets.
-static SECRET_NAME: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)token|secret|password|passwd|api[_-]?key|client[_-]?secret")
-        .expect("the secret-name pattern is valid")
-});
-
-/// Further names that usually carry credentials, beyond the spec pattern:
-/// sessions, cookies, keys, OAuth authorization codes (`code`), signatures
-/// (`sig`, `X-Sig`), one-time passwords and short password names (`pass`).
-static EXTRA_SECRET_NAME: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r"(?i)session|bearer|credential|cookie|jwt|access[_-]?key|private[_-]?key|^(auth|key|sid)$|^(auth[_-]?)?code$|(^|[_-])(sig|pass|otp)$|signature|passcode|passphrase",
-    )
-    .expect("the extra secret-name pattern is valid")
-});
-
-/// Values whose shape alone says they are credentials, whatever their
-/// name: GitHub, GitLab, Slack, Stripe live and AWS access keys, and JWTs.
-static KNOWN_TOKEN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r"\b(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_\w{20,}|glpat-[\w-]{20,}|xox[abposr]-[\w-]{10,}|[sr]k_live_\w{10,}|AKIA[0-9A-Z]{16}|eyJ[\w-]{8,}\.eyJ[\w-]{8,}\.[\w-]+)",
-    )
-    .expect("the known-token pattern is valid")
-});
-
-/// Header names ending in a credential word, such as `X-Custom-Auth` or
-/// `X-Upload-Signature`.
-static SECRET_HEADER_SUFFIX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)-(auth|token|key|secret|signature)$")
-        .expect("the secret-header pattern is valid")
-});
-
-/// Whether a variable, header or field called `name` holds a secret: the
-/// spec pattern, plus session, cookie, credential and key-like names.
-pub fn is_secret_name(name: &str) -> bool {
-    SECRET_NAME.is_match(name) || EXTRA_SECRET_NAME.is_match(name)
-}
-
-/// Whether `value` contains a token of a well-known credential format.
-pub fn is_known_token(value: &str) -> bool {
-    KNOWN_TOKEN.is_match(value)
-}
-
-/// Whether the value `value` called `name` is a secret, by its name or by
-/// its shape.
-fn is_secret(name: &str, value: &str) -> bool {
-    is_secret_name(name) || is_known_token(value)
-}
-
-/// Whether `value` starts with an HTTP auth scheme (`Bearer `, `Basic `,
-/// `Digest `, any case): a credential whatever it is called.
-pub fn is_auth_scheme_value(value: &str) -> bool {
-    let value = value.trim_start();
-    ["bearer ", "basic ", "digest "].iter().any(|scheme| {
-        value
-            .get(..scheme.len())
-            .is_some_and(|head| head.eq_ignore_ascii_case(scheme))
-    })
-}
-
-/// Whether the variable `name` holds a secret: [`is_secret`], or a value
-/// that starts with an auth scheme.
-fn is_secret_variable(var: &Variable) -> bool {
-    var.secret || is_secret(&var.name, &var.value) || is_auth_scheme_value(&var.value)
-}
-
-/// Whether a header called `name` holds a secret: a secret name or a name
-/// ending in `-auth`, `-token`, `-key`, `-secret` or `-signature`.
-pub fn is_secret_header_name(name: &str) -> bool {
-    is_secret_name(name) || SECRET_HEADER_SUFFIX.is_match(name)
-}
-
-/// Whether a script setting `name` sets a secret: a secret name, or a
-/// credential header such as `Authorization`.
-fn is_script_secret(name: &str) -> bool {
-    is_secret_name(name) || is_credential_header(name)
-}
-
-fn is_credential_header(name: &str) -> bool {
-    name.eq_ignore_ascii_case("authorization") || name.eq_ignore_ascii_case("proxy-authorization")
-}
+pub use detect::{
+    is_auth_scheme_value, is_known_token, is_secret_header_name, is_secret_name, known_tokens,
+};
+use detect::{is_credential_header, is_script_secret, is_secret, is_secret_variable};
+use scope::Renames;
+pub use scrub::{MIN_REPEAT, redact_tokens};
 
 /// The environment file name (`environments/<name>.yaml`) for a source
 /// environment or collection called `display`.
@@ -145,9 +70,7 @@ pub fn extract(
     existing: &Existing<'_>,
 ) -> Vec<MovedSecret> {
     let mut extractor = Extractor::new(target, existing);
-    extractor.folder_variables(&mut collection.root);
-    let renames = std::mem::take(&mut extractor.renames);
-    rename_references(&mut collection.root, &renames);
+    extractor.scoped_variables(&mut collection.root, &Renames::new());
     extractor.folder(&mut collection.root);
     let mut notes = Vec::new();
     extractor.folder_scripts(&collection.root, &mut notes);
@@ -156,6 +79,7 @@ pub fn extract(
     }
     collection.notes.extend(notes);
     collection.notes.extend(review_notes(collection));
+    extractor.scrub(collection);
     extractor.moved
 }
 
@@ -177,7 +101,7 @@ pub fn folder_has_literal(folder: &Folder) -> bool {
         items: Vec::new(),
         ..folder.clone()
     };
-    probe.folder_variables(&mut copy);
+    probe.scoped_variables(&mut copy, &Renames::new());
     probe.folder(&mut copy);
     !probe.moved.is_empty()
 }
@@ -187,9 +111,16 @@ struct Extractor<'a> {
     existing: &'a Existing<'a>,
     /// Names given out by this import, per environment, with their values.
     assigned: HashMap<(String, String), String>,
+    /// The name each (environment, base name, value) was given, so a
+    /// repeated value reuses its name without probing.
+    by_value: HashMap<(String, String, String), String>,
+    /// Per (environment, base name), the first suffix not yet given out by
+    /// this import: every candidate below it is taken here, so probing
+    /// starts there and naming stays linear.
+    next_free: HashMap<(String, String), usize>,
+    /// The first name each value was moved under, any base.
+    names_by_value: HashMap<String, String>,
     moved: Vec<MovedSecret>,
-    /// Collection variables moved under another name: (old, new).
-    renames: Vec<(String, String)>,
 }
 
 /// Whether a candidate name can hold a value.
@@ -205,29 +136,10 @@ impl<'a> Extractor<'a> {
             target: target.to_owned(),
             existing,
             assigned: HashMap::new(),
+            by_value: HashMap::new(),
+            next_free: HashMap::new(),
+            names_by_value: HashMap::new(),
             moved: Vec::new(),
-            renames: Vec::new(),
-        }
-    }
-
-    /// Move the secret variables of `folder` and the folders below it.
-    fn folder_variables(&mut self, folder: &mut Folder) {
-        let mut kept = Vec::new();
-        for var in std::mem::take(&mut folder.variables) {
-            if is_secret_variable(&var) && has_literal(&var.value) {
-                let name = self.move_value(&var.name, &var.value, &folder.location);
-                if name != var.name {
-                    self.renames.push((var.name.clone(), name));
-                }
-            } else {
-                kept.push(var);
-            }
-        }
-        folder.variables = kept;
-        for item in &mut folder.items {
-            if let Item::Folder(child) = item {
-                self.folder_variables(child);
-            }
         }
     }
 
@@ -245,7 +157,7 @@ impl<'a> Extractor<'a> {
 
     fn request(&mut self, request: &mut ImportedRequest) {
         let at = request.location.clone();
-        self.url(&mut request.url, &at);
+        self.url(&mut request.url, "url", &at);
         self.headers(&mut request.headers, &at);
         self.pairs(&mut request.query, &at);
         self.auth(request.auth.as_mut(), &at);
@@ -253,18 +165,20 @@ impl<'a> Extractor<'a> {
         self.request_variables(request);
     }
 
-    /// The password (or token) in the userinfo of `url`.
-    fn url(&mut self, url: &mut String, at: &Location) {
+    /// The password (or token) in the userinfo of `url`, named
+    /// `<prefix>_password` (or `<prefix>_token`).
+    fn url(&mut self, url: &mut String, prefix: &str, at: &Location) {
         let Some(range) = text::userinfo_credentials(url) else {
             return;
         };
-        let base = if url[..range.start].ends_with(':') {
-            "url_password"
+        let kind = if url[..range.start].ends_with(':') {
+            "password"
         } else {
-            "url_token"
+            "token"
         };
         let value = url[range.clone()].to_owned();
-        if let Some(placeholder) = self.placeholder(&value, base, at) {
+        let base = format!("{prefix}_{kind}");
+        if let Some(placeholder) = self.placeholder(&value, &base, at) {
             url.replace_range(range, &placeholder);
         }
     }
@@ -306,8 +220,9 @@ impl<'a> Extractor<'a> {
                 edits.push((found.range, placeholder));
             }
         }
-        for (range, placeholder) in edits.into_iter().rev() {
-            text.replace_range(range, &placeholder);
+        if !edits.is_empty() {
+            edits.sort_by_key(|(range, _)| range.start);
+            *text = splice(text, edits);
         }
     }
 
@@ -315,20 +230,19 @@ impl<'a> Extractor<'a> {
     /// vars) move like collection variables; references follow renames.
     fn request_variables(&mut self, request: &mut ImportedRequest) {
         let at = request.location.clone();
-        let mut renames = Vec::new();
+        let mut renames = Renames::new();
         let mut kept = Vec::new();
-        for var in std::mem::take(&mut request.variables) {
+        for mut var in std::mem::take(&mut request.variables) {
             if is_secret_variable(&var) && has_literal(&var.value) {
                 let name = self.move_value(&var.name, &var.value, &at);
-                if name != var.name {
-                    renames.push((var.name.clone(), name));
-                }
+                renames.insert(var.name.clone(), name);
             } else {
+                self.url(&mut var.value, &var_name(&var.name, "url"), &at);
                 kept.push(var);
             }
         }
         request.variables = kept;
-        rename_references(request, &renames);
+        scope::rename(request, &renames);
     }
 
     /// Literal secrets that scripts set: moved, so that every output
@@ -352,6 +266,20 @@ impl<'a> Extractor<'a> {
                 let (base, value) = script_secret(&found.name, &found.value);
                 if has_literal(value) && !is_redaction_marker(value) {
                     self.move_value(&base, value, &script.location);
+                    moved.push(value.to_owned());
+                }
+            }
+            // `btoa('user:pw')` builds a Basic credential.
+            for found in text::encoded_literals(&script.source) {
+                if has_literal(&found.value) && !is_redaction_marker(&found.value) {
+                    self.move_value("basic_credentials", &found.value, &script.location);
+                    moved.push(found.value);
+                }
+            }
+            for literal in text::string_literals(&script.source) {
+                for token in known_tokens(literal) {
+                    let value = &literal[token.range];
+                    self.move_token(token.name, value, &script.location);
                     moved.push(value.to_owned());
                 }
             }
@@ -418,7 +346,11 @@ impl<'a> Extractor<'a> {
         let target = environment_name(&env.name);
         for var in &mut env.variables {
             let secret = is_secret_variable(var);
-            if !secret || !has_literal(&var.value) {
+            if !secret {
+                self.environment_url(var, &target, &env.location);
+                continue;
+            }
+            if !has_literal(&var.value) {
                 continue;
             }
             self.moved.push(MovedSecret {
@@ -429,6 +361,27 @@ impl<'a> Extractor<'a> {
             });
             var.secret = true;
         }
+    }
+
+    /// The userinfo password of an environment variable holding a URL
+    /// (`postgres://admin:pw@db/x`), moved to that environment's secrets
+    /// as `<variable>_password`.
+    fn environment_url(&mut self, var: &mut Variable, target: &str, at: &Location) {
+        let Some(range) = text::userinfo_credentials(&var.value) else {
+            return;
+        };
+        let value = var.value[range.clone()].to_owned();
+        if !has_literal(&value) {
+            return;
+        }
+        let name = format!("{}_password", var_name(&var.name, "url"));
+        var.value.replace_range(range, &format!("{{{{{name}}}}}"));
+        self.moved.push(MovedSecret {
+            secret: Secret::new(&name, value),
+            environment: target.to_owned(),
+            location: at.clone(),
+            from_environment: true,
+        });
     }
 
     /// `Bearer abc` keeps its scheme: `Bearer {{name}}`.
@@ -451,12 +404,30 @@ impl<'a> Extractor<'a> {
         has_literal(value).then(|| format!("{{{{{}}}}}", self.move_value(base, value, at)))
     }
 
+    /// The name of a token found by its shape: the name the same value was
+    /// already moved under, else a new one after its kind.
+    fn move_token(&mut self, kind: &str, value: &str, at: &Location) -> String {
+        match self.names_by_value.get(value) {
+            Some(name) => name.clone(),
+            None => self.move_value(kind, value, at),
+        }
+    }
+
     /// Give `value` a secret name in the target environment and record it.
     fn move_value(&mut self, base: &str, value: &str, at: &Location) -> String {
+        let by_value = (self.target.clone(), base.to_owned(), value.to_owned());
+        if let Some(name) = self.by_value.get(&by_value) {
+            return name.clone();
+        }
         let name = self.name_for(base, value);
+        self.by_value.insert(by_value, name.clone());
         let key = (self.target.clone(), name.clone());
         let fresh = !self.assigned.contains_key(&key);
         self.assigned.insert(key, value.to_owned());
+        self.advance_free(base);
+        self.names_by_value
+            .entry(value.to_owned())
+            .or_insert_with(|| name.clone());
         if fresh {
             self.moved.push(MovedSecret {
                 secret: Secret::new(&name, value.to_owned()),
@@ -471,18 +442,28 @@ impl<'a> Extractor<'a> {
     /// `base`, else `base_2`, `base_3`...: the first name that is free or
     /// already holds `value`.
     fn name_for(&self, base: &str, value: &str) -> String {
-        let mut n = 1;
+        let key = (self.target.clone(), base.to_owned());
+        let mut n = self.next_free.get(&key).copied().unwrap_or(1);
         loop {
-            let candidate = if n == 1 {
-                base.to_owned()
-            } else {
-                format!("{base}_{n}")
-            };
+            let candidate = candidate(base, n);
             match self.slot(&candidate, value) {
                 Slot::Free | Slot::SameValue => return candidate,
                 Slot::Taken => n += 1,
             }
         }
+    }
+
+    /// Move `next_free` for `base` past the names this import gave out.
+    fn advance_free(&mut self, base: &str) {
+        let key = (self.target.clone(), base.to_owned());
+        let mut n = self.next_free.get(&key).copied().unwrap_or(1);
+        while self
+            .assigned
+            .contains_key(&(self.target.clone(), candidate(base, n)))
+        {
+            n += 1;
+        }
+        self.next_free.insert(key, n);
     }
 
     fn slot(&self, name: &str, value: &str) -> Slot {
@@ -560,19 +541,27 @@ fn script_secret<'v>(name: &str, value: &'v str) -> (String, &'v str) {
     (var_name(name, "secret"), value)
 }
 
-/// Rewrite `{{old}}` references to `{{new}}` everywhere in `node`.
-fn rename_references(node: &mut dyn VisitStrings, renames: &[(String, String)]) {
-    if renames.is_empty() {
-        return;
+/// `base`, then `base_2`, `base_3`...
+fn candidate(base: &str, n: usize) -> String {
+    if n == 1 {
+        base.to_owned()
+    } else {
+        format!("{base}_{n}")
     }
-    node.visit_strings(&mut |text| {
-        for (old, new) in renames {
-            let from = format!("{{{{{old}}}}}");
-            if text.contains(&from) {
-                *text = text.replace(&from, &format!("{{{{{new}}}}}"));
-            }
-        }
-    });
+}
+
+/// `text` with each range replaced, in one pass; `edits` are in order and
+/// do not overlap.
+fn splice(text: &str, edits: Vec<(Range<usize>, String)>) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut at = 0;
+    for (range, replacement) in edits {
+        out.push_str(&text[at..range.start]);
+        out.push_str(&replacement);
+        at = range.end;
+    }
+    out.push_str(&text[at..]);
+    out
 }
 
 /// Values that look like secrets (long, letters and digits, no spaces) but
@@ -616,7 +605,7 @@ fn looks_secret(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::{ApiKeyIn, Grant, ImportedOAuth2};
+    use crate::ir::{ApiKeyIn, Grant, ImportedOAuth2, VisitStrings};
     use rustman_core::model::{VarValue, Variables};
 
     fn at() -> Location {
