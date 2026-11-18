@@ -100,6 +100,7 @@ fn file_variable(line: &str) -> Option<Variable> {
         name: name.to_owned(),
         value: value.trim().to_owned(),
         secret: false,
+        path: false,
     })
 }
 

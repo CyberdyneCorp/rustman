@@ -40,6 +40,7 @@ pub fn parse_environment(text: &str, file: &str) -> Result<ImportedCollection, I
             name: key,
             value: string(&value["value"]).unwrap_or_default(),
             secret: value["type"] == "secret",
+            path: false,
         });
     }
     Ok(ImportedCollection {

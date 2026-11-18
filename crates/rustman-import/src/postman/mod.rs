@@ -81,7 +81,11 @@ impl Context {
             description: description(&v["description"]),
             auth: auth::parse(&v["auth"], &at, self),
             headers: Vec::new(),
-            variables: self.variables(&v["variable"], &at),
+            variables: if path.is_empty() {
+                self.variables(&v["variable"], &at)
+            } else {
+                self.folder_variables(&v["variable"], &at)
+            },
             scripts: scripts(&v["event"], &at),
             items: self.items(&v["item"], path),
             location: at,
@@ -108,6 +112,25 @@ impl Context {
         out
     }
 
+    /// Folder `variable` lists: the v2.1 schema allows them, but Postman
+    /// never resolves them (requests in the folder see the collection's
+    /// value), so they are dropped, each with a note, rather than given a
+    /// meaning they do not have in Postman. Values are never shown.
+    fn folder_variables(&mut self, vars: &Value, at: &Location) -> Vec<Variable> {
+        for var in vars.as_array().into_iter().flatten() {
+            let name = string(&var["key"])
+                .or_else(|| string(&var["id"]))
+                .unwrap_or_default();
+            if !name.is_empty() {
+                let message = format!(
+                    "folder variable {name} dropped: Postman ignores folder-level variables"
+                );
+                self.note(NoteKind::Dropped, message, at);
+            }
+        }
+        Vec::new()
+    }
+
     /// Collection, folder or request variables; disabled ones are dropped.
     pub fn variables(&mut self, vars: &Value, at: &Location) -> Vec<Variable> {
         let mut out = Vec::new();
@@ -130,6 +153,7 @@ impl Context {
                 name,
                 value: string(&var["value"]).unwrap_or_default(),
                 secret: var["type"] == "secret",
+                path: false,
             });
         }
         out

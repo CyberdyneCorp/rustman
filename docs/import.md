@@ -58,8 +58,9 @@ error: import: cannot detect format of data.json (expected postman, insomnia, br
 | Folders | Nested folders (collections), each with a `_collection.yaml` holding its `name` and the item order as `order:` |
 | Items | `kind: http` request files: method, URL, query, headers, body, auth |
 | Collection and folder auth | `auth` in `_collection.yaml`, inherited by the requests inside |
-| Collection and folder variables | `variables` in `_collection.yaml` (secret ones are moved, see below) |
-| Path variables (`/users/:id`) | `/users/{{id}}`, with `id` under the request's `variables` |
+| Collection variables | `variables` in the root `_collection.yaml` (secret ones are moved, see below) |
+| Folder `variable` lists | Dropped, each reported as `folder variable <name> dropped: Postman ignores folder-level variables`: the v2.1 schema allows them, but Postman never resolves them (a request in the folder gets the collection's value), so importing them would change which value is sent |
+| Path variables (`/users/:id`) | `/users/{{id}}`, with `id` under the request's `variables`. Path variables are a namespace of their own in Postman: when the name is also used elsewhere (a collection variable `{{id}}`, an auth field), the path variable is renamed (`path_id`, `path_id_2`, ...) so it never shadows the other |
 | Disabled headers, query parameters, form fields and variables | Dropped, and listed in the report |
 | `noauth` on a request | `auth: {type: none}` (turns inherited auth off) |
 | `inherit` on a request or folder | No `auth` (inherits the parent's auth) |
@@ -121,7 +122,7 @@ Environments are flattened: each sub-environment becomes `environments/<slug>.ya
 | `collection.bru` | The collection's `_collection.yaml`: headers, auth (`auth { mode: ... }`), variables, scripts |
 | `.bru` request files | `kind: http` request files, ordered by `meta.seq`, then file name |
 | Method block (`get`, `post`, ...) | Method and URL; `body:` and `auth:` select the body and auth blocks |
-| `params:query`, `params:path` | Query parameters; `/users/:id` becomes `/users/{{id}}` with `id` under the request's `variables` |
+| `params:query`, `params:path` | Query parameters; `/users/:id` becomes `/users/{{id}}` with `id` under the request's `variables` (renamed `path_id` when `id` is used elsewhere, as for Postman) |
 | `headers` | Headers (entries starting with `~` are disabled: dropped and reported) |
 | `body:json`, `body:text`, `body:xml`, `body:form-urlencoded`, `body:multipart-form` (`@file(path)` parts), `body:graphql` + `body:graphql:vars` | `json`, `text`, `form`, `multipart`, or a `kind: graphql` file |
 | `auth:basic`, `auth:bearer`, `auth:apikey`, `auth:oauth2`; `auth: none` / `inherit` | The matching auth helper; other modes are written as `auth: {type: none}` (so no parent credential is inherited) and reported as unsupported |
@@ -209,6 +210,7 @@ Before anything is written, the importer looks for secrets in three passes.
 
 - `Authorization`, `Proxy-Authorization` and `Cookie` headers, headers whose name looks like a secret (`X-API-Key`) or ends in `-auth`, `-token`, `-key`, `-secret` or `-signature` (any case: `X-Custom-Auth`), and headers whose value starts with an auth scheme (see below);
 - query parameters, form fields and multipart text parts whose name looks like a secret (HAR multipart bodies exported as raw `text`, as Chromium does, are split into parts first);
+- `"key": "Basic dTpw..."` (any auth scheme, see below) under any key of a JSON body: the scheme stays and the credential moves;
 - the password (or token) in the userinfo of a URL, of a request URL or of any variable holding one (`postgres://admin:p4ss@db/x`): `https://admin:p4ss@host` becomes `https://admin:{{url_password}}@host`, and a variable `db_url` gets `{{db_url_password}}`;
 - `"key": "value"` pairs of JSON, raw and GraphQL-variables bodies (also every string of a `"key": [...]` array, and numbers of four digits or more such as `"pin": 12345678`), and `key=value` pairs of form-encoded raw bodies, whose key looks like a secret (`"password": "{{password}}"`);
 - basic passwords, bearer tokens, API-key values and OAuth2 client secrets (a cached OAuth2 access token is dropped and reported: Rustman fetches its own);
@@ -217,13 +219,19 @@ Before anything is written, the importer looks for secrets in three passes.
 
 A name looks like a secret when it matches `token|secret|password|passwd|api[_-]?key|client[_-]?secret` (case-insensitive); or names a session, cookie, credential, bearer, JWT, access or private key, a signature, passcode or passphrase; or is exactly `auth`, `key`, `sid`, `code` or `auth_code` (OAuth authorization codes); or ends in `sig`, `pass` or `otp` (`X-Sig`); or has `pwd`, `pass`, `passwd`, `pin`, `otp`, `sid`, `verifier`, `csrf` or `xsrf` as a whole segment, split at punctuation and lowercase-to-uppercase changes (`X-Pwd`, `pinCode`, `code_verifier`; `spinner` and `bypass` stay plain). A variable or header value that starts with an auth scheme and a credential (`Bearer`, `Basic`, `Digest`, `Token`, `ApiKey`, `Bot`, `SSWS`, `Negotiate` or `NTLM`, any case) is a secret whatever its name; in a header the scheme stays and only the credentials move (`X-Client: Token {{x_client}}`).
 
-**2. Well-known tokens, everywhere.** Every text the import writes is scanned for tokens of these formats, whatever field holds them: URLs (paths included), query parameters, headers, bodies, auth fields, variables, request, folder and collection names, descriptions (Bruno `docs` included), and string literals in scripts. The formats are GitHub (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`), GitLab (`glpat-`), Slack (`xoxa-`, `xoxb-`, `xoxp-`, ...), Stripe live keys (`sk_live_`, `rk_live_`), AWS access key ids (`AKIA`/`ASIA` and 16 characters), Google API keys (`AIza` and 35 characters), JWTs (three base64url segments starting `eyJ`) and PEM private-key blocks. Each is stored under a name for its kind (`github_token`, `jwt`, `aws_access_key`, `google_api_key`, `private_key`, ...).
+**2. Well-known tokens, everywhere.** Every text the import writes is scanned for tokens of these formats, whatever field holds them: URLs (paths included), query parameters, headers, bodies, auth fields, variables, request, folder and collection names, descriptions (Bruno `docs` included), and string literals in scripts. The formats are GitHub (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`), GitLab (`glpat-`), Slack (`xoxa-`, `xoxb-`, `xoxp-`, ...), Stripe live keys (`sk_live_`, `rk_live_`), AWS access key ids (`AKIA`/`ASIA` and 16 characters), Google API keys (`AIza` and 35 characters), JWTs (three base64url segments starting `eyJ`) and PEM private-key blocks. Tokens are also found when percent-encoded (`-----BEGIN%20RSA%20PRIVATE%20KEY-----...`). Each is stored under a name for its kind (`github_token`, `jwt`, `aws_access_key`, `google_api_key`, `private_key`, ...).
 
-**3. Repeats.** Every value moved by the first two passes is then replaced wherever it repeats verbatim in those same texts: another header, the URL path or query, a body, a description. Values shorter than 6 characters (which would match unrelated text) or longer than 16 KiB are not looked for.
+**3. Repeats.** Every value moved by the first two passes is then looked for where it repeats in those same texts (another header, the URL path or query, a body, a name or description), as written and, for secret-like values, percent-encoded and JSON-escaped. A value is *secret-like* when it has at least 8 characters from at least two of the classes letters, digits and symbols (`p4ssw0rd!`, `sk-live-42ab`; not `password`, `123456`, `example` or `application`). A repeat is replaced only when that cannot change ordinary data:
 
-Where a field takes templates (URLs, headers, bodies, auth, variables) the value becomes the `{{name}}` placeholder; in free text (names, descriptions, report notes and locations) it becomes `«redacted:name»`. In scripts, which are kept as written, every moved value is shown as `«redacted:name»`, as in the report's unconverted statements. For example `Authorization: Bearer eyJhbGciOi...` becomes `Authorization: Bearer {{authorization_token}}`, and a description `Use key ghp_...` becomes `Use key «redacted:github_token»`. Values that are already placeholders are left alone.
+- a field whose whole value is a secret-like moved value becomes its placeholder (`X-Note: SAME-VAL-42` → `X-Note: {{x_api_key}}`);
+- a secret-like value inside a longer text is replaced only on token boundaries, with no letter or digit right before or after it (`/keys/SAME-VAL-42?x=1` → `/keys/{{x_api_key}}?x=1`, but `xSAME-VAL-42` stays);
+- any other repeat is left as written, and the report gets a `review` note `the value of secret <name> also appears in <file > item>:<field>; review it`, never showing the value. So a Basic password `password` leaves `grant_type=password` and `/password/reset` alone, and a secret `123456` leaves `zip=123456` and `api.123456.com` alone.
 
-Variables keep their scope: a folder variable moved under another name (`password_2`, because the collection's `password` holds another value) is renamed only in that folder's requests and subfolders, not where the collection's `password` applies, and not below a subfolder or request that declares `password` again.
+Values shorter than 6 characters or longer than 16 KiB are not looked for. Environment files only get the first rule, and only with the secrets of that same environment: a plain variable whose whole value is one of its environment's secrets becomes that secret's placeholder; nothing else in an environment file changes.
+
+Where a field takes templates (URLs, headers, bodies, auth, variables) the value becomes the `{{name}}` placeholder; in free text (names, descriptions, report notes and locations) it becomes `«redacted:name»`; the same rules decide whether a collection, folder or request name (and so its file name) changes. In scripts, which are kept as written and never run, every moved value is shown as `«redacted:name»`, as in the report's unconverted statements. For example `Authorization: Bearer eyJhbGciOi...` becomes `Authorization: Bearer {{authorization_token}}`, and a description `Use key ghp_...` becomes `Use key «redacted:github_token»`. Values that are already placeholders are left alone. The printed summary and the `--report` file are checked once more for secret-like values before they are written.
+
+Variables keep their scope: a folder variable (Insomnia, Bruno) moved under another name (`password_2`, because the collection's `password` holds another value) is renamed only in that folder's requests and subfolders, not where the collection's `password` applies, and not below a subfolder or request that declares `password` again. A new secret name never takes the name of any variable declared anywhere in the source (collection, folders, requests, environments) other than the variable being moved: with a plain collection variable `token_2`, a folder's moved `token` becomes `token_3`, so no placeholder resolves to another variable.
 
 The target environment is `--env`, else the active one. Without either, secrets go to a new environment named after the collection (`environments/billing-api.yaml`), and the report says so. A name already used in that environment is reused only when it holds the same value; otherwise the next free name (`token_2`) is used, so an import never replaces a stored secret.
 
@@ -233,6 +241,8 @@ Known limits: outside the named fields above, only well-known token formats and 
 
 - XML bodies and other raw text that is neither `"key": "value"` nor `key=value` (`<password>p4ss</password>`), and literals inside a GraphQL query document (`login(password: "p4ss")`; GraphQL *variables* are scanned);
 - descriptions and docs, beyond well-known tokens and repeats of moved values;
+- tokens wrapped in another encoding (base64 of a JSON holding a `ghp_...` token, a JWT inside a base64 blob), and repeats of a moved value in an encoding other than percent-encoding or JSON escaping;
+- repeats of values that are not secret-like (`password`, `123456`), which are only reported;
 - string literals in scripts that are not given to a secret-named variable, header or key, `btoa` or `atob`, and are not a well-known token: the script is kept as written and only a `review` note points at it;
 - expected values in assertions suggested from scripts (`pm.expect(body.token).to.eql("...")`), which are written as checks.
 
@@ -347,7 +357,7 @@ Features the target cannot hold are listed as warnings on standard error, such a
 | Folders, order, names, descriptions | Kept | Flattened into `###` blocks in run order; descriptions dropped |
 | Collection and folder auth | Kept on the folder | Written into each request that inherits it |
 | Collection and folder headers | Warning | Written into each request |
-| Variables | Collection and folder `variable` lists; request variables as URL variables (`{{id}}` path segments become `:id`) | `@name = value` lines at the top (one value per name; a different later value is a warning) |
+| Variables | Collection and folder `variable` lists (Postman ignores folder lists when it runs a request); request variables as URL variables (`{{id}}` path segments become `:id`) | `@name = value` lines at the top (one value per name; a different later value is a warning) |
 | Basic, bearer, API key auth | Kept | `Authorization: Basic <user> <password>`, `Authorization: Bearer <token>`, the key header or query parameter |
 | OAuth2 auth | Kept | Warning |
 | Bodies | `raw` (JSON or text), `urlencoded`, `formdata`, `file`, `graphql` | As text, form fields joined with `&`, multipart with `< path` file parts, `< path` for a file body, GraphQL as a JSON `POST`; a `Content-Type` is added when missing |

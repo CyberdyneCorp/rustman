@@ -68,6 +68,47 @@ impl FileSecretStore {
         self.write(&table)
     }
 
+    /// Store every `(env, name, value)` with one read and one write of the
+    /// file, under one lock.
+    pub fn set_many(&self, entries: &[(&str, &str, &str)]) -> Result<(), SecretError> {
+        if entries.is_empty() {
+            return Ok(());
+        }
+        git::ensure_private(&self.root, SECRETS_FILE)?;
+        let _lock = self.lock()?;
+        let mut table = self.read()?;
+        for (env, name, value) in entries {
+            table
+                .entry((*env).to_owned())
+                .or_default()
+                .insert((*name).to_owned(), (*value).to_owned());
+        }
+        self.write(&table)
+    }
+
+    /// Delete every `(env, name)` with at most one read and one write; the
+    /// file is only touched when it held one of them.
+    pub fn remove_many(&self, entries: &[(&str, &str)]) -> Result<(), SecretError> {
+        if entries.is_empty() || !self.path().exists() {
+            return Ok(());
+        }
+        let _lock = self.lock()?;
+        let mut table = self.read()?;
+        let mut changed = false;
+        for (env, name) in entries {
+            if let Some(secrets) = table.get_mut(*env) {
+                changed |= secrets.remove(*name).is_some();
+                if secrets.is_empty() {
+                    table.remove(*env);
+                }
+            }
+        }
+        if changed {
+            self.write(&table)?;
+        }
+        Ok(())
+    }
+
     /// Delete `env`/`name`; the file is only touched when it held the entry.
     pub fn remove(&self, env: &str, name: &str) -> Result<bool, SecretError> {
         if !self.path().exists() {

@@ -106,6 +106,7 @@ fn distinct_environment_names(collection: &mut ImportedCollection) {
 /// Convert `collection` into the files and secrets of an import.
 pub fn plan(mut collection: ImportedCollection, o: &PlanOptions<'_>) -> Result<Plan, ImportError> {
     translate::translate(&mut collection);
+    crate::pathvars::separate(&mut collection);
     collection.name = redact_tokens(&collection.name);
     distinct_environment_names(&mut collection);
     let target = o

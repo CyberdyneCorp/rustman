@@ -225,6 +225,7 @@ pub(crate) fn object_variables(v: &Value) -> Vec<Variable> {
             name: name.clone(),
             value: crate::common::value_text(value),
             secret: false,
+            path: false,
         })
         .collect()
 }

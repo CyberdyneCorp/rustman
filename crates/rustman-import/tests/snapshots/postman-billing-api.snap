@@ -90,7 +90,7 @@ version: 1
 kind: http
 name: Statement
 method: GET
-url: https://admin:{{url_password}}@billing.example.com/v1/statements/{{token_2}}
+url: https://admin:{{url_password}}@billing.example.com/v1/statements/{{token}}
 === billing-api/users/delete.rman.yaml (create)
 version: 1
 kind: http
@@ -199,7 +199,7 @@ auth:
     - payments:read
 === billing-api/_collection.yaml (create)
 # imported-script: prerequest (not executed)
-# // refresh with «redacted:token» when it expires
+# // refresh with «redacted:token_2» when it expires
 # pm.request.headers.add({key: 'X-Request-Id', value: pm.variables.replaceIn('{{$guid}}')});
 name: Billing API
 description: Invoices, customers and payments.
@@ -213,19 +213,19 @@ order:
   - partner-token
 auth:
   type: bearer
-  token: '{{token}}'
+  token: '{{token_2}}'
 variables:
   base_url: https://billing.example.com/v1
 === environments/local.yaml (create)
 secrets:
   - api_key
   - webhook_secret
-  - token
+  - token_2
   - password
   - x_api_key
   - password_2
   - url_password
-  - token_2
+  - token
   - authorization_token
   - cookie
   - password_3

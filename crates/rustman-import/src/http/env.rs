@@ -135,6 +135,7 @@ fn variables(vars: &Value, secret: bool, at: &Location, notes: &mut Vec<Note>) -
             name: name.clone(),
             value: value_text(value),
             secret,
+            path: false,
         });
     }
     out

@@ -15,13 +15,13 @@ username=billing-bot&password={{password}}
 GET {{base_url}}/users?page=1&per_page=50
 Accept: application/json
 X-API-Key: {{x_api_key}}
-Authorization: Bearer {{token}}
+Authorization: Bearer {{token_2}}
 
 ### Create
 POST {{base_url}}/users
 Content-Type: application/json
 Idempotency-Key: {{$uuid}}
-Authorization: Bearer {{token}}
+Authorization: Bearer {{token_2}}
 
 {
   "name": "Ada",
@@ -31,12 +31,12 @@ Authorization: Bearer {{token}}
 }
 
 ### Statement
-GET https://admin:{{url_password}}@billing.example.com/v1/statements/{{token_2}}
-Authorization: Bearer {{token}}
+GET https://admin:{{url_password}}@billing.example.com/v1/statements/{{token}}
+Authorization: Bearer {{token_2}}
 
 ### Delete
 DELETE {{base_url}}/users/{{id}}
-Authorization: Bearer {{token}}
+Authorization: Bearer {{token_2}}
 
 ### List invoices
 GET {{base_url}}/invoices?status=open
@@ -64,15 +64,15 @@ GET {{base_url}}/invoices/export.csv
 
 ### Get User
 GET {{base_url}}/me
-Authorization: Bearer {{token}}
+Authorization: Bearer {{token_2}}
 
 ### get user!
 GET {{base_url}}/me?verbose=1
-Authorization: Bearer {{token}}
+Authorization: Bearer {{token_2}}
 
 ### Payments (GraphQL)
 POST {{base_url}}/graphql
-Authorization: Bearer {{token}}
+Authorization: Bearer {{token_2}}
 Content-Type: application/json
 
 {
