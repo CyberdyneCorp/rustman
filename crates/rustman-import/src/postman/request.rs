@@ -72,6 +72,7 @@ fn url(v: &Value, at: &Location, ctx: &mut Context) -> (String, Vec<Pair>, Vec<V
             name,
             value: string(&var["value"]).unwrap_or_default(),
             secret: false,
+            path: true,
         });
     }
     (base, query, variables)

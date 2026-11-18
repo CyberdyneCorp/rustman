@@ -7,7 +7,7 @@ mod scope;
 mod scrub;
 mod text;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
 use rustman_core::vars::{Segment, Template};
@@ -24,7 +24,7 @@ pub use detect::{
 };
 use detect::{is_credential_header, is_script_secret, is_secret, is_secret_variable};
 use scope::Renames;
-pub use scrub::{MIN_REPEAT, redact_tokens};
+pub use scrub::{MIN_REPEAT, is_secret_like, redact_tokens};
 
 /// The environment file name (`environments/<name>.yaml`) for a source
 /// environment or collection called `display`.
@@ -70,6 +70,7 @@ pub fn extract(
     existing: &Existing<'_>,
 ) -> Vec<MovedSecret> {
     let mut extractor = Extractor::new(target, existing);
+    extractor.reserved = variable_names(collection);
     extractor.scoped_variables(&mut collection.root, &Renames::new());
     extractor.folder(&mut collection.root);
     let mut notes = Vec::new();
@@ -120,6 +121,12 @@ struct Extractor<'a> {
     next_free: HashMap<(String, String), usize>,
     /// The first name each value was moved under, any base.
     names_by_value: HashMap<String, String>,
+    /// Every variable name of the collection, its folders, requests and
+    /// environments: a new secret name never takes one of them, so a
+    /// placeholder cannot end up resolving to another variable.
+    reserved: HashSet<String>,
+    /// While moving a variable, its own name, which it may keep.
+    own: Option<String>,
     moved: Vec<MovedSecret>,
 }
 
@@ -139,6 +146,8 @@ impl<'a> Extractor<'a> {
             by_value: HashMap::new(),
             next_free: HashMap::new(),
             names_by_value: HashMap::new(),
+            reserved: HashSet::new(),
+            own: None,
             moved: Vec::new(),
         }
     }
@@ -214,10 +223,24 @@ impl<'a> Extractor<'a> {
     fn embedded(&mut self, text: &mut String, find: Finder, at: &Location) {
         let mut edits: Vec<(Range<usize>, String)> = Vec::new();
         let all = find(text, &|_| true);
-        for found in all.into_iter().filter(|f| is_secret(&f.name, &f.value)) {
+        let wanted =
+            |f: &text::Found| is_secret(&f.name, &f.value) || is_auth_scheme_value(&f.value);
+        for found in all.into_iter().filter(wanted) {
             let base = var_name(&found.name, "secret");
-            if let Some(placeholder) = self.placeholder(&found.value, &base, at) {
-                edits.push((found.range, placeholder));
+            // `"x": "Basic dTpw"` keeps its scheme when written unescaped.
+            let (_, credentials) = split_scheme(&found.value);
+            let raw = &text[found.range.clone()];
+            let keep_scheme = is_auth_scheme_value(&found.value) && raw == found.value;
+            let (range, value) = if keep_scheme {
+                (
+                    found.range.end - credentials.len()..found.range.end,
+                    credentials,
+                )
+            } else {
+                (found.range.clone(), found.value.as_str())
+            };
+            if let Some(placeholder) = self.placeholder(value, &base, at) {
+                edits.push((range, placeholder));
             }
         }
         if !edits.is_empty() {
@@ -234,7 +257,7 @@ impl<'a> Extractor<'a> {
         let mut kept = Vec::new();
         for mut var in std::mem::take(&mut request.variables) {
             if is_secret_variable(&var) && has_literal(&var.value) {
-                let name = self.move_value(&var.name, &var.value, &at);
+                let name = self.move_variable(&var.name, &var.value, &at);
                 renames.insert(var.name.clone(), name);
             } else {
                 self.url(&mut var.value, &var_name(&var.name, "url"), &at);
@@ -404,6 +427,15 @@ impl<'a> Extractor<'a> {
         has_literal(value).then(|| format!("{{{{{}}}}}", self.move_value(base, value, at)))
     }
 
+    /// Move the secret variable `name`, which may keep its own name when it
+    /// is free.
+    fn move_variable(&mut self, name: &str, value: &str, at: &Location) -> String {
+        self.own = Some(name.to_owned());
+        let moved = self.move_value(name, value, at);
+        self.own = None;
+        moved
+    }
+
     /// The name of a token found by its shape: the name the same value was
     /// already moved under, else a new one after its kind.
     fn move_token(&mut self, kind: &str, value: &str, at: &Location) -> String {
@@ -475,6 +507,9 @@ impl<'a> Extractor<'a> {
                 Slot::Taken
             };
         }
+        if self.reserved.contains(name) && self.own.as_deref() != Some(name) {
+            return Slot::Taken;
+        }
         let env = self
             .existing
             .environments
@@ -539,6 +574,25 @@ fn script_secret<'v>(name: &str, value: &'v str) -> (String, &'v str) {
         return (base, split_scheme(value).1);
     }
     (var_name(name, "secret"), value)
+}
+
+/// Every variable name declared in `collection`.
+fn variable_names(collection: &ImportedCollection) -> HashSet<String> {
+    let mut names = HashSet::new();
+    let mut folders = vec![&collection.root];
+    while let Some(folder) = folders.pop() {
+        names.extend(folder.variables.iter().map(|v| v.name.clone()));
+        for item in &folder.items {
+            match item {
+                Item::Folder(child) => folders.push(child),
+                Item::Request(r) => names.extend(r.variables.iter().map(|v| v.name.clone())),
+            }
+        }
+    }
+    for env in &collection.environments {
+        names.extend(env.variables.iter().map(|v| v.name.clone()));
+    }
+    names
 }
 
 /// `base`, then `base_2`, `base_3`...
@@ -703,6 +757,7 @@ mod tests {
             name: "stripe_sk".into(),
             value: "sk_live_abcdefghijklmnop".into(),
             secret: false,
+            path: false,
         }];
         let moved = extract(&mut c, "local", &Existing::none());
         let values: Vec<&str> = moved.iter().map(|m| m.secret.expose().as_str()).collect();
@@ -890,11 +945,13 @@ mod tests {
                 name: "api_key".into(),
                 value: "abc".into(),
                 secret: false,
+                path: false,
             },
             Variable {
                 name: "base_url".into(),
                 value: "https://x".into(),
                 secret: false,
+                path: false,
             },
         ];
         let moved = extract(&mut c, "local", &existing);
@@ -913,11 +970,13 @@ mod tests {
                         name: "api_key".into(),
                         value: "s3cr3t".into(),
                         secret: true,
+                        path: false,
                     },
                     Variable {
                         name: "host".into(),
                         value: "a1b2c3d4e5f6a1b2c3d4e5f6a1".into(),
                         secret: false,
+                        path: false,
                     },
                 ],
                 location: Location::item("staging.json", ""),
@@ -948,11 +1007,13 @@ mod tests {
                     name: "token".into(),
                     value: "LEAK4path".into(),
                     secret: false,
+                    path: false,
                 },
                 Variable {
                     name: "org".into(),
                     value: "acme".into(),
                     secret: false,
+                    path: false,
                 },
             ],
             ..ImportedRequest::default()
@@ -961,7 +1022,15 @@ mod tests {
         let values: Vec<_> = moved.iter().map(|m| m.secret.expose().as_str()).collect();
         assert_eq!(values, ["t-collection", "LEAK4path"]);
         let r = first_request(&mut c);
-        assert_eq!(r.url, "{{base}}/statements/{{token_2}}");
+        // `token` is the request variable's own name: the bearer token,
+        // moved first, takes the next free name instead.
+        assert_eq!(r.url, "{{base}}/statements/{{token}}");
+        assert_eq!(
+            r.auth,
+            Some(ImportedAuth::Bearer {
+                token: "{{token_2}}".into()
+            })
+        );
         assert_eq!(r.variables.len(), 1);
         assert_eq!(r.variables[0].name, "org");
         assert!(!request_has_literal(r));
@@ -1139,6 +1208,7 @@ mod tests {
             name: "upstream".into(),
             value: "Basic dXNlcjpwdw==".into(),
             secret: false,
+            path: false,
         }];
         c.environments = vec![ImportedEnvironment {
             name: "Prod".into(),
@@ -1146,6 +1216,7 @@ mod tests {
                 name: "header_value".into(),
                 value: "Digest username=\"u\", response=\"r\"".into(),
                 secret: false,
+                path: false,
             }],
             location: at(),
         }];

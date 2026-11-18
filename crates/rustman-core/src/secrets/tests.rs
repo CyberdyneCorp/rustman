@@ -325,3 +325,52 @@ fn symlinked_state_folder_is_refused_for_every_backend() {
     assert!(keychain.entries().is_empty());
     assert_eq!(fs::read_dir(dir.path().join("public")).unwrap().count(), 0);
 }
+
+#[test]
+fn set_many_stores_in_the_file_with_one_write_and_stays_linear() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = SecretStore::open(dir.path(), SecretBackend::File);
+    let secrets: Vec<Secret<String>> = (0..5_000)
+        .map(|i| Secret::new(format!("s{i}"), format!("v-{i}")))
+        .collect();
+    let batch: Vec<(&str, &Secret<String>)> = secrets.iter().map(|s| ("prod", s)).collect();
+    let start = std::time::Instant::now();
+    store.set_many(&batch).unwrap();
+    // One write instead of 5,000 read-modify-writes; a generous bound.
+    assert!(start.elapsed() < std::time::Duration::from_secs(10));
+    assert_eq!(value(&store, "prod", "s4999").as_deref(), Some("v-4999"));
+    assert!(store.set_many(&[("prod", &token(""))]).is_err());
+}
+
+#[test]
+fn set_many_uses_the_keychain_and_clears_stale_file_copies() {
+    let keychain = FakeKeychain::default();
+    let (dir, store) = store_with(&keychain);
+    FileSecretStore::new(dir.path())
+        .set("prod", "api_token", "old")
+        .unwrap();
+    let other = Secret::new("other", "o".to_owned());
+    store
+        .set_many(&[("prod", &token("new")), ("dev", &other)])
+        .unwrap();
+    assert_eq!(keychain.entries().len(), 2);
+    assert!(!dir.path().join(SECRETS_FILE).exists());
+    assert_eq!(value(&store, "prod", "api_token").as_deref(), Some("new"));
+}
+
+#[test]
+fn set_many_falls_back_to_the_file_when_the_keychain_is_down() {
+    let keychain = unavailable();
+    let (dir, store) = store_with(&keychain);
+    let other = Secret::new("other", "o".to_owned());
+    store
+        .set_many(&[("prod", &token("s3cr3t")), ("prod", &other)])
+        .unwrap();
+    assert_eq!(store.take_warnings(), [FALLBACK_WARNING]);
+    let text = fs::read_to_string(dir.path().join(SECRETS_FILE)).unwrap();
+    assert!(
+        text.contains("api_token: s3cr3t") && text.contains("other: o"),
+        "{text}"
+    );
+    assert_eq!(keychain.calls(), 1);
+}

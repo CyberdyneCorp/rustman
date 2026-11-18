@@ -121,12 +121,14 @@ pub fn file<'p>(plan: &'p Plan, path: &str) -> &'p str {
 
 /// Apply `plan` under `root`, keeping stored secrets in `store`.
 pub fn apply(plan: &Plan, root: &Path, store: &std::sync::Mutex<Vec<(String, String, String)>>) {
-    let save = |env: &str, secret: &Secret<String>| {
-        store.lock().unwrap().push((
-            env.to_owned(),
-            secret.name().to_owned(),
-            secret.expose().clone(),
-        ));
+    let save = |batch: &[(&str, &Secret<String>)]| {
+        for (env, secret) in batch {
+            store.lock().unwrap().push((
+                (*env).to_owned(),
+                secret.name().to_owned(),
+                secret.expose().clone(),
+            ));
+        }
         Ok(())
     };
     rustman_import::apply(plan, root, &save).unwrap();

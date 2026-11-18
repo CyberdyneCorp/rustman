@@ -25,7 +25,7 @@ impl Extractor<'_> {
         let mut kept = Vec::new();
         for mut var in std::mem::take(&mut folder.variables) {
             if is_secret_variable(&var) && has_literal(&var.value) {
-                let name = self.move_value(&var.name, &var.value, &folder.location);
+                let name = self.move_variable(&var.name, &var.value, &folder.location);
                 scope.insert(var.name.clone(), name);
             } else {
                 // A plain variable shadows any rename from further up.

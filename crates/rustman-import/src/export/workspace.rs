@@ -299,6 +299,7 @@ fn variables(vars: Option<&Variables>) -> Vec<Variable> {
                 name: name.to_owned(),
                 value: value.to_string(),
                 secret: false,
+                path: false,
             })
             .collect()
     })

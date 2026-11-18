@@ -99,6 +99,7 @@ impl<'a> Bru<'a> {
                 name: entry.key.clone(),
                 value: entry.value.clone(),
                 secret: false,
+                path: true,
             });
         }
         url
@@ -135,6 +136,7 @@ impl<'a> Bru<'a> {
                 name: p.name,
                 value: p.value,
                 secret: false,
+                path: false,
             })
             .collect()
     }
@@ -381,6 +383,7 @@ pub(super) fn environment_variables(bru: &mut Bru<'_>) -> Vec<Variable> {
                     name,
                     value: String::new(),
                     secret: true,
+                    path: false,
                 }),
             }
         }

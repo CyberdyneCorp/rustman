@@ -18,6 +18,7 @@ pub mod http;
 pub mod insomnia;
 pub mod ir;
 pub mod migration;
+pub mod pathvars;
 pub mod plan;
 pub mod postman;
 pub mod render;

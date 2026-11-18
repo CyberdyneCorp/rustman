@@ -188,6 +188,42 @@ impl SecretStore {
         Ok(StoredIn::File)
     }
 
+    /// Store many secrets at once, `(environment, secret)`: in the keychain
+    /// one by one, and in the file fallback with a single read and write,
+    /// so storing thousands of secrets stays linear.
+    pub fn set_many(&self, secrets: &[(&str, &Secret<String>)]) -> Result<(), SecretError> {
+        if secrets.iter().any(|(_, s)| s.expose().is_empty()) {
+            return Err(SecretError::EmptyValue);
+        }
+        let mut in_keychain: Vec<(&str, &str)> = Vec::new();
+        let mut to_file: Vec<(&str, &str, &str)> = Vec::new();
+        let mut id: Option<String> = None;
+        for (env, secret) in secrets {
+            if let Some(keychain) = self.keychain() {
+                if id.is_none() {
+                    id = Some(workspace_id::load_or_create(&self.root)?);
+                }
+                let id = id.as_deref().unwrap_or_default();
+                match keychain.set(&account(id, env, secret.name()), secret.expose()) {
+                    Ok(()) => {
+                        in_keychain.push((env, secret.name()));
+                        continue;
+                    }
+                    Err(KeychainError::Unavailable(_)) => {
+                        self.keychain_down.store(true, Ordering::Relaxed);
+                    }
+                    Err(KeychainError::Failed(msg)) => return Err(SecretError::Keychain(msg)),
+                }
+            }
+            to_file.push((env, secret.name(), secret.expose()));
+        }
+        self.file.remove_many(&in_keychain)?;
+        if !to_file.is_empty() && self.keychain.is_some() {
+            self.warn_fallback_once();
+        }
+        self.file.set_many(&to_file)
+    }
+
     /// Delete secret `name` of environment `env` wherever it is stored.
     /// Returns whether anything was deleted.
     pub fn remove(&self, env: &str, name: &str) -> Result<bool, SecretError> {

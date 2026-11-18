@@ -214,22 +214,54 @@ Any variable or header value starting with `Bearer `, `Basic ` or `Digest ` (cas
 When a secret folder variable is moved under another name, references SHALL be rewritten only inside the declaring folder's subtree, except below a subfolder or request that declares the same name again.
 
 #### Scenario: Folder override of a collection variable
-- **GIVEN** collection variable `password=A`, folder `F` variable `password=B`, a root request and a request in sibling folder `G` using `{{password}}`
+- **GIVEN** a Bruno collection variable `password=A`, folder `F` variable `password=B`, a root request and a request in sibling folder `G` using `{{password}}`
 - **WHEN** it is imported
 - **THEN** the root and `G` requests SHALL resolve to `A` and the request in `F` SHALL resolve to `B`
 
-### Requirement: Token and repeat scan
-Every text written to a tracked file (URLs, headers, bodies, auth, variables, names, descriptions, script literals) SHALL be scanned for GitHub, GitLab, Slack, Stripe live, AWS, Google API key, JWT and PEM private-key tokens, which SHALL be moved. Every moved value of 6 characters or more SHALL be replaced wherever it repeats verbatim: by `{{name}}` where the field takes templates, by `«redacted:name»` in free text.
+### Requirement: Token scan
+Every text written to a tracked file (URLs, headers, bodies, auth, variables, names, descriptions, script literals) SHALL be scanned, as written and percent-decoded, for GitHub, GitLab, Slack, Stripe live, AWS, Google API key, JWT and PEM private-key tokens, which SHALL be moved.
 
 #### Scenario: Token in a description
 - **GIVEN** a collection description `Use key ghp_...`
 - **WHEN** it is imported
 - **THEN** the description SHALL read `Use key «redacted:github_token»` and the token SHALL be stored as a secret
 
-#### Scenario: Repeated value
-- **GIVEN** `X-Api-Key: v-123456` and the same value in another header and in the URL path
+### Requirement: Repeat replacement
+A moved value SHALL replace a repeat only when it is secret-like (8 characters or more from at least two of letters, digits and symbols) and either fills the whole field or sits on token boundaries. Other repeats SHALL be left unchanged and reported by secret name and field, never by value. Environment files SHALL only get whole-value replacements by their own secrets.
+
+#### Scenario: Repeated secret-like value
+- **GIVEN** `X-Api-Key: SAME-VAL-42` and the same value in another header and in the URL path
 - **WHEN** it is imported
 - **THEN** every occurrence SHALL be `{{x_api_key}}`
+
+#### Scenario: Ordinary word as a secret
+- **GIVEN** a Basic password `password` and a body `{"grant_type":"password"}` and URL `/password/reset?type=password`
+- **WHEN** it is imported
+- **THEN** the body and URL SHALL be unchanged and the report SHALL note that the value of secret `password` also appears there
+
+### Requirement: Fresh secret names
+A new secret name SHALL NOT be the name of any variable declared in the source (collection, folders, requests, environments) other than the variable being moved.
+
+#### Scenario: Plain variable with the suffixed name
+- **GIVEN** collection variables `token=A` and `token_2={{env_tok}}`, and folder variable `token=B`
+- **WHEN** it is imported
+- **THEN** the folder's references SHALL resolve to `B`, not to `{{env_tok}}`
+
+### Requirement: Path variable namespace
+Postman and Bruno path variables SHALL NOT shadow a variable of the same name: when the name is used elsewhere, the path variable SHALL be renamed (`path_<name>`).
+
+#### Scenario: Path variable named like the collection's token
+- **GIVEN** a collection variable `token`, bearer auth `{{token}}` and a request URL `/:token/x`
+- **WHEN** it is imported
+- **THEN** the URL SHALL be `/{{path_token}}/x` and the request SHALL still send the collection's `{{token}}`
+
+### Requirement: Postman folder variables
+Postman folder `variable` lists SHALL be dropped with a report note, because Postman does not resolve them.
+
+#### Scenario: Folder variable overriding a collection variable
+- **GIVEN** collection variable `password=A` and folder `F` variable `password=B`
+- **WHEN** a request in `F` using `{{password}}` is imported
+- **THEN** it SHALL resolve to `A`, and the report SHALL list `folder variable password dropped`
 
 ### Requirement: Secret report
 The import summary and report SHALL list every moved secret by variable name, source location and target environment, never by value. `--keep-secrets-inline` SHALL NOT exist; the only way to put a literal secret into a file is to edit it by hand.

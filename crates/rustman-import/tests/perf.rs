@@ -70,3 +70,22 @@ fn a_large_body_with_runs_of_braces_plans_in_linear_time() {
     assert!(took < BOUND, "{took:?}");
     assert_eq!(plan.secrets.len(), 1);
 }
+
+#[test]
+fn storing_five_thousand_secrets_in_the_file_store_is_fast() {
+    use rustman_core::{SecretStore, secrets::SecretBackend};
+    let pairs: Vec<String> = (0..5_000)
+        .map(|i| format!("\"password{i}\":\"value-{i}\""))
+        .collect();
+    let (_, plan) = plan_time(&collection(&format!("{{{}}}", pairs.join(","))));
+    assert_eq!(plan.secrets.len(), 5_000);
+    let dir = tempfile::tempdir().unwrap();
+    let store = SecretStore::open(dir.path(), SecretBackend::File);
+    let save = |batch: &[(&str, &rustman_core::Secret<String>)]| store.set_many(batch);
+    let start = Instant::now();
+    rustman_import::apply(&plan, dir.path(), &save).unwrap();
+    let took = start.elapsed();
+    assert!(took < Duration::from_secs(10), "{took:?}");
+    let stored = store.get("local", "password4999").unwrap().unwrap();
+    assert_eq!(stored.expose(), "value-4999");
+}

@@ -274,11 +274,14 @@ fn a_failed_write_stores_no_secret_and_leaves_no_file() {
     fs::write(dir.path().join("billing-api/users"), "in the way").unwrap();
     let before = read_tree(dir.path());
     let store = Mutex::new(Vec::new());
-    let save = |env: &str, secret: &Secret<String>| {
-        store
-            .lock()
-            .unwrap()
-            .push((env.to_owned(), secret.name().to_owned(), String::new()));
+    let save = |batch: &[(&str, &Secret<String>)]| {
+        for (env, secret) in batch {
+            store.lock().unwrap().push((
+                (*env).to_owned(),
+                secret.name().to_owned(),
+                String::new(),
+            ));
+        }
         Ok(())
     };
     assert!(rustman_import::apply(&plan, dir.path(), &save).is_err());
@@ -292,7 +295,7 @@ fn a_failed_secret_store_leaves_no_file() {
     let plan = Setup::new(dir.path()).plan(BILLING);
     let before = read_tree(dir.path());
     let fail =
-        |_: &str, _: &Secret<String>| Err(rustman_core::SecretError::Keychain("locked".into()));
+        |_: &[(&str, &Secret<String>)]| Err(rustman_core::SecretError::Keychain("locked".into()));
     assert!(rustman_import::apply(&plan, dir.path(), &fail).is_err());
     assert_eq!(read_tree(dir.path()), before);
     assert!(!dir.path().join("billing-api").exists());

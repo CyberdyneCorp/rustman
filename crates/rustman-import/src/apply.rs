@@ -12,8 +12,10 @@ use rustman_core::{Secret, SecretError};
 use crate::error::ImportError;
 use crate::plan::Plan;
 
-/// Stores one secret value for an environment (the keychain, in the CLI).
-pub type StoreSecret<'a> = &'a dyn Fn(&str, &Secret<String>) -> Result<(), SecretError>;
+/// Stores secret values, each for its environment, in one batch (the
+/// CLI's [`rustman_core::SecretStore::set_many`]), so storing thousands
+/// stays linear.
+pub type StoreSecret<'a> = &'a dyn Fn(&[(&str, &Secret<String>)]) -> Result<(), SecretError>;
 
 /// The suffix of a staged file, next to its target.
 const STAGED: &str = ".rmtmp";
@@ -22,10 +24,15 @@ const STAGED: &str = ".rmtmp";
 pub fn apply(plan: &Plan, root: &Path, store: StoreSecret<'_>) -> Result<(), ImportError> {
     let mut staging = Staging::default();
     let staged = staging.stage(plan, root).and_then(|()| {
-        plan.secrets
+        let batch: Vec<(&str, &Secret<String>)> = plan
+            .secrets
             .iter()
-            .try_for_each(|moved| store(&moved.environment, &moved.secret))
-            .map_err(ImportError::from)
+            .map(|moved| (moved.environment.as_str(), &moved.secret))
+            .collect();
+        if batch.is_empty() {
+            return Ok(());
+        }
+        store(&batch).map_err(ImportError::from)
     });
     if let Err(e) = staged {
         staging.undo();

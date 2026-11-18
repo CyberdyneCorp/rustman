@@ -137,6 +137,7 @@ fn flatten_into(name: &str, value: &Value, secret: bool, out: &mut Vec<Variable>
             name: name.to_owned(),
             value: value_text(leaf),
             secret,
+            path: false,
         }),
     }
 }

@@ -51,49 +51,149 @@ fn assert_nowhere(plan: &Plan, value: &str) {
     );
 }
 
+/// A Bruno collection: `collection.bru` with `vars`, and per folder
+/// (`""` for the root) its `folder.bru` vars and requests (name, URL).
+/// `name = value` pairs.
+type Vars<'a> = &'a [(&'a str, &'a str)];
+
+/// A folder (`""` for the root), its `folder.bru` vars and its requests
+/// (name, URL).
+type BrunoFolder<'a> = (&'a str, Vars<'a>, Vars<'a>);
+
+fn plan_bruno(root_vars: Vars<'_>, folders: &[BrunoFolder<'_>]) -> Plan {
+    let dir = tempfile::tempdir().unwrap();
+    let vars = |vars: &[(&str, &str)]| -> String {
+        let lines: Vec<String> = vars.iter().map(|(k, v)| format!("  {k}: {v}\n")).collect();
+        format!("vars:pre-request {{\n{}}}\n", lines.concat())
+    };
+    std::fs::write(
+        dir.path().join("bruno.json"),
+        r#"{"version": "1", "name": "Scope", "type": "collection"}"#,
+    )
+    .unwrap();
+    std::fs::write(dir.path().join("collection.bru"), vars(root_vars)).unwrap();
+    for (folder, folder_vars, requests) in folders {
+        let path = dir.path().join(folder);
+        std::fs::create_dir_all(&path).unwrap();
+        if !folder.is_empty() {
+            std::fs::write(path.join("folder.bru"), vars(folder_vars)).unwrap();
+        }
+        for (name, url) in *requests {
+            let text = format!(
+                "meta {{\n  name: {name}\n  type: http\n}}\n\nget {{\n  url: {url}\n  body: none\n  auth: none\n}}\n"
+            );
+            std::fs::write(path.join(format!("{name}.bru")), text).unwrap();
+        }
+    }
+    let (format, collection) = rustman_import::load(
+        Some(Format::Bruno),
+        dir.path(),
+        "scope",
+        &rustman_import::SourceOptions::default(),
+    )
+    .unwrap();
+    let root = tempfile::tempdir().unwrap();
+    Setup::new(root.path()).plan_collection(format, collection, "scope")
+}
+
+/// The value the first `{{name}}` of the file at `path` resolves to, from
+/// the moved secrets, or its own name when it is not a secret.
+fn resolved(plan: &Plan, path: &str) -> String {
+    let text = file(plan, path);
+    let name = text
+        .split("{{")
+        .nth(1)
+        .and_then(|rest| rest.split("}}").next())
+        .unwrap_or_else(|| panic!("{text}"));
+    plan.secrets
+        .iter()
+        .find(|m| m.secret.name() == name)
+        .map_or_else(|| format!("var:{name}"), |m| m.secret.expose().clone())
+}
+
 #[test]
 fn a_folder_variable_rename_applies_only_inside_that_folder() {
+    let url = "https://x.test/?p={{password}}";
+    let plan = plan_bruno(
+        &[("password", "ROOT-PW-1")],
+        &[
+            ("", &[], &[("root", url)]),
+            ("f", &[("password", "FOLDER-PW-2")], &[("in-f", url)]),
+            ("f/deeper", &[], &[("deep", url)]),
+            ("g", &[], &[("in-g", url)]),
+        ],
+    );
+    // Each request resolves to the value Bruno would use.
+    assert_eq!(resolved(&plan, "scope/root.rman.yaml"), "ROOT-PW-1");
+    assert_eq!(resolved(&plan, "scope/g/in-g.rman.yaml"), "ROOT-PW-1");
+    assert_eq!(resolved(&plan, "scope/f/in-f.rman.yaml"), "FOLDER-PW-2");
+    assert_eq!(
+        resolved(&plan, "scope/f/deeper/deep.rman.yaml"),
+        "FOLDER-PW-2"
+    );
+}
+
+#[test]
+fn a_rename_never_takes_another_variables_name() {
+    // `token_2` is a plain collection variable: folder A's moved `token`
+    // must not become `{{token_2}}`, which resolves to `{{env_tok}}`.
+    let url = "https://x.test/?t={{token}}";
+    let plan = plan_bruno(
+        &[("token", "TOK_ROOT_0001"), ("token_2", "{{env_tok}}")],
+        &[
+            ("", &[], &[("root", url)]),
+            ("a", &[("token", "TOK_A_0002")], &[("in-a", url)]),
+        ],
+    );
+    assert_eq!(resolved(&plan, "scope/root.rman.yaml"), "TOK_ROOT_0001");
+    assert_eq!(resolved(&plan, "scope/a/in-a.rman.yaml"), "TOK_A_0002");
+    assert!(plan.secrets.iter().all(|m| m.secret.name() != "token_2"));
+}
+
+#[test]
+fn postman_folder_variables_are_dropped_as_postman_ignores_them() {
     let plan = plan_postman(json!({
         "info": {"name": "Two", "schema": SCHEMA},
         "variable": [{"key": "password", "value": "ROOT-PW-1"}],
         "item": [
-            request("root", "https://root.example.com/login?p={{password}}"),
             {"name": "F", "variable": [{"key": "password", "value": "FOLDER-PW-2"}],
-             "item": [
-                request("in f", "https://f.example.com/?p={{password}}"),
-                {"name": "Deeper", "item": [request("deep", "https://d.example.com/?p={{password}}")]}
-             ]},
-            {"name": "G", "item": [request("in g", "https://g.example.com/?p={{password}}")]}
-        ]
-    }));
-    // Each request resolves to the value Postman would use.
-    let value_of = |path: &str| {
-        let text = file(&plan, path);
-        let name = text
-            .split("value: '{{")
-            .nth(1)
-            .and_then(|rest| rest.split("}}").next())
-            .unwrap_or_else(|| panic!("{text}"));
-        stored(&plan, name).to_owned()
-    };
-    assert_eq!(value_of("two/root.rman.yaml"), "ROOT-PW-1");
-    assert_eq!(value_of("two/g/in-g.rman.yaml"), "ROOT-PW-1");
-    assert_eq!(value_of("two/f/in-f.rman.yaml"), "FOLDER-PW-2");
-    assert_eq!(value_of("two/f/deeper/deep.rman.yaml"), "FOLDER-PW-2");
-}
-
-#[test]
-fn a_plain_folder_variable_shadows_a_renamed_one() {
-    let plan = plan_postman(json!({
-        "info": {"name": "Shadow", "schema": SCHEMA},
-        "variable": [{"key": "password", "value": "ROOT-PW-1"}],
-        "item": [
-            {"name": "F", "variable": [{"key": "password", "value": "{{other}}"}],
              "item": [request("in f", "https://f.example.com/?p={{password}}")]}
         ]
     }));
-    let text = file(&plan, "shadow/f/in-f.rman.yaml");
-    assert!(text.contains("value: '{{password}}'"), "{text}");
+    // Postman sends the collection's value from inside F too.
+    assert_eq!(resolved(&plan, "two/f/in-f.rman.yaml"), "ROOT-PW-1");
+    assert_nowhere(&plan, "FOLDER-PW-2");
+    assert!(
+        plan.secrets
+            .iter()
+            .all(|m| m.secret.expose() != "FOLDER-PW-2")
+    );
+    let note = plan
+        .report
+        .notes
+        .iter()
+        .find(|n| n.message.starts_with("folder variable password dropped"))
+        .unwrap_or_else(|| panic!("{:?}", plan.report.notes));
+    assert_eq!(note.kind, rustman_import::ir::NoteKind::Dropped);
+}
+
+#[test]
+fn a_path_variable_does_not_take_over_a_collection_variable() {
+    let plan = plan_postman(json!({
+        "info": {"name": "Path", "schema": SCHEMA},
+        "variable": [{"key": "token", "value": "{{env_tok}}"}],
+        "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{token}}"}]},
+        "item": [{"name": "r", "request": {"method": "GET",
+            "url": {"raw": "https://api.test/:token/x", "variable": [{"key": "token", "value": "TOK_PATH_0004"}]}}}]
+    }));
+    let r = file(&plan, "path/r.rman.yaml");
+    assert!(r.contains("url: https://api.test/{{path_token}}/x"), "{r}");
+    assert_eq!(resolved(&plan, "path/r.rman.yaml"), "TOK_PATH_0004");
+    // The request inherits the collection's bearer `{{token}}`, which no
+    // request variable now shadows.
+    assert!(!r.contains("name: token\n"), "{r}");
+    let root = file(&plan, "path/_collection.yaml");
+    assert!(root.contains("token: '{{token}}'"), "{root}");
 }
 
 #[test]
@@ -276,4 +376,123 @@ fn insomnia_environments_with_the_same_file_name_stay_apart() {
         "{:?}",
         plan.report.notes
     );
+}
+
+fn review_notes(plan: &Plan) -> Vec<String> {
+    plan.report
+        .notes
+        .iter()
+        .filter(|n| n.kind == rustman_import::ir::NoteKind::Review)
+        .map(|n| n.message.clone())
+        .collect()
+}
+
+#[test]
+fn weak_secret_values_never_change_other_data() {
+    // The reviewer's inputs: secrets whose values are ordinary words and
+    // numbers that also appear as data.
+    let plan = plan_postman(json!({
+        "info": {"name": "FP 123456 example", "schema": SCHEMA},
+        "variable": [
+            {"key": "password", "value": "123456"}, {"key": "api_key", "value": "example"},
+            {"key": "client_secret", "value": "application"}, {"key": "pin", "value": "000000"}
+        ],
+        "item": [
+            {"name": "Login", "request": {"method": "POST", "url": "https://auth.local/login",
+              "auth": {"type": "basic", "basic": [{"key": "username", "value": "admin"}, {"key": "password", "value": "password"}]},
+              "body": {"mode": "raw", "raw": "{\"grant_type\":\"password\",\"amount\":123456}"}}},
+            {"name": "example", "request": {"method": "POST",
+              "url": "https://api.example.com/password/reset?type=password&zip=123456&page=000000",
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": {"mode": "urlencoded", "urlencoded": [{"key": "grant_type", "value": "password"}]}}}
+        ]
+    }));
+    let dest = "fp-123456-example";
+    let login = file(&plan, &format!("{dest}/login.rman.yaml"));
+    assert!(
+        login.contains(r#""grant_type":"password","amount":123456"#),
+        "{login}"
+    );
+    let example = file(&plan, &format!("{dest}/example.rman.yaml"));
+    for kept in [
+        "url: https://api.example.com/password/reset",
+        "value: password",
+        "value: '123456'",
+        "value: '000000'",
+        "value: application/json",
+        "name: example",
+    ] {
+        assert!(example.contains(kept), "{kept}: {example}");
+    }
+    let notes = review_notes(&plan);
+    assert!(
+        notes.iter().any(
+            |n| n.starts_with("the value of secret password also appears in ")
+                && n.ends_with("; review it")
+        ),
+        "{notes:?}"
+    );
+    // Notes name the secret and the field, never the value.
+    assert!(
+        notes.iter().any(|n| n.contains("example:query zip")),
+        "{notes:?}"
+    );
+    assert!(
+        notes
+            .iter()
+            .all(|n| !n.contains("123456") || n.contains("FP 123456")),
+        "{notes:?}"
+    );
+}
+
+#[test]
+fn a_secret_like_value_off_token_boundaries_is_kept_and_noted() {
+    let plan = plan_postman(json!({
+        "info": {"name": "Off", "schema": SCHEMA},
+        "item": [{"name": "r", "request": {"method": "GET", "url": "https://x.test/?a=xSAME-VALUE-42",
+            "header": [{"key": "X-Api-Key", "value": "SAME-VALUE-42"}]}}]
+    }));
+    let r = file(&plan, "off/r.rman.yaml");
+    assert!(r.contains("value: xSAME-VALUE-42"), "{r}");
+    assert!(
+        review_notes(&plan).iter().any(|n| n
+            .starts_with("the value of secret x_api_key also appears in ")
+            && n.contains(":query a;")),
+        "{:?}",
+        review_notes(&plan)
+    );
+}
+
+#[test]
+fn percent_encoded_keys_and_basic_values_in_json_are_moved() {
+    let plan = plan_postman(json!({
+        "info": {"name": "Enc", "schema": SCHEMA},
+        "item": [{"name": "r", "request": {"method": "POST",
+            "url": "https://a.test/cb?k=-----BEGIN%20RSA%20PRIVATE%20KEY-----%0AENCPEMBODY%0A-----END%20RSA%20PRIVATE%20KEY-----",
+            "body": {"mode": "raw", "raw": "{\"authHeader\": \"Basic dTpFTkNCQVNJQw==\"}"}}}]
+    }));
+    assert_nowhere(&plan, "ENCPEMBODY");
+    assert_nowhere(&plan, "dTpFTkNCQVNJQw==");
+    let r = file(&plan, "enc/r.rman.yaml");
+    assert!(r.contains("value: '{{private_key}}'"), "{r}");
+    assert!(r.contains(r#""authHeader": "Basic {{authheader}}""#), "{r}");
+    assert!(stored(&plan, "private_key").contains("ENCPEMBODY"));
+}
+
+#[test]
+fn environment_files_only_take_their_own_secrets_as_whole_values() {
+    let export = json!({"_type": "export", "__export_format": 4, "resources": [
+        {"_id": "wrk", "_type": "workspace", "name": "W", "parentId": null},
+        {"_id": "env", "_type": "environment", "parentId": "wrk", "name": "Base",
+         "data": {"api_key": "SAME-VAL-42X", "copy": "SAME-VAL-42X", "note": "key SAME-VAL-42X", "other": "HDR-VAL-99X"}},
+        {"_id": "r", "_type": "request", "parentId": "wrk", "name": "r", "method": "GET", "url": "https://x.test",
+         "headers": [{"name": "X-Api-Key", "value": "HDR-VAL-99X"}]}
+    ]});
+    let plan = plan_as(Format::Insomnia, &export.to_string());
+    let base = file(&plan, "environments/base.yaml");
+    // (a) whole value, same environment.
+    assert!(base.contains("copy: '{{api_key}}'"), "{base}");
+    // Embedded values and other environments' secrets are left alone.
+    assert!(base.contains("note: key SAME-VAL-42X"), "{base}");
+    assert!(base.contains("other: HDR-VAL-99X"), "{base}");
 }

@@ -214,15 +214,19 @@ fn source(
     };
     let plan = plan(collection, &options)?;
     if !o.dry_run {
-        let save = |env: &str, secret: &_| store.set(env, secret).map(|_| ());
+        let save = |batch: &[(&str, &_)]| store.set_many(batch);
         let applied = apply(&plan, &ws.root, &save);
         print_warnings(&store.take_warnings());
         applied?;
     }
-    // Reports name secrets only; redacting them as well guards every output.
+    // Reports name secrets only; redacting them as well guards every
+    // output. Values that are ordinary words or numbers (`password`,
+    // `123456`) are left out: the report shows them only as data (URLs,
+    // names), which redacting would corrupt.
     let redactor = plan
         .secrets
         .iter()
+        .filter(|m| rustman_import::secrets::is_secret_like(m.secret.expose()))
         .fold(Redactor::new(), |r, m| r.with(&m.secret));
     print!("{}", redactor.text(&plan.report.summary_text()));
     if let Some(path) = &o.report {

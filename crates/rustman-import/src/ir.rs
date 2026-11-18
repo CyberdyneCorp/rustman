@@ -185,6 +185,11 @@ pub struct Variable {
     pub value: String,
     /// The source marked it secret (e.g. Postman `type: secret`).
     pub secret: bool,
+    /// A path variable (Postman `:id`, Bruno `params:path`): a namespace of
+    /// its own, distinct from `{{id}}`, so it is given a name no other
+    /// variable uses before planning (see [`crate::translate`]).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub path: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -518,6 +523,7 @@ mod tests {
                     name: "base".into(),
                     value: "https://x".into(),
                     secret: false,
+                    path: false,
                 }],
                 items: vec![Item::Folder(Box::new(users))],
                 ..Folder::default()
