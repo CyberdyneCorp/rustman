@@ -1,0 +1,173 @@
+---
+source: crates/rustman-import/tests/postman.rs
+expression: tree(&plan)
+---
+=== shop-scripts/login.rman.yaml (create)
+# imported-script: prerequest (not executed)
+# pm.variables.set("ts", Date.now());
+# pm.request.headers.add({key: "X-Token", value: "«redacted:token»"});
+# imported-script: test (not executed)
+# pm.test("ok", () => pm.response.to.have.status(200));
+# const body = pm.response.json();
+# pm.environment.set("token", body.data.token);
+# pm.environment.set("etag", pm.response.headers.get("ETag"));
+# pm.globals.set("session", pm.cookies.get("sid"));
+# pm.test("fast", () => pm.expect(pm.response.responseTime).to.be.below(300));
+# pm.expect(body.data.expires_in).to.be.above(60);
+version: 1
+kind: http
+name: Login
+method: POST
+url: '{{base_url}}/auth/login'
+assertions:
+  - status: 200
+  - latency:
+      total_lt: 300
+  - json:
+      path: $.data.expires_in
+      gt: 60
+captures:
+  - var: token
+    from: json
+    path: $.data.token
+    persist: true
+  - var: etag
+    from: header
+    name: ETag
+    persist: true
+  - var: session
+    from: cookie
+    name: sid
+    persist: true
+=== shop-scripts/list-orders.rman.yaml (create)
+# imported-script: test (not executed)
+# pm.test("list", function () {
+#     pm.response.to.be.ok;
+#     pm.response.to.have.header("Content-Type", "application/json");
+#     pm.response.to.have.header("X-Total-Count");
+#     const d = pm.response.json();
+#     pm.expect(d.items[0].tags).to.have.lengthOf(2);
+#     pm.expect(d.items).to.be.an("array");
+#     pm.expect(d.total).to.be.above(0);
+#     pm.expect(d.page).to.eql(1);
+#     pm.expect(pm.response.json().items.every(i => i.price > 0)).to.be.true;
+#     pm.expect(d.items.length).to.eql(20);
+#     pm.collectionVariables.set("firstId", d.items[0].id);
+# });
+version: 1
+kind: http
+name: List orders
+method: GET
+url: '{{base_url}}/orders'
+assertions:
+  - status: '2xx'
+  - header:
+      name: Content-Type
+      equals: application/json
+  - header:
+      name: X-Total-Count
+      exists: true
+  - json:
+      path: $.items[0].tags
+      length: 2
+  - json:
+      path: $.items
+      type: array
+  - json:
+      path: $.total
+      gt: 0
+  - json:
+      path: $.page
+      equals: 1
+  - json:
+      path: $.items
+      length: 20
+captures:
+  - var: firstId
+    from: json
+    path: $.items[0].id
+=== shop-scripts/get-user.rman.yaml (create)
+# imported-script: test (not executed)
+# const user = pm.response.json();
+# pm.expect(user.user.id).to.eql(42);
+# pm.expect(user.user.name).to.be.a('string');
+# pm.expect(user.user.email).to.exist;
+# pm.expect(pm.response.text()).to.include("Ada");
+# pm.expect(pm.response.code).to.equal(200);
+# if (user.user.admin) {
+#     postman.setNextRequest("Admin panel");
+# }
+# pm.expect(user.user.roles).to.include("viewer");
+version: 1
+kind: http
+name: Get user
+method: GET
+url: '{{base_url}}/users/42'
+assertions:
+  - json:
+      path: $.user.id
+      equals: 42
+  - json:
+      path: $.user.name
+      type: string
+  - json:
+      path: $.user.email
+      exists: true
+  - body:
+      contains: Ada
+  - status: 200
+  - json:
+      path: $.user.roles
+      contains: viewer
+=== shop-scripts/checkout.rman.yaml (create)
+# imported-script: test (not executed)
+# pm.test("created", () => pm.response.to.have.status(201));
+# const order = pm.response.json();
+# pm.collectionVariables.set("orderId", order.order.id);
+# pm.variables.set("total", order.order["grand total"]);
+# pm.expect(order.order.status).to.not.eql("failed");
+# _.each(order.items, (i) => pm.expect(i.qty).to.be.above(0));
+# pm.sendRequest("https://audit.example.com/log", () => {});
+# pm.expect(order.order.lines).to.have.lengthOf(3);
+# var tax = order.order.total * 0.2;
+# pm.expect(tax).to.be.below(100);
+# pm.expect(order.order.id).to.exist;
+version: 1
+kind: http
+name: Checkout
+method: POST
+url: '{{base_url}}/checkout'
+assertions:
+  - status: 201
+  - json:
+      path: $.order.status
+      not_equals: failed
+  - json:
+      path: $.order.lines
+      length: 3
+  - json:
+      path: $.order.id
+      exists: true
+captures:
+  - var: orderId
+    from: json
+    path: $.order.id
+  - var: total
+    from: json
+    path: $.order["grand total"]
+=== shop-scripts/_collection.yaml (create)
+name: Shop scripts
+order:
+  - login
+  - list-orders
+  - get-user
+  - checkout
+auth:
+  type: bearer
+  token: '{{token}}'
+variables:
+  base_url: https://shop.example.com
+=== environments/local.yaml (create)
+secrets:
+  - token
+  - x_token

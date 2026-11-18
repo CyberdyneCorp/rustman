@@ -2,6 +2,7 @@
 
 use super::{MapBuilder, Node, render};
 use crate::collection::CollectionMeta;
+use crate::environment::Environment;
 use crate::model::{
     Assertion, Auth, Body, Capture, HeaderAssertion, HttpRequest, JsonAssertion, JsonContent,
     NameValue, OAuth2, Part, PartSource, Request, RequestSettings, StatusExpectation, VarValue,
@@ -37,6 +38,37 @@ pub fn assertions_to_yaml(assertions: &[Assertion]) -> String {
         return String::new();
     }
     render(&Node::Seq(assertions.iter().map(assertion).collect()))
+}
+
+/// The YAML text Rustman writes for an environment file: its variables,
+/// the names of its secrets (never their values) and `production: true`.
+pub fn environment_to_yaml(env: &Environment) -> String {
+    let secrets = (!env.secrets.is_empty()).then(|| strings(&env.secrets));
+    let node = MapBuilder::new()
+        .opt(
+            "variables",
+            (!env.variables.is_empty()).then(|| variables(&env.variables)),
+        )
+        .opt("secrets", secrets)
+        .opt("production", env.production.then(|| Node::plain(true)))
+        .build();
+    render(&node)
+}
+
+/// Nodes for request kinds this crate does not model, such as the
+/// `kind: graphql` files written by importers.
+pub fn auth_node(a: &Auth) -> Node {
+    auth(a)
+}
+
+/// A `{name, value}` list node (headers, query parameters, form fields).
+pub fn name_values_node(pairs: &[NameValue]) -> Node {
+    name_values(pairs)
+}
+
+/// A JSON value as a YAML node.
+pub fn json_node(value: &serde_json::Value) -> Node {
+    json(value)
 }
 
 fn http_node(r: &HttpRequest) -> Node {
@@ -292,4 +324,35 @@ fn capture(c: &Capture) -> Node {
         .opt_plain("required", c.required)
         .opt_plain("persist", c.persist)
         .build()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::environment::parse;
+
+    #[test]
+    fn environment_files_round_trip_without_secret_values() {
+        let env = Environment {
+            name: "staging".into(),
+            variables: Variables::new(vec![
+                ("base_url".into(), VarValue::String("https://x".into())),
+                ("port".into(), VarValue::Integer(8080)),
+            ]),
+            secrets: vec!["api_key".into()],
+            production: false,
+        };
+        let text = environment_to_yaml(&env);
+        assert_eq!(
+            text,
+            "variables:\n  base_url: https://x\n  port: 8080\nsecrets:\n  - api_key\n"
+        );
+        let loaded = parse(std::path::Path::new("staging.yaml"), "staging", &text).unwrap();
+        assert_eq!(loaded, env);
+        let empty = Environment {
+            production: true,
+            ..Environment::default()
+        };
+        assert_eq!(environment_to_yaml(&empty), "production: true\n");
+    }
 }

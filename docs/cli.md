@@ -17,7 +17,16 @@ This page covers sending and running requests, reporters, terminal behavior, log
 | `rustman cookies clear` | Empty the cookie jar of an environment | [Cookies](http.md#cookies) |
 | `rustman auth login <request>` | Run the OAuth2 authorization-code login for a request and cache its token | [OAuth2](http.md#oauth2) |
 | `rustman import curl` | Create a request file from a curl command | [Curl import](http.md#import) |
+| `rustman import <src>` / `rustman import auto <src>` | Import a collection export, detecting its format from the content | [Importing collections](import.md) |
+| `rustman import postman <src>` | Import a Postman Collection v2.0 or v2.1 export | [Postman](import.md#postman-collections) |
+| `rustman import postman-env <src>` | Import a Postman environment export into `environments/` | [Postman environments](import.md#postman-environments) |
+| `rustman import insomnia <src>` | Import an Insomnia v4 (JSON) or v5 (YAML) export | [Insomnia](import.md#insomnia-exports) |
+| `rustman import bruno <src>` | Import a Bruno collection folder or a single `.bru` file | [Bruno](import.md#bruno-collections) |
+| `rustman import har <src>` | Import the requests of a HAR 1.2 capture, with `--host`, `--method`, `--content-type` and `--include-static` | [HAR](import.md#har-captures) |
+| `rustman import http <src>` | Import `.http` / `.rest` files (a file or a folder) and their environment files | [HTTP files](import.md#http-files) |
 | `rustman export curl <request>` | Print a request as a curl command (redacted) | [Curl export](http.md#export) |
+| `rustman export postman <path>` | Write a collection folder or request file as a Postman Collection v2.1 (`-o <file>`) | [Exporting](import.md#exporting) |
+| `rustman export http <path>` | Write a collection folder or request file as a `.http` file (`-o <file>`) | [Exporting](import.md#exporting) |
 | `rustman send` | Send one request and print the response | [below](#rustman-send) |
 | `rustman run` | Run the requests under files and folders and report the results | [below](#rustman-run) |
 | `rustman history list` | List past exchanges, newest first, with `--status`, `--method`, `--grep`, `--since`, `--limit` and `--json` | [History](history.md#listing-and-searching) |
@@ -26,7 +35,7 @@ This page covers sending and running requests, reporters, terminal behavior, log
 | `rustman history clear` | Delete every recorded exchange | [History](history.md#retention) |
 | `rustman completions <shell>` | Print a shell completion script | [below](#completions) |
 
-The command groups `rustman env`, `rustman secret`, `rustman cookies`, `rustman auth`, `rustman import`, `rustman export` and `rustman history` only hold the commands above: on their own they print their subcommands and exit with 2.
+The command groups `rustman env`, `rustman secret`, `rustman cookies`, `rustman auth`, `rustman import`, `rustman export` and `rustman history` only hold the commands above: on their own they print their subcommands and exit with 2. `rustman import` also takes a source file or folder directly (`rustman import export.json`), which is the same as `rustman import auto export.json`.
 
 `rustman --help` and `rustman <command> --help` document every flag; `rustman --version` prints `rustman <version>`, such as `rustman 0.1.0`.
 
@@ -185,6 +194,8 @@ Every reporter writes from the same redacted records: secret values and sensitiv
 | 2 | Usage or configuration error: a bad flag, no workspace, an invalid file, a missing environment, an ambiguous request name, no request to run. |
 | 3 | At least one request errored: network, TLS, timeout, auth or unresolved variable. It wins over 1. |
 | 130 | Interrupted by Ctrl+C (SIGINT). |
+
+`rustman import` has its own: 0 when the import completed (even with unsupported features, unless `--fail-on-unsupported`), 1 with `--fail-on-unsupported` when a feature was unsupported, dropped or unmapped, and 2 for an unreadable, invalid, oversized or undetectable source (see [Importing collections](import.md#exit-codes)).
 
 On Ctrl+C, in-flight requests are cancelled, the requests not finished are reported as `skipped` with `skip_reason: interrupted`, every reporter writes its partial report (with `summary.interrupted: true`), and the exit code is 130. A second Ctrl+C quits at once, also with exit code 130, without waiting for reports to be written.
 

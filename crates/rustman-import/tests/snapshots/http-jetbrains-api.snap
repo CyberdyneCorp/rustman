@@ -1,0 +1,52 @@
+---
+source: crates/rustman-import/tests/sources.rs
+expression: tree(&plan)
+---
+=== api/list-items.rman.yaml (create)
+version: 1
+kind: http
+name: List items
+method: GET
+url: '{{host}}/{{api_version}}/items'
+headers:
+  - name: Accept
+    value: application/json
+=== api/create-item.rman.yaml (create)
+# imported-script: response-handler (not executed)
+# client.global.set("item_id", response.body.id);
+version: 1
+kind: http
+name: create-item
+method: POST
+url: '{{host}}/{{api_version}}/items'
+headers:
+  - name: Content-Type
+    value: application/json
+  - name: Authorization
+    value: Bearer {{token}}
+body:
+  type: json
+  content: |-
+    {
+      "name": "lamp",
+      "id": "{{$uuid}}"
+    }
+=== api/_collection.yaml (create)
+name: api
+order:
+  - list-items
+  - create-item
+variables:
+  api_version: v1
+=== environments/dev.yaml (create)
+variables:
+  timeout: '30'
+  host: http://localhost:8080
+secrets:
+  - token
+=== environments/prod.yaml (create)
+variables:
+  timeout: '30'
+  host: https://api.example.com
+secrets:
+  - token

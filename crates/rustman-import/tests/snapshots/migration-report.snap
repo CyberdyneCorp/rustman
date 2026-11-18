@@ -1,0 +1,46 @@
+---
+source: crates/rustman-import/tests/migration.rs
+expression: report
+---
+# Script migration report
+
+Source: `migration.postman_collection.json` (postman). Scripts were not executed; converted statements became assertions and captures in the request files.
+
+scripts: 31/40 statements converted (77%)
+
+## Login
+
+2 of 9 statements unconverted.
+
+| Statement | Request file | Suggestion |
+| --- | --- | --- |
+| `pm.variables.set("ts", Date.now())` | `shop-scripts/login.rman.yaml` | no declarative equivalent; consider a plugin |
+| `pm.request.headers.add({key: "X-Token", value: "«redacted:token»"})` | `shop-scripts/login.rman.yaml` | no declarative equivalent; consider a plugin |
+
+## List orders
+
+1 of 11 statements unconverted.
+
+| Statement | Request file | Suggestion |
+| --- | --- | --- |
+| `pm.expect(pm.response.json().items.every(i => i.price > 0)).to.be.true` | `shop-scripts/list-orders.rman.yaml` | use a `schema` assertion with `items.price` constrained by `exclusiveMinimum: 0`: `schema: {inline: {type: object, properties: {items: {type: array, items: {type: object, properties: {price: {exclusiveMinimum: 0}}}}}}}` |
+
+## Get user
+
+2 of 9 statements unconverted.
+
+| Statement | Request file | Suggestion |
+| --- | --- | --- |
+| `if (user.user.admin)` | `shop-scripts/get-user.rman.yaml` | no declarative equivalent; consider a plugin |
+| `postman.setNextRequest("Admin panel")` | `shop-scripts/get-user.rman.yaml` | no declarative equivalent; consider a plugin; for run order, list the requests under `order:` in `_collection.yaml` |
+
+## Checkout
+
+4 of 11 statements unconverted.
+
+| Statement | Request file | Suggestion |
+| --- | --- | --- |
+| `_.each(order.items, (i) => pm.expect(i.qty).to.be.above(0))` | `shop-scripts/checkout.rman.yaml` | no declarative equivalent; consider a plugin |
+| `pm.sendRequest("https://audit.example.com/log", () => {})` | `shop-scripts/checkout.rman.yaml` | no declarative equivalent; consider a plugin |
+| `var tax = order.order.total * 0.2` | `shop-scripts/checkout.rman.yaml` | no declarative equivalent; consider a plugin |
+| `pm.expect(tax).to.be.below(100)` | `shop-scripts/checkout.rman.yaml` | no declarative equivalent; consider a plugin |

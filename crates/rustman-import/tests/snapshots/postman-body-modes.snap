@@ -1,0 +1,96 @@
+---
+source: crates/rustman-import/tests/postman.rs
+expression: tree(&plan)
+---
+=== body-modes/raw-json.rman.yaml (create)
+version: 1
+kind: http
+name: Raw JSON
+method: POST
+url: '{{base_url}}/raw-json'
+body:
+  type: json
+  content: '{"a": 1}'
+=== body-modes/raw-json-by-header.rman.yaml (create)
+version: 1
+kind: http
+name: Raw JSON by header
+method: POST
+url: '{{base_url}}/raw-json-by-header'
+headers:
+  - name: Content-Type
+    value: application/json
+body:
+  type: json
+  content: '[1, 2]'
+=== body-modes/raw-xml.rman.yaml (create)
+version: 1
+kind: http
+name: Raw XML
+method: POST
+url: '{{base_url}}/raw-xml'
+body:
+  type: text
+  content: <a>1</a>
+=== body-modes/urlencoded.rman.yaml (create)
+version: 1
+kind: http
+name: Urlencoded
+method: POST
+url: '{{base_url}}/urlencoded'
+body:
+  type: form
+  fields:
+    - name: a
+      value: '1'
+    - name: b
+      value: '2'
+=== body-modes/formdata.rman.yaml (create)
+version: 1
+kind: http
+name: Formdata
+method: POST
+url: '{{base_url}}/formdata'
+body:
+  type: multipart
+  parts:
+    - name: note
+      value: hi
+    - name: doc
+      file: files/doc.pdf
+      content_type: application/pdf
+=== body-modes/file.rman.yaml (create)
+version: 1
+kind: http
+name: File
+method: POST
+url: '{{base_url}}/file'
+body:
+  type: file
+  path: payloads/body.bin
+=== body-modes/graphql-nested-variables.rman.yaml (create)
+# graphql-variables: {"input": {"name": "x"}}
+version: 1
+kind: graphql
+name: GraphQL nested variables
+endpoint: '{{base_url}}/graphql-nested-variables'
+document: 'mutation Add($input: In!) { add(input: $input) { id } }'
+=== body-modes/unknown-mode.rman.yaml (create)
+version: 1
+kind: http
+name: Unknown mode
+method: POST
+url: '{{base_url}}/unknown-mode'
+=== body-modes/_collection.yaml (create)
+name: Body modes
+order:
+  - raw-json
+  - raw-json-by-header
+  - raw-xml
+  - urlencoded
+  - formdata
+  - file
+  - graphql-nested-variables
+  - unknown-mode
+variables:
+  base_url: http://localhost:8080

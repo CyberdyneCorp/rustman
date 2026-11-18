@@ -5,6 +5,7 @@ use rustman_core::history::HistoryError;
 use rustman_core::run::Summary;
 use rustman_core::vars::ResolveError;
 use rustman_http::{CurlError, RequestError};
+use rustman_import::ImportError;
 
 /// Usage or configuration error: bad flag, invalid file, unsupported version.
 pub const CONFIG: u8 = 2;
@@ -37,6 +38,9 @@ pub enum CliError {
     /// History cannot be read or written, or has no such entry.
     #[error(transparent)]
     History(#[from] HistoryError),
+    /// A source that cannot be imported, or an import that cannot be written.
+    #[error(transparent)]
+    Import(#[from] ImportError),
 }
 
 impl CliError {
@@ -44,7 +48,7 @@ impl CliError {
         match self {
             Self::Config(err) => code(err),
             Self::Request(_) | Self::Resolve(_) => REQUEST,
-            Self::Curl(_) | Self::History(_) => CONFIG,
+            Self::Curl(_) | Self::History(_) | Self::Import(_) => CONFIG,
         }
     }
 
@@ -193,6 +197,16 @@ mod tests {
     fn usage_errors_exit_2() {
         let err = CliError::from(ConfigError::Usage("bad --var".into()));
         assert_eq!((err.code(), err.render().as_str()), (2, "error: bad --var"));
+    }
+
+    #[test]
+    fn import_errors_exit_2() {
+        let err = CliError::from(ImportError::CannotDetect("data.json".into()));
+        assert_eq!(err.code(), 2);
+        assert!(
+            err.render()
+                .starts_with("error: import: cannot detect format of data.json")
+        );
     }
 
     #[test]

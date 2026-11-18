@@ -1,0 +1,26 @@
+---
+source: crates/rustman-import/tests/sources.rs
+expression: plan.report.summary_text()
+---
+imported Shop API (insomnia) into shop-api/
+written: 5 requests, 2 collections, 4 environments; skipped: 0; dropped: 2; secrets moved: 9; unsupported: 5; unmapped: 0
+1 scripts preserved as comments, not executed
+scripts: 0/1 statements converted (0%)
+secret: token -> environment 'local' (shop-v4.json > Users / Create user)
+secret: password -> environment 'local' (shop-v4.json > Users / Create user)
+secret: x_api_key -> environment 'local' (shop-v4.json > Search products)
+secret: apikey -> environment 'local' (shop-v4.json > Search products)
+secret: password_2 -> environment 'local' (shop-v4.json > Login)
+secret: api_token -> environment 'dev' (shop-v4.json > Dev)
+secret: api_token -> environment 'prod' (shop-v4.json > Prod)
+secret: api_token -> environment 'private' (shop-v4.json > Private)
+secret: plain -> environment 'private' (shop-v4.json > Private)
+dropped: disabled query parameter debug dropped (shop-v4.json > Users / List users)
+unsupported: hawk auth unsupported (shop-v4.json > Users / Get user)
+dropped: disabled form field remember dropped (shop-v4.json > Login)
+unsupported: gRPC/WebSocket request unsupported (shop-v4.json > Stream)
+unsupported: unsupported template tag: uuid (shop-v4.json > Users / List users)
+unsupported: unsupported template tag: response (shop-v4.json > Users / Get user)
+unsupported: unsupported template tag: now (shop-v4.json > Dev)
+script not executed: after-response (shop-v4.json > Login)
+info: secrets stored in new environment 'local' (shop-v4.json)

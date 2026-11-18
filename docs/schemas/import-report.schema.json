@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/CyberdyneCorp/rustman/docs/schemas/import-report.schema.json",
+  "title": "rustman.import-report/v1",
+  "description": "The report of `rustman import --report <file>`. Secrets appear by name, environment and source location only, never by value.",
+  "type": "object",
+  "required": ["schema", "source", "destination", "dry_run", "summary", "files", "conflicts", "secrets", "notes", "migration"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "rustman.import-report/v1" },
+    "source": {
+      "type": "object",
+      "required": ["path", "format", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string", "description": "The source as given on the command line." },
+        "format": { "enum": ["postman", "postman-env", "insomnia", "bruno", "har", "http"] },
+        "name": { "type": "string", "description": "The source collection or environment name." }
+      }
+    },
+    "destination": {
+      "type": ["string", "null"],
+      "description": "The collection folder, relative to the workspace root; null for an environment-only import."
+    },
+    "dry_run": { "type": "boolean" },
+    "summary": {
+      "type": "object",
+      "required": ["requests", "collections", "environments", "skipped", "dropped", "secrets_moved", "unsupported", "unmapped", "scripts"],
+      "additionalProperties": false,
+      "properties": {
+        "requests": { "$ref": "#/$defs/count", "description": "Request files written." },
+        "collections": { "$ref": "#/$defs/count", "description": "_collection.yaml files written." },
+        "environments": { "$ref": "#/$defs/count", "description": "Environment files created or updated." },
+        "skipped": { "$ref": "#/$defs/count", "description": "Files kept because they already existed, including unchanged ones." },
+        "dropped": { "$ref": "#/$defs/count" },
+        "secrets_moved": { "$ref": "#/$defs/count" },
+        "unsupported": { "$ref": "#/$defs/count" },
+        "unmapped": { "$ref": "#/$defs/count" },
+        "scripts": { "$ref": "#/$defs/count", "description": "Scripts preserved as comments, not executed." }
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "kind", "action"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "type": "string", "description": "Relative to the workspace root, with / separators." },
+          "kind": { "enum": ["request", "collection", "environment"] },
+          "action": { "enum": ["create", "overwrite", "update", "skip", "unchanged"], "description": "unchanged: the file already has exactly this content; it is not rewritten and not reported as a conflict." }
+        }
+      }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "resolution"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "type": "string" },
+          "resolution": { "type": "string", "examples": ["skipped (exists)", "overwritten", "renamed to billing-api/list-2.rman.yaml"] }
+        }
+      }
+    },
+    "secrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "environment", "location"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "environment": { "type": "string" },
+          "location": { "$ref": "#/$defs/location" }
+        }
+      }
+    },
+    "migration": {
+      "type": "object",
+      "description": "Script migration: the script statements of each request, how many became declarative assertions or captures, and the ones left as comments (with extracted secret values redacted).",
+      "required": ["found", "mapped", "unconverted", "percent", "requests"],
+      "additionalProperties": false,
+      "properties": {
+        "found": { "$ref": "#/$defs/count" },
+        "mapped": { "$ref": "#/$defs/count" },
+        "unconverted": { "$ref": "#/$defs/count" },
+        "percent": { "type": "integer", "minimum": 0, "maximum": 100, "description": "mapped * 100 / found, rounded down; 100 when no statement was found." },
+        "requests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["request", "path", "found", "mapped", "unconverted", "statements"],
+            "additionalProperties": false,
+            "properties": {
+              "request": { "type": "string", "description": "The request's item path in the source, such as Users / List." },
+              "path": { "type": "string", "description": "The request file, relative to the workspace root." },
+              "found": { "$ref": "#/$defs/count" },
+              "mapped": { "$ref": "#/$defs/count" },
+              "unconverted": { "$ref": "#/$defs/count" },
+              "statements": { "type": "array", "items": { "type": "string" }, "description": "The unconverted statements, as written." }
+            }
+          }
+        }
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "message", "location"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": { "enum": ["dropped", "unsupported", "unmapped", "script", "review", "info"] },
+          "message": { "type": "string" },
+          "location": { "$ref": "#/$defs/location" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "count": { "type": "integer", "minimum": 0 },
+    "location": {
+      "type": "object",
+      "required": ["file"],
+      "additionalProperties": false,
+      "properties": {
+        "file": { "type": "string" },
+        "item": { "type": "string", "description": "The item path in the source, such as Users / List." },
+        "line": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

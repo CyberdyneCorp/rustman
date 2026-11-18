@@ -44,9 +44,9 @@ enum Command {
     Cookies(commands::cookies::CookiesArgs),
     /// Log in to OAuth2-protected APIs
     Auth(commands::auth::AuthArgs),
-    /// Create request files from other formats (curl)
+    /// Import collections (Postman, Insomnia, Bruno, HAR, .http) and curl commands
     Import(commands::import::ImportArgs),
-    /// Print requests in other formats (curl)
+    /// Export requests and collections (curl, Postman, .http)
     Export(commands::export::ExportArgs),
     /// Send one request (a file, id or name, or an ad-hoc METHOD URL) and print the response
     Send(commands::send::SendArgs),
@@ -94,7 +94,7 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
         Command::Secret(args) => Ok(commands::secret::run(&args).map(done)?),
         Command::Cookies(args) => Ok(commands::cookies::run(&args).map(done)?),
         Command::Auth(args) => commands::auth::run(&args).map(done),
-        Command::Import(args) => commands::import::run(&args).map(done),
+        Command::Import(args) => commands::import::run(&args),
         Command::Export(args) => commands::export::run(&args).map(done),
         Command::Send(args) => commands::send::run(&args),
         Command::Run(args) => commands::run::run(&args),

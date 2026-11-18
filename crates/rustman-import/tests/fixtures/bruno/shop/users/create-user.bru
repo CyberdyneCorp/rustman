@@ -1,0 +1,43 @@
+meta {
+  name: Create user
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/users/:org
+  body: json
+  auth: apikey
+}
+
+params:path {
+  org: acme
+}
+
+auth:apikey {
+  key: X-Api-Key
+  value: CANARY-bruno-apikey-6e2d90
+  placement: header
+}
+
+body:json {
+  {
+    "name": "Ada",
+    "password": "CANARY-bruno-body-password-31",
+    "tags": ["a", "b"]
+  }
+}
+
+vars:pre-request {
+  token: CANARY-bruno-reqvar-token-42
+}
+
+vars:post-response {
+  user_id: res.body.data.id
+  stamp: Date.now()
+}
+
+script:pre-request {
+  req.setHeader("X-Request-Id", bru.interpolate("{{$guid}}"));
+  req.setHeader("Authorization", "Bearer CANARY-bruno-script-bearer-53");
+}

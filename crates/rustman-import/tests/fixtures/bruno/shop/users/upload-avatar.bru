@@ -1,0 +1,21 @@
+meta {
+  name: Upload avatar
+  type: http
+  seq: 3
+}
+
+put {
+  url: {{base_url}}/users/1/avatar
+  body: multipartForm
+  auth: basic
+}
+
+auth:basic {
+  username: admin
+  password: CANARY-bruno-basic-password-31
+}
+
+body:multipart-form {
+  caption: Me
+  file: @file(avatar.png)
+}

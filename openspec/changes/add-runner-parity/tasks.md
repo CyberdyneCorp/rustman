@@ -42,9 +42,9 @@
 
 ## 6. Script migration
 
-- [ ] 6.1 Extend the pattern table with `to.be.ok`, `responseTime`, `text().include` and header values. Verify: one fixture test per mapping.
-- [ ] 6.2 Track `pm.response.json()` aliases, and map the chai field ops (`eql`/`equal`, `exist`, `lengthOf`, `a`, `above`, `below`), including bracket indexes. Verify: fixture tests for nested paths and `[0]` indexes.
-- [ ] 6.3 Map the variable setters (environment, collectionVariables, globals, variables) to captures, setting `persist` per scope. Verify: fixture tests for header, cookie and tracked-body captures.
-- [ ] 6.4 Add the migration summary counts to the import report and pretty output. Verify: a test on a 40-statement fixture asserts `31/40 (77%)`.
-- [ ] 6.5 Implement `--migration-report`: Markdown sections with a suggestion table (`every(...)` → schema, `setNextRequest` → collection ordering, the rest → plugin hint), with redaction. Verify: a golden Markdown test, and a grep for secret values that finds none.
-- [ ] 6.6 Run a real-world corpus: import 5 public Postman collections, then record and commit the conversion rate as a fixture baseline. Verify: CI fails if the conversion rate drops below the baseline.
+- [x] 6.1 Extend the pattern table with `to.be.ok`, `responseTime`, `text().include` and header values. Verify: one fixture test per mapping.
+- [x] 6.2 Track `pm.response.json()` aliases, and map the chai field ops (`eql`/`equal`, `exist`, `lengthOf`, `a`, `above`, `below`), including bracket indexes. Verify: fixture tests for nested paths and `[0]` indexes.
+- [x] 6.3 Map the variable setters (environment, collectionVariables, globals, variables) to captures, setting `persist` per scope. Verify: fixture tests for header, cookie and tracked-body captures.
+- [x] 6.4 Add the migration summary counts to the import report and pretty output. Verify: a test on a 40-statement fixture asserts `31/40 (77%)`.
+- [x] 6.5 Implement `--migration-report`: Markdown sections with a suggestion table (`every(...)` → schema, `setNextRequest` → collection ordering, the rest → plugin hint), with redaction. Verify: a golden Markdown test, and a grep for secret values that finds none.
+- [x] 6.6 Run a real-world corpus: import 5 public Postman collections, then record and commit the conversion rate as a fixture baseline. Verify: CI fails if the conversion rate drops below the baseline.

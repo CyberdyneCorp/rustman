@@ -1,0 +1,276 @@
+{
+  "info": {
+    "name": "Auth types",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080"
+    }
+  ],
+  "item": [
+    {
+      "name": "No auth",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/no-auth",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Basic",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/basic",
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "u",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "{{password}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Bearer",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/bearer",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "API key in query",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api-key-in-query",
+        "auth": {
+          "type": "apikey",
+          "apikey": [
+            {
+              "key": "key",
+              "value": "api_key",
+              "type": "string"
+            },
+            {
+              "key": "value",
+              "value": "{{api_key}}",
+              "type": "string"
+            },
+            {
+              "key": "in",
+              "value": "query",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "OAuth2 client credentials",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/oauth2-client-credentials",
+        "auth": {
+          "type": "oauth2",
+          "oauth2": [
+            {
+              "key": "grant_type",
+              "value": "client_credentials",
+              "type": "string"
+            },
+            {
+              "key": "accessTokenUrl",
+              "value": "https://auth/token",
+              "type": "string"
+            },
+            {
+              "key": "clientId",
+              "value": "cid",
+              "type": "string"
+            },
+            {
+              "key": "clientSecret",
+              "value": "{{client_secret}}",
+              "type": "string"
+            },
+            {
+              "key": "scope",
+              "value": "a b",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "OAuth2 authorization code",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/oauth2-authorization-code",
+        "auth": {
+          "type": "oauth2",
+          "oauth2": [
+            {
+              "key": "grant_type",
+              "value": "authorization_code_with_pkce",
+              "type": "string"
+            },
+            {
+              "key": "authUrl",
+              "value": "https://auth/authorize",
+              "type": "string"
+            },
+            {
+              "key": "accessTokenUrl",
+              "value": "https://auth/token",
+              "type": "string"
+            },
+            {
+              "key": "clientId",
+              "value": "cid",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "OAuth2 implicit",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/oauth2-implicit",
+        "auth": {
+          "type": "oauth2",
+          "oauth2": [
+            {
+              "key": "grant_type",
+              "value": "implicit",
+              "type": "string"
+            },
+            {
+              "key": "authUrl",
+              "value": "https://auth/authorize",
+              "type": "string"
+            },
+            {
+              "key": "clientId",
+              "value": "cid",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Hawk",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/hawk",
+        "auth": {
+          "type": "hawk",
+          "hawk": [
+            {
+              "key": "authId",
+              "value": "x",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Digest",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/digest",
+        "auth": {
+          "type": "digest",
+          "digest": [
+            {
+              "key": "username",
+              "value": "x",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "AWS Signature",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/aws-signature",
+        "auth": {
+          "type": "awsv4",
+          "awsv4": [
+            {
+              "key": "accessKey",
+              "value": "x",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "NTLM",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/ntlm",
+        "auth": {
+          "type": "ntlm",
+          "ntlm": [
+            {
+              "key": "username",
+              "value": "x",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}

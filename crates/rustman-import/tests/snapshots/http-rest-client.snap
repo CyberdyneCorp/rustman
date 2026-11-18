@@ -1,0 +1,45 @@
+---
+source: crates/rustman-import/tests/sources.rs
+expression: tree(&plan)
+---
+=== rest-client/requests/get-status.rman.yaml (create)
+version: 1
+kind: http
+name: GET /status
+method: GET
+url: '{{base}}/status'
+=== rest-client/requests/post-login.rman.yaml (create)
+version: 1
+kind: http
+name: POST /login
+method: POST
+url: '{{base}}/login'
+headers:
+  - name: Content-Type
+    value: application/x-www-form-urlencoded
+body:
+  type: form
+  fields:
+    - name: user
+      value: ada
+    - name: password
+      value: '{{password}}'
+=== rest-client/requests/_collection.yaml (create)
+name: requests
+order:
+  - get-status
+  - post-login
+variables:
+  base: '{{host}}/api'
+=== rest-client/_collection.yaml (create)
+name: rest-client
+order:
+  - requests
+=== environments/local.yaml (create)
+variables:
+  host: http://localhost:9000
+secrets:
+  - password
+=== environments/production.yaml (create)
+variables:
+  host: https://api.example.com

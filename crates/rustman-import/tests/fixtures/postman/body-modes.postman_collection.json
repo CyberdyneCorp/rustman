@@ -1,0 +1,163 @@
+{
+  "info": {
+    "name": "Body modes",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080"
+    }
+  ],
+  "item": [
+    {
+      "name": "Raw JSON",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{base_url}}/raw-json",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"a\": 1}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Raw JSON by header",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/raw-json-by-header",
+        "body": {
+          "mode": "raw",
+          "raw": "[1, 2]"
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Raw XML",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{base_url}}/raw-xml",
+        "body": {
+          "mode": "raw",
+          "raw": "<a>1</a>",
+          "options": {
+            "raw": {
+              "language": "xml"
+            }
+          }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Urlencoded",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{base_url}}/urlencoded",
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "a",
+              "value": "1"
+            },
+            {
+              "key": "b",
+              "value": "2"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Formdata",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{base_url}}/formdata",
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "note",
+              "value": "hi",
+              "type": "text"
+            },
+            {
+              "key": "doc",
+              "type": "file",
+              "src": "files/doc.pdf",
+              "contentType": "application/pdf"
+            },
+            {
+              "key": "empty",
+              "type": "file",
+              "src": []
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "File",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{base_url}}/file",
+        "body": {
+          "mode": "file",
+          "file": {
+            "src": "payloads/body.bin"
+          }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "GraphQL nested variables",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{base_url}}/graphql-nested-variables",
+        "body": {
+          "mode": "graphql",
+          "graphql": {
+            "query": "mutation Add($input: In!) { add(input: $input) { id } }",
+            "variables": "{\"input\": {\"name\": \"x\"}}"
+          }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Unknown mode",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{base_url}}/unknown-mode",
+        "body": {
+          "mode": "binary-stream"
+        }
+      },
+      "response": []
+    }
+  ]
+}

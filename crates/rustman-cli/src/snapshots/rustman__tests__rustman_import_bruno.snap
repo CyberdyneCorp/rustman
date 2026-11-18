@@ -1,0 +1,53 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Import a Bruno collection folder (or a single .bru file)
+
+Usage: rustman import bruno [OPTIONS] <SRC>
+
+Arguments:
+  <SRC>
+          The exported file (or folder, for Bruno and .http sources)
+
+Options:
+      --into <DIR>
+          Collection folder to write into, inside the workspace (default: the slug of the source collection's name)
+
+      --dry-run
+          Convert and print the planned files and secrets without writing anything
+
+      --on-conflict <POLICY>
+          When a file already exists: keep it, replace it, or write next to it
+          
+          [default: skip]
+          [possible values: skip, overwrite, rename]
+
+      --report <FILE>
+          Also write the report as JSON (rustman.import-report/v1) to FILE
+
+      --migration-report <FILE>
+          Write the unconverted script statements, with suggestions, as Markdown to FILE
+
+      --max-size <SIZE>
+          Refuse sources larger than this (bytes, or with K, M or G; default 100M)
+
+      --fail-on-unsupported
+          Exit with 1 when a feature was unsupported, dropped or unmapped
+
+      --env <NAME>
+          Environment (default: RUSTMAN_ENV, then default_environment)
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

@@ -1,0 +1,11 @@
+---
+source: crates/rustman-import/tests/postman.rs
+expression: tree(&plan)
+---
+=== environments/staging.yaml (create)
+variables:
+  base_url: https://staging.billing.example.com/v1
+  request_signing_salt: a8F3k2L9q7W1z5X0c4V6b8N2m1
+secrets:
+  - api_key
+  - admin_password

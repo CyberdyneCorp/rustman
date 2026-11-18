@@ -3264,6 +3264,7 @@ version = "0.1.0"
 dependencies = [
  "anstream",
  "assert_cmd",
+ "base64",
  "clap",
  "clap_complete",
  "dunce",
@@ -3276,6 +3277,7 @@ dependencies = [
  "rpassword",
  "rustman-core",
  "rustman-http",
+ "rustman-import",
  "rustman-report",
  "rustman-test-support",
  "rustman-tui",
@@ -3360,6 +3362,20 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "rustman-import"
+version = "0.1.0"
+dependencies = [
+ "insta",
+ "jsonschema",
+ "regex",
+ "rustman-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

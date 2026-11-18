@@ -1,0 +1,283 @@
+{
+  "info": {
+    "_postman_id": "8b0f9a52-3c1e-4d7a-9f53-2f6a1c0d4e11",
+    "name": "Billing API",
+    "description": "Invoices, customers and payments.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "1234567"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "sk_live_CANARY_collection_bearer_7f3a9c2e", "type": "string" }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// refresh with sk_live_CANARY_collection_bearer_7f3a9c2e when it expires",
+          "pm.request.headers.add({key: 'X-Request-Id', value: pm.variables.replaceIn('{{$guid}}')});"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "https://billing.example.com/v1", "type": "string" },
+    { "key": "api_key", "value": "CANARY-collection-apikey-4d5e6f", "type": "string" },
+    { "key": "webhook_secret", "value": "CANARY-webhook-secret-0a1b2c", "type": "secret" },
+    { "key": "legacy_host", "value": "old.example.com", "disabled": true }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": ["pm.environment.set('apiSecret', 'CANARY-script-only-secret-8024');"],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"logged in\", () => pm.response.to.have.status(200));",
+                  "pm.environment.set(\"token\", pm.response.json().data.token);",
+                  "pm.environment.set(\"refresh\", pm.response.headers.get(\"X-Refresh\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "username", "value": "billing-bot", "type": "text" },
+                { "key": "password", "value": "CANARY-login-password-8c9d", "type": "text" },
+                { "key": "otp", "value": "000000", "type": "text", "disabled": true }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "List",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.expect(pm.response.code).to.eql(200);", "pm.response.to.have.header(\"X-Total-Count\");"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "X-Debug", "value": "1", "disabled": true },
+              { "key": "X-API-Key", "value": "CANARY-header-xapikey-1122" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/users?page=1&per_page=50&debug=true",
+              "host": ["{{base_url}}"],
+              "path": ["users"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "per_page", "value": "50" },
+                { "key": "debug", "value": "true", "disabled": true }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ada\",\n  \"password\": \"CANARY-body-password-2468\",\n  \"city\": \"{{$randomCity}}\",\n  \"created\": {{$timestamp}}\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/users"
+          },
+          "response": []
+        },
+        {
+          "name": "Statement",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "https://admin:CANARY-userinfo-pass-1470@billing.example.com/v1/statements/:token",
+              "protocol": "https",
+              "host": ["billing", "example", "com"],
+              "path": ["v1", "statements", ":token"],
+              "variable": [{ "key": "token", "value": "CANARY-path-token-3690" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/:id",
+              "host": ["{{base_url}}"],
+              "path": ["users", ":id"],
+              "variable": [{ "key": "id", "value": "42" }]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Invoices",
+      "auth": {
+        "type": "apikey",
+        "apikey": [
+          { "key": "key", "value": "X-Billing-Key", "type": "string" },
+          { "key": "value", "value": "{{api_key}}", "type": "string" },
+          { "key": "in", "value": "header", "type": "string" }
+        ]
+      },
+      "item": [
+        {
+          "name": "List invoices",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiJ9.CANARY-literal-jwt.sig" },
+              { "key": "Cookie", "value": "session=CANARY-cookie-session-3344; theme=dark" }
+            ],
+            "url": "{{base_url}}/invoices?status=open"
+          },
+          "response": []
+        },
+        {
+          "name": "Upload attachment",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "uploader", "type": "string" },
+                { "key": "password", "value": "CANARY-basic-password-5566", "type": "string" }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "invoice_id", "value": "inv_1", "type": "text" },
+                { "key": "file", "type": "file", "src": "/Users/someone/Desktop/invoice.pdf" }
+              ]
+            },
+            "url": "{{base_url}}/invoices/inv_1/attachments"
+          },
+          "response": []
+        },
+        {
+          "name": "Legacy export",
+          "request": {
+            "auth": {
+              "type": "hawk",
+              "hawk": [
+                { "key": "authId", "value": "legacy", "type": "string" },
+                { "key": "authKey", "value": "CANARY-hawk-key-7788", "type": "string" }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/invoices/export.csv"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Get User",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/me"
+      },
+      "response": []
+    },
+    {
+      "name": "get user!",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/me?verbose=1"
+      },
+      "response": []
+    },
+    {
+      "name": "Payments (GraphQL)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "graphql",
+          "graphql": {
+            "query": "query Payments($first: Int) {\n  payments(first: $first) { id amount }\n}",
+            "variables": "{\n  \"first\": 10\n}"
+          }
+        },
+        "url": "{{base_url}}/graphql"
+      },
+      "response": []
+    },
+    {
+      "name": "Partner token",
+      "request": {
+        "auth": {
+          "type": "oauth2",
+          "oauth2": [
+            { "key": "grant_type", "value": "client_credentials", "type": "string" },
+            { "key": "accessTokenUrl", "value": "https://auth.example.com/oauth/token", "type": "string" },
+            { "key": "clientId", "value": "billing-partner", "type": "string" },
+            { "key": "clientSecret", "value": "CANARY-oauth-client-secret-9900", "type": "string" },
+            { "key": "scope", "value": "invoices:read payments:read", "type": "string" },
+            { "key": "accessToken", "value": "CANARY-oauth-access-token-1357", "type": "string" }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/partners/me"
+      },
+      "response": []
+    }
+  ]
+}

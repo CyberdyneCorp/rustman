@@ -1,0 +1,11 @@
+---
+source: crates/rustman-import/tests/postman.rs
+expression: plan.report.summary_text()
+---
+imported Auth types (postman) into auth-types/
+written: 11 requests, 1 collections, 0 environments; skipped: 0; dropped: 0; secrets moved: 0; unsupported: 5; unmapped: 0
+unsupported: oauth2 auth with grant 'implicit' unsupported (auth-types.postman_collection.json > OAuth2 implicit)
+unsupported: hawk auth unsupported (auth-types.postman_collection.json > Hawk)
+unsupported: digest auth unsupported (auth-types.postman_collection.json > Digest)
+unsupported: awsv4 auth unsupported (auth-types.postman_collection.json > AWS Signature)
+unsupported: ntlm auth unsupported (auth-types.postman_collection.json > NTLM)

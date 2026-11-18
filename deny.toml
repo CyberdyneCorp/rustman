@@ -60,6 +60,13 @@ deny = [
     { crate = "native-tls", reason = "system TLS is not allowed; use rustls" },
     { crate = "aws-lc-rs", reason = "rustls uses the ring provider (design D3)" },
     { crate = "aws-lc-sys", reason = "rustls uses the ring provider (design D3)" },
+    # Imported scripts are never executed (add-importers design D3): no JS engine.
+    { crate = "boa_engine", reason = "imported scripts are never executed" },
+    { crate = "rquickjs", reason = "imported scripts are never executed" },
+    { crate = "quickjs-rs", reason = "imported scripts are never executed" },
+    { crate = "deno_core", reason = "imported scripts are never executed" },
+    { crate = "v8", reason = "imported scripts are never executed" },
+    { crate = "mozjs", reason = "imported scripts are never executed" },
 ]
 
 [sources]

@@ -1,0 +1,12 @@
+---
+source: crates/rustman-import/tests/sources.rs
+expression: plan.report.summary_text()
+---
+imported api (http) into api/
+written: 2 requests, 1 collections, 2 environments; skipped: 0; dropped: 0; secrets moved: 2; unsupported: 1; unmapped: 0
+1 scripts preserved as comments, not executed
+scripts: 0/1 statements converted (0%)
+secret: token -> environment 'dev' (http-client.private.env.json > dev)
+secret: token -> environment 'prod' (http-client.private.env.json > prod)
+unsupported: environment value Security is not a scalar; unsupported (http-client.private.env.json > prod)
+script not executed: response-handler (api.http:18)

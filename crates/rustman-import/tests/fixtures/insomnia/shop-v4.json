@@ -1,0 +1,137 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2026-10-01T10:00:00.000Z",
+  "__export_source": "insomnia.desktop.app:v2023.5.8",
+  "resources": [
+    {
+      "_id": "req_list",
+      "_type": "request",
+      "parentId": "fld_users",
+      "name": "List users",
+      "method": "GET",
+      "url": "{{ _.base_url }}/users?limit=10",
+      "parameters": [
+        {"name": "page", "value": "1"},
+        {"name": "debug", "value": "true", "disabled": true}
+      ],
+      "headers": [
+        {"name": "Accept", "value": "application/json"},
+        {"name": "X-Trace", "value": "{% uuid 'v4' %}"}
+      ],
+      "authentication": {},
+      "body": {},
+      "metaSortKey": -200
+    },
+    {
+      "_id": "req_create",
+      "_type": "request",
+      "parentId": "fld_users",
+      "name": "Create user",
+      "method": "POST",
+      "url": "{{ _.base_url }}/users",
+      "headers": [{"name": "Content-Type", "value": "application/json"}],
+      "body": {"mimeType": "application/json", "text": "{\"name\": \"Ada\", \"password\": \"CANARY-insomnia-body-password-75\", \"id\": \"{{ $guid }}\"}"},
+      "authentication": {"type": "bearer", "token": "CANARY-insomnia-bearer-9f3b2c7d1e"},
+      "metaSortKey": -300
+    },
+    {
+      "_id": "req_get",
+      "_type": "request",
+      "parentId": "fld_users",
+      "name": "Get user",
+      "method": "GET",
+      "url": "{{ _.base_url }}/users/1",
+      "headers": [{"name": "X-User", "value": "{% response 'body', 'req_create', 'b64::JC5pZA==::46b', 'never', 60 %}"}],
+      "authentication": {"type": "hawk", "id": "x", "key": "y"},
+      "metaSortKey": -100
+    },
+    {
+      "_id": "req_graphql",
+      "_type": "request",
+      "parentId": "wrk_shop",
+      "name": "Search products",
+      "method": "POST",
+      "url": "{{ _.base_url }}/graphql",
+      "body": {"mimeType": "application/graphql", "text": "{\"query\":\"query Search($q: String) { products(q: $q) { id } }\",\"variables\":{\"q\":\"lamp\",\"apiKey\":\"CANARY-insomnia-gql-key-86\"}}"},
+      "authentication": {"type": "apikey", "key": "X-Api-Key", "value": "CANARY-insomnia-apikey-51c0de", "addTo": "header"},
+      "metaSortKey": -50
+    },
+    {
+      "_id": "req_login",
+      "_type": "request",
+      "parentId": "wrk_shop",
+      "name": "Login",
+      "method": "POST",
+      "url": "{{ _.base_url }}/login",
+      "body": {
+        "mimeType": "application/x-www-form-urlencoded",
+        "params": [
+          {"name": "username", "value": "ada"},
+          {"name": "password", "value": "CANARY-insomnia-form-password-77"},
+          {"name": "remember", "value": "1", "disabled": true}
+        ]
+      },
+      "authentication": {"type": "none"},
+      "afterResponseScript": "insomnia.environment.set(\"token\", insomnia.response.json().token);",
+      "metaSortKey": -40
+    },
+    {
+      "_id": "greq_stream",
+      "_type": "grpc_request",
+      "parentId": "wrk_shop",
+      "name": "Stream",
+      "metaSortKey": -30
+    },
+    {
+      "_id": "fld_users",
+      "_type": "request_group",
+      "parentId": "wrk_shop",
+      "name": "Users",
+      "description": "User management",
+      "environment": {"page_size": "25"},
+      "metaSortKey": -1000
+    },
+    {
+      "_id": "wrk_shop",
+      "_type": "workspace",
+      "parentId": null,
+      "name": "Shop API",
+      "description": "The shop"
+    },
+    {
+      "_id": "env_base",
+      "_type": "environment",
+      "parentId": "wrk_shop",
+      "name": "Base Environment",
+      "data": {"base_url": "http://localhost:8080", "api_token": "CANARY-insomnia-env-token-0042"},
+      "metaSortKey": 1
+    },
+    {
+      "_id": "env_prod",
+      "_type": "environment",
+      "parentId": "env_base",
+      "name": "Prod",
+      "data": {"base_url": "https://shop.example.com"},
+      "metaSortKey": 2
+    },
+    {
+      "_id": "env_dev",
+      "_type": "environment",
+      "parentId": "env_base",
+      "name": "Dev",
+      "data": {"base_url": "https://dev.shop.example.com", "trace": "{% now 'iso-8601', '' %}"},
+      "metaSortKey": 1
+    },
+    {
+      "_id": "env_private",
+      "_type": "environment",
+      "parentId": "env_base",
+      "name": "Private",
+      "isPrivate": true,
+      "data": {"plain": "CANARY-insomnia-private-plain-v4"},
+      "metaSortKey": 3
+    },
+    {"_id": "jar_1", "_type": "cookie_jar", "parentId": "wrk_shop", "cookies": []}
+  ]
+}

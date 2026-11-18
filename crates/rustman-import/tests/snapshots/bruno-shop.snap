@@ -1,0 +1,120 @@
+---
+source: crates/rustman-import/tests/sources.rs
+expression: tree(&plan)
+---
+=== shop-bruno/health.rman.yaml (create)
+# imported-script: tests (not executed)
+# test("is healthy", function() {
+#   expect(res.getStatus()).to.equal(200);
+# });
+version: 1
+kind: http
+name: Health
+method: GET
+url: '{{base_url}}/health'
+auth:
+  type: none
+assertions:
+  - status: 200
+  - json:
+      path: $.status
+      equals: ok
+  - json:
+      path: $.uptime
+      gt: 0
+=== shop-bruno/users/create-user.rman.yaml (create)
+# imported-script: pre-request (not executed)
+# req.setHeader("X-Request-Id", bru.interpolate("{{$guid}}"));
+# req.setHeader("Authorization", "Bearer «redacted:authorization_token»");
+version: 1
+kind: http
+name: Create user
+method: POST
+url: '{{base_url}}/users/{{org}}'
+body:
+  type: json
+  content: |-
+    {
+      "name": "Ada",
+      "password": "{{password}}",
+      "tags": ["a", "b"]
+    }
+auth:
+  type: api_key
+  name: X-Api-Key
+  value: '{{x_api_key}}'
+  in: header
+variables:
+  org: acme
+captures:
+  - var: user_id
+    from: json
+    path: $.data.id
+=== shop-bruno/users/list-users.rman.yaml (create)
+version: 1
+kind: http
+name: List users
+method: GET
+url: '{{base_url}}/users'
+query:
+  - name: page
+    value: '1'
+headers:
+  - name: Accept
+    value: application/json
+assertions:
+  - json:
+      path: $.items
+      exists: true
+=== shop-bruno/users/upload-avatar.rman.yaml (create)
+version: 1
+kind: http
+name: Upload avatar
+method: PUT
+url: '{{base_url}}/users/1/avatar'
+body:
+  type: multipart
+  parts:
+    - name: caption
+      value: Me
+    - name: file
+      file: avatar.png
+auth:
+  type: basic
+  username: admin
+  password: '{{password_2}}'
+=== shop-bruno/users/_collection.yaml (create)
+name: Users
+order:
+  - create-user
+  - list-users
+  - upload-avatar
+headers:
+  - name: X-Area
+    value: users
+=== shop-bruno/_collection.yaml (create)
+name: Shop (Bruno)
+order:
+  - health
+  - users
+headers:
+  - name: X-Client
+    value: rustman-fixture
+auth:
+  type: bearer
+  token: '{{token}}'
+=== environments/local.yaml (create)
+variables:
+  base_url: http://localhost:3000
+secrets:
+  - session_ref
+  - token
+  - x_api_key
+  - password
+  - password_2
+  - authorization_token
+=== environments/staging.yaml (create)
+variables:
+  base_url: https://staging.shop.example.com
+secrets:
+  - api_password

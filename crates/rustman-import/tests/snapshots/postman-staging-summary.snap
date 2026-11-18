@@ -1,0 +1,10 @@
+---
+source: crates/rustman-import/tests/postman.rs
+expression: plan.report.summary_text()
+---
+imported Staging (postman-env)
+written: 0 requests, 0 collections, 1 environments; skipped: 0; dropped: 1; secrets moved: 2; unsupported: 0; unmapped: 0
+secret: api_key -> environment 'staging' (staging.postman_environment.json > Staging)
+secret: admin_password -> environment 'staging' (staging.postman_environment.json > Staging)
+dropped: disabled variable old_host dropped (staging.postman_environment.json > Staging)
+review: variable 'request_signing_salt' looks like a secret but was kept as a plain value; review it (staging.postman_environment.json > Staging)
