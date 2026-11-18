@@ -335,3 +335,48 @@ async fn tokens_are_redacted_from_every_sink() {
     let secrets = std::fs::read_to_string(dir.path().join(".rustman/secrets.yaml")).unwrap();
     assert!(secrets.contains("oauth2:api/me"), "{secrets}");
 }
+
+/// A keychain that works, holding entries in memory.
+#[derive(Default)]
+struct MemoryKeychain(Mutex<std::collections::HashMap<String, String>>);
+
+impl rustman_core::secrets::Keychain for MemoryKeychain {
+    fn get(&self, account: &str) -> Result<Option<String>, rustman_core::secrets::KeychainError> {
+        Ok(self.0.lock().unwrap().get(account).cloned())
+    }
+
+    fn set(&self, account: &str, value: &str) -> Result<(), rustman_core::secrets::KeychainError> {
+        self.0.lock().unwrap().insert(account.into(), value.into());
+        Ok(())
+    }
+
+    fn delete(&self, account: &str) -> Result<bool, rustman_core::secrets::KeychainError> {
+        Ok(self.0.lock().unwrap().remove(account).is_some())
+    }
+}
+
+#[tokio::test]
+async fn login_reports_where_the_token_was_stored() {
+    use rustman_core::secrets::StoredIn;
+    let server = OAuthServer::start().await;
+    let config = config(&server, OAuth2Grant::ClientCredentials);
+    let request = api_request(&server, config);
+    let engine = HttpEngine::new();
+    let options = SendOptions::default();
+    let dir = tempfile::tempdir().unwrap();
+    let file_only = SecretStore::with_keychain(dir.path(), None);
+    let stored = engine
+        .oauth2_login(&request, &options, &context(&file_only, non_interactive()))
+        .await
+        .unwrap();
+    assert_eq!(stored, StoredIn::File);
+    let dir = tempfile::tempdir().unwrap();
+    let keychain =
+        SecretStore::with_keychain(dir.path(), Some(Box::new(MemoryKeychain::default())));
+    let stored = engine
+        .oauth2_login(&request, &options, &context(&keychain, non_interactive()))
+        .await
+        .unwrap();
+    assert_eq!(stored, StoredIn::Keychain);
+    assert!(!dir.path().join(".rustman/secrets.yaml").exists());
+}

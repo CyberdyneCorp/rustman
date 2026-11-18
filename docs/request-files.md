@@ -41,6 +41,7 @@ default_environment = "local"
 ca_bundle = "certs/dev-ca.pem"   # extra trusted CAs (PEM), relative to the workspace root
 proxy = "http://127.0.0.1:3128"
 max_body_bytes = 10485760         # larger response bodies are spilled to disk
+max_download_bytes = 1073741824   # an undecoded response body larger than this fails
 client_cert = "certs/client.pem" # mutual TLS for requests without their own client certificate
 client_key = "certs/client.key"
 # or: client_pkcs12 = "certs/client.p12" with client_pkcs12_password = "{{p12_password}}"

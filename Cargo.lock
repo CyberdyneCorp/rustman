@@ -3193,6 +3193,7 @@ dependencies = [
  "oo7",
  "rand 0.10.4",
  "regex",
+ "rustix",
  "serde",
  "serde-saphyr",
  "serde_json",

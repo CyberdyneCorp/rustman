@@ -26,7 +26,7 @@ A timeout fails the request with `timeout after <n> ms (<phase>)`, where the pha
 
 ### Redirects
 
-Redirects are followed by default, up to `max_redirects` (10) hops, and every hop is recorded in the exchange. A `301`, `302` or `303` turns a non-`GET`/`HEAD` request into a `GET` without a body; `307` and `308` keep the method and body. Credentials are dropped when a hop goes to another origin (scheme, host or port): `Authorization`, `Proxy-Authorization`, an explicit `Cookie` header (the cookie jar still sends the cookies that match the new host) and the `api_key` header or query parameter. With `follow_redirects: false` the 3xx response is returned as is. Too many hops fail with `too many redirects (<max>)`.
+Redirects are followed by default, up to `max_redirects` (10) hops, and every hop is recorded in the exchange. A `301`, `302` or `303` turns a non-`GET`/`HEAD` request into a `GET` without a body; `307` and `308` keep the method and body. Credentials are dropped when a hop goes to another origin (scheme, host or port): `Authorization`, `Proxy-Authorization`, an explicit `Cookie` header (the cookie jar still sends the cookies that match the new host) and the `api_key` header or query parameter. Any other header whose value carries a secret (such as `X-Api-Key: '{{token}}'`), and a `307`/`308` body that carries one (such as a form with a `client_secret`), are dropped too, so a secret never follows a redirect to another server; the hop is still sent, without them, and the exchange gets the warning `cross-origin redirect to <origin>: dropped header x-api-key, the body, which carry a secret`. A secret is found the way output is redacted: a secret variable's value, or a literal credential in `Authorization`, `Cookie` and the like, in any of its encoded forms. Same-origin hops keep everything. With `follow_redirects: false` the 3xx response is returned as is. Too many hops fail with `too many redirects (<max>)`.
 
 ```yaml
 # http/no-redirects.rman.yaml
@@ -152,7 +152,7 @@ auth:
 
 ### OAuth2
 
-`grant: client_credentials` gets a token from `token_url` with the client id and secret. `grant: authorization_code` also needs `auth_url`: Rustman opens the browser (and prints the URL) with a PKCE `code_challenge_method=S256` challenge, and receives the code on a loopback listener at `http://127.0.0.1:<ephemeral port>/callback`.
+`grant: client_credentials` gets a token from `token_url` with the client id and secret. `grant: authorization_code` also needs `auth_url`: Rustman opens the browser (and prints the URL) with a PKCE `code_challenge_method=S256` challenge, and receives the code on a loopback listener at `http://127.0.0.1:<ephemeral port>/callback`. The listener serves at most 16 connections at once (each gets 5 s to send its request), and when accepting a connection fails (for example when the process is out of file descriptors) it retries after a delay that doubles from 10 ms up to 1 s, rather than spinning.
 
 Tokens are cached per environment in the secret store, never in workspace files. A cached token is reused until shortly before it expires, refreshed with its refresh token when there is one, and acquired again when a request gets a `401`. Calls to `token_url` never follow redirects, so the client secret and codes in the form cannot be re-posted elsewhere; point `token_url` at the final URL.
 
@@ -172,7 +172,7 @@ auth:
     - profile
 ```
 
-The authorization-code grant needs a person at a terminal. When `rustman send` or `rustman run` has no terminal on stdin (as in CI) and no cached token, the request fails with `oauth2: interactive login required (run 'rustman auth login <request>')`. Run `rustman auth login http/oauth-login --env prod` once on a workstation; later runs reuse and refresh the cached token.
+The authorization-code grant needs a person at a terminal. When `rustman send` or `rustman run` has no terminal on stdin (as in CI) and no cached token, the request fails with `oauth2: interactive login required (run 'rustman auth login <request>')`. Run `rustman auth login http/oauth-login --env prod` once on a workstation; later runs reuse and refresh the cached token. When the token goes to `.rustman/secrets.yaml` rather than the OS keychain (no keychain, or `RUSTMAN_SECRET_STORE=file`), `rustman auth login` says so once: `warning: OAuth2 tokens are stored in .rustman/secrets.yaml (git-ignored, readable by you only), not in the OS keychain`. See [secret storage](environments.md#secret-storage).
 
 ## Timing breakdown
 
@@ -192,7 +192,8 @@ Phases that did not happen are `null`, never `0`: `tls` on plain HTTP, `dns` for
 ## Response bodies
 
 - Bodies are decompressed (`gzip`, `br`, `deflate`, `zstd`) unless `settings.decompress: false`. An unknown `Content-Encoding` leaves the body as received, with a warning. Decoding goes through a fixed 64 KiB buffer, so memory stays bounded whatever the compression ratio, and a body that decodes to more than 1 GiB fails with `network: the decompressed response body is larger than <n> bytes` (use `decompress: false` to keep such a body encoded).
-- Bodies up to `rustman.toml [http] max_body_bytes` (10 MiB) stay in memory. A larger body is streamed to `.rustman/bodies/<uuid>.bin` (a random name per exchange; outside a workspace, a `rustman-bodies` folder in the temp folder); the exchange keeps its first 64 KiB as a preview and its full `size_bytes`. The file is removed again when the request fails or times out before the body ends, and redirect hops keep none. Once the request is done, the file is kept only while a history entry refers to it: with `--no-history`, history disabled or outside a workspace, it is deleted when the command has used it (after `rustman send` printed the body). Pruning history deletes it with its entry, along with any spill file no entry refers to that is more than an hour old, and `rustman history clear` deletes every spill file. Spill files are readable by the current user only, and, like cookie jars, are written only when `.rustman/` is a real, git-ignored folder. A 50 MiB download keeps well under 16 MiB of memory for its body.
+- A body that is not decoded (no `Content-Encoding`, or `decompress: false`) is limited by `rustman.toml [http] max_download_bytes` (1 GiB): past it the request fails with `network: the response body is larger than <n> bytes`, so an endless stream cannot fill the disk before the timeout.
+- Bodies up to `rustman.toml [http] max_body_bytes` (10 MiB) stay in memory. A larger body is streamed to `.rustman/bodies/<uuid>.bin` (a random name per exchange; outside a workspace, a folder of the current user in the temp folder: `rustman-bodies-<uid>` on Unix, `rustman-bodies` in the per-user temp folder on Windows); the exchange keeps its first 64 KiB as a preview and its full `size_bytes`. The file is removed again when the request fails or times out before the body ends, and redirect hops keep none. Once the request is done, the file is kept only while a history entry refers to it: with `--no-history`, history disabled or outside a workspace, it is deleted when the command has used it (after `rustman send` printed the body). Pruning history deletes it with its entry, along with any spill file no entry refers to that is more than an hour old, and `rustman history clear` deletes every spill file. Spill files are readable by the current user only, and, like cookie jars, are written only when `.rustman/` is a real, git-ignored folder. A spill folder that is a symbolic link, or (on Unix) belongs to another user, is refused; one of ours that others can access is set back to mode `0700`. A spill file is always created new, never opened when something already exists at its path. A 50 MiB download keeps well under 16 MiB of memory for its body.
 - A body that is not valid UTF-8 (an image, a PDF) is marked `binary: true`, and its bytes are kept exactly as received, never decoded lossily.
 
 ```toml
@@ -203,6 +204,7 @@ version = 1
 
 [http]
 max_body_bytes = 1048576   # spill bodies over 1 MiB
+max_download_bytes = 104857600   # fail undecoded bodies over 100 MiB
 ```
 
 ## Curl import and export
@@ -285,9 +287,11 @@ timeout after 500 ms (response)
 too many redirects (10)
 tls: certificate verification failed for <host>: <reason>
 network: the decompressed response body is larger than <n> bytes
+network: the response body is larger than <n> bytes
 oauth2: interactive login required (run 'rustman auth login <request>')
 ignored stale Content-Length: 3 (sent the computed 10)
 ignored Host: <value> (sent the URL's host <host>)
+cross-origin redirect to <origin>: dropped <parts>, which carry a secret
 ignored unsupported curl option <option>
 ```
 

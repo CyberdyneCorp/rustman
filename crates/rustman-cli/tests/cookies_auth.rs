@@ -128,7 +128,8 @@ fn auth_login_stores_the_token_in_the_secret_store() {
         .args(["auth", "login", "Me", "--env", "prod"])
         .assert()
         .success()
-        .stdout("logged in: token for 'api/me' stored for environment 'prod'\n");
+        .stdout("logged in: token for 'api/me' stored for environment 'prod'\n")
+        .stderr(format!("warning: {}\n", rustman_http::TOKEN_FILE_WARNING));
     let form = server.join().unwrap();
     assert!(form.contains("grant_type=client_credentials"), "{form}");
     let secrets = fs::read_to_string(ws.path().join(".rustman/secrets.yaml")).unwrap();
@@ -156,4 +157,14 @@ fn auth_login_needs_oauth2_auth() {
         .stderr(predicate::str::starts_with(
             "error: request 'nope' not found",
         ));
+}
+
+#[test]
+fn the_token_file_warning_is_documented() {
+    let docs = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs");
+    let warning = format!("`warning: {}`", rustman_http::TOKEN_FILE_WARNING);
+    for page in ["environments.md", "http.md"] {
+        let text = fs::read_to_string(docs.join(page)).unwrap();
+        assert!(text.contains(&warning), "{page} does not show {warning}");
+    }
 }

@@ -34,6 +34,7 @@ const KNOWN_KEYS: &[(&str, &[&str])] = &[
             "ca_bundle",
             "proxy",
             "max_body_bytes",
+            "max_download_bytes",
             "client_cert",
             "client_key",
             "client_pkcs12",
@@ -116,6 +117,9 @@ pub struct HttpDefaults {
     pub ca_bundle: Option<String>,
     pub proxy: Option<String>,
     pub max_body_bytes: u64,
+    /// A response body kept as received (not decompressed) larger than this
+    /// fails, so an endless stream cannot fill the disk.
+    pub max_download_bytes: u64,
     pub client_cert: Option<String>,
     pub client_key: Option<String>,
     pub client_pkcs12: Option<String>,
@@ -149,6 +153,7 @@ impl Default for HttpDefaults {
             ca_bundle: None,
             proxy: None,
             max_body_bytes: 10 * 1024 * 1024,
+            max_download_bytes: 1024 * 1024 * 1024,
             client_cert: None,
             client_key: None,
             client_pkcs12: None,
@@ -166,6 +171,7 @@ impl fmt::Debug for HttpDefaults {
             .field("ca_bundle", &self.ca_bundle)
             .field("proxy", &self.proxy)
             .field("max_body_bytes", &self.max_body_bytes)
+            .field("max_download_bytes", &self.max_download_bytes)
             .field("client_cert", &self.client_cert)
             .field("client_key", &self.client_key)
             .field("client_pkcs12", &self.client_pkcs12)
@@ -297,6 +303,7 @@ mod tests {
         assert_eq!(settings.defaults.max_redirects, 10);
         assert!(settings.defaults.verify_tls);
         assert_eq!(settings.http.max_body_bytes, 10 * 1024 * 1024);
+        assert_eq!(settings.http.max_download_bytes, 1024 * 1024 * 1024);
         assert!(settings.variables.is_empty());
         assert_eq!(settings.history, HistorySettings::default());
         assert!(settings.history.enabled);
@@ -325,6 +332,7 @@ client_cert = "certs/client.pem"
 client_key = "certs/client.key"
 client_pkcs12 = "certs/client.p12"
 client_pkcs12_password = "{{p12_password}}"
+max_download_bytes = 4096
 
 [history]
 enabled = false
@@ -340,6 +348,7 @@ base_url = "http://localhost"
         assert_eq!(s.defaults.default_environment.as_deref(), Some("local"));
         assert_eq!(s.http.ca_bundle.as_deref(), Some("certs/ca.pem"));
         assert_eq!(s.http.max_body_bytes, 1024);
+        assert_eq!(s.http.max_download_bytes, 4096);
         assert_eq!(s.http.client_cert.as_deref(), Some("certs/client.pem"));
         assert_eq!(s.http.path("client_key"), Some("certs/client.key"));
         assert_eq!(s.http.path("client_pkcs12"), Some("certs/client.p12"));

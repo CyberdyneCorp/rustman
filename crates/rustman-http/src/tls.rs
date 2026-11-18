@@ -155,6 +155,17 @@ fn bundle_verifier(
     pem: &[u8],
     provider: &Arc<CryptoProvider>,
 ) -> Result<Arc<dyn ServerCertVerifier>, RequestError> {
+    WebPkiServerVerifier::builder_with_provider(Arc::new(bundle_roots(pem)?), provider.clone())
+        .build()
+        .map(|v| v as Arc<dyn ServerCertVerifier>)
+        .map_err(tls_error)
+}
+
+/// The bundle's CAs plus the platform roots. `WebPkiServerVerifier` needs
+/// the roots as a list, so the platform's are loaded with
+/// `rustls-native-certs` (the same OS stores `rustls-platform-verifier`
+/// reads, without OS-side checks such as revocation; design D3).
+fn bundle_roots(pem: &[u8]) -> Result<RootCertStore, RequestError> {
     let mut roots = RootCertStore::empty();
     let bundle = CertificateDer::pem_slice_iter(pem)
         .collect::<Result<Vec<_>, _>>()
@@ -171,10 +182,7 @@ fn bundle_verifier(
     }
     // Platform roots that fail to parse are skipped, as browsers do.
     roots.add_parsable_certificates(rustls_native_certs::load_native_certs().certs);
-    WebPkiServerVerifier::builder_with_provider(Arc::new(roots), provider.clone())
-        .build()
-        .map(|v| v as Arc<dyn ServerCertVerifier>)
-        .map_err(tls_error)
+    Ok(roots)
 }
 
 fn tls_error(err: impl fmt::Display) -> RequestError {
@@ -254,6 +262,15 @@ mod tests {
             err.to_string(),
             "tls: invalid ca_bundle: no certificates found"
         );
+    }
+
+    #[test]
+    fn a_bundle_is_trusted_next_to_the_platform_roots() {
+        let certs = rustman_test_support::TestCerts::generate();
+        let roots = bundle_roots(certs.ca_pem.as_bytes()).unwrap();
+        let mut platform = RootCertStore::empty();
+        platform.add_parsable_certificates(rustls_native_certs::load_native_certs().certs);
+        assert_eq!(roots.len(), 1 + platform.len());
     }
 
     #[test]

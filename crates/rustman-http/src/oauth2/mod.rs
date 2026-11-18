@@ -3,7 +3,9 @@
 //!
 //! Tokens are cached per environment in the secret store (design D6), used
 //! until shortly before they expire, refreshed with a refresh token when one
-//! was issued, and re-acquired when a request gets a `401`.
+//! was issued, and re-acquired when a request gets a `401`. Without the OS
+//! keychain they land in `.rustman/secrets.yaml`, which `rustman auth login`
+//! reports once (see [`login_warnings`]).
 
 mod loopback;
 mod pkce;
@@ -12,6 +14,7 @@ mod token;
 use std::time::Duration;
 
 use rustman_core::model::{Auth, OAuth2, OAuth2Grant};
+use rustman_core::secrets::{FALLBACK_WARNING, StoredIn};
 use rustman_core::vars::ResolvedRequest;
 use rustman_core::workspace::RequestRef;
 use rustman_core::{Redactor, SecretStore};
@@ -26,6 +29,23 @@ use token::{TokenCache, TokenEndpoint, TokenSet, now};
 
 /// How long the authorization-code flow waits for the browser.
 pub const LOGIN_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// The warning `rustman auth login` prints when the token went to the
+/// secrets file instead of the OS keychain.
+pub const TOKEN_FILE_WARNING: &str = "OAuth2 tokens are stored in .rustman/secrets.yaml \
+     (git-ignored, readable by you only), not in the OS keychain";
+
+/// The warnings to print after a login: the secret store's, with the
+/// generic keychain-fallback one replaced by [`TOKEN_FILE_WARNING`] when the
+/// token was `stored` in the file, so the user is told once.
+pub fn login_warnings(store_warnings: Vec<String>, stored: StoredIn) -> Vec<String> {
+    let mut warnings = store_warnings;
+    if stored == StoredIn::File {
+        warnings.retain(|w| w != FALLBACK_WARNING);
+        warnings.push(TOKEN_FILE_WARNING.to_owned());
+    }
+    warnings
+}
 
 /// How the authorization-code flow may reach the user.
 pub enum Login<'a> {
@@ -109,22 +129,21 @@ impl HttpEngine {
     }
 
     /// Acquire a new token for `request` (`rustman auth login`), replacing
-    /// any cached one.
+    /// any cached one. Returns where the token was stored.
     pub async fn oauth2_login(
         &self,
         request: &ResolvedRequest,
         options: &SendOptions,
         context: &OAuth2Context<'_>,
-    ) -> Result<(), RequestError> {
+    ) -> Result<StoredIn, RequestError> {
         let Some(Auth::OAuth2(config)) = &request.auth else {
             return Err(RequestError::Auth(
                 "oauth2: the request does not use oauth2 auth".into(),
             ));
         };
-        Flow::new(self, config, request, options, context)
-            .acquire()
-            .await
-            .map(|_| ())
+        let flow = Flow::new(self, config, request, options, context);
+        let token = flow.grant().await?;
+        flow.cache.save(&token)
     }
 }
 
@@ -191,13 +210,18 @@ impl<'a> Flow<'a> {
 
     /// Run the grant and cache the token.
     async fn acquire(&self) -> Result<TokenSet, RequestError> {
-        let token = match self.endpoint.config.grant {
+        let token = self.grant().await?;
+        self.cache.save(&token)?;
+        Ok(token)
+    }
+
+    /// Run the grant.
+    async fn grant(&self) -> Result<TokenSet, RequestError> {
+        match self.endpoint.config.grant {
             OAuth2Grant::ClientCredentials => self.endpoint.client_credentials().await,
             OAuth2Grant::AuthorizationCode => self.authorize().await,
         }
-        .map_err(|e| e.redacted(&self.redactor))?;
-        self.cache.save(&token)?;
-        Ok(token)
+        .map_err(|e| e.redacted(&self.redactor))
     }
 
     /// The authorization-code flow: the user approves in a browser, which
@@ -221,6 +245,20 @@ impl<'a> Flow<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_token_in_the_file_is_reported_once() {
+        let store = vec![FALLBACK_WARNING.to_owned(), "other".to_owned()];
+        assert_eq!(
+            login_warnings(store.clone(), StoredIn::File),
+            ["other", TOKEN_FILE_WARNING]
+        );
+        assert_eq!(
+            login_warnings(Vec::new(), StoredIn::File),
+            [TOKEN_FILE_WARNING]
+        );
+        assert_eq!(login_warnings(store.clone(), StoredIn::Keychain), store);
+    }
 
     #[test]
     fn the_non_interactive_error_names_the_command() {

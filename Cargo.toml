@@ -101,6 +101,8 @@ jsonschema = { version = "0.61.2", default-features = false }
 regex = "1.13"
 tempfile = "3"
 proptest = { version = "1", default-features = false, features = ["std"] }
+# The current user id (safe `geteuid`), for per-user private temp folders on Unix.
+rustix = { version = "1.1", default-features = false, features = ["std", "process"] }
 # Peak heap usage in the body memory-ceiling test (a counting global allocator).
 peak_alloc = "0.3"
 

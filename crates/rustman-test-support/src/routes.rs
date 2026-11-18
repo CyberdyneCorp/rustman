@@ -11,6 +11,7 @@
 //! | `/bytes/<n>` | `<n>` bytes streamed in 64 KiB chunks |
 //! | `/compressed/<gzip\|br\|zstd\|deflate>` | [`COMPRESSED_TEXT`] encoded |
 //! | `/zeros/<br\|zstd>/<n>` | `<n>` zero bytes, encoded (a decompression bomb) |
+//! | `/endless` | a chunked body of zero bytes that never ends |
 //! | `/stall-after/<n>` | `<n>` of the promised `2n` bytes, then nothing |
 //! | `/png` | a small PNG, byte for byte [`PNG`] |
 //! | `/login` | `200` with `Set-Cookie: sid=abc; Path=/` |
@@ -118,6 +119,7 @@ pub async fn handle(req: Request<Incoming>) -> Result<Response<TestBody>, Infall
         ["bytes", n] => bytes(n.parse().unwrap_or(0)),
         ["compressed", encoding] => compressed(encoding).await,
         ["zeros", encoding, n] => zeros(encoding, n.parse().unwrap_or(0)).await,
+        ["endless"] => Response::new(Endless.boxed()),
         ["stall-after", n] => stall_after(n.parse().unwrap_or(0)),
         ["png"] => png(),
         ["login"] => login(),
@@ -395,6 +397,21 @@ impl Body for Repeat {
 
     fn size_hint(&self) -> SizeHint {
         SizeHint::with_exact(self.remaining)
+    }
+}
+
+/// Zero bytes in 64 KiB chunks, forever, with no length known up front.
+struct Endless;
+
+impl Body for Endless {
+    type Data = Bytes;
+    type Error = Infallible;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Bytes>, Infallible>>> {
+        Poll::Ready(Some(Ok(Frame::data(Bytes::from_static(&[0; CHUNK])))))
     }
 }
 

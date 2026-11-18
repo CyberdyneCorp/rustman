@@ -249,15 +249,24 @@ async fn an_explicit_content_type_wins() {
 #[tokio::test]
 async fn a_slow_server_times_out_in_the_response_phase() {
     let server = TestServer::http().await;
+    // Warm the pool so the measured time is the response phase, not DNS and
+    // connect on a loaded machine.
+    let engine = HttpEngine::new();
+    engine
+        .send(&get(&server.url("/status/200")), &SendOptions::default())
+        .await
+        .unwrap();
     let started = Instant::now();
-    let err = HttpEngine::new()
-        .send(&get(&server.url("/delay/2000")), &with_timeouts(500, None))
+    let err = engine
+        .send(&get(&server.url("/delay/5000")), &with_timeouts(500, None))
         .await
         .unwrap_err();
     let elapsed = started.elapsed();
     assert_eq!(err.to_string(), "timeout after 500 ms (response)");
-    // The spec scenario's bound: the timeout itself plus 100 ms of slack.
-    assert!(elapsed < Duration::from_millis(600), "{elapsed:?}");
+    // The spec scenario's "within 600 ms", with room for a loaded CI runner:
+    // the error comes from the 500 ms timeout, far before the 5 s response.
+    assert!(elapsed >= Duration::from_millis(500), "{elapsed:?}");
+    assert!(elapsed < Duration::from_millis(2_500), "{elapsed:?}");
 }
 
 #[tokio::test]

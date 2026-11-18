@@ -3,6 +3,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rustman_core::model::{OAuth2, RequestSettings};
+use rustman_core::secrets::StoredIn;
 use rustman_core::vars::UsedSecret;
 use rustman_core::vars::{Resolved, ResolvedBody, ResolvedPair, ResolvedRequest, TlsFiles};
 use rustman_core::{Redactor, Secret, SecretStore};
@@ -94,10 +95,10 @@ impl TokenCache<'_> {
         Ok(secret.as_ref().and_then(TokenSet::from_secret))
     }
 
-    pub fn save(&self, token: &TokenSet) -> Result<(), RequestError> {
+    /// Store `token`; returns where it went.
+    pub fn save(&self, token: &TokenSet) -> Result<StoredIn, RequestError> {
         self.store
             .set(self.env, &token.to_secret(&self.name))
-            .map(|_| ())
             .map_err(cache_error)
     }
 
