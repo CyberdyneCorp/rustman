@@ -1,0 +1,6 @@
+---
+source: crates/rustman-tui/src/env_tests.rs
+assertion_line: 259
+expression: status_line(&state)
+---
+ demo │ env: dev │ TLS: INSECURE │ 0 in flight                                          Ctrl+Q quit

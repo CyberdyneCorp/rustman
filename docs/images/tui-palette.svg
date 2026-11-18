@@ -7,20 +7,6 @@
 <rect x="54.0" y="29.0" width="8.7" height="17.3" fill="#283457"/>
 <rect x="62.4" y="29.0" width="8.7" height="17.3" fill="#283457"/>
 <rect x="70.8" y="29.0" width="8.7" height="17.3" fill="#283457"/>
-<rect x="79.2" y="29.0" width="8.7" height="17.3" fill="#283457"/>
-<rect x="87.6" y="29.0" width="8.7" height="17.3" fill="#283457"/>
-<rect x="96.0" y="29.0" width="8.7" height="17.3" fill="#283457"/>
-<rect x="104.4" y="29.0" width="8.7" height="17.3" fill="#283457"/>
-<rect x="112.8" y="29.0" width="8.7" height="17.3" fill="#283457"/>
-<rect x="121.2" y="29.0" width="8.7" height="17.3" fill="#283457"/>
-<rect x="129.6" y="29.0" width="8.7" height="17.3" fill="#283457"/>
-<rect x="138.0" y="29.0" width="8.7" height="17.3" fill="#283457"/>
-<rect x="146.4" y="29.0" width="8.7" height="17.3" fill="#283457"/>
-<rect x="154.8" y="29.0" width="8.7" height="17.3" fill="#283457"/>
-<rect x="163.2" y="29.0" width="8.7" height="17.3" fill="#283457"/>
-<rect x="171.6" y="29.0" width="8.7" height="17.3" fill="#283457"/>
-<rect x="180.0" y="29.0" width="8.7" height="17.3" fill="#283457"/>
-<rect x="188.4" y="29.0" width="8.7" height="17.3" fill="#283457"/>
 <rect x="289.2" y="63.0" width="8.7" height="17.3" fill="#283457"/>
 <rect x="230.4" y="97.0" width="8.7" height="17.3" fill="#283457"/>
 <rect x="238.8" y="97.0" width="8.7" height="17.3" fill="#283457"/>
@@ -109,7 +95,7 @@
 <path d="M234.6 20.5L238.8 20.5M234.6 20.5L230.4 20.5" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M243.0 20.5L243.0 29.0M243.0 20.5L238.8 20.5" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 20.5L255.6 20.5M251.4 20.5L251.4 29.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="255.6" y="25.3" fill="#3b4261" textLength="75.6" lengthAdjust="spacingAndGlyphs"> Request </text>
+<text x="255.6" y="25.3" fill="#c0caf5" font-weight="bold" textLength="75.6" lengthAdjust="spacingAndGlyphs"> Request </text>
 <path d="M335.4 20.5L339.6 20.5M335.4 20.5L331.2 20.5" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M343.8 20.5L348.0 20.5M343.8 20.5L339.6 20.5" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M352.2 20.5L356.4 20.5M352.2 20.5L348.0 20.5" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
@@ -184,7 +170,8 @@
 <path d="M1007.4 20.5L1011.6 20.5M1007.4 20.5L1003.2 20.5" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M1015.8 20.5L1015.8 29.0M1015.8 20.5L1011.6 20.5" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 37.5L16.2 29.0M16.2 37.5L16.2 46.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="28.8" y="42.3" fill="#c0caf5" textLength="168.0" lengthAdjust="spacingAndGlyphs">auth/login.rman.yaml</text>
+<text x="28.8" y="42.3" fill="#737aa2" textLength="16.8" lengthAdjust="spacingAndGlyphs">▾ </text>
+<text x="45.6" y="42.3" fill="#c0caf5" font-weight="bold" textLength="33.6" lengthAdjust="spacingAndGlyphs">auth</text>
 <path d="M243.0 37.5L243.0 29.0M243.0 37.5L243.0 46.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 37.5L251.4 29.0M251.4 37.5L251.4 46.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <text x="255.6" y="42.3" fill="#737aa2" textLength="369.6" lengthAdjust="spacingAndGlyphs"> METHOD   No request open                   </text>
@@ -193,7 +180,8 @@
 <text x="650.4" y="42.3" fill="#737aa2" textLength="134.4" lengthAdjust="spacingAndGlyphs">No response yet.</text>
 <path d="M1015.8 37.5L1015.8 29.0M1015.8 37.5L1015.8 46.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 54.5L16.2 46.0M16.2 54.5L16.2 63.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="20.4" y="59.3" fill="#d0d0d0" textLength="193.2" lengthAdjust="spacingAndGlyphs"> auth/refresh-token.rma</text>
+<text x="45.6" y="59.3" fill="#7aa2f7" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">POST   </text>
+<text x="104.4" y="59.3" fill="#c0caf5" textLength="42.0" lengthAdjust="spacingAndGlyphs">login</text>
 <path d="M217.8 54.5L222.0 54.5M217.8 54.5L217.8 63.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <text x="222.0" y="59.3" fill="#7dcfff" textLength="142.8" lengthAdjust="spacingAndGlyphs"> Command palette </text>
 <path d="M369.0 54.5L373.2 54.5M369.0 54.5L364.8 54.5" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
@@ -252,61 +240,77 @@
 <path d="M814.2 54.5L814.2 63.0M814.2 54.5L810.0 54.5" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M1015.8 54.5L1015.8 46.0M1015.8 54.5L1015.8 63.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 71.5L16.2 63.0M16.2 71.5L16.2 80.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="20.4" y="76.3" fill="#d0d0d0" textLength="193.2" lengthAdjust="spacingAndGlyphs"> pets/create-pet.rman.y</text>
+<text x="45.6" y="76.3" fill="#7aa2f7" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">POST   </text>
+<text x="104.4" y="76.3" fill="#c0caf5" textLength="109.2" lengthAdjust="spacingAndGlyphs">refresh-token</text>
 <path d="M217.8 71.5L217.8 63.0M217.8 71.5L217.8 80.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <text x="230.4" y="76.3" fill="#7aa2f7" textLength="16.8" lengthAdjust="spacingAndGlyphs">› </text>
 <text x="247.2" y="76.3" fill="#c0caf5" textLength="42.0" lengthAdjust="spacingAndGlyphs">swenv</text>
 <path d="M814.2 71.5L814.2 63.0M814.2 71.5L814.2 80.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M1015.8 71.5L1015.8 63.0M1015.8 71.5L1015.8 80.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 88.5L16.2 80.0M16.2 88.5L16.2 97.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="20.4" y="93.3" fill="#d0d0d0" textLength="193.2" lengthAdjust="spacingAndGlyphs"> pets/delete-pet.rman.y</text>
+<text x="28.8" y="93.3" fill="#737aa2" textLength="16.8" lengthAdjust="spacingAndGlyphs">▾ </text>
+<text x="45.6" y="93.3" fill="#c0caf5" font-weight="bold" textLength="33.6" lengthAdjust="spacingAndGlyphs">pets</text>
 <path d="M217.8 88.5L217.8 80.0M217.8 88.5L217.8 97.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M814.2 88.5L814.2 80.0M814.2 88.5L814.2 97.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M1015.8 88.5L1015.8 80.0M1015.8 88.5L1015.8 97.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 105.5L16.2 97.0M16.2 105.5L16.2 114.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="20.4" y="110.3" fill="#d0d0d0" textLength="193.2" lengthAdjust="spacingAndGlyphs"> pets/get-pet.rman.yaml</text>
+<text x="45.6" y="110.3" fill="#7aa2f7" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">POST   </text>
+<text x="104.4" y="110.3" fill="#c0caf5" textLength="84.0" lengthAdjust="spacingAndGlyphs">create-pet</text>
 <path d="M217.8 105.5L217.8 97.0M217.8 105.5L217.8 114.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <text x="230.4" y="110.3" fill="#c0caf5" font-weight="bold" textLength="571.2" lengthAdjust="spacingAndGlyphs"> Switch environment                                           Alt+E </text>
 <path d="M814.2 105.5L814.2 97.0M814.2 105.5L814.2 114.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M1015.8 105.5L1015.8 97.0M1015.8 105.5L1015.8 114.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 122.5L16.2 114.0M16.2 122.5L16.2 131.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="20.4" y="127.3" fill="#d0d0d0" textLength="193.2" lengthAdjust="spacingAndGlyphs"> pets/list-pets.rman.ya</text>
+<text x="45.6" y="127.3" fill="#f7768e" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">DELETE </text>
+<text x="104.4" y="127.3" fill="#c0caf5" textLength="84.0" lengthAdjust="spacingAndGlyphs">delete-pet</text>
 <path d="M217.8 122.5L217.8 114.0M217.8 122.5L217.8 131.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M814.2 122.5L814.2 114.0M814.2 122.5L814.2 131.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M1015.8 122.5L1015.8 114.0M1015.8 122.5L1015.8 131.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 139.5L16.2 131.0M16.2 139.5L16.2 148.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="20.4" y="144.3" fill="#d0d0d0" textLength="193.2" lengthAdjust="spacingAndGlyphs"> pets/update-pet.rman.y</text>
+<text x="45.6" y="144.3" fill="#9ece6a" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">GET    </text>
+<text x="104.4" y="144.3" fill="#c0caf5" textLength="58.8" lengthAdjust="spacingAndGlyphs">get-pet</text>
 <path d="M217.8 139.5L217.8 131.0M217.8 139.5L217.8 148.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M814.2 139.5L814.2 131.0M814.2 139.5L814.2 148.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M1015.8 139.5L1015.8 131.0M1015.8 139.5L1015.8 148.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 156.5L16.2 148.0M16.2 156.5L16.2 165.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="20.4" y="161.3" fill="#d0d0d0" textLength="193.2" lengthAdjust="spacingAndGlyphs"> store/inventory.rman.y</text>
+<text x="45.6" y="161.3" fill="#9ece6a" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">GET    </text>
+<text x="104.4" y="161.3" fill="#c0caf5" textLength="75.6" lengthAdjust="spacingAndGlyphs">list-pets</text>
 <path d="M217.8 156.5L217.8 148.0M217.8 156.5L217.8 165.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M814.2 156.5L814.2 148.0M814.2 156.5L814.2 165.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M1015.8 156.5L1015.8 148.0M1015.8 156.5L1015.8 165.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 173.5L16.2 165.0M16.2 173.5L16.2 182.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="20.4" y="178.3" fill="#d0d0d0" textLength="193.2" lengthAdjust="spacingAndGlyphs"> store/place-order.rman</text>
+<text x="45.6" y="178.3" fill="#e0af68" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">PUT    </text>
+<text x="104.4" y="178.3" fill="#c0caf5" textLength="84.0" lengthAdjust="spacingAndGlyphs">update-pet</text>
 <path d="M217.8 173.5L217.8 165.0M217.8 173.5L217.8 182.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M814.2 173.5L814.2 165.0M814.2 173.5L814.2 182.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M1015.8 173.5L1015.8 165.0M1015.8 173.5L1015.8 182.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 190.5L16.2 182.0M16.2 190.5L16.2 199.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="20.4" y="195.3" fill="#d0d0d0" textLength="193.2" lengthAdjust="spacingAndGlyphs"> users/me.rman.yaml    </text>
+<text x="28.8" y="195.3" fill="#737aa2" textLength="16.8" lengthAdjust="spacingAndGlyphs">▾ </text>
+<text x="45.6" y="195.3" fill="#c0caf5" font-weight="bold" textLength="42.0" lengthAdjust="spacingAndGlyphs">store</text>
 <path d="M217.8 190.5L217.8 182.0M217.8 190.5L217.8 199.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M814.2 190.5L814.2 182.0M814.2 190.5L814.2 199.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M1015.8 190.5L1015.8 182.0M1015.8 190.5L1015.8 199.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 207.5L16.2 199.0M16.2 207.5L16.2 216.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
+<text x="45.6" y="212.3" fill="#9ece6a" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">GET    </text>
+<text x="104.4" y="212.3" fill="#c0caf5" textLength="75.6" lengthAdjust="spacingAndGlyphs">inventory</text>
 <path d="M217.8 207.5L217.8 199.0M217.8 207.5L217.8 216.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M814.2 207.5L814.2 199.0M814.2 207.5L814.2 216.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M1015.8 207.5L1015.8 199.0M1015.8 207.5L1015.8 216.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 224.5L16.2 216.0M16.2 224.5L16.2 233.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
+<text x="45.6" y="229.3" fill="#7aa2f7" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">POST   </text>
+<text x="104.4" y="229.3" fill="#c0caf5" textLength="92.4" lengthAdjust="spacingAndGlyphs">place-order</text>
 <path d="M217.8 224.5L217.8 216.0M217.8 224.5L217.8 233.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M814.2 224.5L814.2 216.0M814.2 224.5L814.2 233.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M1015.8 224.5L1015.8 216.0M1015.8 224.5L1015.8 233.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 241.5L16.2 233.0M16.2 241.5L16.2 250.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
+<text x="28.8" y="246.3" fill="#737aa2" textLength="16.8" lengthAdjust="spacingAndGlyphs">▾ </text>
+<text x="45.6" y="246.3" fill="#c0caf5" font-weight="bold" textLength="42.0" lengthAdjust="spacingAndGlyphs">users</text>
 <path d="M217.8 241.5L217.8 233.0M217.8 241.5L217.8 250.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M814.2 241.5L814.2 233.0M814.2 241.5L814.2 250.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M1015.8 241.5L1015.8 233.0M1015.8 241.5L1015.8 250.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 258.5L16.2 250.0M16.2 258.5L16.2 267.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
+<text x="45.6" y="263.3" fill="#9ece6a" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">GET    </text>
+<text x="104.4" y="263.3" fill="#c0caf5" textLength="16.8" lengthAdjust="spacingAndGlyphs">me</text>
 <path d="M217.8 258.5L217.8 250.0M217.8 258.5L217.8 267.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M814.2 258.5L814.2 250.0M814.2 258.5L814.2 267.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M1015.8 258.5L1015.8 250.0M1015.8 258.5L1015.8 267.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>

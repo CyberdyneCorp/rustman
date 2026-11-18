@@ -157,7 +157,14 @@ impl<'a> Resolver<'a> {
 
     /// The value of `name` from the highest-precedence source defining it.
     pub fn lookup(&self, name: &str) -> Option<Lookup> {
-        self.sources.iter().find_map(|s| s.lookup(name))
+        self.lookup_with_layer(name).map(|(_, lookup)| lookup)
+    }
+
+    /// [`Resolver::lookup`], with the layer the value came from.
+    pub fn lookup_with_layer(&self, name: &str) -> Option<(Layer, Lookup)> {
+        self.sources
+            .iter()
+            .find_map(|s| s.lookup(name).map(|found| (s.layer(), found)))
     }
 
     /// Resolve one string.

@@ -1,0 +1,589 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/CyberdyneCorp/rustman/schema/rustman-viz-1.schema.json",
+  "title": "rustman-viz/1 message",
+  "description": "One line of the Rustman viz protocol. Unknown message types and unknown fields are allowed and ignored by readers.",
+  "type": "object",
+  "required": [
+    "type"
+  ],
+  "properties": {
+    "type": {
+      "type": "string"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "hello"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "protocol",
+          "producer"
+        ],
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "pattern": "^rustman-viz/[0-9]+"
+          },
+          "producer": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "hello_ack"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "protocol",
+          "viewer"
+        ],
+        "properties": {
+          "protocol": {
+            "type": "string"
+          },
+          "viewer": {
+            "type": "string"
+          },
+          "views": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "run_dashboard, exploration_dashboard, api_graph, response_inspector"
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "hello_reject"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "supported"
+        ],
+        "properties": {
+          "supported": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "open_view"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "view"
+        ],
+        "properties": {
+          "view": {
+            "type": "string",
+            "description": "run_dashboard, exploration_dashboard, api_graph, response_inspector"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "run_started"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "started_at"
+        ],
+        "properties": {
+          "started_at": {
+            "type": "string"
+          },
+          "environment": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "exchange_completed"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "request",
+          "method",
+          "url",
+          "outcome",
+          "duration_ms"
+        ],
+        "properties": {
+          "request": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string",
+            "description": "passed, failed, errored, cancelled, skipped (unknown values are allowed)"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 999
+          },
+          "duration_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "assertions": {
+            "type": "object",
+            "required": [
+              "passed",
+              "failed"
+            ],
+            "properties": {
+              "passed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "failed": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "error": {
+            "type": "string"
+          },
+          "iteration": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "run_finished"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "state",
+          "summary"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "description": "completed or aborted"
+          },
+          "summary": {
+            "type": "object",
+            "required": [
+              "total",
+              "passed",
+              "failed",
+              "errored",
+              "skipped",
+              "duration_ms"
+            ],
+            "properties": {
+              "total": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "passed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "failed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "errored": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "skipped": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "duration_ms": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "exploration_started"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "started_at",
+          "operations"
+        ],
+        "properties": {
+          "started_at": {
+            "type": "string"
+          },
+          "operations": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "base_url": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "probe_completed"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "operation",
+          "outcome",
+          "duration_ms"
+        ],
+        "properties": {
+          "operation": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string",
+            "description": "passed, failed, errored, cancelled, skipped (unknown values are allowed)"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 999
+          },
+          "duration_ms": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "finding"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "severity",
+          "operation",
+          "title"
+        ],
+        "properties": {
+          "severity": {
+            "type": "string",
+            "description": "critical, high, medium, low, info"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "exploration_finished"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "state",
+          "operations_total",
+          "operations_exercised"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "description": "completed or aborted"
+          },
+          "operations_total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "operations_exercised": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "status_codes_documented": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "status_codes_seen": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "load_report"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "path",
+          "kind"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "run or exploration"
+          },
+          "view": {
+            "type": "string",
+            "description": "run_dashboard, exploration_dashboard, api_graph, response_inspector"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "inspect_response"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "properties": {
+          "request": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "headers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "value"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "selector": {
+            "type": "string"
+          },
+          "body": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "type",
+                  "text"
+                ],
+                "properties": {
+                  "type": {
+                    "const": "inline"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type",
+                  "path",
+                  "bytes"
+                ],
+                "properties": {
+                  "type": {
+                    "const": "blob_ref"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "bytes": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "media_type": {
+                    "type": "string"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "blob_ref"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "path",
+          "bytes"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "media_type": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "error"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "close"
+          }
+        }
+      },
+      "then": {
+        "type": "object"
+      }
+    }
+  ]
+}

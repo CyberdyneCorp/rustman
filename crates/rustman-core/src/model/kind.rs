@@ -92,6 +92,8 @@ pub struct OpaqueRequest {
 #[derive(Clone)]
 pub struct KindRegistry {
     kinds: Vec<(&'static str, KindLoader)>,
+    /// Loads kinds that are not registered, instead of failing.
+    fallback: Option<KindLoader>,
 }
 
 impl Default for KindRegistry {
@@ -103,6 +105,7 @@ impl Default for KindRegistry {
                 ("graphql", load_opaque),
                 ("mcp", load_opaque),
             ],
+            fallback: None,
         }
     }
 }
@@ -122,6 +125,15 @@ impl KindRegistry {
         }
     }
 
+    /// Load request files of unregistered kinds as [`OpaqueRequest`]s
+    /// instead of rejecting them. Front-ends that can show any request
+    /// (the TUI's read-only view) use this; the CLI keeps the strict default.
+    #[must_use]
+    pub fn with_opaque_fallback(mut self) -> Self {
+        self.fallback = Some(load_opaque);
+        self
+    }
+
     pub fn names(&self) -> Vec<&'static str> {
         self.kinds.iter().map(|(name, _)| *name).collect()
     }
@@ -137,7 +149,7 @@ impl KindRegistry {
             );
             LoadError::new(file, Some(Position { line: 1, column: 1 }), message)
         })?;
-        let loader = self.loader(kind.get()).ok_or_else(|| {
+        let loader = self.loader(kind.get()).or(self.fallback).ok_or_else(|| {
             let message = format!(
                 "unknown request kind '{}' (expected one of: {})",
                 kind.get(),

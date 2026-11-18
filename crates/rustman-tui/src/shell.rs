@@ -2,14 +2,17 @@
 //! (spec: Responsive collapse, Default keymap, Mouse support, Toasts).
 
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+use ratatui::layout::Position;
 
-use crate::app::{Overlay, Screen, Session, State};
+use crate::app::{Overlay, Screen, State};
 use crate::focus::{Focus, Pane};
 use crate::layout::{
-    Breakpoint, Regions, SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN, editor_targets, regions,
-    switcher_tabs,
+    Breakpoint, Regions, SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN, editor_targets, label_rects,
+    regions, switcher_tabs, tab_strip,
 };
 use crate::toast;
+use crate::tree::TreeState;
+use crate::workbench;
 
 /// Layout and focus state that survives resizes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,6 +30,8 @@ pub struct ShellState {
     pub scroll: [u16; 3],
     /// The selected sidebar row.
     pub selected: usize,
+    /// Folded folders and the filter of the collection tree.
+    pub tree: TreeState,
 }
 
 impl Default for ShellState {
@@ -39,6 +44,7 @@ impl Default for ShellState {
             dragging: false,
             scroll: [0; 3],
             selected: 0,
+            tree: TreeState::default(),
         }
     }
 }
@@ -149,7 +155,7 @@ pub fn on_mouse(state: &mut State, event: MouseEvent) {
 
 fn click(state: &mut State, column: u16, row: u16) {
     let rects = toast::toast_rects(state.area, state.notifications.visible());
-    let at = ratatui::layout::Position::new(column, row);
+    let at = Position::new(column, row);
     if let Some(index) = rects.iter().position(|r| r.contains(at)) {
         state.notifications.dismiss(index);
         return;
@@ -162,17 +168,90 @@ fn click(state: &mut State, column: u16, row: u16) {
         state.shell.dragging = true;
         return;
     }
+    if let Some(editor) = regions.editor
+        && tab_strip(editor).contains(at)
+    {
+        click_request_tab(state, editor, at);
+        return;
+    }
     if let Some(focus) = focus_at(&regions, at) {
         state.shell.focus = focus;
         if focus.pane() != Pane::Sidebar {
             state.shell.overlay_open = false;
         }
+        click_inside(state, &regions, focus, at);
+    }
+}
+
+/// A click on a request tab in the editor's top border shows that tab.
+fn click_request_tab(state: &mut State, editor: ratatui::layout::Rect, at: Position) {
+    let labels = request_tab_labels(state);
+    let rects = label_rects(tab_strip(editor), &labels);
+    if let Some(i) = rects.iter().position(|r| r.contains(at)) {
+        state.tabs.select(i);
+    }
+}
+
+/// The labels of the request tab strip, as drawn.
+pub fn request_tab_labels(state: &State) -> Vec<String> {
+    let glyphs = &state.ui.glyphs;
+    state
+        .tabs
+        .list
+        .iter()
+        .map(|t| {
+            let mut label = t.title();
+            if t.dirty {
+                label = format!("{label} {}", glyphs.dirty);
+            }
+            if let Some(flight) = &t.in_flight {
+                // A spinner frame per 100 ms of the send (spec: Non-blocking send).
+                let elapsed = state.now.saturating_duration_since(flight.started);
+                let frame = usize::try_from(elapsed.as_millis() / 100).unwrap_or(0);
+                label = format!("{} {label}", glyphs.spinner[frame % glyphs.spinner.len()]);
+            }
+            label
+        })
+        .collect()
+}
+
+/// Clicks on a sidebar row select it; clicks on an editor tab label show
+/// that tab.
+fn click_inside(state: &mut State, regions: &Regions, focus: Focus, at: Position) {
+    match focus {
+        Focus::Sidebar if regions.switcher.is_none_or(|bar| !bar.contains(at)) => {
+            let Some(rect) = regions.sidebar else { return };
+            let top = rect.y + 1 + u16::from(state.shell.tree.filter.is_some());
+            let Some(offset) = at.y.checked_sub(top) else {
+                return;
+            };
+            let index =
+                usize::from(state.shell.scroll[Pane::Sidebar.index()]) + usize::from(offset);
+            if index < workbench::sidebar_rows(state).len() {
+                state.shell.selected = index;
+            }
+        }
+        Focus::EditorTabs => {
+            let Some(editor) = regions.editor else { return };
+            let Some(tab) = state.tabs.active_mut() else {
+                return;
+            };
+            let [_, _, (_, bar), _] = editor_targets(editor);
+            let labels: Vec<String> = tab.editor.tabs().iter().map(|l| (*l).to_owned()).collect();
+            if let Some(i) = label_rects(bar, &labels)
+                .iter()
+                .position(|r| r.contains(at))
+            {
+                tab.editor.set_tab(i);
+            }
+        }
+        _ => {}
     }
 }
 
 /// What a click at `at` focuses: a switcher label, an editor field, or the
 /// pane under it.
-fn focus_at(regions: &Regions, at: ratatui::layout::Position) -> Option<Focus> {
+fn focus_at(regions: &Regions, at: Position) -> Option<Focus> {
     if let Some(bar) = regions.switcher.filter(|r| r.contains(at)) {
         return switcher_tabs(bar)
             .into_iter()
@@ -196,7 +275,7 @@ fn scroll(state: &mut State, column: u16, row: u16, down: bool) {
         return;
     };
     let limit = match pane {
-        Pane::Sidebar => sidebar_items(&state.screen).len().saturating_sub(1),
+        Pane::Sidebar => workbench::sidebar_rows(state).len().saturating_sub(1),
         _ => usize::from(u16::MAX),
     };
     let offset = &mut state.shell.scroll[pane.index()];
@@ -209,22 +288,10 @@ fn scroll(state: &mut State, column: u16, row: u16, down: bool) {
     };
 }
 
-/// The read-only request list in the sidebar.
-pub fn sidebar_items(screen: &Screen) -> Vec<String> {
-    match screen {
-        Screen::Shell(Session::Workspace(ws)) => ws
-            .requests()
-            .iter()
-            .map(|r| r.entry.path.display().to_string().replace('\\', "/"))
-            .collect(),
-        _ => Vec::new(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::{Action, update};
+    use crate::app::{Action, Session, update};
     use crate::toast::Severity;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::layout::Rect;
@@ -471,17 +538,18 @@ mod tests {
     fn resizing_keeps_unsaved_body_edits() {
         // Scenario "Resize keeps edits": 160x45 -> 80x24 -> 160x45.
         let mut state = shell_state(160, 45);
-        state.shell.focus = Focus::EditorBody;
+        crate::testing::open_raw_body(&mut state);
         for c in "{\"a\":1}".chars() {
             update(&mut state, key(KeyCode::Char(c), KeyModifiers::NONE));
         }
         update(&mut state, key(KeyCode::Left, KeyModifiers::NONE));
-        let (text, cursor) = (state.body.text(), state.body.cursor());
+        let text = crate::testing::body_text(&state);
         assert_eq!(text, "{\"a\":1}");
+        assert!(state.tabs.active().unwrap().dirty);
         for (width, height) in [(80, 24), (160, 45)] {
             update(&mut state, Action::Resize { width, height });
-            assert_eq!(state.body.text(), text, "{width}x{height}");
-            assert_eq!(state.body.cursor(), cursor, "{width}x{height}");
+            assert_eq!(crate::testing::body_text(&state), text, "{width}x{height}");
+            assert!(state.tabs.active().unwrap().dirty);
             assert_eq!(state.shell.focus, Focus::EditorBody);
         }
     }

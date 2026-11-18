@@ -138,6 +138,23 @@ fn inherited_header_is_added() {
 }
 
 #[test]
+fn disabled_headers_are_neither_sent_nor_override() {
+    let f = Fixture::new();
+    f.write(
+        "users/_collection.yaml",
+        "headers:\n  - {name: X-Team, value: core}\n",
+    );
+    f.request(
+        "users/get.rman.yaml",
+        "get",
+        "headers:\n  - {name: x-team, value: mine, enabled: false}\n  - {name: X-Debug, value: '1', enabled: false}\n",
+    );
+    let ws = f.load().unwrap();
+    let headers = ws.requests()[0].effective_headers();
+    assert_eq!(headers, [NameValue::new("X-Team", "core")]);
+}
+
+#[test]
 fn nearer_collection_headers_win() {
     let f = Fixture::new();
     f.write(

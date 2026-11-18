@@ -1,0 +1,20 @@
+[package]
+name = "rustman-viz-protocol"
+description = "Message types of the Rustman viz protocol (rustman-viz/1)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+jsonschema.workspace = true
+
+[lints]
+workspace = true

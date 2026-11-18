@@ -22,6 +22,10 @@ pub struct Glyphs {
     pub fail: &'static str,
     pub info: &'static str,
     pub warn: &'static str,
+    /// The unsaved-changes marker on tabs and sidebar rows.
+    pub dirty: &'static str,
+    /// How a secret value is shown.
+    pub mask: &'static str,
 }
 
 pub const UNICODE: Glyphs = Glyphs {
@@ -39,6 +43,8 @@ pub const UNICODE: Glyphs = Glyphs {
     fail: "✖",
     info: "ℹ",
     warn: "⚠",
+    dirty: "●",
+    mask: "••••••••",
 };
 
 pub const ASCII: Glyphs = Glyphs {
@@ -65,6 +71,8 @@ pub const ASCII: Glyphs = Glyphs {
     fail: "x",
     info: "i",
     warn: "!",
+    dirty: "*",
+    mask: "********",
 };
 
 #[cfg(test)]
@@ -93,6 +101,8 @@ mod tests {
             g.fail,
             g.info,
             g.warn,
+            g.dirty,
+            g.mask,
         ];
         all.extend(g.spinner);
         all.extend(g.sparkline);

@@ -1,14 +1,17 @@
 ---
 source: crates/rustman-tui/src/commands.rs
-assertion_line: 467
 expression: text
 ---
 ┌ › Sidebar ───────────────┐┌ Request ───────────────────────────────────┐┌ Response ──────────────────────────────────┐
-│ examples/ping.rman.yaml  ││ METHOD   No request open                   ││ No response yet.                           │
-│                          ││ Params  Headers  Body  Auth  Assertions    ││                                            │
-│                          ││ Open a request from the sidebar.           ││                                            │
-│                       ┌ Help ────────────────────────────────────────────────────────────────┐                       │
-│                       │ Sidebar                                                              │                       │
+│ ▾ examples            ┌ Help ────────────────────────────────────────────────────────────────┐                       │
+│   GET    ping         │ Sidebar                                                              │                       │
+│                       │   Enter                    Open request                              │                       │
+│                       │   /                        Filter requests                           │                       │
+│                       │   n                        New request file                          │                       │
+│                       │   r                        Rename request or folder                  │                       │
+│                       │   d                        Delete request or folder                  │                       │
+│                       │   Left                     Collapse folder                           │                       │
+│                       │   Right                    Expand folder                             │                       │
 │                       │   Up                       Move up                                   │                       │
 │                       │   Down                     Move down                                 │                       │
 │                       │   Home                     Go to top                                 │                       │
@@ -22,20 +25,16 @@ expression: text
 │                       │   Ctrl+S                   Save request                              │                       │
 │                       │   Ctrl+T                   New tab                                   │                       │
 │                       │   Ctrl+W                   Close tab                                 │                       │
-│                       │   Ctrl+P                   Command palette                           │                       │
-│                       │   ?, F1                    Help                                      │                       │
-│                       │   Ctrl+B                   Toggle sidebar                            │                       │
-│                       │   Alt+Right                Widen sidebar                             │                       │
-│                       │   Alt+Left                 Narrow sidebar                            │                       │
-│                       │   Tab                      Focus next                                │                       │
-│                       │   Shift+Tab                Focus previous                            │                       │
-│                       │   Esc                      Close or dismiss                          │                       │
-│                       │   Alt+E                    Switch environment                        │                       │
-│                       │   Alt+R                    Reveal secrets                            │                       │
-│                       │   Ctrl+Q                   Quit                                      │                       │
+│                       │   Ctrl+PageDown            Next tab                                  │                       │
+│                       │   Ctrl+PageUp              Previous tab                              │                       │
+│                       │   Alt+1                    Go to tab 1                               │                       │
+│                       │   Alt+2                    Go to tab 2                               │                       │
+│                       │   Alt+3                    Go to tab 3                               │                       │
+│                       │   Alt+4                    Go to tab 4                               │                       │
+│                       │   Alt+5                    Go to tab 5                               │                       │
+│                       │   Alt+6                    Go to tab 6                               │                       │
+│                       │   Alt+7                    Go to tab 7                               │                       │
 │                       │                                                                      │                       │
 │                       │ ↑↓ scroll · Esc close                                                │                       │
-│                       └──────────────────────────────────────────────────────────────────────┘                       │
-│                          ││                                            ││                                            │
-└──────────────────────────┘└────────────────────────────────────────────┘└────────────────────────────────────────────┘
+└───────────────────────└──────────────────────────────────────────────────────────────────────┘───────────────────────┘
  demo │ env: local │ TLS verified │ 0 in flight                                                             Ctrl+Q quit

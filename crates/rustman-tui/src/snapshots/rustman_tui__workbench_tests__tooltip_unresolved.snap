@@ -1,0 +1,49 @@
+---
+source: crates/rustman-tui/src/workbench_tests.rs
+expression: text(&state)
+---
+┌ Sidebar ─────────────────┐┌ get-user ──────────────────────────────────────────────────────┐┌ Response ──────────────────────────────────────────────────────┐
+│ ▾ grpc                   ││ GET      {{base_url}}/users/{{id}}                             ││ No response yet. Ctrl+Enter sends the request.                 │
+│   GRPC   hello           ││ Params  Headers  Body  Auth  Assertions                        ││                                                                │
+│ ▾ users                  ││ No rows. a add                                                 ││                                                                │
+│   POST   create-user     ││                                                                ││                                                                │
+│   GET    get-user        ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││ {{id}} is not defined in any layer                             ││                                                                │
+└──────────────────────────┘└────────────────────────────────────────────────────────────────┘└────────────────────────────────────────────────────────────────┘
+ demo │ env: local │ TLS verified │ 0 in flight                                                                                                     Ctrl+Q quit

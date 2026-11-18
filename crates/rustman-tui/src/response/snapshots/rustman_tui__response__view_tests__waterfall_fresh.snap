@@ -1,0 +1,15 @@
+---
+source: crates/rustman-tui/src/response/view_tests.rs
+expression: fresh
+---
+✔ 200 OK · 84 ms · 2 B
+Body  Headers  Timing  Assertions
+Total 84 ms
+DNS          2.0 ms   █
+Connect      3.0 ms    █
+TLS               —
+Waiting       65 ms     ███████████████████████████████
+Download     9.0 ms                                    ████
+
+Latency (last exchanges of this request)
+not enough history

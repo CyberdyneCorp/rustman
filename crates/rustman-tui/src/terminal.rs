@@ -60,6 +60,20 @@ impl Drop for TerminalGuard {
     }
 }
 
+/// Hand the terminal to another program (the external editor): cooked
+/// mode, the main screen, mouse released when `mouse`.
+pub fn suspend(mouse: bool) -> io::Result<()> {
+    let raw = disable_raw_mode();
+    let screen = restore_screen(&mut io::stdout(), mouse);
+    raw.and(screen)
+}
+
+/// Take the terminal back after [`suspend`].
+pub fn resume(mouse: bool) -> io::Result<()> {
+    enable_raw_mode()?;
+    setup(&mut io::stdout(), mouse)
+}
+
 /// Whether the live guard captured the mouse. On Windows releasing a
 /// capture that was never enabled fails, so restore only releases it when set.
 static MOUSE_CAPTURED: AtomicBool = AtomicBool::new(false);

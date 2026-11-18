@@ -16,6 +16,7 @@ rustman-report = { path = "crates/rustman-report", version = "0.1.0" }
 # Test servers shared by the integration tests; never published.
 rustman-test-support = { path = "crates/rustman-test-support" }
 rustman-tui = { path = "crates/rustman-tui", version = "0.1.0" }
+rustman-viz-protocol = { path = "crates/rustman-viz-protocol", version = "0.1.0" }
 
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
@@ -134,11 +135,26 @@ ratatui = { version = "0.30.2", default-features = false, features = ["crossterm
 crossterm = { version = "0.29", default-features = false, features = ["bracketed-paste", "events", "windows"] }
 # Pseudo-terminal for the panic-restores-the-terminal test (Unix only).
 portable-pty = "0.9"
+# Terminal emulator for the TUI pty smoke test: turns the bytes the TUI
+# writes into a screen to assert on. Matching raw escape output is rejected
+# (ratatui redraws only changed cells, so text is split by cursor moves).
+vt100 = "0.18"
 # Fuzzy matching for the command palette (add-terminal-ui task 3.2): the
 # matcher of `nucleo`, used synchronously; the `nucleo` worker pool is not
 # needed for a few hundred entries. `fuzzy-matcher` (unmaintained) and
 # `sublime_fuzzy` (no Unicode case folding) are rejected.
 nucleo-matcher = { version = "0.3.1", default-features = false, features = ["unicode-casefold", "unicode-normalization"] }
+# File watching for open request files (add-terminal-ui task 4.3): inotify,
+# FSEvents and ReadDirectoryChangesW without native libraries. Polling every
+# file from the UI loop is rejected (I/O on the render loop).
+notify = { version = "8.2", default-features = false, features = ["macos_fsevent"] }
+# Response viewer (add-terminal-ui design D6; JSONPath filters reuse
+# `serde_json_path` above). Highlighting of non-JSON bodies with the bundled Sublime syntaxes, matched
+# by pure-Rust `fancy-regex` (the default `onig` needs a C library build).
+# Scopes map to theme tokens, so no syntect themes are loaded.
+syntect = { version = "5.3", default-features = false, features = ["default-syntaxes", "regex-fancy"] }
+# Line diffs of non-JSON bodies in the exchange diff.
+similar = { version = "3.2", default-features = false, features = ["std", "text"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

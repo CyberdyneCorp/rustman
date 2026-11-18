@@ -16,6 +16,14 @@ use crate::format::{Located, MaybeFloat, error_at, exact_located};
 pub struct NameValue {
     pub name: String,
     pub value: String,
+    /// `enabled: false` keeps the row in the file without sending it (the
+    /// TUI's per-row toggle). Written only when false.
+    #[serde(default = "enabled_by_default")]
+    pub enabled: bool,
+}
+
+fn enabled_by_default() -> bool {
+    true
 }
 
 impl NameValue {
@@ -23,7 +31,15 @@ impl NameValue {
         Self {
             name: name.into(),
             value: value.into(),
+            enabled: true,
         }
+    }
+
+    /// The same pair, enabled or disabled.
+    #[must_use]
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
     }
 }
 

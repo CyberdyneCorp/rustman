@@ -2,6 +2,8 @@
 //! area, then the keymap; and running the action a key, the palette or the
 //! help overlay names.
 
+use std::path::Path;
+
 use crate::app::{Effect, Overlay, Screen, Session, State};
 use crate::focus::{Focus, Pane};
 use crate::keymap::{ActionId, Chord, Context, Resolution, chord::Code};
@@ -10,21 +12,28 @@ use crate::palette::{self, Palette, Scope, Sources, Target};
 use crate::shell::{self, Command};
 use crate::status::VimMode;
 use crate::toast::Severity;
-use crate::vim;
+use crate::tree::{self, Filter};
+use crate::{reveal, send, viewer_keys, viz, workbench};
 
 /// Handle a key while the shell is showing.
 pub fn shell_key(state: &mut State, chord: Chord) -> Vec<Effect> {
     let effects = match state.overlay {
         Some(Overlay::Palette(_)) => palette_key(state, chord),
         Some(Overlay::Help { .. }) => help_key(state, chord),
-        _ => {
-            let typed = state.pending_keys.is_empty() && text_key(state, chord);
-            if typed {
-                Vec::new()
-            } else {
-                keymap_key(state, chord)
+        Some(Overlay::Confirm(_)) => confirm_key(state, chord),
+        Some(Overlay::Input(_)) => workbench::input_key(state, chord),
+        Some(Overlay::Exchanges(_) | Overlay::Diff(_)) => viewer_keys::overlay_key(state, chord),
+        _ => match viewer_keys::box_key(state, chord) {
+            Some(effects) => effects,
+            None => {
+                let typed = state.pending_keys.is_empty() && text_key(state, chord);
+                if typed {
+                    Vec::new()
+                } else {
+                    keymap_key(state, chord)
+                }
             }
-        }
+        },
     };
     sync_vim_status(state);
     effects
@@ -44,14 +53,74 @@ fn sync_vim_status(state: &mut State) {
 /// Keys for the focused text input; false when the keymap should have it.
 fn text_key(state: &mut State, chord: Chord) -> bool {
     match state.shell.focus {
-        Focus::EditorBody => match &mut state.vim {
-            Some(vim) => vim.key(&mut state.body, chord),
-            None => vim::type_key(&mut state.body, chord),
+        Focus::Sidebar => filter_key(state, chord),
+        Focus::Response => false,
+        focus => editor_key(state, focus, chord),
+    }
+}
+
+/// Keys for the open request's editor.
+fn editor_key(state: &mut State, focus: Focus, chord: Chord) -> bool {
+    let Some(tab) = state.tabs.active_mut() else {
+        // No request open: characters typed in the URL field do nothing
+        // rather than run shortcuts.
+        return focus == Focus::Url && chord.typed_char().is_some();
+    };
+    let handled = tab.editor.key(focus, chord, state.vim.as_mut());
+    if handled {
+        tab.refresh();
+    }
+    handled
+}
+
+/// Keys for the sidebar filter: typing edits the query while it is open,
+/// `Esc` clears it.
+fn filter_key(state: &mut State, chord: Chord) -> bool {
+    let Some(filter) = state.shell.tree.filter.as_mut() else {
+        return false;
+    };
+    match chord.code {
+        Code::Esc => state.shell.tree.filter = None,
+        _ if !filter.editing => return false,
+        Code::Backspace => {
+            filter.query.pop();
+        }
+        _ => match chord.typed_char() {
+            Some(c) => filter.query.push(c),
+            None => return false,
         },
-        // The URL field becomes editable with the HTTP pane; until then
-        // typed characters are swallowed rather than run as shortcuts.
-        Focus::Url => chord.typed_char().is_some(),
-        _ => false,
+    }
+    state.shell.selected = 0;
+    state.shell.scroll[Pane::Sidebar.index()] = 0;
+    true
+}
+
+/// `/` in the sidebar: open the filter.
+fn start_filter(state: &mut State) {
+    state.shell.focus = Focus::Sidebar;
+    let query = state
+        .shell
+        .tree
+        .filter
+        .take()
+        .map(|f| f.query)
+        .unwrap_or_default();
+    state.shell.tree.filter = Some(Filter {
+        query,
+        editing: true,
+    });
+}
+
+fn confirm_key(state: &mut State, chord: Chord) -> Vec<Effect> {
+    let Some(Overlay::Confirm(confirm)) = &mut state.overlay else {
+        return Vec::new();
+    };
+    match confirm.key(chord) {
+        Some(decision) => {
+            state.overlay = None;
+            workbench::decide(state, decision)
+        }
+        None => Vec::new(),
     }
 }
 
@@ -124,28 +193,14 @@ fn choose(state: &mut State) -> Vec<Effect> {
     match target {
         Target::Action(action) => run(state, action),
         Target::Request(path) => {
-            reveal_request(state, &path);
+            workbench::reveal(state, Path::new(&path));
             Vec::new()
         }
         Target::Environment(name) => {
             state.notify(Severity::Info, format!("Active environment: {name}"));
             state.status.environment = Some(name);
-            Vec::new()
+            reveal::environment_changed(state)
         }
-    }
-}
-
-/// Select a request in the sidebar and focus it (opening it in a tab comes
-/// with the request editor).
-fn reveal_request(state: &mut State, path: &str) {
-    let items = shell::sidebar_items(&state.screen);
-    if let Some(index) = items.iter().position(|p| p == path) {
-        state.shell.focus = Focus::Sidebar;
-        if Breakpoint::of(state.area.width, state.area.height) == Breakpoint::Medium {
-            state.shell.overlay_open = true;
-        }
-        state.shell.sidebar_hidden = false;
-        select(state, index);
     }
 }
 
@@ -167,17 +222,29 @@ fn help_key(state: &mut State, chord: Chord) -> Vec<Effect> {
 
 /// Run `action`.
 pub fn run(state: &mut State, action: ActionId) -> Vec<Effect> {
+    // `Esc` cancels the request in flight before it dismisses anything
+    // (spec: Cancel in-flight request).
+    if action == ActionId::Escape && state.overlay.is_none() && send::cancel(state) {
+        return Vec::new();
+    }
+    if let Some(effects) = request_action(state, action) {
+        return effects;
+    }
     if let Some(command) = shell_command(action) {
         shell::apply(state, command);
         return Vec::new();
     }
+    if let Some(effects) = workbench_action(state, action) {
+        return effects;
+    }
     match action {
-        ActionId::Quit => state.quit = true,
+        ActionId::Quit => workbench::quit(state),
         ActionId::PaletteOpen => open_palette(state, Scope::Everything),
         ActionId::EnvSwitch => open_palette(state, Scope::Environments),
         ActionId::HelpOpen => state.overlay = Some(Overlay::Help { scroll: 0 }),
-        ActionId::SecretsReveal => toggle_secrets(state),
-        ActionId::RequestCancel => idle_cancel(state),
+        ActionId::SecretsReveal => return reveal::toggle(state),
+        ActionId::VizOpen => return viz::start(state),
+        ActionId::ReportHtml => return crate::response::html::start(state),
         ActionId::PaneLeft => pane_step(state, false),
         ActionId::PaneRight => pane_step(state, true),
         ActionId::ListUp
@@ -194,6 +261,70 @@ pub fn run(state: &mut State, action: ActionId) -> Vec<Effect> {
     Vec::new()
 }
 
+/// Sending, cancelling and the response viewer's actions.
+fn request_action(state: &mut State, action: ActionId) -> Option<Vec<Effect>> {
+    match action {
+        ActionId::RequestSend => Some(send::start(state)),
+        ActionId::RequestCancel => {
+            if !send::cancel(state) {
+                idle_cancel(state);
+            }
+            Some(Vec::new())
+        }
+        ActionId::ListUp
+        | ActionId::ListDown
+        | ActionId::ListTop
+        | ActionId::ListBottom
+        | ActionId::ListPageUp
+        | ActionId::ListPageDown
+            if state.shell.focus.pane() == Pane::Response =>
+        {
+            Some(viewer_keys::list_move(state, action))
+        }
+        _ => viewer_keys::run(state, action),
+    }
+}
+
+/// The request workbench's actions: tabs, saving, the sidebar's file
+/// commands, editor modes and the external editor.
+fn workbench_action(state: &mut State, action: ActionId) -> Option<Vec<Effect>> {
+    let effects = match action {
+        ActionId::RequestSave => workbench::save(state),
+        ActionId::SidebarOpen => workbench::open_selected(state),
+        ActionId::EditorExternal => workbench::external(state),
+        ActionId::TabNew => {
+            workbench::new_tab(state);
+            Vec::new()
+        }
+        ActionId::TabClose => {
+            workbench::close_tab(state);
+            Vec::new()
+        }
+        _ => {
+            workbench_command(state, action)?;
+            Vec::new()
+        }
+    };
+    Some(effects)
+}
+
+/// The workbench actions that need no effect; `None` for other actions.
+fn workbench_command(state: &mut State, action: ActionId) -> Option<()> {
+    match action {
+        ActionId::TabNext => state.tabs.step(true),
+        ActionId::TabPrev => state.tabs.step(false),
+        ActionId::SidebarFilter => start_filter(state),
+        ActionId::SidebarNew => workbench::prompt_new(state),
+        ActionId::SidebarRename => workbench::prompt_rename(state),
+        ActionId::SidebarDelete => workbench::prompt_delete(state),
+        ActionId::TreeCollapse => workbench::fold_selected(state, true),
+        ActionId::TreeExpand => workbench::fold_selected(state, false),
+        ActionId::EditorMode => workbench::cycle_mode(state),
+        _ => state.tabs.select(action.tab_index()?),
+    }
+    Some(())
+}
+
 fn shell_command(action: ActionId) -> Option<Command> {
     Some(match action {
         ActionId::SidebarToggle => Command::ToggleSidebar,
@@ -208,7 +339,7 @@ fn shell_command(action: ActionId) -> Option<Command> {
 }
 
 fn open_palette(state: &mut State, scope: Scope) {
-    let requests = shell::sidebar_items(&state.screen);
+    let requests = workbench::workspace(state).map_or_else(Vec::new, tree::request_paths);
     let environments: Vec<String> = match &state.screen {
         Screen::Shell(Session::Workspace(ws)) => {
             ws.environments.iter().map(|e| e.name.clone()).collect()
@@ -223,18 +354,18 @@ fn open_palette(state: &mut State, scope: Scope) {
         dot: state.ui.glyphs.dot,
     };
     let entries = palette::entries(scope, sources);
-    let palette = Palette::new(scope, entries, &state.recent);
+    let mut palette = Palette::new(scope, entries, &state.recent);
+    if scope == Scope::Environments
+        && let Some(ws) = workbench::workspace(state)
+    {
+        let variables = ws
+            .environments
+            .iter()
+            .map(|env| (env.name.clone(), palette::env_variables(ws, env)))
+            .collect();
+        palette = palette.with_variables(variables);
+    }
     state.overlay = Some(Overlay::Palette(Box::new(palette)));
-}
-
-fn toggle_secrets(state: &mut State) {
-    state.status.secrets_visible = !state.status.secrets_visible;
-    let message = if state.status.secrets_visible {
-        "Secrets are visible until you hide them or quit"
-    } else {
-        "Secrets are masked"
-    };
-    state.notify(Severity::Info, message);
 }
 
 /// `Ctrl+C` with nothing in flight never quits (spec: Cancel in-flight
@@ -275,7 +406,7 @@ fn list_move(state: &mut State, action: ActionId) {
     let pane = state.shell.focus.pane();
     let page = page_size(state, pane);
     let len = match pane {
-        Pane::Sidebar => shell::sidebar_items(&state.screen).len(),
+        Pane::Sidebar => workbench::sidebar_rows(state).len(),
         _ => usize::from(u16::MAX),
     };
     let current = match pane {
@@ -419,8 +550,16 @@ mod tests {
         assert!(
             toasts(&state)
                 .iter()
-                .any(|t| t == "Send request is not available yet")
+                .any(|t| t == "Open a request to send it")
         );
+        press(&mut state, "Ctrl+T");
+        let f5 = KeyEvent::new(KeyCode::F(5), KeyModifiers::NONE);
+        let effects = update(&mut state, Action::Key(f5));
+        assert!(
+            matches!(effects.as_slice(), [Effect::Send(_)]),
+            "F5 sends the current request: {effects:?}"
+        );
+        assert_eq!(state.status.in_flight, 1);
         press(&mut state, "Ctrl+B");
         assert!(state.shell.sidebar_hidden, "other bindings still work");
     }
@@ -492,12 +631,14 @@ mod tests {
     }
 
     #[test]
-    fn choosing_a_request_selects_it_in_the_sidebar() {
+    fn choosing_a_request_opens_and_selects_it() {
         let (_tmp, mut state) = shell(100, 30, "", false);
         press(&mut state, "Ctrl+P p i n g");
         press(&mut state, "Enter");
-        assert_eq!(state.shell.focus, Focus::Sidebar);
-        assert!(state.shell.overlay_open, "medium layout shows the overlay");
+        assert_eq!(state.shell.focus, Focus::Url);
+        assert_eq!(state.tabs.active().unwrap().title(), "ping");
+        let rows = workbench::sidebar_rows(&state);
+        assert_eq!(rows[state.shell.selected].label, "ping");
         assert_eq!(
             state.recent,
             [Target::Request("examples/ping.rman.yaml".into())]
@@ -528,10 +669,10 @@ mod tests {
     #[test]
     fn question_mark_types_in_a_text_input() {
         let (_tmp, mut state) = shell(120, 36, "", false);
-        focus_body(&mut state);
+        crate::testing::open_raw_body(&mut state);
         press(&mut state, "a ? Enter b");
         assert!(state.overlay.is_none());
-        assert_eq!(state.body.text(), "a?\nb");
+        assert_eq!(crate::testing::body_text(&state), "a?\nb");
         press(&mut state, "F1");
         assert!(
             matches!(state.overlay, Some(Overlay::Help { .. })),
@@ -547,13 +688,13 @@ mod tests {
     fn vim_modal_editing_in_the_body() {
         // Scenario "Modal editing in the body".
         let (_tmp, mut state) = shell(120, 36, "", true);
-        focus_body(&mut state);
+        crate::testing::open_raw_body(&mut state);
         assert_eq!(state.status.vim, Some(VimMode::Normal));
         press(&mut state, "i");
         assert_eq!(state.status.vim, Some(VimMode::Insert));
         assert!(text(&state).contains("INSERT"));
         press(&mut state, "a b c Esc");
-        assert_eq!(state.body.text(), "abc");
+        assert_eq!(crate::testing::body_text(&state), "abc");
         assert_eq!(state.status.vim, Some(VimMode::Normal));
         let screen = text(&state);
         assert!(
@@ -573,13 +714,17 @@ mod tests {
             matches!(state.overlay, Some(Overlay::Help { .. })),
             "? is not text in normal mode"
         );
-        assert!(text(&state).contains("Vim text editing"));
+        let help = crate::help::lines(&state.keymap, Context::Editor, true, &state.ui);
+        assert!(
+            help.iter()
+                .any(|l| l.to_string().contains("Vim text editing"))
+        );
     }
 
     #[test]
     fn vim_navigation_in_the_sidebar() {
         let (_tmp, mut state) = shell(160, 45, "", true);
-        let items = shell::sidebar_items(&state.screen);
+        let items = workbench::sidebar_rows(&state);
         assert!(!items.is_empty());
         state.shell.focus = Focus::Sidebar;
         press(&mut state, "j");
@@ -596,13 +741,9 @@ mod tests {
         );
         press(&mut state, "l");
         assert_eq!(state.shell.focus, Focus::EditorBody);
+        // With no exchange, the response viewer's keys do nothing.
         state.shell.focus = Focus::Response;
-        let page = page_size(&state, Pane::Response);
-        press(&mut state, "j j Ctrl+D k");
-        let scroll = usize::from(state.shell.scroll[Pane::Response.index()]);
-        assert_eq!(scroll, 2 + page - 1);
-        press(&mut state, "Ctrl+U G g g h");
-        assert_eq!(state.shell.scroll[Pane::Response.index()], 0);
+        press(&mut state, "j j Ctrl+D k Ctrl+U G g g h");
         assert_eq!(state.shell.focus, Focus::EditorBody);
     }
 
@@ -627,7 +768,7 @@ mod tests {
                 height: 12,
             },
         );
-        let count = shell::sidebar_items(&state.screen).len();
+        let count = workbench::sidebar_rows(&state).len();
         assert!(count > 20);
         press(&mut state, "Down Down");
         assert_eq!(state.shell.selected, 2);

@@ -141,6 +141,34 @@ fn registry_accepts_new_kinds() {
     );
 }
 
+#[test]
+fn the_opaque_fallback_loads_unregistered_kinds() {
+    let text = "version: 1\nkind: grpc\nname: Say hello\nservice: Greeter\n";
+    let registry = KindRegistry::default().with_opaque_fallback();
+    let request = registry.load(Path::new("g"), text).unwrap();
+    assert_eq!((request.kind(), request.name()), ("grpc", "Say hello"));
+    let Request::Opaque(opaque) = request else {
+        panic!("expected an opaque request");
+    };
+    assert_eq!(opaque.source, text);
+    assert!(KindRegistry::default().load(Path::new("g"), text).is_err());
+}
+
+#[test]
+fn disabled_rows_load_and_are_written_back_only_when_false() {
+    let text = "version: 1\nkind: http\nname: R\nurl: http://x/\nheaders:\n  - name: X-Debug\n    value: '1'\n    enabled: false\n  - name: Accept\n    value: '*/*'\n";
+    let request = KindRegistry::default().load(Path::new("r"), text).unwrap();
+    let Request::Http(http) = &request else {
+        panic!("expected http");
+    };
+    let headers = http.headers.as_deref().unwrap();
+    assert!(!headers[0].enabled && headers[1].enabled);
+    let yaml = rustman_core::format::write::request_to_yaml(&request);
+    assert_eq!(yaml.matches("enabled").count(), 1, "{yaml}");
+    let again = KindRegistry::default().load(Path::new("r"), &yaml).unwrap();
+    assert_eq!(again, request);
+}
+
 fn assert_error(err: &LoadError, line: usize, column: usize, text: &str) {
     assert_eq!(
         (err.line(), err.column()),

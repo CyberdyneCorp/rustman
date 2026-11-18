@@ -2,24 +2,34 @@
 //!
 //! ```text
 //! cargo run -p rustman-tui --example screenshot -- \
-//!     [--ansi] [--size WxH] [--theme NAME] [--ascii] [--no-color] [--keys KEYS] [PATH]
+//!     [--ansi] [--size WxH] [--theme NAME] [--ascii] [--no-color] \
+//!     [--open REQUEST] [--response BODY.json] [--keys KEYS] [PATH]
 //! ```
 //!
 //! Opens PATH (default: the current directory) the way `rustman tui` does,
 //! runs the start-up effects synchronously, and prints one frame (120x36 by
 //! default) as plain text, or with ANSI colours with `--ansi`. `tui.toml` is
-//! not read, so the output only depends on the flags. `--keys` presses
-//! space-separated chords first (`"Ctrl+P s w"`), e.g. to show the palette.
+//! not read, so the output only depends on the flags. `--open` opens a
+//! request file (relative to the workspace root) in a tab. `--response`
+//! shows the JSON file as that tab's exchange, a `200 OK` with fixed
+//! timings and history, so a frame with a response needs no network.
+//! `--keys` presses space-separated chords last (`"Ctrl+P s w"`), e.g. to
+//! show the palette.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use rustman_core::run::{
+    ExchangeRecord, HeaderRecord, RequestRecord, RequestStatus, ResponseRecord, SentRequest,
+    TimingsRecord,
+};
 use rustman_tui::app::{Action, State, update};
 use rustman_tui::config::{Overrides, TuiConfig, UiOptions};
 use rustman_tui::effects::execute;
 use rustman_tui::keymap::chord::{Chord, Code, parse_chord};
 use rustman_tui::launch::discover;
+use rustman_tui::response::{RawBody, Received, Source};
 use rustman_tui::snapshot::{buffer_ansi, buffer_text, render};
 use rustman_tui::theme::ColorMode;
 
@@ -31,6 +41,8 @@ struct Options {
     height: u16,
     path: PathBuf,
     keys: Vec<Chord>,
+    open: Option<PathBuf>,
+    response: Option<PathBuf>,
 }
 
 fn parse(args: impl Iterator<Item = String>) -> Result<Options, String> {
@@ -42,6 +54,8 @@ fn parse(args: impl Iterator<Item = String>) -> Result<Options, String> {
         height: 36,
         path: PathBuf::from("."),
         keys: Vec::new(),
+        open: None,
+        response: None,
     };
     let mut args = args;
     while let Some(arg) = args.next() {
@@ -56,6 +70,10 @@ fn parse(args: impl Iterator<Item = String>) -> Result<Options, String> {
             "--size" => {
                 let size = args.next().ok_or("--size needs WxH")?;
                 (options.width, options.height) = parse_size(&size)?;
+            }
+            "--open" => options.open = Some(args.next().ok_or("--open needs a request")?.into()),
+            "--response" => {
+                options.response = Some(args.next().ok_or("--response needs a file")?.into());
             }
             "--keys" => {
                 let keys = args.next().ok_or("--keys needs chords")?;
@@ -87,12 +105,70 @@ fn key_event(chord: &Chord) -> Result<KeyEvent, String> {
         Code::Backspace => KeyCode::Backspace,
         Code::Up => KeyCode::Up,
         Code::Down => KeyCode::Down,
+        Code::Left => KeyCode::Left,
+        Code::Right => KeyCode::Right,
         other => return Err(format!("unsupported key {other:?}")),
     };
     let mut modifiers = KeyModifiers::NONE;
     modifiers.set(KeyModifiers::CONTROL, chord.ctrl);
     modifiers.set(KeyModifiers::ALT, chord.alt);
     Ok(KeyEvent::new(code, modifiers))
+}
+
+/// A `200 OK` exchange of `body` (JSON) for `request`, with fixed timings
+/// and a made-up history, so frames are the same on every run.
+fn exchange(request: &Path, body: Vec<u8>) -> Received {
+    let file = request.to_string_lossy().replace('\\', "/");
+    let id = file.trim_end_matches(".rman.yaml").to_owned();
+    let mut record = RequestRecord::new(id.clone(), id, file, 1);
+    record.status = RequestStatus::Passed;
+    let size = body.len() as u64;
+    let header = |name: &str, value: &str| HeaderRecord {
+        name: name.into(),
+        value: value.into(),
+    };
+    record.exchange = Some(ExchangeRecord {
+        request: SentRequest {
+            method: "GET".into(),
+            url: String::new(),
+            headers: Vec::new(),
+            body: None,
+        },
+        response: ResponseRecord {
+            status: 200,
+            http_version: "HTTP/1.1".into(),
+            headers: vec![
+                header("content-type", "application/json"),
+                header("x-request-id", "req-7f3a"),
+            ],
+            body: String::from_utf8(body.clone()).ok(),
+            body_bytes: size,
+            body_truncated: false,
+            binary: false,
+        },
+        timings: TimingsRecord {
+            dns_ms: Some(4.2),
+            connect_ms: Some(11.8),
+            tls_ms: Some(23.5),
+            ttfb_ms: 71.0,
+            download_ms: 13.0,
+            total_ms: 84.0,
+        },
+        redirects: Vec::new(),
+        insecure: false,
+    });
+    let raw = RawBody {
+        source: Source::Memory(body.into()),
+        size,
+        binary: false,
+        content_type: Some("application/json".into()),
+    };
+    let mut received = Received::with_body(record, raw);
+    received.history = [
+        92.0, 88.0, 101.0, 79.0, 84.0, 140.0, 95.0, 83.0, 77.0, 90.0, 86.0, 84.0,
+    ]
+    .to_vec();
+    received
 }
 
 fn main() -> ExitCode {
@@ -117,6 +193,26 @@ fn main() -> ExitCode {
     update(&mut state, Action::Resize { width, height });
     while let Some(effect) = effects.pop() {
         effects.extend(update(&mut state, execute(effect)));
+    }
+    if let Some(request) = &options.open {
+        rustman_tui::workbench::open_path(&mut state, request);
+    }
+    if let Some(file) = &options.response {
+        let body = match std::fs::read(file) {
+            Ok(body) => body,
+            Err(err) => {
+                eprintln!("error: cannot read {}: {err}", file.display());
+                return ExitCode::from(2);
+            }
+        };
+        let request = options.open.clone().unwrap_or_default();
+        match state.tabs.active_mut() {
+            Some(tab) => tab.show(exchange(&request, body)),
+            None => {
+                eprintln!("error: --response needs a tab: pass --open");
+                return ExitCode::from(2);
+            }
+        }
     }
     for chord in &options.keys {
         let key = match key_event(chord) {

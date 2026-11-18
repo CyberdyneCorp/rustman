@@ -3,9 +3,9 @@ source: crates/rustman-tui/src/shell_view.rs
 expression: text
 ---
 ┌ › Sidebar ───────────────┐┌ Request ───────────────────────────────────┐┌ Response ┌ ✖ error ────────────────────────┐
-│ examples/ping.rman.yaml  ││ METHOD   No request open                   ││ No respon│ Permission denied (os error 13) │
-│                          ││ Params  Headers  Body  Auth  Assertions    ││          └─────────────────────────────────┘
-│                          ││ Open a request from the sidebar.        ┌ ⚠ warning ─────────────────────────────────────┐
+│ ▾ examples               ││ METHOD   No request open                   ││ No respon│ Permission denied (os error 13) │
+│   GET    ping            ││ Params  Headers  Body  Auth  Assertions    ││          └─────────────────────────────────┘
+│                          ││ Open a request from the sidebar, or Ctrl┌ ⚠ warning ─────────────────────────────────────┐
 │                          ││                                         │ Unknown action `request.sned` in               │
 │                          ││                                         │ keybindings.toml                               │
 │                          ││                                         └────────────────────────────────────────────────┘

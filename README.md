@@ -137,14 +137,18 @@ rustman            # open the TUI in the current workspace
 ```
 
 <p align="center">
-  <img src="docs/images/tui-shell.svg" alt="Rustman TUI: collection sidebar, request and response panes, status bar" width="49%">
-  <img src="docs/images/tui-palette.svg" alt="Rustman TUI command palette fuzzy-matching 'swenv' to Switch environment" width="49%">
+  <img src="docs/images/tui-shell.svg" alt="Rustman TUI: collection sidebar, an open request and its JSON response as a collapsible tree" width="49%">
+  <img src="docs/images/tui-timing.svg" alt="Rustman TUI Timing tab: phase waterfall and latency sparkline from history" width="49%">
 </p>
 <p align="center">
+  <img src="docs/images/tui-palette.svg" alt="Rustman TUI command palette fuzzy-matching 'swenv' to Switch environment" width="49%">
   <img src="docs/images/tui-help.svg" alt="Rustman TUI help overlay generated from the effective keymap" width="49%">
 </p>
+<p align="center">
+  <img src="docs/images/tui-environments.svg" alt="Rustman TUI environment switcher listing each variable's layer and value, with the secret masked" width="49%">
+</p>
 
-<sub>The TUI shell as of v0.2 development (layout, themes, keymap, command palette, help). Request editing and the response viewer are in progress. The images are rendered by `cargo run -p rustman-tui --example screenshot -- --ansi [--keys "Ctrl+P s w e n v"] <workspace>`.</sub>
+<sub>The TUI as of v0.2 development: an open request with its response as a JSON tree, the timing waterfall and latency sparkline, the command palette, help, and the environment switcher with secrets masked. The frames are drawn by the TUI's own renderer, but the response shown is sample data: `--response` loads a JSON file as a `200 OK` with fixed timings and a made-up latency history, so no request was sent. The images are rendered by `cargo run -p rustman-tui --example screenshot -- --ansi [--open REQUEST --response BODY.json] [--keys "Ctrl+P s w e n v"] <workspace>` and converted to SVG.</sub>
 
 | Key | Action |
 |---|---|

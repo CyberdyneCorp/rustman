@@ -1,0 +1,26 @@
+# The decoder fuzz target (add-raven-visualizer task 1.3). Not part of the
+# workspace: it needs nightly and cargo-fuzz. Run from the crate folder:
+#   cargo +nightly fuzz run decode -- -max_total_time=60
+[package]
+name = "rustman-viz-protocol-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+rustman-viz-protocol = { path = ".." }
+
+[[bin]]
+name = "decode"
+path = "fuzz_targets/decode.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]

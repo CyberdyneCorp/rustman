@@ -58,6 +58,15 @@ jobs:
           sudo apt-get install -y zsh fish
           echo "RUSTMAN_REQUIRE_SHELLS=1" >> "$GITHUB_ENV"
       - run: cargo test --workspace --locked
+      # add-terminal-ui task 9.1 (also part of the run above; repeated here
+      # so the job shows the TUI smoke result per OS). The real TUI runs in
+      # a pty (ConPTY on Windows); the same flow also runs through the real
+      # event loop with an in-memory terminal (see docs/tui.md, "Platform
+      # checks").
+      - name: TUI smoke test (pty)
+        run: cargo test -p rustman-tui --locked --test pty_smoke
+      - name: TUI smoke test (event loop)
+        run: cargo test -p rustman-tui --locked --lib smoke_tests
       # Task 3.4: the real OS keychain round trip. Windows runners have the
       # Credential Manager; macOS is run manually (the runner keychain is
       # locked) and Linux has no Secret Service on the runner.
@@ -97,6 +106,17 @@ jobs:
                 cargo test -p rustman-cli --test e2e --locked --offline
               "
             '
+
+  # add-raven-visualizer task 1.3: the viz protocol decoder never panics.
+  fuzz-viz-protocol:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup toolchain install nightly --profile minimal
+      - run: cargo +nightly install cargo-fuzz --locked
+      - name: Fuzz the decoder for 60 s
+        working-directory: crates/rustman-viz-protocol
+        run: cargo +nightly fuzz run decode -- -max_total_time=60
 
   deny:
     runs-on: ubuntu-latest

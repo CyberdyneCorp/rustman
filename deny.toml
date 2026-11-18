@@ -12,6 +12,11 @@ ignore = [
     # timestamps that Rustman never sets. Not a vulnerability; revisit when
     # quick-junit moves off chrono.
     { id = "RUSTSEC-2026-0543", reason = "unmaintained chrono via quick-junit; no timestamps are parsed or formatted" },
+    # bincode 1.3.3 is unmaintained but declared complete by its authors. It
+    # comes only through syntect (the TUI's body highlighting), which uses it
+    # to load its own bundled syntax definitions; no untrusted input is
+    # decoded with it. Not a vulnerability.
+    { id = "RUSTSEC-2025-0141", reason = "unmaintained bincode via syntect; decodes only syntect's bundled syntax dump" },
 ]
 
 [licenses]
@@ -36,6 +41,9 @@ unused-allowed-license = "allow"
 # the command palette's fuzzy matcher, not workspace-wide.
 exceptions = [
     { allow = ["MPL-2.0"], crate = "nucleo-matcher" },
+    # CC0-1.0 is a public-domain dedication, compatible with MIT OR
+    # Apache-2.0. Allowed only for the TUI's file watcher.
+    { allow = ["CC0-1.0"], crate = "notify" },
 ]
 
 [licenses.private]
