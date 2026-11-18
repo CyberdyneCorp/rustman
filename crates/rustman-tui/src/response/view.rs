@@ -19,16 +19,20 @@ use super::timing::{ms_text, sparkline, waterfall};
 use super::{BodyKind, BoxKind, Received, ResponseTab, Viewer};
 use crate::config::UiOptions;
 use crate::focus::Pane;
+use crate::keymap::Keymap;
+use crate::keymap::actions::ActionId;
 use crate::layout::label_rects;
 use crate::tabs::{InFlight, Tab};
 use crate::theme::Token;
-use crate::view::{block, hint};
+use crate::view::{block, empty_hint, hint, press};
 
 /// What the response pane draws from.
 pub struct Ctx<'a> {
     pub ui: &'a UiOptions,
     pub focused: bool,
     pub now: Instant,
+    /// The effective keymap, for the keys hints name.
+    pub keymap: &'a Keymap,
 }
 
 /// The response pane for `tab` (none open: a hint).
@@ -92,7 +96,10 @@ pub fn summary_line(tab: &Tab, ctx: &Ctx) -> Line<'static> {
         return sending_line(flight, ctx);
     }
     match tab.exchange.as_deref() {
-        None => hint("No response yet. Ctrl+Enter sends the request.", ui),
+        None => {
+            let send = press(ctx.keymap, ActionId::RequestSend, "send");
+            hint(&empty_hint("No response yet", send, ui), ui)
+        }
         Some(received) => outcome_line(received, ui),
     }
 }
@@ -385,7 +392,8 @@ fn body(received: &Received, viewer: &Viewer, height: usize, ctx: &Ctx) -> Vec<L
     match &received.body {
         BodyKind::Empty => vec![hint("Empty body.", ui)],
         BodyKind::Json { pretty, .. } if viewer.raw => {
-            let mut lines = vec![hint("Raw · r shows the tree", ui)];
+            let tree = press(ctx.keymap, ActionId::ResponseRaw, "show the tree");
+            let mut lines = vec![hint(&empty_hint("Raw", tree, ui), ui)];
             lines.extend(text_window(
                 pretty,
                 viewer.scroll,

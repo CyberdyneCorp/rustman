@@ -18,7 +18,7 @@ use rustman_core::model::Request;
 use crate::config::UiOptions;
 use crate::focus::Focus;
 use crate::http_pane::HttpPane;
-use crate::keymap::Chord;
+use crate::keymap::{Chord, Keymap};
 use crate::theme::Token;
 use crate::vars_view::VarScope;
 use crate::vim::Vim;
@@ -30,6 +30,8 @@ pub struct RenderCtx<'a> {
     /// it has it).
     pub focus: Focus,
     pub vars: &'a VarScope<'a>,
+    /// The effective keymap, for the keys hints name.
+    pub keymap: &'a Keymap,
 }
 
 /// The editing state of one open request.

@@ -18,7 +18,7 @@ use crate::response;
 use crate::status;
 use crate::theme::Token;
 use crate::toast::{Severity, toast_rects};
-use crate::view::{block, dialog, hint};
+use crate::view::{block, dialog, hint, quit_key};
 use crate::workbench_view;
 
 /// The notice shown below the recommended terminal size.
@@ -35,6 +35,7 @@ pub fn shell(frame: &mut Frame, state: &State, session: &Session) {
             ui: &state.ui,
             focused: state.shell.focus.pane() == Pane::Response,
             now: state.now,
+            keymap: &state.keymap,
         };
         response::view::render(frame, rect, state.tabs.active(), &ctx);
     }
@@ -62,6 +63,7 @@ pub fn shell(frame: &mut Frame, state: &State, session: &Session) {
         regions.status,
         &session.title(),
         &state.status,
+        &quit_key(&state.keymap),
         &state.ui,
     );
 }

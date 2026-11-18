@@ -11,6 +11,7 @@ use rustman_core::model::Request;
 
 use crate::app::{Session, State};
 use crate::focus::{Focus, Pane};
+use crate::keymap::actions::ActionId;
 use crate::layout::{editor_targets, label_rects, tab_strip};
 use crate::pane::RenderCtx;
 use crate::shell::request_tab_labels;
@@ -18,7 +19,7 @@ use crate::tabs::Tab;
 use crate::theme::Token;
 use crate::tree::{RowKind, TreeRow, method_token};
 use crate::vars_view::{VarScope, highlight};
-use crate::view::{block, hint};
+use crate::view::{block, empty_hint, hint};
 use crate::workbench::{sidebar_rows, workspace};
 
 /// Columns of a request badge (`DELETE` plus a space).
@@ -44,10 +45,20 @@ pub fn sidebar_lines(state: &State, session: &Session) -> Vec<Line<'static>> {
     }
     if rows.is_empty() && state.shell.tree.filter.is_none() {
         let text = match session {
-            Session::Scratch => "Scratch session.\nNothing is saved.",
-            Session::Workspace(_) => "No requests yet.\nn new request",
+            Session::Scratch => vec![
+                "Scratch session.".to_owned(),
+                "Nothing is saved.".to_owned(),
+            ],
+            Session::Workspace(_) => {
+                let new = state.keymap.key(ActionId::SidebarNew);
+                let next = new.map(|key| format!("Press {key} to add one."));
+                ["No requests yet.".to_owned()]
+                    .into_iter()
+                    .chain(next)
+                    .collect()
+            }
         };
-        lines.extend(text.lines().map(|line| hint(line, ui)));
+        lines.extend(text.iter().map(|line| hint(line, ui)));
         return lines;
     }
     let skip = usize::from(state.shell.scroll[Pane::Sidebar.index()]);
@@ -164,14 +175,23 @@ fn tab_strip_line(frame: &mut Frame, rect: Rect, state: &State, focused: bool) {
     }
 }
 
+/// What to do with no request open: `Open a request from the sidebar ·
+/// press Ctrl+T for a new one`.
+fn open_hint(state: &State) -> String {
+    let new = state.keymap.key(ActionId::TabNew);
+    let new = new.map(|key| format!("press {key} for a new one"));
+    empty_hint("Open a request from the sidebar", new, &state.ui)
+}
+
 fn placeholders(frame: &mut Frame, rect: Rect, state: &State) {
     let ui = &state.ui;
+    let open = open_hint(state);
     for (focus, target) in editor_targets(rect) {
         let text = match focus {
             Focus::Method => "METHOD",
             Focus::Url => "No request open",
             Focus::EditorTabs => "Params  Headers  Body  Auth  Assertions",
-            _ => "Open a request from the sidebar, or Ctrl+T for a new one.",
+            _ => &open,
         };
         let style = if state.shell.focus == focus {
             ui.theme.selection()
@@ -227,6 +247,7 @@ fn open_tab(frame: &mut Frame, rect: Rect, state: &State, tab: &Tab) {
         ui: &state.ui,
         focus,
         vars: &scope,
+        keymap: &state.keymap,
     };
     tab.editor.render(frame, content, &ctx);
 }

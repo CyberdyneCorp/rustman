@@ -11,6 +11,10 @@ use crate::keymap::chord::{Chord, Code};
 use crate::textarea::TextArea;
 use crate::vim;
 
+/// The key that adds a row. Tables handle their keys before the keymap,
+/// so it is fixed; hints name it from here.
+pub const ADD_KEY: char = 'a';
+
 /// One row of a table.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Row {
@@ -128,7 +132,7 @@ impl KvTable {
             Code::Down | Code::Char('j') => self.select(self.selected + 1),
             Code::Enter | Code::Char('e') => self.start(Cell::Name, false),
             Code::Char(' ') if !self.fixed => self.toggle(),
-            Code::Char('a') | Code::Insert if !self.fixed => self.add(),
+            Code::Char(ADD_KEY) | Code::Insert if !self.fixed => self.add(),
             Code::Char('x') | Code::Delete if !self.fixed => self.remove(),
             _ => Outcome::Ignored,
         }

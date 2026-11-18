@@ -374,6 +374,15 @@ impl Keymap {
         labels.join(", ")
     }
 
+    /// The first key sequence bound to `action`, displayed (`Ctrl+Enter`),
+    /// for hints that name one key; `None` when it has none.
+    pub fn key(&self, action: ActionId) -> Option<String> {
+        Context::ALL
+            .iter()
+            .find_map(|&context| self.keys_for(context, action).into_iter().next())
+            .map(|keys| chord::display(&keys))
+    }
+
     /// The actions bound in `context` with their keys, in registry order.
     pub fn bindings_in(&self, context: Context) -> Vec<(ActionId, Vec<Keys>)> {
         ActionId::all()
@@ -490,6 +499,15 @@ mod tests {
             "F5, Ctrl+Enter, Ctrl+R"
         );
         assert_eq!(keymap.label(ActionId::PaletteOpen), "");
+        // Hints name the first key only: the user's.
+        assert_eq!(keymap.key(ActionId::RequestSend).as_deref(), Some("F5"));
+        assert_eq!(keymap.key(ActionId::PaletteOpen), None);
+        let default = Keymap::default();
+        assert_eq!(
+            default.key(ActionId::RequestSend).as_deref(),
+            Some("Ctrl+Enter")
+        );
+        assert_eq!(default.key(ActionId::SidebarNew).as_deref(), Some("n"));
     }
 
     fn checked(vim: bool, text: &str) -> (Keymap, Vec<String>) {

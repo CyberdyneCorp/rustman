@@ -5,7 +5,7 @@ expression: text
 ┌ › Sidebar ───────────────┐┌ Request ───────────────────────────────────┐┌ Response ┌ ✖ error ────────────────────────┐
 │ ▾ examples               ││ METHOD   No request open                   ││ No respon│ Permission denied (os error 13) │
 │   GET    ping            ││ Params  Headers  Body  Auth  Assertions    ││          └─────────────────────────────────┘
-│                          ││ Open a request from the sidebar, or Ctrl┌ ⚠ warning ─────────────────────────────────────┐
+│                          ││ Open a request from the sidebar · press ┌ ⚠ warning ─────────────────────────────────────┐
 │                          ││                                         │ Unknown action `request.sned` in               │
 │                          ││                                         │ keybindings.toml                               │
 │                          ││                                         └────────────────────────────────────────────────┘

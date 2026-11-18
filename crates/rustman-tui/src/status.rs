@@ -39,9 +39,17 @@ pub struct StatusInfo {
     pub secrets_visible: bool,
 }
 
-/// Draw the status bar for `workspace` into the one-row `area`.
-pub fn render(frame: &mut Frame, area: Rect, workspace: &str, info: &StatusInfo, ui: &UiOptions) {
-    let right = right_spans(info, ui);
+/// Draw the status bar for `workspace` into the one-row `area`; `quit` is
+/// the key that quits.
+pub fn render(
+    frame: &mut Frame,
+    area: Rect,
+    workspace: &str,
+    info: &StatusInfo,
+    quit: &str,
+    ui: &UiOptions,
+) {
+    let right = right_spans(info, quit, ui);
     let right_width = u16::try_from(Line::from(right.clone()).width()).unwrap_or(u16::MAX);
     let [left_area, right_area] =
         Layout::horizontal([Constraint::Min(0), Constraint::Length(right_width)]).areas(area);
@@ -84,7 +92,7 @@ fn left_spans(workspace: &str, info: &StatusInfo, ui: &UiOptions) -> Vec<Span<'s
     ]
 }
 
-fn right_spans(info: &StatusInfo, ui: &UiOptions) -> Vec<Span<'static>> {
+fn right_spans(info: &StatusInfo, quit: &str, ui: &UiOptions) -> Vec<Span<'static>> {
     let theme = &ui.theme;
     let mut spans = Vec::new();
     if let Some(mode) = info.vim {
@@ -98,7 +106,10 @@ fn right_spans(info: &StatusInfo, ui: &UiOptions) -> Vec<Span<'static>> {
         spans.push(Span::styled(" SECRETS VISIBLE ", theme.badge(Token::Warn)));
         spans.push(Span::raw(" "));
     }
-    spans.push(Span::styled("Ctrl+Q quit ", theme.fg(Token::Muted)));
+    spans.push(Span::styled(
+        format!("{quit} quit "),
+        theme.fg(Token::Muted),
+    ));
     spans
 }
 
@@ -115,7 +126,7 @@ mod tests {
     fn draw(info: &StatusInfo, ui: &UiOptions) -> Buffer {
         let mut terminal = Terminal::new(TestBackend::new(100, 1)).unwrap();
         terminal
-            .draw(|frame| render(frame, frame.area(), "demo", info, ui))
+            .draw(|frame| render(frame, frame.area(), "demo", info, "Ctrl+Q", ui))
             .unwrap();
         terminal.backend().buffer().clone()
     }

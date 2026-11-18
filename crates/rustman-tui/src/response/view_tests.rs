@@ -15,6 +15,7 @@ use crate::app::{Action, Effect, Overlay, Screen, Session, State, update};
 use crate::config::{Overrides, TuiConfig, UiOptions};
 use crate::focus::Focus;
 use crate::keymap::chord::{Code, parse_chord};
+use crate::keymap::{Keymap, UserLayer};
 use crate::snapshot::{buffer_text, render, style_of};
 use crate::theme::{ColorMode, Token};
 
@@ -370,7 +371,7 @@ fn json_keys_fold_filter_search_and_copy() {
         3
     );
     press(&mut state, "z R r");
-    assert!(pane(&state).contains("Raw · r shows the tree"));
+    assert!(pane(&state).contains("Raw · press r to show the tree"));
 }
 
 #[test]
@@ -610,4 +611,23 @@ fn the_sparkline_stats_fit_the_narrow_response_pane() {
     assert!(low.contains("median "), "{screen}");
     assert!(high.ends_with("6 points"), "{screen}");
     assert!(high.contains(" max "), "{screen}");
+}
+
+#[test]
+fn hints_name_the_keys_of_the_effective_keymap() {
+    let mut state = state(ColorMode::TrueColor, 160, 30);
+    assert_eq!(
+        summary(&state),
+        "No response yet · press Ctrl+Enter to send"
+    );
+    let rebind = |text: &str| {
+        let (user, warnings) = UserLayer::parse(text);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        Keymap::new(false, &user)
+    };
+    state.keymap = rebind("[global]\n\"F5\" = \"request.send\"\n\"F10\" = \"app.quit\"");
+    assert_eq!(summary(&state), "No response yet · press F5 to send");
+    assert!(text(&state).contains("F10 quit"), "{}", text(&state));
+    state.keymap = rebind("[global]\n\"Ctrl+Enter\" = \"none\"\n\"Ctrl+R\" = \"none\"");
+    assert_eq!(summary(&state), "No response yet", "no key: no advice");
 }

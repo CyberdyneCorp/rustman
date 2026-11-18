@@ -3,9 +3,9 @@ source: crates/rustman-tui/src/workbench_tests.rs
 expression: buffer_text(&buffer)
 ---
 ┌ Sidebar ─────────────────┐┌ get-user ──────────────────────────────────────────────────────┐┌ Response ──────────────────────────────────────────────────────┐
-│ ▾ grpc                   ││ GET      {{base_url}}/users/{{id}}                             ││ No response yet. Ctrl+Enter sends the request.                 │
+│ ▾ grpc                   ││ GET      {{base_url}}/users/{{id}}                             ││ No response yet · press Ctrl+Enter to send                     │
 │   GRPC   hello           ││ Params  Headers  Body  Auth  Assertions                        ││                                                                │
-│ ▾ users                  ││ No rows. a add                                                 ││                                                                │
+│ ▾ users                  ││ No rows · press a to add                                       ││                                                                │
 │   POST   create-user     ││                                                                ││                                                                │
 │   GET    get-user        ││                                                                ││                                                                │
 │                          ││                                                                ││                                                                │

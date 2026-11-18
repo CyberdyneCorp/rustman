@@ -5,7 +5,7 @@ expression: text
 ┌ › Sidebar ───────────────┐───────────────────────────────────────────────────┐
 │ ▾ examples               │                                                   │
 │   GET    ping            │h  Assertions                                      │
-│                          │debar, or Ctrl+T for a new one.                    │
+│                          │debar · press Ctrl+T for a new one                 │
 │                          │                                                   │
 │                          │                                                   │
 │                          │                                                   │
