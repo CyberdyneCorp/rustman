@@ -33,12 +33,17 @@ The source argument SHALL accept a local path or an `http(s)` URL. URL fetches S
 - **THEN** the command SHALL exit with code 2 with a message naming the 20 MiB limit
 
 ### Requirement: Reference resolution
-Local `$ref`s (`#/...` and relative file paths beside a local source) SHALL be resolved. Remote `$ref`s (`http(s)://`) SHALL be refused unless `--allow-remote-refs` is given. Circular references SHALL be preserved as references, not expanded infinitely.
+Local `$ref`s (`#/...` and relative file paths beside a local source) SHALL be resolved. A file reference SHALL stay in the root document's directory or below; any other file reference SHALL be refused. Remote `$ref`s (`http(s)://`) SHALL be refused unless `--allow-remote-refs` is given. Circular references SHALL be preserved as references, not expanded infinitely.
 
 #### Scenario: Remote ref refused by default
 - **GIVEN** a document containing `$ref: https://schemas.example.com/user.json`
 - **WHEN** it is imported without `--allow-remote-refs`
 - **THEN** the command SHALL exit with code 2 naming the unresolved remote reference
+
+#### Scenario: File ref outside the document directory refused
+- **GIVEN** a local document containing `$ref: ../shared.yaml#/Pet` or an absolute file path
+- **WHEN** it is imported
+- **THEN** the command SHALL exit with code 2 saying the reference leaves the document's directory, and the file SHALL NOT be read
 
 #### Scenario: Circular schema
 - **GIVEN** a `Node` schema whose `children` items reference `Node`

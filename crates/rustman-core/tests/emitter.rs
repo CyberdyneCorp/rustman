@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use rustman_core::collection::CollectionMeta;
 use rustman_core::format::from_yaml;
-use rustman_core::format::write::{collection_to_yaml, request_to_yaml};
+use rustman_core::format::write::{collection_to_yaml, environment_to_yaml, request_to_yaml};
 use rustman_core::model::KindRegistry;
 
 fn fixtures() -> Vec<PathBuf> {
@@ -104,4 +104,49 @@ variables:
 ";
     let meta: CollectionMeta = from_yaml(Path::new("_collection.yaml"), text).unwrap();
     assert_eq!(collection_to_yaml(&meta), text);
+}
+
+#[test]
+fn collection_source_and_parallel_round_trip() {
+    let text = "\
+name: Shop
+parallel: true
+source:
+  format: openapi
+  location: specs/shop.yaml
+  sha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'
+";
+    let meta: CollectionMeta = from_yaml(Path::new("_collection.yaml"), text).unwrap();
+    assert_eq!(meta.source.as_ref().unwrap().format, "openapi");
+    assert_eq!(collection_to_yaml(&meta), text);
+}
+
+#[test]
+fn collection_data_file_and_secret_columns_round_trip() {
+    let text = "\
+name: Signup
+data: data/users.csv
+secret_columns:
+  - password
+";
+    let meta: CollectionMeta = from_yaml(Path::new("_collection.yaml"), text).unwrap();
+    assert_eq!(meta.data.as_deref(), Some("data/users.csv"));
+    assert_eq!(collection_to_yaml(&meta), text);
+}
+
+#[test]
+fn environments_round_trip() {
+    let text = "\
+variables:
+  baseUrl: https://api.example.com/v1
+  version: v1
+secrets:
+  - bearerAuth_token
+production: true
+";
+    let file = Path::new("environments/production.yaml");
+    let env = rustman_core::environment::parse(file, "production", text).unwrap();
+    assert_eq!(environment_to_yaml(&env), text);
+    let empty = rustman_core::environment::parse(file, "e", "").unwrap();
+    assert_eq!(environment_to_yaml(&empty), "{}\n");
 }

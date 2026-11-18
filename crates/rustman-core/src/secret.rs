@@ -54,9 +54,35 @@ pub fn placeholder(name: &str) -> String {
     format!("«redacted:{name}»")
 }
 
+/// Every `«redacted:...»` placeholder in `text`, concatenated: what a
+/// redacted credential is shown as, without the parts that were not
+/// recognized as secrets.
+pub fn placeholders(text: &str) -> String {
+    const START: &str = "«redacted:";
+    let mut found = String::new();
+    let mut rest = text;
+    while let Some(start) = rest.find(START) {
+        let tail = &rest[start..];
+        let end = tail.find('»').map_or(tail.len(), |e| e + '»'.len_utf8());
+        found.push_str(&tail[..end]);
+        rest = &tail[end..];
+    }
+    found
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn placeholders_are_collected_in_order() {
+        assert_eq!(
+            placeholders("Bearer «redacted:a»x«redacted:b»"),
+            "«redacted:a»«redacted:b»"
+        );
+        assert_eq!(placeholders("plain"), "");
+        assert_eq!(placeholders("«redacted:open"), "«redacted:open");
+    }
 
     #[test]
     fn debug_never_shows_the_value() {

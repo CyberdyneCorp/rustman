@@ -1,0 +1,27 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Explore an API from its OpenAPI document under the safety policy
+
+Usage: rustman explore [OPTIONS] <COMMAND>
+
+Commands:
+  plan    Discover and plan probes without sending any request (a dry run)
+  run     Discover, plan, send the probes and report the findings
+  resume  Continue an interrupted exploration with the probes not yet run
+  status  Show the phase, progress and findings of an exploration
+  export  Write findings as regression request files for `rustman run`
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

@@ -31,7 +31,7 @@ A `run` report SHALL list every executed request file with its path, exchange su
 - **THEN** that assertion SHALL appear with expected `200`, actual `404` and result `fail`
 
 ### Requirement: Exploration report content
-An `exploration` report SHALL contain the seed, safety settings, probe totals by outcome (`passed`, `finding`, `blocked`, `skipped`, `not run`), the coverage matrix, the findings with evidence and reproduction, and the list of resources left behind.
+An `exploration` report SHALL contain the seed, safety settings, probe totals by outcome (`passed`, `finding`, `blocked`, `skipped`, `not run`, and `failed` for a probe whose request could not be sent or whose chain stopped early), the coverage matrix, the findings with evidence and reproduction, and the list of resources left behind.
 
 #### Scenario: Blocked probes counted
 - **GIVEN** a read-only exploration in which 40 probes were blocked

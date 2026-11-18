@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{{ title }}</title>
+<style>{{ css | safe }}</style>
+</head>
+<body>
+<h1>{{ title }}</h1>
+{% if kind == "exploration" -%}
+<dl class="meta">
+<dt>Target</dt><dd><code>{{ r.target }}</code></dd>
+<dt>Document</dt><dd><code>{{ r.spec }}</code></dd>
+<dt>Environment</dt><dd>{{ r.environment or "none" }}</dd>
+<dt>Seed</dt><dd>{{ r.seed }}</dd>
+<dt>Started</dt><dd>{{ r.started_at }}</dd>
+<dt>Finished</dt><dd>{{ r.finished_at }}</dd>
+<dt>Duration</dt><dd>{{ duration }}</dd>
+<dt>Safety</dt><dd>{{ safety }}</dd>
+</dl>
+
+<h2>Summary</h2>
+<p>{{ failing }} finding{{ "" if failing == 1 else "s" }} at or above <strong>{{ fail_on }}</strong>. Findings by severity: {{ counts }}.</p>
+<table>
+<thead><tr><th class="n">Probes</th><th class="n">Passed</th><th class="n">Finding</th><th class="n">Blocked</th><th class="n">Skipped</th><th class="n">Not run</th><th class="n">Failed</th></tr></thead>
+<tbody><tr><td class="n">{{ p.total }}</td><td class="n">{{ p.passed }}</td><td class="n">{{ p.finding }}</td><td class="n">{{ p.blocked }}</td><td class="n">{{ p.skipped }}</td><td class="n">{{ p.not_run }}</td><td class="n">{{ p.failed }}</td></tr></tbody>
+</table>
+
+<h2>Findings</h2>
+{% if findings -%}
+<div class="filters" id="filters" hidden>
+<label>Severity<select id="filter-severity"><option value="">all</option>{% for s in severities %}<option value="{{ s }}">{{ s }}</option>{% endfor %}</select></label>
+<label>Operation<select id="filter-operation"><option value="">all</option>{% for o in finding_operations %}<option value="{{ o }}">{{ o }}</option>{% endfor %}</select></label>
+</div>
+{% for f in findings -%}
+<details class="finding" data-severity="{{ f.severity }}" data-operation="{{ f.operation }}">
+<summary><span class="sev sev-{{ f.severity }}">{{ f.severity }}</span> <span>{{ f.id }}</span> <strong>{{ f.rule }}</strong> <span class="op">{{ f.operation }}</span> <span class="muted">{{ f.occurrences }}&times;</span></summary>
+<div>
+<p>{{ f.message }}</p>
+<p class="muted">{{ f.description }}{% if f.remediation %} Remediation: {{ f.remediation }}{% endif %}</p>
+{% if f.instance_pointer %}<p class="muted">Instance <code>{{ f.instance_pointer }}</code>, schema <code>{{ f.schema_pointer }}</code></p>{% endif %}
+<p>Request</p>
+<pre>{{ f.request_text }}</pre>
+<p>Response{% if f.evidence.truncated %} (body truncated){% endif %}</p>
+<pre>{{ f.response_text }}</pre>
+{% if f.reproduction %}<p>Reproduce</p>
+<pre>{{ f.reproduction.curl }}</pre>{% endif %}
+</div>
+</details>
+{% endfor %}
+{%- else -%}
+<p>No findings.</p>
+{%- endif %}
+
+<h2>Coverage</h2>
+<p>Operations exercised: {{ c.operations.covered }}/{{ c.operations.total }} ({{ c.operations.percent }}%). Documented statuses observed: {{ c.statuses.covered }}/{{ c.statuses.total }} ({{ c.statuses.percent }}%).</p>
+<table>
+<thead><tr><th>Operation</th><th>Statuses</th></tr></thead>
+<tbody>
+{% for row in c.matrix -%}
+<tr><td><code>{{ row.operation }}</code></td><td>{% for s in row.statuses %}<span class="state-{{ s.state }}">{{ s.status }} {{ s.state }}</span>{% if not loop.last %}, {% endif %}{% endfor %}</td></tr>
+{% endfor -%}
+</tbody>
+</table>
+{% if r.left_behind -%}
+<h2>Left behind</h2>
+<ul>
+{% for res in r.left_behind -%}
+<li><code>{{ res.url }}</code> <span class="muted">created by {{ res.operation }}{% if res.delete %}; delete with {{ res.delete }}{% endif %}</span></li>
+{% endfor -%}
+</ul>
+{%- endif %}
+<script>{{ js | safe }}</script>
+{%- else -%}
+<dl class="meta">
+<dt>Started</dt><dd>{{ r.started_at }}</dd>
+<dt>Environment</dt><dd>{{ r.environment or "none" }}</dd>
+<dt>Duration</dt><dd>{{ duration }}</dd>
+{% if r.summary.interrupted %}<dt>Interrupted</dt><dd>yes: the results are partial</dd>{% endif %}
+</dl>
+
+<h2>Summary</h2>
+<table>
+<thead><tr><th class="n">Total</th><th class="n">Passed</th><th class="n">Failed</th><th class="n">Errored</th><th class="n">Skipped</th></tr></thead>
+<tbody><tr><td class="n">{{ r.summary.total }}</td><td class="n">{{ r.summary.passed }}</td><td class="n">{{ r.summary.failed }}</td><td class="n">{{ r.summary.errored }}</td><td class="n">{{ r.summary.skipped }}</td></tr></tbody>
+</table>
+
+<h2>Requests</h2>
+{% for q in requests -%}
+<details class="finding">
+<summary><span class="sev status-{{ q.status }}">{{ q.status }}</span> <strong>{{ q.name }}</strong> <span class="op">{{ q.exchange }}</span> <span class="muted">{{ q.duration }}</span></summary>
+<div>
+<p class="muted"><code>{{ q.file }}</code></p>
+{% if q.reasons %}<ul>{% for reason in q.reasons %}<li>{{ reason }}</li>{% endfor %}</ul>{% endif %}
+</div>
+</details>
+{% endfor -%}
+{%- endif %}
+</body>
+</html>

@@ -1,0 +1,99 @@
+---
+source: crates/rustman-explore/tests/generate.rs
+expression: tree(&generated)
+---
+=== _collection.yaml
+name: Swagger Petstore
+description: A sample API that uses a petstore as an example.
+order:
+  - pets
+  - store
+auth:
+  type: bearer
+  token: '{{bearerAuth_token}}'
+=== pets/_collection.yaml
+name: pets
+description: Everything about your pets
+order:
+  - list-pets
+  - create-pet
+  - show-pet-by-id
+  - delete-pet
+=== pets/list-pets.rman.yaml
+version: 1
+kind: http
+name: listPets
+description: List all pets
+tags:
+  - openapi:operationId=listPets
+  - openapi:path=/pets
+method: GET
+url: '{{baseUrl}}/pets'
+query:
+  - name: limit
+    value: '{{limit}}'
+    enabled: false
+headers:
+  - name: X-Request-Id
+    value: '{{X-Request-Id}}'
+    enabled: false
+=== pets/create-pet.rman.yaml
+version: 1
+kind: http
+name: createPet
+description: Create a pet
+tags:
+  - openapi:operationId=createPet
+  - openapi:path=/pets
+method: POST
+url: '{{baseUrl}}/pets'
+body:
+  type: json
+  content:
+    name: Rex
+    age: 3
+=== pets/show-pet-by-id.rman.yaml
+version: 1
+kind: http
+name: showPetById
+description: Info for a specific pet
+tags:
+  - openapi:operationId=showPetById
+  - openapi:path=/pets/{petId}
+method: GET
+url: '{{baseUrl}}/pets/{{petId}}'
+=== pets/delete-pet.rman.yaml
+version: 1
+kind: http
+name: deletePet
+tags:
+  - openapi:operationId=deletePet
+  - openapi:path=/pets/{petId}
+method: DELETE
+url: '{{baseUrl}}/pets/{{petId}}'
+auth:
+  type: none
+=== store/_collection.yaml
+name: store
+order:
+  - get-inventory
+=== store/get-inventory.rman.yaml
+version: 1
+kind: http
+name: getInventory
+tags:
+  - openapi:operationId=getInventory
+  - openapi:path=/store/inventory
+method: GET
+url: '{{baseUrl}}/store/inventory'
+auth:
+  type: api_key
+  name: X-API-Key
+  value: '{{apiKey_key}}'
+  in: header
+=== environments/production.yaml
+variables:
+  baseUrl: https://petstore.example.com/v1
+secrets:
+  - bearerAuth_token
+  - apiKey_key

@@ -16,6 +16,8 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 quick-junit.workspace = true
+schemars.workspace = true
+minijinja.workspace = true
 anstyle.workspace = true
 
 [dev-dependencies]

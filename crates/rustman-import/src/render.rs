@@ -88,6 +88,7 @@ pub fn collection_file(
         parallel: None,
         data: None,
         secret_columns: None,
+        source: None,
     };
     let comments = comment_block(&folder.scripts, target.redactor);
     Ok(format!("{comments}{}", collection_to_yaml(&meta)))

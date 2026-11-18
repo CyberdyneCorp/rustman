@@ -2,144 +2,1222 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/CyberdyneCorp/rustman/docs/schemas/report.schema.json",
   "title": "rustman.report/v1",
-  "description": "A Rustman run report (kind: run). Every text field is redacted: secret values appear as «redacted:<name>».",
-  "type": "object",
-  "required": ["schema", "kind", "rustman_version", "started_at", "environment", "summary", "requests"],
-  "properties": {
-    "schema": { "const": "rustman.report/v1" },
-    "kind": { "const": "run" },
-    "rustman_version": { "type": "string" },
-    "started_at": { "type": "string", "format": "date-time" },
-    "environment": { "type": ["string", "null"] },
-    "summary": { "$ref": "#/$defs/summary" },
-    "requests": { "type": "array", "items": { "$ref": "#/$defs/request" } }
-  },
+  "description": "A Rustman report: a run (kind: run) or an exploration (kind: exploration). Every text field is redacted: secret values appear as «redacted:<name>».",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/run_report"
+    },
+    {
+      "$ref": "#/$defs/exploration_report"
+    }
+  ],
   "$defs": {
-    "count": { "type": "integer", "minimum": 0 },
-    "ms": { "type": "number", "minimum": 0 },
-    "optional_ms": { "type": ["number", "null"], "minimum": 0 },
+    "run_report": {
+      "description": "A `rustman run` (or `rustman send`) report.",
+      "type": "object",
+      "required": [
+        "schema",
+        "kind",
+        "rustman_version",
+        "started_at",
+        "environment",
+        "summary",
+        "requests"
+      ],
+      "properties": {
+        "schema": {
+          "const": "rustman.report/v1"
+        },
+        "kind": {
+          "const": "run"
+        },
+        "rustman_version": {
+          "type": "string"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "environment": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "summary": {
+          "$ref": "#/$defs/summary"
+        },
+        "requests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/request"
+          }
+        }
+      }
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "ms": {
+      "type": "number",
+      "minimum": 0
+    },
+    "optional_ms": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
     "summary": {
       "type": "object",
-      "required": ["total", "passed", "failed", "errored", "skipped", "duration_ms", "interrupted"],
+      "required": [
+        "total",
+        "passed",
+        "failed",
+        "errored",
+        "skipped",
+        "duration_ms",
+        "interrupted"
+      ],
       "properties": {
-        "total": { "$ref": "#/$defs/count" },
-        "passed": { "$ref": "#/$defs/count" },
-        "failed": { "$ref": "#/$defs/count" },
-        "errored": { "$ref": "#/$defs/count" },
-        "skipped": { "$ref": "#/$defs/count" },
-        "duration_ms": { "$ref": "#/$defs/ms" },
-        "interrupted": { "type": "boolean", "description": "Stopped by Ctrl+C; the requests are partial." }
+        "total": {
+          "$ref": "#/$defs/count"
+        },
+        "passed": {
+          "$ref": "#/$defs/count"
+        },
+        "failed": {
+          "$ref": "#/$defs/count"
+        },
+        "errored": {
+          "$ref": "#/$defs/count"
+        },
+        "skipped": {
+          "$ref": "#/$defs/count"
+        },
+        "duration_ms": {
+          "$ref": "#/$defs/ms"
+        },
+        "interrupted": {
+          "type": "boolean",
+          "description": "Stopped by Ctrl+C; the requests are partial."
+        }
       }
     },
     "request": {
       "type": "object",
-      "required": ["id", "name", "file", "iteration", "status", "skip_reason", "error", "exchange", "assertions", "captures", "warnings", "duration_ms"],
+      "required": [
+        "id",
+        "name",
+        "file",
+        "iteration",
+        "status",
+        "skip_reason",
+        "error",
+        "exchange",
+        "assertions",
+        "captures",
+        "warnings",
+        "duration_ms"
+      ],
       "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "file": { "type": "string" },
-        "iteration": { "type": "integer", "minimum": 1 },
-        "data_row": { "$ref": "#/$defs/data_row" },
-        "status": { "enum": ["passed", "failed", "errored", "skipped"] },
-        "skip_reason": { "enum": ["bail", "interrupted", "unsupported_kind", null] },
-        "error": { "type": ["string", "null"] },
-        "exchange": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/exchange" }] },
-        "assertions": { "type": "array", "items": { "$ref": "#/$defs/assertion" } },
-        "captures": { "type": "array", "items": { "$ref": "#/$defs/capture" } },
-        "warnings": { "type": "array", "items": { "type": "string" } },
-        "duration_ms": { "$ref": "#/$defs/ms" }
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "iteration": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "data_row": {
+          "$ref": "#/$defs/data_row"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed",
+            "errored",
+            "skipped"
+          ]
+        },
+        "skip_reason": {
+          "enum": [
+            "bail",
+            "interrupted",
+            "unsupported_kind",
+            null
+          ]
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "exchange": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/exchange"
+            }
+          ]
+        },
+        "assertions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/assertion"
+          }
+        },
+        "captures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/capture"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "duration_ms": {
+          "$ref": "#/$defs/ms"
+        }
       }
     },
     "data_row": {
       "type": "object",
       "description": "The data row a data-driven (--data) run used; absent from every run without --data (--iterations included). Added in v0.2.",
-      "required": ["index", "total", "label"],
+      "required": [
+        "index",
+        "total",
+        "label"
+      ],
       "properties": {
-        "index": { "type": "integer", "minimum": 1 },
-        "total": { "type": "integer", "minimum": 1 },
-        "label": { "type": "string", "description": "The --data-label column's value, else row <index>." }
+        "index": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "label": {
+          "type": "string",
+          "description": "The --data-label column's value, else row <index>."
+        }
       }
     },
     "header": {
       "type": "object",
-      "required": ["name", "value"],
-      "properties": { "name": { "type": "string" }, "value": { "type": "string" } }
+      "required": [
+        "name",
+        "value"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
     },
-    "headers": { "type": "array", "items": { "$ref": "#/$defs/header" } },
+    "headers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/header"
+      }
+    },
     "exchange": {
       "type": "object",
-      "required": ["request", "response", "timings", "redirects", "insecure"],
+      "required": [
+        "request",
+        "response",
+        "timings",
+        "redirects",
+        "insecure"
+      ],
       "properties": {
         "request": {
           "type": "object",
-          "required": ["method", "url", "headers", "body"],
+          "required": [
+            "method",
+            "url",
+            "headers",
+            "body"
+          ],
           "properties": {
-            "method": { "type": "string" },
-            "url": { "type": "string" },
-            "headers": { "$ref": "#/$defs/headers" },
-            "body": { "type": ["string", "null"] }
+            "method": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            },
+            "headers": {
+              "$ref": "#/$defs/headers"
+            },
+            "body": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         },
         "response": {
           "type": "object",
-          "required": ["status", "http_version", "headers", "body", "body_bytes", "body_truncated", "binary"],
+          "required": [
+            "status",
+            "http_version",
+            "headers",
+            "body",
+            "body_bytes",
+            "body_truncated",
+            "binary"
+          ],
           "properties": {
-            "status": { "type": "integer", "minimum": 100, "maximum": 999 },
-            "http_version": { "enum": ["HTTP/1.0", "HTTP/1.1", "HTTP/2"] },
-            "headers": { "$ref": "#/$defs/headers" },
-            "body": { "type": ["string", "null"] },
-            "body_bytes": { "$ref": "#/$defs/count" },
-            "body_truncated": { "type": "boolean" },
-            "binary": { "type": "boolean" }
+            "status": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 999
+            },
+            "http_version": {
+              "enum": [
+                "HTTP/1.0",
+                "HTTP/1.1",
+                "HTTP/2"
+              ]
+            },
+            "headers": {
+              "$ref": "#/$defs/headers"
+            },
+            "body": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "body_bytes": {
+              "$ref": "#/$defs/count"
+            },
+            "body_truncated": {
+              "type": "boolean"
+            },
+            "binary": {
+              "type": "boolean"
+            }
           }
         },
         "timings": {
           "type": "object",
-          "required": ["dns_ms", "connect_ms", "tls_ms", "ttfb_ms", "download_ms", "total_ms"],
+          "required": [
+            "dns_ms",
+            "connect_ms",
+            "tls_ms",
+            "ttfb_ms",
+            "download_ms",
+            "total_ms"
+          ],
           "properties": {
-            "dns_ms": { "$ref": "#/$defs/optional_ms" },
-            "connect_ms": { "$ref": "#/$defs/optional_ms" },
-            "tls_ms": { "$ref": "#/$defs/optional_ms" },
-            "ttfb_ms": { "$ref": "#/$defs/ms" },
-            "download_ms": { "$ref": "#/$defs/ms" },
-            "total_ms": { "$ref": "#/$defs/ms" },
-            "auth_ms": { "$ref": "#/$defs/ms" }
+            "dns_ms": {
+              "$ref": "#/$defs/optional_ms"
+            },
+            "connect_ms": {
+              "$ref": "#/$defs/optional_ms"
+            },
+            "tls_ms": {
+              "$ref": "#/$defs/optional_ms"
+            },
+            "ttfb_ms": {
+              "$ref": "#/$defs/ms"
+            },
+            "download_ms": {
+              "$ref": "#/$defs/ms"
+            },
+            "total_ms": {
+              "$ref": "#/$defs/ms"
+            },
+            "auth_ms": {
+              "$ref": "#/$defs/ms"
+            }
           }
         },
         "redirects": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["status", "url"],
-            "properties": { "status": { "type": "integer" }, "url": { "type": "string" } }
+            "required": [
+              "status",
+              "url"
+            ],
+            "properties": {
+              "status": {
+                "type": "integer"
+              },
+              "url": {
+                "type": "string"
+              }
+            }
           }
         },
-        "insecure": { "type": "boolean" }
+        "insecure": {
+          "type": "boolean"
+        }
       }
     },
     "assertion": {
       "type": "object",
-      "required": ["kind", "outcome", "label", "expected", "actual", "message"],
+      "required": [
+        "kind",
+        "outcome",
+        "label",
+        "expected",
+        "actual",
+        "message"
+      ],
       "properties": {
-        "kind": { "enum": ["status", "header", "json", "schema", "body", "latency"] },
-        "outcome": { "enum": ["pass", "fail", "error"] },
-        "label": { "type": "string" },
-        "expected": { "type": ["string", "null"] },
-        "actual": { "type": ["string", "null"] },
-        "message": { "type": "string" }
+        "kind": {
+          "enum": [
+            "status",
+            "header",
+            "json",
+            "schema",
+            "body",
+            "latency"
+          ]
+        },
+        "outcome": {
+          "enum": [
+            "pass",
+            "fail",
+            "error"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "expected": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "actual": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
       }
     },
     "capture": {
       "type": "object",
-      "required": ["var", "outcome", "message", "required", "persisted", "secret"],
+      "required": [
+        "var",
+        "outcome",
+        "message",
+        "required",
+        "persisted",
+        "secret"
+      ],
       "properties": {
-        "var": { "type": "string" },
-        "outcome": { "enum": ["captured", "no_match", "error"] },
-        "message": { "type": ["string", "null"] },
-        "required": { "type": "boolean" },
-        "persisted": { "type": "boolean" },
-        "secret": { "type": "boolean" }
+        "var": {
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "captured",
+            "no_match",
+            "error"
+          ]
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "persisted": {
+          "type": "boolean"
+        },
+        "secret": {
+          "type": "boolean"
+        }
       }
+    },
+    "Settings": {
+      "type": "object",
+      "properties": {
+        "probes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Family"
+          }
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "seed": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "fuzz_cases": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "allow_mutations": {
+          "type": "boolean"
+        },
+        "allow_destructive": {
+          "type": "boolean"
+        },
+        "allow_hosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Extra origins (`--allow-host`), as `scheme://host[:port]`.",
+          "default": []
+        },
+        "production": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "`--production <host>`.",
+          "default": null
+        },
+        "allow_remote_refs": {
+          "type": "boolean",
+          "default": false
+        },
+        "rate": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "concurrency": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "max_probes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "max_duration_ms": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "fail_on": {
+          "$ref": "#/$defs/Severity"
+        }
+      },
+      "required": [
+        "probes",
+        "seed",
+        "fuzz_cases",
+        "allow_mutations",
+        "allow_destructive",
+        "rate",
+        "concurrency",
+        "max_probes",
+        "max_duration_ms",
+        "fail_on"
+      ],
+      "description": "Everything a resume repeats: the probe selection, the seed, the safety\nflags and the budgets."
+    },
+    "Family": {
+      "type": "string",
+      "enum": [
+        "conformance",
+        "auth",
+        "negative-input",
+        "method-not-allowed",
+        "lifecycle",
+        "bola",
+        "fuzz",
+        "undocumented-status",
+        "error-leakage",
+        "security-headers"
+      ],
+      "description": "A probe family (`--probes`), in plan order."
+    },
+    "Severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "info"
+      ],
+      "description": "How bad a finding is, most severe first."
+    },
+    "ExplorationSummary": {
+      "type": "object",
+      "properties": {
+        "probes": {
+          "$ref": "#/$defs/ProbeTotals"
+        },
+        "findings": {
+          "$ref": "#/$defs/SeverityCounts",
+          "description": "Distinct findings by severity."
+        },
+        "requests": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "description": "Requests sent, cleanup included."
+        },
+        "duration_ms": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "Time spent executing."
+        }
+      },
+      "required": [
+        "probes",
+        "findings",
+        "requests",
+        "duration_ms"
+      ],
+      "description": "The counts of an exploration."
+    },
+    "ProbeTotals": {
+      "type": "object",
+      "properties": {
+        "total": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "passed": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "finding": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "description": "Probes that produced at least one finding."
+        },
+        "blocked": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "skipped": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "not_run": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "description": "Probes whose request failed or whose chain stopped early, without a\nfinding."
+        }
+      },
+      "required": [
+        "total",
+        "passed",
+        "finding",
+        "blocked",
+        "skipped",
+        "not_run",
+        "failed"
+      ],
+      "description": "Probes by how they ended."
+    },
+    "SeverityCounts": {
+      "type": "object",
+      "properties": {
+        "critical": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "high": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "medium": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "low": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "info": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "info"
+      ],
+      "description": "A count of findings per severity."
+    },
+    "Coverage": {
+      "type": "object",
+      "properties": {
+        "operations": {
+          "$ref": "#/$defs/Ratio",
+          "description": "Operations that answered at least once."
+        },
+        "statuses": {
+          "$ref": "#/$defs/Ratio",
+          "description": "Documented statuses observed."
+        },
+        "matrix": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Row"
+          }
+        }
+      },
+      "required": [
+        "operations",
+        "statuses",
+        "matrix"
+      ],
+      "description": "Operations by documented statuses."
+    },
+    "Ratio": {
+      "type": "object",
+      "properties": {
+        "covered": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "total": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "percent": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "covered",
+        "total",
+        "percent"
+      ],
+      "description": "A part of a whole, with its percentage (one decimal)."
+    },
+    "Row": {
+      "type": "object",
+      "properties": {
+        "operation": {
+          "type": "string"
+        },
+        "statuses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StatusCell"
+          }
+        }
+      },
+      "required": [
+        "operation",
+        "statuses"
+      ],
+      "description": "One operation's row."
+    },
+    "StatusCell": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "description": "As documented: `200`, `4XX` or `default`."
+        },
+        "state": {
+          "$ref": "#/$defs/Cell"
+        }
+      },
+      "required": [
+        "status",
+        "state"
+      ],
+      "description": "One documented status of one operation."
+    },
+    "Cell": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "observed",
+            "not-observed"
+          ]
+        },
+        {
+          "type": "string",
+          "const": "blocked",
+          "description": "Nothing was sent for the operation: the safety policy refused it."
+        }
+      ],
+      "description": "The state of one documented status in the coverage matrix."
+    },
+    "ReportFinding": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "`f001`, `f002`, ... by severity."
+        },
+        "rule": {
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "operation": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "remediation": {
+          "type": "string",
+          "description": "How to fix it, from the rule registry."
+        },
+        "message": {
+          "type": "string",
+          "description": "The first occurrence's message."
+        },
+        "occurrences": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "probes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The probes it occurred in, in plan order."
+        },
+        "instance_pointer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "schema_pointer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "evidence": {
+          "$ref": "#/$defs/Evidence",
+          "description": "The first occurrence's exchange."
+        },
+        "reproduction": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Reproduction"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "rule",
+        "severity",
+        "operation",
+        "description",
+        "message",
+        "occurrences",
+        "probes",
+        "evidence"
+      ],
+      "description": "One finding, de-duplicated per rule and operation."
+    },
+    "Evidence": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "request_headers": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "request_body": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "response_headers": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "body": {
+          "type": "string",
+          "description": "The start of the response body (at most 4 KiB)."
+        },
+        "truncated": {
+          "type": "boolean",
+          "description": "The body was longer than the excerpt.",
+          "default": false
+        }
+      },
+      "required": [
+        "method",
+        "url",
+        "request_headers",
+        "status",
+        "response_headers",
+        "body"
+      ],
+      "description": "The redacted exchange behind a finding."
+    },
+    "Reproduction": {
+      "type": "object",
+      "properties": {
+        "curl": {
+          "type": "string",
+          "description": "The evidence request as a curl command; secrets are `{{name}}`."
+        },
+        "request": {
+          "type": "string",
+          "description": "A request file (YAML) sending the evidence request to `{{baseUrl}}`\nand asserting what a correct API answers."
+        }
+      },
+      "required": [
+        "curl",
+        "request"
+      ],
+      "description": "How to reproduce one finding."
+    },
+    "ProbeResult": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "family": {
+          "$ref": "#/$defs/Family"
+        },
+        "operation": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        },
+        "variant": {
+          "type": "string"
+        },
+        "outcome": {
+          "type": "string",
+          "description": "`passed`, `finding`, `blocked`, `skipped`, `not run` or `failed`."
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "family",
+        "operation",
+        "method",
+        "variant",
+        "outcome"
+      ],
+      "description": "One probe and how it ended."
+    },
+    "Resource": {
+      "type": "object",
+      "properties": {
+        "probe": {
+          "type": "string",
+          "description": "The probe that created it."
+        },
+        "operation": {
+          "type": "string",
+          "description": "`METHOD /path` of the create operation."
+        },
+        "path": {
+          "type": "string",
+          "description": "Its path relative to the target, as a template (`/users/42`)."
+        },
+        "url": {
+          "type": "string",
+          "description": "Its URL, redacted, as reports show it."
+        },
+        "delete": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "`METHOD /path` of the documented operation that deletes it."
+        }
+      },
+      "required": [
+        "probe",
+        "operation",
+        "path",
+        "url"
+      ],
+      "description": "A resource a probe created, identified by a captured id."
+    },
+    "Cleanup": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "The resource's path, as [`Resource::path`]."
+        },
+        "url": {
+          "type": "string",
+          "description": "Its URL, redacted."
+        },
+        "status": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "The status the delete answered."
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Why no response came."
+        }
+      },
+      "required": [
+        "path",
+        "url"
+      ],
+      "description": "One deletion of a created resource, after the probes ran."
+    },
+    "OperationInfo": {
+      "type": "object",
+      "properties": {
+        "operation": {
+          "type": "string",
+          "description": "`METHOD /path`."
+        },
+        "operation_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Its tags, in document order; the first groups it in JUnit.",
+          "default": []
+        }
+      },
+      "required": [
+        "operation"
+      ],
+      "description": "One documented operation: how reports group and locate it."
+    },
+    "exploration_report": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "rustman.report/v1"
+        },
+        "kind": {
+          "const": "exploration"
+        },
+        "rustman_version": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "started_at": {
+          "type": "string",
+          "description": "RFC 3339."
+        },
+        "finished_at": {
+          "type": "string",
+          "description": "RFC 3339."
+        },
+        "environment": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "target": {
+          "type": "string"
+        },
+        "spec": {
+          "type": "string",
+          "description": "The OpenAPI document, as a resume finds it."
+        },
+        "document_sha256": {
+          "type": "string"
+        },
+        "seed": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "settings": {
+          "$ref": "#/$defs/Settings",
+          "description": "The probe selection, safety flags and budgets."
+        },
+        "summary": {
+          "$ref": "#/$defs/ExplorationSummary"
+        },
+        "coverage": {
+          "$ref": "#/$defs/Coverage"
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReportFinding"
+          }
+        },
+        "probes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ProbeResult"
+          }
+        },
+        "left_behind": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Resource"
+          },
+          "description": "Created resources that were not deleted, oldest first."
+        },
+        "cleanup": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Cleanup"
+          },
+          "description": "Deletions of created resources, in the order they ran.",
+          "default": []
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/OperationInfo"
+          },
+          "description": "The documented operations, in document order.",
+          "default": []
+        }
+      },
+      "required": [
+        "schema",
+        "kind",
+        "rustman_version",
+        "id",
+        "started_at",
+        "finished_at",
+        "target",
+        "spec",
+        "document_sha256",
+        "seed",
+        "settings",
+        "summary",
+        "coverage",
+        "findings",
+        "probes",
+        "left_behind"
+      ],
+      "description": "`report.json` of an exploration."
     }
   }
 }

@@ -44,10 +44,14 @@ enum Command {
     Cookies(commands::cookies::CookiesArgs),
     /// Log in to OAuth2-protected APIs
     Auth(commands::auth::AuthArgs),
-    /// Import collections (Postman, Insomnia, Bruno, HAR, .http) and curl commands
+    /// Import collections (Postman, Insomnia, Bruno, HAR, .http, OpenAPI) and curl commands
     Import(commands::import::ImportArgs),
     /// Export requests and collections (curl, code snippets, Postman, .http)
     Export(commands::export::ExportArgs),
+    /// Explore an API from its OpenAPI document under the safety policy
+    Explore(commands::explore::ExploreArgs),
+    /// Print the report schema, render reports in other formats, diff them
+    Report(commands::report::ReportArgs),
     /// Send one request (a file, id or name, or an ad-hoc METHOD URL) and print the response
     Send(commands::send::SendArgs),
     /// Run the requests under files or folders and report the results
@@ -96,6 +100,8 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
         Command::Auth(args) => commands::auth::run(&args).map(done),
         Command::Import(args) => commands::import::run(&args),
         Command::Export(args) => commands::export::run(&args).map(done),
+        Command::Explore(args) => commands::explore::run(&args),
+        Command::Report(args) => commands::report::run(&args),
         Command::Send(args) => commands::send::run(&args),
         Command::Run(args) => commands::run::run(&args),
         Command::History(args) => commands::history::run(&args),

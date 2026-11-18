@@ -1,0 +1,17 @@
+---
+source: crates/rustman-explore/tests/graph.rs
+expression: "graph(&[]).await.render()"
+---
+GET /users/{id}: id <- POST /users /id (heuristic)
+GET /users/{id}: id <- GET /users /0/id (heuristic)
+PUT /users/{id}: id <- POST /users /id (heuristic)
+PUT /users/{id}: id <- GET /users /0/id (heuristic)
+DELETE /users/{id}: id <- POST /users /id (heuristic)
+DELETE /users/{id}: id <- GET /users /0/id (heuristic)
+POST /users/{id}/posts: id <- POST /users /id (heuristic)
+POST /users/{id}/posts: id <- GET /users /0/id (heuristic)
+GET /users/{id}/posts/{postId}: id <- POST /users /id (heuristic)
+GET /users/{id}/posts/{postId}: id <- GET /users /0/id (heuristic)
+GET /users/{id}/posts/{postId}: postId <- POST /users/{id}/posts /postId (heuristic)
+GET /teams/{slug}: slug <- POST /teams /handle (link)
+GET /orders/{orderId}: orderId <- no producer

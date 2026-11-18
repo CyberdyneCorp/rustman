@@ -1,0 +1,41 @@
+---
+source: crates/rustman-report/tests/render.rs
+expression: "rendered(&report, format)"
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="rustman" tests="5" skipped="1" failures="2" errors="0" time="1.500">
+    <testsuite name="admin" tests="1" skipped="0" errors="0" failures="1">
+        <properties>
+            <property name="target" value="http://127.0.0.1:8080"/>
+            <property name="seed" value="7"/>
+        </properties>
+        <testcase name="GET /admin/users" classname="admin" assertions="1">
+            <failure message="f001 [critical] auth-not-enforced: auth-not-enforced on GET /admin/users | got 200" type="auth-not-enforced">f001 [critical] auth-not-enforced: auth-not-enforced on GET /admin/users | got 200</failure>
+        </testcase>
+    </testsuite>
+    <testsuite name="undocumented" tests="1" skipped="0" errors="0" failures="0">
+        <properties>
+            <property name="target" value="http://127.0.0.1:8080"/>
+            <property name="seed" value="7"/>
+        </properties>
+        <testcase name="PUT /users" classname="undocumented" assertions="0">
+            <system-out>f004 [medium] undocumented-method-allowed: undocumented-method-allowed on PUT /users | got 200</system-out>
+        </testcase>
+    </testsuite>
+    <testsuite name="users" tests="3" skipped="1" errors="0" failures="1">
+        <properties>
+            <property name="target" value="http://127.0.0.1:8080"/>
+            <property name="seed" value="7"/>
+        </properties>
+        <testcase name="POST /users" classname="users" assertions="1">
+            <failure message="f002 [high] server-error-on-invalid-input: server-error-on-invalid-input on POST /users | got 500" type="server-error-on-invalid-input">f002 [high] server-error-on-invalid-input: server-error-on-invalid-input on POST /users | got 500</failure>
+            <system-out>f005 [low] missing-content-type-options: missing-content-type-options on POST /users | got 500</system-out>
+        </testcase>
+        <testcase name="GET /users/{id}" classname="users" assertions="1">
+            <system-out>f003 [medium] response-schema-violation: response-schema-violation on GET /users/{id} | got 200</system-out>
+        </testcase>
+        <testcase name="DELETE /users/{id}" classname="users" assertions="2">
+            <skipped message="2 probes blocked: DELETE needs --allow-destructive"/>
+        </testcase>
+    </testsuite>
+</testsuites>

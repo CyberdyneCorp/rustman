@@ -2,7 +2,7 @@
 
 `rustman import` turns collections exported from other tools into request files, `_collection.yaml` files and environments in the current workspace. It never writes a secret into a workspace file, never runs a script, and reports exactly what it could not carry over.
 
-This build reads Postman Collection v2.0 and v2.1 exports and Postman environment exports, Insomnia v4 (JSON) and v5 (YAML) exports, Bruno collection folders, HAR 1.2 captures and `.http` / `.rest` files. Single curl commands have their own command, [`rustman import curl`](http.md#import).
+This build reads Postman Collection v2.0 and v2.1 exports and Postman environment exports, Insomnia v4 (JSON) and v5 (YAML) exports, Bruno collection folders, HAR 1.2 captures and `.http` / `.rest` files. Single curl commands have their own command, [`rustman import curl`](http.md#import), and so do OpenAPI documents, [`rustman import openapi`](import-openapi.md), which is not detected by `rustman import <src>`.
 
 ```text
 rustman import <src>                    # detect the format from the content

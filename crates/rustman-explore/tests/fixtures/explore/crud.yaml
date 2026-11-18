@@ -1,0 +1,117 @@
+openapi: 3.1.0
+info:
+  title: CRUD
+  version: '1'
+paths:
+  /users:
+    get:
+      operationId: listUsers
+      responses:
+        '200':
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+    post:
+      operationId: createUser
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+  /users/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: integer}}
+    get:
+      operationId: getUser
+      responses:
+        '200':
+          description: The user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+    put:
+      operationId: updateUser
+      responses:
+        '200':
+          description: Updated
+    delete:
+      operationId: deleteUser
+      responses:
+        '204':
+          description: Deleted
+  /users/{id}/posts:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: integer}}
+    post:
+      operationId: createPost
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  postId: {type: string}
+  /users/{id}/posts/{postId}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: integer}}
+      - {name: postId, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: getPost
+      responses:
+        '200':
+          description: The post
+  /orders/{orderId}:
+    get:
+      operationId: getOrder
+      parameters:
+        - {name: orderId, in: path, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: The order
+  /teams:
+    post:
+      operationId: createTeam
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  handle: {type: string}
+          links:
+            GetTeam:
+              operationId: getTeam
+              parameters:
+                slug: $response.body#/handle
+  /teams/{slug}:
+    get:
+      operationId: getTeam
+      parameters:
+        - {name: slug, in: path, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: The team
+components:
+  schemas:
+    User:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}

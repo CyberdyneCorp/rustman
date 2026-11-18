@@ -1,0 +1,243 @@
+openapi: 3.1.0
+info:
+  title: Bad API
+  version: '1'
+  description: A deliberately broken API, the fixture of the exploration tests.
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: users
+  - name: orders
+  - name: misc
+paths:
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      responses:
+        '200':
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+    post:
+      operationId: createUser
+      tags: [users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewUser'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid user
+  /users/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    get:
+      operationId: getUser
+      tags: [users]
+      responses:
+        '200':
+          description: The user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: No such user
+    put:
+      operationId: updateUser
+      tags: [users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewUser'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid user
+        '404':
+          description: No such user
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          description: No such user
+  /admin/users:
+    get:
+      operationId: listAdmins
+      tags: [users]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Admins
+        '401':
+          description: Unauthorized
+  /orders:
+    post:
+      operationId: createOrder
+      tags: [orders]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewOrder'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          description: Invalid order
+        '401':
+          description: Unauthorized
+  /orders/{orderId}:
+    get:
+      operationId: getOrder
+      tags: [orders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '401':
+          description: Unauthorized
+        '404':
+          description: No such order
+  /search:
+    get:
+      operationId: search
+      tags: [misc]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 3
+      responses:
+        '200':
+          description: Results
+        '400':
+          description: Invalid query
+        '401':
+          description: Unauthorized
+  /reports/{reportId}:
+    get:
+      operationId: getReport
+      tags: [misc]
+      parameters:
+        - name: reportId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The report
+        '404':
+          description: No such report
+  /status:
+    get:
+      operationId: getStatus
+      tags: [misc]
+      responses:
+        '200':
+          description: Up
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    User:
+      type: object
+      required: [id, name, email]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+    NewUser:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        email:
+          type: string
+          format: email
+        age:
+          type: integer
+          minimum: 0
+          maximum: 150
+    Order:
+      type: object
+      required: [id, item, quantity]
+      properties:
+        id:
+          type: string
+        item:
+          type: string
+        quantity:
+          type: integer
+    NewOrder:
+      type: object
+      required: [item, quantity]
+      properties:
+        item:
+          type: string
+          minLength: 1
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 100

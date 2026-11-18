@@ -1,0 +1,111 @@
+---
+source: crates/rustman-report/tests/render.rs
+expression: "rendered(&report, format)"
+---
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "rustman",
+          "version": "0.1.0",
+          "informationUri": "https://github.com/CyberdyneCorp/rustman",
+          "rules": [
+            {
+              "id": "assertion-failed",
+              "shortDescription": {
+                "text": "assertion-failed"
+              },
+              "fullDescription": {
+                "text": "A request's assertions did not pass."
+              },
+              "help": {
+                "text": "A request's assertions did not pass."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "api"
+                ],
+                "security-severity": "8.0"
+              }
+            },
+            {
+              "id": "request-errored",
+              "shortDescription": {
+                "text": "request-errored"
+              },
+              "fullDescription": {
+                "text": "A request got no response: network, TLS, timeout or unresolved variables."
+              },
+              "help": {
+                "text": "A request got no response: network, TLS, timeout or unresolved variables."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "api"
+                ],
+                "security-severity": "8.0"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "assertion-failed",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "users/create: status: expected 201, got 404"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "users/create.rman.yaml"
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "rustmanRequest/v1": "assertion-failed|users/create"
+          },
+          "properties": {
+            "iteration": "1"
+          }
+        },
+        {
+          "ruleId": "request-errored",
+          "ruleIndex": 1,
+          "level": "error",
+          "message": {
+            "text": "users/slow: timeout after 500 ms (response)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "users/slow.rman.yaml"
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "rustmanRequest/v1": "request-errored|users/slow"
+          },
+          "properties": {
+            "iteration": "1"
+          }
+        }
+      ]
+    }
+  ]
+}

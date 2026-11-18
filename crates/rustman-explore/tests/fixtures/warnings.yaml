@@ -1,0 +1,43 @@
+openapi: 3.1.0
+info:
+  title: Warnings
+  version: '1'
+paths:
+  /users:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      operationId: createUser
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, age]
+              properties:
+                name:
+                  type: string
+                age:
+                  type: integer
+                  minimum: 0
+            example:
+              name: 7
+              age: -1
+      responses:
+        '201':
+          description: Created
+  /users/{id}:
+    get:
+      operationId: createUser
+      parameters:
+        - name: userId
+          in: path
+          schema:
+            type: string
+    put:
+      operationId: Create User
+      responses:
+        '200':
+          description: OK

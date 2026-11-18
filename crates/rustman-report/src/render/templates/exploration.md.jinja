@@ -1,0 +1,71 @@
+# Exploration {{ r.id }}
+
+| | |
+|---|---|
+| Target | {{ r.target | cell | code }} |
+| Document | {{ r.spec | cell | code }} |
+| Environment | {{ (r.environment or "none") | text }} |
+| Seed | {{ r.seed }} |
+| Started | {{ r.started_at }} |
+| Finished | {{ r.finished_at }} |
+| Duration | {{ duration }} |
+| Safety | {{ safety }} |
+
+## Summary
+
+{{ failing }} finding{{ "" if failing == 1 else "s" }} at or above `{{ fail_on }}`. Findings by severity: {{ counts }}.
+
+| Probes | Passed | Finding | Blocked | Skipped | Not run | Failed |
+|---:|---:|---:|---:|---:|---:|---:|
+| {{ p.total }} | {{ p.passed }} | {{ p.finding }} | {{ p.blocked }} | {{ p.skipped }} | {{ p.not_run }} | {{ p.failed }} |
+
+## Findings
+{% if findings %}
+| ID | Severity | Rule | Operation | Occurrences | Message |
+|---|---|---|---|---:|---|
+{% for f in findings -%}
+| {{ f.id }} | {{ f.severity }} | `{{ f.rule }}` | {{ f.operation | cell | code }} | {{ f.occurrences }} | {{ f.message | text }} |
+{% endfor %}
+{% for f in findings %}
+### {{ f.id }} {{ f.rule }}: {{ f.operation | text }}
+
+{{ f.description }}
+{% if f.remediation %}
+Remediation: {{ f.remediation }}
+{% endif %}
+Evidence: {{ (f.evidence.method ~ " " ~ f.evidence.url) | code }} answered {{ f.evidence.status }}.
+
+{% set fence = f.request_text | fence %}{{ fence }}http
+{{ f.request_text }}
+{{ fence }}
+
+{% set fence = f.response_text | fence %}{{ fence }}http
+{{ f.response_text }}
+{{ fence }}
+{% if f.reproduction %}
+Reproduce:
+
+{% set fence = f.reproduction.curl | fence %}{{ fence }}sh
+{{ f.reproduction.curl }}
+{{ fence }}
+{% endif %}
+{% endfor %}
+{%- else %}
+No findings.
+{% endif %}
+## Coverage
+
+Operations exercised: {{ c.operations.covered }}/{{ c.operations.total }} ({{ c.operations.percent }}%). Documented statuses observed: {{ c.statuses.covered }}/{{ c.statuses.total }} ({{ c.statuses.percent }}%).
+
+| Operation | Statuses |
+|---|---|
+{% for row in c.matrix -%}
+| {{ row.operation | cell | code }} | {% for s in row.statuses %}{{ s.status }} {{ s.state }}{% if not loop.last %}, {% endif %}{% endfor %} |
+{% endfor %}
+{%- if r.left_behind %}
+## Left behind
+
+{% for res in r.left_behind -%}
+- {{ res.url | code }} (created by {{ res.operation | code }}{% if res.delete %}; delete with {{ res.delete | code }}{% endif %})
+{% endfor %}
+{%- endif %}

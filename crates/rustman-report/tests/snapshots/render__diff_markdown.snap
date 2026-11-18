@@ -1,0 +1,33 @@
+---
+source: crates/rustman-report/tests/render.rs
+expression: d.to_markdown()
+---
+# Report diff (exploration)
+
+1 new, 1 fixed, 2 unchanged findings.
+
+## New
+
+| Severity | Rule | Operation | ID |
+|---|---|---|---|
+| critical | `broken-object-level-authorization` | `GET /orders/{id}` | f009 |
+
+## Fixed
+
+| Severity | Rule | Operation | ID |
+|---|---|---|---|
+| high | `server-error-on-invalid-input` | `POST /users` | f002 |
+
+## Unchanged
+
+| Severity | Rule | Operation | ID |
+|---|---|---|---|
+| critical | `auth-not-enforced` | `GET /admin/users` | f001 |
+| medium | `response-schema-violation` | `GET /users/{id}` | f003 |
+
+## Coverage
+
+| | Old | New | Change |
+|---|---:|---:|---:|
+| Operations | 3/4 (75%) | 4/4 (100%) | +25.0 |
+| Statuses | 3/6 (50%) | 3/6 (50%) | +0.0 |

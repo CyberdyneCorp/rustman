@@ -24,6 +24,15 @@ This page covers sending and running requests, reporters, terminal behavior, log
 | `rustman import bruno <src>` | Import a Bruno collection folder or a single `.bru` file | [Bruno](import.md#bruno-collections) |
 | `rustman import har <src>` | Import the requests of a HAR 1.2 capture, with `--host`, `--method`, `--content-type` and `--include-static` | [HAR](import.md#har-captures) |
 | `rustman import http <src>` | Import `.http` / `.rest` files (a file or a folder) and their environment files | [HTTP files](import.md#http-files) |
+| `rustman import openapi <file\|url>` | Create a collection, environments and auth config from an OpenAPI 3.0 or 3.1 document; `--into`, `--allow-remote-refs`; `--sync` (with `--dry-run`, `--json`) updates an imported collection | [OpenAPI import](import-openapi.md) |
+| `rustman explore plan --spec <file\|url> --target <url>` | Discover the resource graph and plan exploration probes without sending anything; `--probes`, `--operations`, `--seed`, `--fuzz-cases`, the safety flags, `--graph`, `--json` | [Exploration](exploration.md#planning-rustman-explore-plan) |
+| `rustman explore run --spec <file\|url> --target <url>` | Discover, plan, send the probes under the safety policy and write the report; the plan flags plus `--rate`, `--concurrency`, `--max-probes`, `--max-duration`, `--fail-on`, `--report <format>[=<path>]` | [Exploration](exploration.md#running-rustman-explore-run) |
+| `rustman explore resume <id>` | Continue an interrupted exploration with the probes not yet run | [Exploration](exploration.md#interrupting-and-resuming) |
+| `rustman explore status [<id>]` | Show the phase, progress and findings by severity of an exploration (the latest by default); `--json` | [Exploration](exploration.md#status) |
+| `rustman explore export <id> --findings <ids\|all> --into <dir>` | Write findings as regression request files for `rustman run` | [Exploration](exploration.md#reproducing-findings) |
+| `rustman report schema` | Print the JSON Schema of `rustman.report/v1` | [Reports](reports.md#the-canonical-report) |
+| `rustman report render <report.json> --format <format>` | Render a run or exploration report as `json`, `junit`, `markdown`, `html` or `sarif`; `-o <file>`, `--fail-on` | [Reports](reports.md#rendering) |
+| `rustman report diff <old.json> <new.json>` | List new, fixed and unchanged findings, coverage deltas and changed assertions; `--fail-on`, `--format markdown\|json` | [Reports](reports.md#comparing-reports) |
 | `rustman export curl <request>` | Print a request as a curl command (redacted) | [Curl export](http.md#export) |
 | `rustman export postman <path>` | Write a collection folder or request file as a Postman Collection v2.1 (`-o <file>`) | [Exporting](import.md#exporting) |
 | `rustman export http <path>` | Write a collection folder or request file as a `.http` file (`-o <file>`) | [Exporting](import.md#exporting) |
@@ -36,7 +45,7 @@ This page covers sending and running requests, reporters, terminal behavior, log
 | `rustman history clear` | Delete every recorded exchange | [History](history.md#retention) |
 | `rustman completions <shell>` | Print a shell completion script | [below](#completions) |
 
-The command groups `rustman env`, `rustman secret`, `rustman cookies`, `rustman auth`, `rustman import`, `rustman export` and `rustman history` only hold the commands above: on their own they print their subcommands and exit with 2. `rustman import` also takes a source file or folder directly (`rustman import export.json`), which is the same as `rustman import auto export.json`.
+The command groups `rustman env`, `rustman secret`, `rustman cookies`, `rustman auth`, `rustman import`, `rustman export`, `rustman explore`, `rustman report` and `rustman history` only hold the commands above: on their own they print their subcommands and exit with 2. `rustman import` also takes a source file or folder directly (`rustman import export.json`), which is the same as `rustman import auto export.json`.
 
 `rustman --help` and `rustman <command> --help` document every flag; `rustman --version` prints `rustman <version>`, such as `rustman 0.1.0`.
 
@@ -106,7 +115,7 @@ rustman send DELETE '{{base_url}}/users/42?key={{api_token}}' --env dev
 rustman run [<PATH>...] [--env <name>] [--var k=v]... [--timeout <duration>] [--insecure]
             [--bail[=iteration]] [--filter <tag:name | glob>]... [--iterations <n>] [--parallel <n>]
             [--data <file> | --no-data] [--data-label <column>] [--secret-columns <a,b>]
-            [--reporter <format>[:<path>]]...
+            [--reporter <format>[:<path>]]... [--report <format>[=<path>]]...
 ```
 
 Runs every request file under the given files and folders (default: the current folder), in collection order: file-name order, or the folder's `_collection.yaml` `order:` (see [collections](request-files.md)). Paths must exist and lie inside the workspace. Values captured by one request are available to every later request of the run.
@@ -126,6 +135,7 @@ Runs every request file under the given files and folders (default: the current 
 | `--secret-columns <a,b>` | Data columns whose values are secrets, redacted in every output. |
 | `--parallel <n>` | Run up to `n` folders at once (default 1). |
 | `--reporter <format>[:<path>]` | `pretty`, `json`, `junit` or `tap`, written to stdout or to `<path>` (repeatable; default `pretty` on stdout). At most one reporter may write to stdout. A file is replaced atomically, a symlink is followed, and a device such as `/dev/stdout` is written in place. |
+| `--report <format>[=<path>]` | Also render the canonical report as `json`, `junit`, `markdown`, `html` or `sarif` (repeatable), to `<path>` or stdout; see [Reports](reports.md). With a `--report` on stdout and no `--reporter`, the `pretty` report is not printed. At most one reporter or report may write to stdout. |
 
 A filter or path that selects no request fails with `error: no requests to run (check the paths and --filter)` (exit code 2).
 
@@ -200,9 +210,12 @@ Every reporter writes from the same redacted records: secret values and sensitiv
 | 1 | At least one request failed (an assertion, or a required capture) and none errored. |
 | 2 | Usage or configuration error: a bad flag, no workspace, an invalid file, a missing environment, an ambiguous request name, no request to run. |
 | 3 | At least one request errored: network, TLS, timeout, auth or unresolved variable. It wins over 1. |
+| 4 | Refused by the [safety policy](safety.md#production-guard) (`rustman explore`). |
 | 130 | Interrupted by Ctrl+C (SIGINT). |
 
-`rustman import` has its own: 0 when the import completed (even with unsupported features, unless `--fail-on-unsupported`), 1 with `--fail-on-unsupported` when a feature was unsupported, dropped or unmapped, and 2 for an unreadable, invalid, oversized or undetectable source (see [Importing collections](import.md#exit-codes)).
+`rustman import` has its own: 0 when the import completed (even with unsupported features, unless `--fail-on-unsupported`), 1 with `--fail-on-unsupported` when a feature was unsupported, dropped or unmapped, and 2 for an unreadable, invalid, oversized or undetectable source (see [Importing collections](import.md#exit-codes)). `rustman import openapi` exits 0 on success, 3 when fetching the document failed, and 2 otherwise.
+
+`rustman explore run` and `explore resume` exit 1 when a finding is at or above `--fail-on` (default `high`) instead of on failed requests, and 0 otherwise; see [Exploration](exploration.md#exit-codes). `rustman report diff` exits 1 when a new finding is at or above `--fail-on` (default `high`), and `report render` and `report diff` exit 2 on a report with an unknown major schema version; see [Reports](reports.md).
 
 On Ctrl+C, in-flight requests are cancelled, the requests not finished are reported as `skipped` with `skip_reason: interrupted`, every reporter writes its partial report (with `summary.interrupted: true`), and the exit code is 130. A second Ctrl+C quits at once, also with exit code 130, without waiting for reports to be written.
 

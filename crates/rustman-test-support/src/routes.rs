@@ -25,6 +25,7 @@
 //! | `/me` | `200` JSON `{"id": 42}` with `Authorization: Bearer TOKEN`, else `401` |
 //! | `/aws-skew` | `403` with an AWS `RequestTimeTooSkewed` error body |
 //! | `/aws-credential` | `200` text: the `Credential=` scope and the `SignedHeaders=` list of a SigV4 `Authorization`, one per line (no signature) |
+//! | `/openapi/<name>` | an OpenAPI document from [`crate::openapi`] |
 
 use std::convert::Infallible;
 use std::pin::Pin;
@@ -160,6 +161,7 @@ pub async fn handle(req: Request<Incoming>) -> Result<Response<TestBody>, Infall
             .unwrap(),
         ["users", "42"] => user(),
         ["orders"] => order(),
+        ["openapi", name] => openapi(name),
         _ => text(StatusCode::NOT_FOUND, "no such route"),
     };
     Ok(response)
@@ -183,6 +185,16 @@ fn aws_credential(req: &Request<Incoming>) -> Response<TestBody> {
     };
     let text = format!("{}\n{}", field("Credential="), field("SignedHeaders="));
     Response::new(Full::new(Bytes::from(text)).boxed())
+}
+
+fn openapi(name: &str) -> Response<TestBody> {
+    match crate::openapi::document(name) {
+        Some((body, content_type)) => Response::builder()
+            .header(header::CONTENT_TYPE, content_type)
+            .body(Full::new(Bytes::from_static(body.as_bytes())).boxed())
+            .unwrap(),
+        None => text(StatusCode::NOT_FOUND, "no such document"),
+    }
 }
 
 fn millis(ms: &str) -> Duration {

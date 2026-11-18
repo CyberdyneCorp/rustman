@@ -4,7 +4,7 @@ Rustman can send requests on its own: OpenAPI exploration sends probes, and late
 
 Requests you send yourself with `rustman send` and `rustman run` are not governed by this policy.
 
-The policy, the rate limit and the budgets are defined in `rustman-core` (`rustman_core::safety`); the sender that enforces them over HTTP is `rustman_http::GovernedSender` (see [For developers](#for-developers)). The `[safety]` example below is checked by a test (`crates/rustman-core/tests/docs_safety.rs`). The command-line flags named on this page belong to the commands that use the policy, such as `rustman explore run`, and arrive with them.
+The policy, the rate limit and the budgets are defined in `rustman-core` (`rustman_core::safety`); the sender that enforces them over HTTP is `rustman_http::GovernedSender` (see [For developers](#for-developers)). The `[safety]` example below is checked by a test (`crates/rustman-core/tests/docs_safety.rs`). The command-line flags named on this page belong to the commands that use the policy: [`rustman explore plan`, `explore run` and `explore resume`](exploration.md).
 
 ## Methods
 

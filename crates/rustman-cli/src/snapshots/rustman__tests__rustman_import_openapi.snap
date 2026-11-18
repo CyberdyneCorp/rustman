@@ -1,0 +1,41 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Create a collection from an OpenAPI 3.0 or 3.1 document (a file or URL)
+
+Usage: rustman import openapi [OPTIONS] <SOURCE>
+
+Arguments:
+  <SOURCE>
+          The document: a file path or an http(s) URL, in JSON or YAML
+
+Options:
+      --into <DIR>
+          Write the collection to this folder (default: the API title in kebab-case, in the workspace root); it must not exist or be empty
+
+      --allow-remote-refs
+          Fetch $refs to other http(s) documents instead of refusing them
+
+      --sync
+          Update an imported collection: merge the new document, keeping your edits, and move removed operations to _removed/
+
+      --dry-run
+          With --sync: print the change summary without writing any file
+
+      --json
+          With --sync: print the change summary as JSON
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

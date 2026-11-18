@@ -1,0 +1,387 @@
+{
+  "schema": "rustman.report/v1",
+  "kind": "exploration",
+  "rustman_version": "0.1.0",
+  "id": "exp-20261118-0a1b2c",
+  "started_at": "2026-11-18T09:00:00.000Z",
+  "finished_at": "2026-11-18T09:00:01.500Z",
+  "environment": "dev",
+  "target": "http://127.0.0.1:8080",
+  "spec": "api.yaml",
+  "document_sha256": "abababababababababababababababababababababababababababababababab",
+  "seed": 7,
+  "settings": {
+    "probes": [
+      "conformance",
+      "auth",
+      "negative-input",
+      "method-not-allowed",
+      "lifecycle",
+      "fuzz",
+      "undocumented-status",
+      "error-leakage",
+      "security-headers"
+    ],
+    "operations": [],
+    "seed": 7,
+    "fuzz_cases": 4,
+    "allow_mutations": false,
+    "allow_destructive": false,
+    "allow_hosts": [],
+    "production": null,
+    "allow_remote_refs": false,
+    "rate": 10,
+    "concurrency": 4,
+    "max_probes": 2000,
+    "max_duration_ms": 900000,
+    "fail_on": "high"
+  },
+  "summary": {
+    "probes": {
+      "total": 5,
+      "passed": 0,
+      "finding": 3,
+      "blocked": 2,
+      "skipped": 0,
+      "not_run": 0,
+      "failed": 0
+    },
+    "findings": {
+      "critical": 1,
+      "high": 1,
+      "medium": 2,
+      "low": 1,
+      "info": 0
+    },
+    "requests": 3,
+    "duration_ms": 1500
+  },
+  "coverage": {
+    "operations": {
+      "covered": 3,
+      "total": 4,
+      "percent": 75.0
+    },
+    "statuses": {
+      "covered": 3,
+      "total": 6,
+      "percent": 50.0
+    },
+    "matrix": [
+      {
+        "operation": "GET /admin/users",
+        "statuses": [
+          {
+            "status": "200",
+            "state": "observed"
+          },
+          {
+            "status": "401",
+            "state": "not-observed"
+          }
+        ]
+      },
+      {
+        "operation": "POST /users",
+        "statuses": [
+          {
+            "status": "201",
+            "state": "not-observed"
+          }
+        ]
+      },
+      {
+        "operation": "GET /users/{id}",
+        "statuses": [
+          {
+            "status": "200",
+            "state": "observed"
+          },
+          {
+            "status": "404",
+            "state": "observed"
+          }
+        ]
+      },
+      {
+        "operation": "DELETE /users/{id}",
+        "statuses": [
+          {
+            "status": "204",
+            "state": "blocked"
+          }
+        ]
+      }
+    ]
+  },
+  "findings": [
+    {
+      "id": "f001",
+      "rule": "auth-not-enforced",
+      "severity": "critical",
+      "operation": "GET /admin/users",
+      "description": "The auth-not-enforced rule.",
+      "remediation": "Fix auth-not-enforced.",
+      "message": "auth-not-enforced on GET /admin/users | got 200",
+      "occurrences": 2,
+      "probes": [
+        "p0001"
+      ],
+      "evidence": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8080/admin/users",
+        "request_headers": [
+          [
+            "Authorization",
+            "Bearer «redacted:bearerAuth_token»"
+          ]
+        ],
+        "status": 200,
+        "response_headers": [
+          [
+            "content-type",
+            "text/plain"
+          ]
+        ],
+        "body": "echo: authorization: Bearer «redacted:bearerAuth_token»\n<script>alert(1)</script>",
+        "truncated": false
+      },
+      "reproduction": {
+        "curl": "curl 'http://127.0.0.1:8080/admin/users' -H 'Authorization: Bearer {{bearerAuth_token}}'",
+        "request": ""
+      }
+    },
+    {
+      "id": "f002",
+      "rule": "server-error-on-invalid-input",
+      "severity": "high",
+      "operation": "POST /users",
+      "description": "The server-error-on-invalid-input rule.",
+      "remediation": "Fix server-error-on-invalid-input.",
+      "message": "server-error-on-invalid-input on POST /users | got 500",
+      "occurrences": 2,
+      "probes": [
+        "p0001"
+      ],
+      "evidence": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8080/users",
+        "request_headers": [
+          [
+            "Authorization",
+            "Bearer «redacted:bearerAuth_token»"
+          ]
+        ],
+        "request_body": "{\"age\": \"x\"} <b>",
+        "status": 500,
+        "response_headers": [
+          [
+            "content-type",
+            "text/plain"
+          ]
+        ],
+        "body": "echo: authorization: Bearer «redacted:bearerAuth_token»\n<script>alert(1)</script>",
+        "truncated": false
+      },
+      "reproduction": {
+        "curl": "curl 'http://127.0.0.1:8080/users' -H 'Authorization: Bearer {{bearerAuth_token}}'",
+        "request": ""
+      }
+    },
+    {
+      "id": "f003",
+      "rule": "response-schema-violation",
+      "severity": "medium",
+      "operation": "GET /users/{id}",
+      "description": "The response-schema-violation rule.",
+      "remediation": "Fix response-schema-violation.",
+      "message": "response-schema-violation on GET /users/{id} | got 200",
+      "occurrences": 2,
+      "probes": [
+        "p0001"
+      ],
+      "evidence": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8080/users/{id}",
+        "request_headers": [
+          [
+            "Authorization",
+            "Bearer «redacted:bearerAuth_token»"
+          ]
+        ],
+        "status": 200,
+        "response_headers": [
+          [
+            "content-type",
+            "text/plain"
+          ]
+        ],
+        "body": "echo: authorization: Bearer «redacted:bearerAuth_token»\n<script>alert(1)</script>",
+        "truncated": false
+      },
+      "reproduction": {
+        "curl": "curl 'http://127.0.0.1:8080/users/{id}' -H 'Authorization: Bearer {{bearerAuth_token}}'",
+        "request": ""
+      }
+    },
+    {
+      "id": "f004",
+      "rule": "undocumented-method-allowed",
+      "severity": "medium",
+      "operation": "PUT /users",
+      "description": "The undocumented-method-allowed rule.",
+      "remediation": "Fix undocumented-method-allowed.",
+      "message": "undocumented-method-allowed on PUT /users | got 200",
+      "occurrences": 2,
+      "probes": [
+        "p0001"
+      ],
+      "evidence": {
+        "method": "PUT",
+        "url": "http://127.0.0.1:8080/users",
+        "request_headers": [
+          [
+            "Authorization",
+            "Bearer «redacted:bearerAuth_token»"
+          ]
+        ],
+        "status": 200,
+        "response_headers": [
+          [
+            "content-type",
+            "text/plain"
+          ]
+        ],
+        "body": "echo: authorization: Bearer «redacted:bearerAuth_token»\n<script>alert(1)</script>",
+        "truncated": false
+      },
+      "reproduction": {
+        "curl": "curl 'http://127.0.0.1:8080/users' -H 'Authorization: Bearer {{bearerAuth_token}}'",
+        "request": ""
+      }
+    },
+    {
+      "id": "f005",
+      "rule": "missing-content-type-options",
+      "severity": "low",
+      "operation": "POST /users",
+      "description": "The missing-content-type-options rule.",
+      "remediation": "Fix missing-content-type-options.",
+      "message": "missing-content-type-options on POST /users | got 500",
+      "occurrences": 2,
+      "probes": [
+        "p0001"
+      ],
+      "evidence": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8080/users",
+        "request_headers": [
+          [
+            "Authorization",
+            "Bearer «redacted:bearerAuth_token»"
+          ]
+        ],
+        "request_body": "{\"age\": \"x\"} <b>",
+        "status": 500,
+        "response_headers": [
+          [
+            "content-type",
+            "text/plain"
+          ]
+        ],
+        "body": "echo: authorization: Bearer «redacted:bearerAuth_token»\n<script>alert(1)</script>",
+        "truncated": false
+      },
+      "reproduction": {
+        "curl": "curl 'http://127.0.0.1:8080/users' -H 'Authorization: Bearer {{bearerAuth_token}}'",
+        "request": ""
+      }
+    }
+  ],
+  "probes": [
+    {
+      "id": "p0001",
+      "family": "conformance",
+      "operation": "GET /admin/users",
+      "method": "GET",
+      "variant": "documented",
+      "outcome": "finding"
+    },
+    {
+      "id": "p0002",
+      "family": "conformance",
+      "operation": "POST /users",
+      "method": "POST",
+      "variant": "documented",
+      "outcome": "finding"
+    },
+    {
+      "id": "p0003",
+      "family": "conformance",
+      "operation": "GET /users/{id}",
+      "method": "GET",
+      "variant": "documented",
+      "outcome": "finding"
+    },
+    {
+      "id": "p0004",
+      "family": "conformance",
+      "operation": "DELETE /users/{id}",
+      "method": "DELETE",
+      "variant": "documented",
+      "outcome": "blocked",
+      "reason": "DELETE needs --allow-destructive"
+    },
+    {
+      "id": "p0005",
+      "family": "conformance",
+      "operation": "DELETE /users/{id}",
+      "method": "DELETE",
+      "variant": "documented",
+      "outcome": "blocked",
+      "reason": "DELETE needs --allow-destructive"
+    }
+  ],
+  "left_behind": [
+    {
+      "probe": "p0002",
+      "operation": "POST /users",
+      "path": "/users/9",
+      "url": "http://127.0.0.1:8080/users/9",
+      "delete": "DELETE /users/{id}"
+    }
+  ],
+  "cleanup": [
+    {
+      "path": "/users/8",
+      "url": "http://127.0.0.1:8080/users/8",
+      "status": 204
+    }
+  ],
+  "operations": [
+    {
+      "operation": "GET /admin/users",
+      "tags": [
+        "admin"
+      ]
+    },
+    {
+      "operation": "POST /users",
+      "tags": [
+        "users"
+      ]
+    },
+    {
+      "operation": "GET /users/{id}",
+      "tags": [
+        "users"
+      ]
+    },
+    {
+      "operation": "DELETE /users/{id}",
+      "tags": [
+        "users"
+      ]
+    }
+  ]
+}

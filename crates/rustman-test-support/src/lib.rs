@@ -2,14 +2,17 @@
 //! integration tests of every Rustman crate. Nothing here touches the network
 //! beyond the loopback interface. Never published.
 
+pub mod bad_api;
 pub mod certs;
 pub mod digest;
 pub mod oauth;
+pub mod openapi;
 pub mod proxy;
 pub mod raw;
 pub mod routes;
 pub mod server;
 
+pub use bad_api::BadApi;
 pub use certs::TestCerts;
 pub use digest::DigestServer;
 pub use oauth::OAuthServer;

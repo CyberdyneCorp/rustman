@@ -1,0 +1,188 @@
+---
+source: crates/rustman-report/tests/render.rs
+expression: "rendered(&report, format)"
+---
+# Exploration exp-20261118-0a1b2c
+
+| | |
+|---|---|
+| Target | `http://127.0.0.1:8080` |
+| Document | `api.yaml` |
+| Environment | dev |
+| Seed | 7 |
+| Started | 2026-11-18T09:00:00.000Z |
+| Finished | 2026-11-18T09:00:01.500Z |
+| Duration | 1.5 s |
+| Safety | read-only; 10 requests/s, 4 at once; budget 2000 requests |
+
+## Summary
+
+2 findings at or above `high`. Findings by severity: 1 critical, 1 high, 2 medium, 1 low, 0 info.
+
+| Probes | Passed | Finding | Blocked | Skipped | Not run | Failed |
+|---:|---:|---:|---:|---:|---:|---:|
+| 5 | 0 | 3 | 2 | 0 | 0 | 0 |
+
+## Findings
+
+| ID | Severity | Rule | Operation | Occurrences | Message |
+|---|---|---|---|---:|---|
+| f001 | critical | `auth-not-enforced` | `GET /admin/users` | 2 | auth-not-enforced on GET /admin/users \| got 200 |
+| f002 | high | `server-error-on-invalid-input` | `POST /users` | 2 | server-error-on-invalid-input on POST /users \| got 500 |
+| f003 | medium | `response-schema-violation` | `GET /users/{id}` | 2 | response-schema-violation on GET /users/{id} \| got 200 |
+| f004 | medium | `undocumented-method-allowed` | `PUT /users` | 2 | undocumented-method-allowed on PUT /users \| got 200 |
+| f005 | low | `missing-content-type-options` | `POST /users` | 2 | missing-content-type-options on POST /users \| got 500 |
+
+### f001 auth-not-enforced: GET /admin/users
+
+The auth-not-enforced rule.
+
+Remediation: Fix auth-not-enforced.
+
+Evidence: `GET http://127.0.0.1:8080/admin/users` answered 200.
+
+~~~~http
+GET http://127.0.0.1:8080/admin/users
+Authorization: Bearer «redacted:bearerAuth_token»
+~~~~
+
+~~~~http
+HTTP 200
+content-type: text/plain
+
+echo: authorization: Bearer «redacted:bearerAuth_token»
+<script>alert(1)</script>
+~~~~
+
+Reproduce:
+
+~~~~sh
+curl 'http://127.0.0.1:8080/admin/users' -H 'Authorization: Bearer {{bearerAuth_token}}'
+~~~~
+
+### f002 server-error-on-invalid-input: POST /users
+
+The server-error-on-invalid-input rule.
+
+Remediation: Fix server-error-on-invalid-input.
+
+Evidence: `POST http://127.0.0.1:8080/users` answered 500.
+
+~~~~http
+POST http://127.0.0.1:8080/users
+Authorization: Bearer «redacted:bearerAuth_token»
+
+{"age": "x"} <b>
+~~~~
+
+~~~~http
+HTTP 500
+content-type: text/plain
+
+echo: authorization: Bearer «redacted:bearerAuth_token»
+<script>alert(1)</script>
+~~~~
+
+Reproduce:
+
+~~~~sh
+curl 'http://127.0.0.1:8080/users' -H 'Authorization: Bearer {{bearerAuth_token}}'
+~~~~
+
+### f003 response-schema-violation: GET /users/{id}
+
+The response-schema-violation rule.
+
+Remediation: Fix response-schema-violation.
+
+Evidence: `GET http://127.0.0.1:8080/users/{id}` answered 200.
+
+~~~~http
+GET http://127.0.0.1:8080/users/{id}
+Authorization: Bearer «redacted:bearerAuth_token»
+~~~~
+
+~~~~http
+HTTP 200
+content-type: text/plain
+
+echo: authorization: Bearer «redacted:bearerAuth_token»
+<script>alert(1)</script>
+~~~~
+
+Reproduce:
+
+~~~~sh
+curl 'http://127.0.0.1:8080/users/{id}' -H 'Authorization: Bearer {{bearerAuth_token}}'
+~~~~
+
+### f004 undocumented-method-allowed: PUT /users
+
+The undocumented-method-allowed rule.
+
+Remediation: Fix undocumented-method-allowed.
+
+Evidence: `PUT http://127.0.0.1:8080/users` answered 200.
+
+~~~~http
+PUT http://127.0.0.1:8080/users
+Authorization: Bearer «redacted:bearerAuth_token»
+~~~~
+
+~~~~http
+HTTP 200
+content-type: text/plain
+
+echo: authorization: Bearer «redacted:bearerAuth_token»
+<script>alert(1)</script>
+~~~~
+
+Reproduce:
+
+~~~~sh
+curl 'http://127.0.0.1:8080/users' -H 'Authorization: Bearer {{bearerAuth_token}}'
+~~~~
+
+### f005 missing-content-type-options: POST /users
+
+The missing-content-type-options rule.
+
+Remediation: Fix missing-content-type-options.
+
+Evidence: `POST http://127.0.0.1:8080/users` answered 500.
+
+~~~~http
+POST http://127.0.0.1:8080/users
+Authorization: Bearer «redacted:bearerAuth_token»
+
+{"age": "x"} <b>
+~~~~
+
+~~~~http
+HTTP 500
+content-type: text/plain
+
+echo: authorization: Bearer «redacted:bearerAuth_token»
+<script>alert(1)</script>
+~~~~
+
+Reproduce:
+
+~~~~sh
+curl 'http://127.0.0.1:8080/users' -H 'Authorization: Bearer {{bearerAuth_token}}'
+~~~~
+
+## Coverage
+
+Operations exercised: 3/4 (75.0%). Documented statuses observed: 3/6 (50.0%).
+
+| Operation | Statuses |
+|---|---|
+| `GET /admin/users` | 200 observed, 401 not-observed |
+| `POST /users` | 201 not-observed |
+| `GET /users/{id}` | 200 observed, 404 observed |
+| `DELETE /users/{id}` | 204 blocked |
+
+## Left behind
+
+- `http://127.0.0.1:8080/users/9` (created by `POST /users`; delete with `DELETE /users/{id}`)

@@ -1,6 +1,7 @@
 //! `rustman import`: collections from other tools (Postman, Insomnia,
-//! Bruno, HAR, `.http` files), and `rustman import curl` for a single curl
-//! command.
+//! Bruno, HAR, `.http` files), `rustman import curl` for a single curl
+//! command, and `rustman import openapi` for a collection generated from
+//! an OpenAPI document.
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -11,6 +12,11 @@ use rustman_core::model::Request;
 use rustman_core::secrets::BACKEND_VAR;
 use rustman_core::workspace::check_new_request_file;
 use rustman_core::{ConfigError, Redactor, SecretBackend, SecretStore};
+use rustman_explore::collection::collection_dir;
+use rustman_explore::openapi::Diagnostic;
+use rustman_explore::store::{Target, generate_for, write_import};
+use rustman_explore::sync::{self, SyncPlan};
+use rustman_explore::{ImportOptions as OpenApiOptions, Imported, import};
 use rustman_http::{CurlError, import_curl, import_curl_words};
 use rustman_import::secrets::Existing;
 use rustman_import::{
@@ -18,7 +24,7 @@ use rustman_import::{
     apply, load, plan,
 };
 
-use super::{EnvSelection, current_dir, print_warnings};
+use super::{EnvSelection, current_dir, exec, print_warnings};
 use crate::exit::{self, CliError};
 
 #[derive(Debug, Args)]
@@ -52,6 +58,8 @@ enum ImportCommand {
     Har(HarArgs),
     /// Import .http / .rest files (a file or a folder) and their environments
     Http(SourceArgs),
+    /// Create a collection from an OpenAPI 3.0 or 3.1 document (a file or URL)
+    Openapi(OpenApiArgs),
 }
 
 #[derive(Debug, Args)]
@@ -139,6 +147,33 @@ impl From<ConflictPolicy> for OnConflict {
 }
 
 #[derive(Debug, Args)]
+struct OpenApiArgs {
+    /// The document: a file path or an http(s) URL, in JSON or YAML
+    #[arg(value_name = "SOURCE")]
+    source: String,
+    /// Write the collection to this folder (default: the API title in
+    /// kebab-case, in the workspace root); it must not exist or be empty
+    #[arg(long, value_name = "DIR")]
+    into: Option<PathBuf>,
+    /// Fetch $refs to other http(s) documents instead of refusing them
+    #[arg(long)]
+    allow_remote_refs: bool,
+    /// Update an imported collection: merge the new document, keeping your
+    /// edits, and move removed operations to _removed/
+    #[arg(long)]
+    sync: bool,
+    /// With --sync: print the change summary without writing any file
+    #[arg(long, requires = "sync")]
+    dry_run: bool,
+    /// With --sync: print the change summary as JSON
+    #[arg(long, requires = "sync")]
+    json: bool,
+    /// Workspace directory (default: search from the current directory upwards)
+    #[arg(long, value_name = "DIR")]
+    workspace: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
 struct CurlArgs {
     /// Write the request file here instead of printing it (never overwrites)
     #[arg(long, value_name = "FILE")]
@@ -164,6 +199,7 @@ pub fn run(args: &ImportArgs) -> Result<u8, CliError> {
     let all = HarFilter::default;
     let (format, a, filter) = match command {
         ImportCommand::Curl(a) => return curl(a).map(|()| exit::SUCCESS),
+        ImportCommand::Openapi(a) => return openapi(a).map(|()| exit::SUCCESS),
         ImportCommand::Har(h) => (Some(Format::Har), &h.source, h.filter()),
         ImportCommand::Auto(a) => (None, a, all()),
         ImportCommand::Postman(a) => (Some(Format::Postman), a, all()),
@@ -305,6 +341,89 @@ fn parse_size(text: &str) -> Result<u64, String> {
         .and_then(|n| n.checked_mul(1 << shift))
         .filter(|n| *n > 0)
         .ok_or_else(|| format!("invalid size '{text}' (e.g. 1048576, 512K, 100M)"))
+}
+
+fn openapi(args: &OpenApiArgs) -> Result<(), CliError> {
+    let root = rustman_core::discovery::find_root(&current_dir()?, args.workspace.as_deref())?;
+    let options = OpenApiOptions {
+        allow_remote_refs: args.allow_remote_refs,
+        ..OpenApiOptions::default()
+    };
+    let imported = exec::runtime()?
+        .block_on(import(&args.source, &options))
+        .inspect_err(|e| print_diagnostics(e.warnings()))?;
+    print_diagnostics(imported.warnings.iter());
+    let dir = match &args.into {
+        Some(dir) => current_dir()?.join(dir),
+        None => root.join(collection_dir(&imported.model)),
+    };
+    let target = Target::new(root, dir);
+    if args.sync && is_non_empty_dir(&target.dir) {
+        return sync_collection(&imported, &target, args);
+    }
+    let generated = generate_for(&imported, &target);
+    print_diagnostics(generated.warnings.iter());
+    let outcome = write_import(&imported, &generated, &target)?;
+    let cwd = current_dir()?;
+    let shown = match &args.into {
+        Some(dir) => dir.clone(),
+        None => target
+            .dir
+            .strip_prefix(&cwd)
+            .unwrap_or(&target.dir)
+            .to_path_buf(),
+    };
+    println!(
+        "imported {} operation{} into {}",
+        generated.requests,
+        if generated.requests == 1 { "" } else { "s" },
+        shown.display()
+    );
+    for name in &outcome.created {
+        println!("created environment '{name}'");
+    }
+    let kept: Vec<String> = outcome
+        .kept
+        .iter()
+        .map(|name| {
+            format!(
+                "environment '{name}' already exists and was not changed (use --sync to update it)"
+            )
+        })
+        .collect();
+    print_warnings(&kept);
+    Ok(())
+}
+
+fn is_non_empty_dir(dir: &Path) -> bool {
+    std::fs::read_dir(dir).is_ok_and(|mut entries| entries.next().is_some())
+}
+
+/// `--sync`: merge `imported` into the collection at `target`.
+fn sync_collection(
+    imported: &Imported,
+    target: &Target,
+    args: &OpenApiArgs,
+) -> Result<(), CliError> {
+    let mut plan: SyncPlan = sync::plan(imported, target)?;
+    print_diagnostics(plan.generated.warnings.iter());
+    print_warnings(&plan.warnings);
+    plan.summary.dry_run = args.dry_run;
+    if !args.dry_run {
+        sync::apply(&plan)?;
+    }
+    if args.json {
+        let json = serde_json::to_string_pretty(&plan.summary).unwrap_or_default();
+        println!("{json}");
+    } else {
+        print!("{}", plan.summary);
+    }
+    Ok(())
+}
+
+fn print_diagnostics<'a>(diagnostics: impl IntoIterator<Item = &'a Diagnostic>) {
+    let lines: Vec<String> = diagnostics.into_iter().map(ToString::to_string).collect();
+    print_warnings(&lines);
 }
 
 fn curl(args: &CurlArgs) -> Result<(), CliError> {

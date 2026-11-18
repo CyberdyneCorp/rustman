@@ -1,0 +1,29 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Show the phase, progress and findings of an exploration
+
+Usage: rustman explore status [OPTIONS] [ID]
+
+Arguments:
+  [ID]
+          The exploration id (default: the most recent one)
+
+Options:
+      --json
+          Print the status as JSON
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards, else the current directory)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

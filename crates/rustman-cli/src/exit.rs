@@ -3,7 +3,13 @@
 use rustman_core::ConfigError;
 use rustman_core::history::HistoryError;
 use rustman_core::run::Summary;
+use rustman_core::safety::PolicyError;
 use rustman_core::vars::ResolveError;
+use rustman_explore::ImportError as OpenApiError;
+use rustman_explore::collection::WriteError;
+use rustman_explore::explore::export::ExportError;
+use rustman_explore::explore::session::SessionError;
+use rustman_explore::sync::SyncError;
 use rustman_http::{CurlError, RequestError, SnippetError};
 use rustman_import::ImportError;
 
@@ -19,6 +25,9 @@ pub const SUCCESS: u8 = 0;
 
 /// At least one assertion failed (and no request errored).
 pub const ASSERTION: u8 = 1;
+
+/// Refused by the safety policy (e.g. the production guard).
+pub const SAFETY: u8 = 4;
 
 /// Interrupted by SIGINT (Ctrl+C).
 pub const INTERRUPTED: u8 = 130;
@@ -44,6 +53,24 @@ pub enum CliError {
     /// An unknown snippet language, or a kind without snippet export.
     #[error(transparent)]
     Snippet(#[from] SnippetError),
+    /// An OpenAPI document that cannot be read or is invalid.
+    #[error(transparent)]
+    OpenApi(#[from] OpenApiError),
+    /// A generated collection that cannot be written.
+    #[error(transparent)]
+    Collection(#[from] WriteError),
+    /// An imported collection that cannot be synced.
+    #[error(transparent)]
+    Sync(#[from] SyncError),
+    /// A safety policy that refuses the target, or an invalid target.
+    #[error(transparent)]
+    Policy(#[from] PolicyError),
+    /// An exploration that cannot be found, read or written.
+    #[error(transparent)]
+    Exploration(#[from] SessionError),
+    /// Findings that cannot be exported.
+    #[error(transparent)]
+    ExportFindings(#[from] ExportError),
 }
 
 impl CliError {
@@ -51,7 +78,18 @@ impl CliError {
         match self {
             Self::Config(err) => code(err),
             Self::Request(_) | Self::Resolve(_) => REQUEST,
-            Self::Curl(_) | Self::History(_) | Self::Import(_) | Self::Snippet(_) => CONFIG,
+            Self::OpenApi(err) if err.is_request_failure() => REQUEST,
+            Self::Policy(err) if err.is_refusal() => SAFETY,
+            Self::Curl(_)
+            | Self::History(_)
+            | Self::Import(_)
+            | Self::Snippet(_)
+            | Self::OpenApi(_)
+            | Self::Collection(_)
+            | Self::Sync(_)
+            | Self::Policy(_)
+            | Self::Exploration(_)
+            | Self::ExportFindings(_) => CONFIG,
         }
     }
 
@@ -209,6 +247,29 @@ mod tests {
         assert!(
             err.render()
                 .starts_with("error: import: cannot detect format of data.json")
+        );
+    }
+
+    #[test]
+    fn openapi_errors_exit_2_unless_the_fetch_failed() {
+        assert_eq!(CliError::from(OpenApiError::Swagger2).code(), 2);
+        let fetch = OpenApiError::Fetch {
+            url: "https://h/openapi.json".into(),
+            error: RequestError::Network("network: connection refused".into()),
+        };
+        assert_eq!(CliError::from(fetch).code(), 3);
+    }
+
+    #[test]
+    fn policy_refusals_exit_4_and_bad_targets_2() {
+        let refused = PolicyError::ProductionHostMismatch {
+            given: "a".into(),
+            host: "b".into(),
+        };
+        assert_eq!(CliError::from(refused).code(), 4);
+        assert_eq!(
+            CliError::from(PolicyError::InvalidTarget("x".into())).code(),
+            2
         );
     }
 

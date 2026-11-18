@@ -46,6 +46,7 @@ const KNOWN_KEYS: &[(&str, &[&str])] = &[
         "safety",
         &["allowed_hosts", "production_hosts", "rate", "concurrency"],
     ),
+    ("explore", &["producers", "disabled_rules"]),
 ];
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -60,7 +61,21 @@ pub struct Settings {
     #[serde(default)]
     pub safety: SafetySettings,
     #[serde(default)]
+    pub explore: ExploreSettings,
+    #[serde(default)]
     pub variables: Variables,
+}
+
+/// `[explore]`: settings of OpenAPI exploration.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ExploreSettings {
+    /// `[explore.producers]`: path parameter name to the operation that
+    /// produces its value (`operationId` or `METHOD /path`), optionally
+    /// followed by `#<json-pointer>` into its response body.
+    pub producers: BTreeMap<String, String>,
+    /// Finding rule ids that are never reported.
+    pub disabled_rules: Vec<String>,
 }
 
 /// `[history]`: whether exchanges are recorded, and how many are kept.
@@ -290,6 +305,20 @@ mod tests {
 
     fn parse(text: &str) -> Result<(Settings, Vec<String>), ConfigError> {
         Settings::parse(Path::new("rustman.toml"), text)
+    }
+
+    #[test]
+    fn the_explore_table_is_read() {
+        let text = "[workspace]\nname = \"shop\"\nversion = 1\n\n[explore]\ndisabled_rules = [\"error-leakage\"]\n\n[explore.producers]\norderId = \"createOrder#/id\"\n";
+        let (settings, warnings) = parse(text).unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(settings.explore.disabled_rules, ["error-leakage"]);
+        assert_eq!(settings.explore.producers["orderId"], "createOrder#/id");
+        let (settings, _) = parse("[workspace]\nname = \"shop\"\nversion = 1").unwrap();
+        assert_eq!(settings.explore, ExploreSettings::default());
+        assert!(
+            parse("[workspace]\nname = \"a\"\nversion = 1\n[explore]\nproducer = {}\n").is_err()
+        );
     }
 
     #[test]
