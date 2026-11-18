@@ -210,6 +210,27 @@ Any variable or header value starting with `Bearer `, `Basic ` or `Digest ` (cas
 - **WHEN** they are imported
 - **THEN** they SHALL be written as `{{x_custom_auth}}` and `Bearer {{x_upstream}}`, and `ca-1` and `up-1` SHALL be stored as secrets
 
+### Requirement: Scoped variable renames
+When a secret folder variable is moved under another name, references SHALL be rewritten only inside the declaring folder's subtree, except below a subfolder or request that declares the same name again.
+
+#### Scenario: Folder override of a collection variable
+- **GIVEN** collection variable `password=A`, folder `F` variable `password=B`, a root request and a request in sibling folder `G` using `{{password}}`
+- **WHEN** it is imported
+- **THEN** the root and `G` requests SHALL resolve to `A` and the request in `F` SHALL resolve to `B`
+
+### Requirement: Token and repeat scan
+Every text written to a tracked file (URLs, headers, bodies, auth, variables, names, descriptions, script literals) SHALL be scanned for GitHub, GitLab, Slack, Stripe live, AWS, Google API key, JWT and PEM private-key tokens, which SHALL be moved. Every moved value of 6 characters or more SHALL be replaced wherever it repeats verbatim: by `{{name}}` where the field takes templates, by `«redacted:name»` in free text.
+
+#### Scenario: Token in a description
+- **GIVEN** a collection description `Use key ghp_...`
+- **WHEN** it is imported
+- **THEN** the description SHALL read `Use key «redacted:github_token»` and the token SHALL be stored as a secret
+
+#### Scenario: Repeated value
+- **GIVEN** `X-Api-Key: v-123456` and the same value in another header and in the URL path
+- **WHEN** it is imported
+- **THEN** every occurrence SHALL be `{{x_api_key}}`
+
 ### Requirement: Secret report
 The import summary and report SHALL list every moved secret by variable name, source location and target environment, never by value. `--keep-secrets-inline` SHALL NOT exist; the only way to put a literal secret into a file is to edit it by hand.
 

@@ -11,10 +11,23 @@ use regex::{Captures, Regex};
 /// A quoted string literal: `'...'`, `"..."` or `` `...` ``, escapes kept.
 const QUOTED: &str = r#"(?:'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`)"#;
 
-/// `"key": "value"` (JSON) and `key: 'value'` (object literals).
+/// `"key": "value"` (JSON) and `key: 'value'` (object literals); also
+/// `"pin": 12345678`, numbers of four digits or more.
 static KEY_VALUE: LazyLock<Regex> = LazyLock::new(|| {
-    let pattern = format!(r#"["']?([A-Za-z_$][\w$.-]*)["']?\s*:\s*({QUOTED})"#);
+    let pattern = format!(r#"["']?([A-Za-z_$][\w$.-]*)["']?\s*:\s*({QUOTED}|-?\d{{4,}}\b)"#);
     Regex::new(&pattern).expect("the key-value pattern is valid")
+});
+
+/// `"key": [` : the start of an array value.
+static KEY_ARRAY: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"["']?([A-Za-z_$][\w$.-]*)["']?\s*:\s*\["#)
+        .expect("the key-array pattern is valid")
+});
+
+/// `btoa('user:pw')` and `atob('...')`: encoded credentials.
+static ENCODED: LazyLock<Regex> = LazyLock::new(|| {
+    let pattern = format!(r"\b(btoa|atob)\(\s*({QUOTED})");
+    Regex::new(&pattern).expect("the encoded-literal pattern is valid")
 });
 
 /// `key=value` pairs of an `application/x-www-form-urlencoded` body.
@@ -28,9 +41,10 @@ static SETTER: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(&pattern).expect("the setter pattern is valid")
 });
 
-/// `const name = "value"` (also `let` and `var`).
+/// `const name = "value"` (also `let`, `var`, or a plain assignment such
+/// as `secret = '...'` or `headers.Authorization = '...'`).
 static ASSIGNMENT: LazyLock<Regex> = LazyLock::new(|| {
-    let pattern = format!(r"\b(?:var|let|const)\s+([A-Za-z_$][\w$]*)\s*=\s*({QUOTED})");
+    let pattern = format!(r"([A-Za-z_$][\w$.]*)\s*=\s*({QUOTED})");
     Regex::new(&pattern).expect("the assignment pattern is valid")
 });
 
@@ -67,11 +81,49 @@ pub fn userinfo_credentials(url: &str) -> Option<Range<usize>> {
     (!range.is_empty()).then_some(range)
 }
 
-/// The `"key": "value"` pairs of `text` whose key `wanted` accepts.
+/// The `"key": "value"` pairs of `text` whose key `wanted` accepts, and
+/// each string of a `"key": ["a", "b"]` array, in text order.
 pub fn key_values(text: &str, wanted: &dyn Fn(&str) -> bool) -> Vec<Found> {
-    KEY_VALUE
+    let mut found: Vec<Found> = KEY_VALUE
         .captures_iter(text)
         .filter(|c| wanted(&c[1]))
+        .map(|c| quoted(&c, 1, 2))
+        .collect();
+    for c in KEY_ARRAY.captures_iter(text).filter(|c| wanted(&c[1])) {
+        let end = c.get(0).expect("the match exists").end();
+        found.extend(array_strings(text, end, &c[1]));
+    }
+    found.sort_by_key(|f| f.range.start);
+    found
+}
+
+/// The string elements of the array starting at byte `from` of `text` (just
+/// after its `[`), up to its `]` or the first element that is not a
+/// string.
+fn array_strings(text: &str, from: usize, name: &str) -> Vec<Found> {
+    let mut out = Vec::new();
+    let mut at = from;
+    loop {
+        let rest = &text[at..];
+        let skipped = rest.len() - rest.trim_start_matches([' ', '\t', '\r', '\n', ',']).len();
+        at += skipped;
+        let Some(m) = STRING_LITERAL.find_at(text, at).filter(|m| m.start() == at) else {
+            return out;
+        };
+        let literal = m.as_str();
+        out.push(Found {
+            name: name.to_owned(),
+            value: decode(&literal[1..literal.len() - 1]),
+            range: m.start() + 1..m.end() - 1,
+        });
+        at = m.end();
+    }
+}
+
+/// The literals passed to `btoa(...)` and `atob(...)`, named after the call.
+pub fn encoded_literals(source: &str) -> Vec<Found> {
+    ENCODED
+        .captures_iter(source)
         .map(|c| quoted(&c, 1, 2))
         .collect()
 }
@@ -132,9 +184,17 @@ pub fn string_literals(source: &str) -> impl Iterator<Item = &str> {
         .map(|m| unquote(m.as_str()))
 }
 
-/// A [`Found`] from a name group and a quoted-value group.
+/// A [`Found`] from a name group and a value group: a quoted literal
+/// (range inside the quotes) or a bare number.
 fn quoted(c: &Captures<'_>, name: usize, value: usize) -> Found {
     let literal = c.get(value).expect("the value group always matches");
+    if !literal.as_str().starts_with(['"', '\'', '`']) {
+        return Found {
+            name: c[name].to_owned(),
+            value: literal.as_str().to_owned(),
+            range: literal.range(),
+        };
+    }
     let range = literal.start() + 1..literal.end() - 1;
     Found {
         name: c[name].to_owned(),
@@ -189,6 +249,28 @@ mod tests {
         assert_eq!(names, ["password", "api_key"]);
         assert_eq!(found[0].value, "p\"w");
         assert_eq!(&text[found[0].range.clone()], r#"p\"w"#);
+    }
+
+    #[test]
+    fn arrays_and_long_numbers_under_secret_keys() {
+        let text = r#"{"tokens": ["a1", "b2"], "ids": ["x"], "pin": 12345678, "pin2": 12}"#;
+        let found = key_values(text, &secretish);
+        let values: Vec<_> = found.iter().map(|f| f.value.as_str()).collect();
+        assert_eq!(values, ["a1", "b2", "12345678"]);
+        assert_eq!(&text[found[2].range.clone()], "12345678");
+    }
+
+    #[test]
+    fn encoded_literals_and_plain_assignments() {
+        let source = "let creds = btoa('user:pw1');\nsecret = 'pw2';\nif (a == 'b') {}";
+        let encoded = encoded_literals(source);
+        assert_eq!(encoded[0].value, "user:pw1");
+        let found = script_values(source, &secretish);
+        assert!(
+            found.iter().any(|f| f.name == "secret" && f.value == "pw2"),
+            "{found:?}"
+        );
+        assert!(!found.iter().any(|f| f.value == "b"), "{found:?}");
     }
 
     #[test]

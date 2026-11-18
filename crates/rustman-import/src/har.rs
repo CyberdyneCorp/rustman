@@ -434,9 +434,74 @@ fn body(data: PostData) -> Option<ImportedBody> {
         "multipart/form-data" if !data.params.is_empty() => ImportedBody::Multipart {
             parts: data.params.into_iter().map(part).collect(),
         },
+        // Chromium exports multipart bodies as `text` only.
+        "multipart/form-data" => match multipart_text(&data.mime_type, &text) {
+            Some(parts) => ImportedBody::Multipart { parts },
+            None => return text_body(&data.mime_type, &text),
+        },
         _ => return text_body(&data.mime_type, &text),
     };
     Some(body)
+}
+
+/// The parts of a raw `multipart/form-data` body, split at the boundary
+/// of `mime`; `None` when there is no boundary or no part.
+fn multipart_text(mime: &str, text: &str) -> Option<Vec<ImportedPart>> {
+    let boundary = mime
+        .split(';')
+        .filter_map(|p| p.trim().strip_prefix("boundary="))
+        .next()?
+        .trim_matches('"');
+    let delimiter = format!("--{boundary}");
+    let parts: Vec<ImportedPart> = text
+        .split(delimiter.as_str())
+        .filter_map(multipart_part)
+        .collect();
+    (!parts.is_empty()).then_some(parts)
+}
+
+/// One part: its `Content-Disposition` name and filename, its
+/// `Content-Type`, and the value after the blank line.
+fn multipart_part(raw: &str) -> Option<ImportedPart> {
+    let raw = raw
+        .strip_prefix("\r\n")
+        .or_else(|| raw.strip_prefix('\n'))?;
+    let (head, body) = raw
+        .split_once("\r\n\r\n")
+        .or_else(|| raw.split_once("\n\n"))?;
+    let body = body
+        .strip_suffix("\r\n")
+        .or_else(|| body.strip_suffix('\n'))
+        .unwrap_or(body);
+    let mut name = None;
+    let mut file_name = None;
+    let mut content_type = None;
+    for line in head.lines() {
+        let (key, value) = line.split_once(':')?;
+        if key.trim().eq_ignore_ascii_case("content-type") {
+            content_type = Some(value.trim().to_owned());
+        } else if key.trim().eq_ignore_ascii_case("content-disposition") {
+            name = disposition(value, "name");
+            file_name = disposition(value, "filename");
+        }
+    }
+    let value = match file_name {
+        Some(file) => PartValue::File(file),
+        None => PartValue::Text(body.to_owned()),
+    };
+    Some(ImportedPart {
+        name: name?,
+        value,
+        content_type,
+    })
+}
+
+/// The `key="value"` parameter of a `Content-Disposition` header.
+fn disposition(header: &str, key: &str) -> Option<String> {
+    header.split(';').find_map(|p| {
+        let (k, v) = p.trim().split_once('=')?;
+        (k == key).then(|| v.trim_matches('"').to_owned())
+    })
 }
 
 fn part(p: Param) -> ImportedPart {
@@ -505,6 +570,26 @@ mod tests {
                     .collect()
             })
             .collect()
+    }
+
+    #[test]
+    fn raw_multipart_text_is_split_into_parts() {
+        let text = "------B\r\nContent-Disposition: form-data; name=\"user\"\r\n\r\nme\r\n\
+                    ------B\r\nContent-Disposition: form-data; name=\"password\"\r\n\r\npw-1\r\n\
+                    ------B\r\nContent-Disposition: form-data; name=\"f\"; filename=\"a.png\"\r\n\
+                    Content-Type: image/png\r\n\r\nPNG\r\n------B--\r\n";
+        let parts = multipart_text("multipart/form-data; boundary=----B", text).unwrap();
+        let summary: Vec<(String, PartValue)> =
+            parts.into_iter().map(|p| (p.name, p.value)).collect();
+        assert_eq!(
+            summary,
+            [
+                ("user".into(), PartValue::Text("me".into())),
+                ("password".into(), PartValue::Text("pw-1".into())),
+                ("f".into(), PartValue::File("a.png".into())),
+            ]
+        );
+        assert!(multipart_text("multipart/form-data", text).is_none());
     }
 
     #[test]

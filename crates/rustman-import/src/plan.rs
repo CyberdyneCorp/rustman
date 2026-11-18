@@ -21,7 +21,7 @@ use crate::report::{
     Action, Conflict, FileEntry, FileKind, Migration, Report, RequestMigration, SecretEntry,
     SourceInfo,
 };
-use crate::secrets::{Existing, MovedSecret, environment_name, extract};
+use crate::secrets::{Existing, MovedSecret, environment_name, extract, redact_tokens};
 use crate::slug::{Slugs, path_limit_error, slug};
 use crate::{scripts, translate};
 
@@ -83,9 +83,31 @@ pub fn default_destination(name: &str) -> String {
     }
 }
 
+/// Give environments whose names share a file name (`Prod` and `prod`)
+/// distinct names (`prod-2`), with a note, so none is merged into another.
+fn distinct_environment_names(collection: &mut ImportedCollection) {
+    let mut slugs = Slugs::default();
+    for env in &mut collection.environments {
+        let file = environment_name(&env.name);
+        let unique = slugs.unique(&file, "imported");
+        if unique != file {
+            let message = format!(
+                "environment '{}' imported as '{unique}': its file name is taken by another environment",
+                env.name
+            );
+            collection
+                .notes
+                .push(Note::new(NoteKind::Info, message, &env.location));
+            env.name = unique;
+        }
+    }
+}
+
 /// Convert `collection` into the files and secrets of an import.
 pub fn plan(mut collection: ImportedCollection, o: &PlanOptions<'_>) -> Result<Plan, ImportError> {
     translate::translate(&mut collection);
+    collection.name = redact_tokens(&collection.name);
+    distinct_environment_names(&mut collection);
     let target = o
         .environment
         .clone()
@@ -116,6 +138,7 @@ pub fn plan(mut collection: ImportedCollection, o: &PlanOptions<'_>) -> Result<P
     if let Some(message) = layout.files.iter().find_map(|f| path_limit_error(&f.path)) {
         return Err(ImportError::invalid(&o.source, message));
     }
+    let kept: HashSet<(String, String)> = kept.into_iter().collect();
     moved.retain(|m| !kept.contains(&(m.environment.clone(), m.secret.name().to_owned())));
     let env_path = format!("environments/{target}.yaml");
     let created = layout

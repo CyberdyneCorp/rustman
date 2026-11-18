@@ -1,6 +1,8 @@
 //! Environment files: source environments and the secrets moved out of
 //! requests, merged into `environments/<name>.yaml` under the conflict policy.
 
+use std::collections::{HashMap, HashSet};
+
 use rustman_core::Environment;
 use rustman_core::model::{VarValue, Variables};
 
@@ -31,11 +33,15 @@ pub(crate) fn changes(collection: &ImportedCollection, moved: &[MovedSecret]) ->
             }
         }
     }
+    let mut listed: HashSet<(String, String)> = out
+        .iter()
+        .flat_map(|c| c.secrets.iter().map(|s| (c.name.clone(), s.clone())))
+        .collect();
     for secret in moved.iter().filter(|m| !m.from_environment) {
-        let change = entry(&mut out, &secret.environment);
-        let name = secret.secret.name().to_owned();
-        if !change.secrets.contains(&name) {
-            change.secrets.push(name);
+        let key = (secret.environment.clone(), secret.secret.name().to_owned());
+        if listed.insert(key) {
+            let change = entry(&mut out, &secret.environment);
+            change.secrets.push(secret.secret.name().to_owned());
         }
     }
     out
@@ -70,6 +76,8 @@ pub(crate) fn merge(change: &EnvChange, existing: &Existing<'_>, policy: OnConfl
     let current = existing.environments.iter().find(|e| e.name == change.name);
     let mut merger = Merger {
         path: format!("environments/{}.yaml", change.name),
+        var_index: HashMap::new(),
+        secret_set: HashSet::new(),
         vars: current
             .map(|e| {
                 e.variables
@@ -90,6 +98,7 @@ pub(crate) fn merge(change: &EnvChange, existing: &Existing<'_>, policy: OnConfl
             kept_secrets: Vec::new(),
         },
     };
+    merger.index();
     for (name, value) in &change.variables {
         merger.variable(name, value);
     }
@@ -102,6 +111,10 @@ pub(crate) fn merge(change: &EnvChange, existing: &Existing<'_>, policy: OnConfl
 
 struct Merger {
     path: String,
+    /// Position of each name in `vars`.
+    var_index: HashMap<String, usize>,
+    /// The names in `env.secrets`.
+    secret_set: HashSet<String>,
     vars: Vec<(String, VarValue)>,
     env: Environment,
     policy: OnConflict,
@@ -116,14 +129,27 @@ impl Merger {
         });
     }
 
+    /// Build the name indexes, so merging stays linear.
+    fn index(&mut self) {
+        self.var_index = self
+            .vars
+            .iter()
+            .enumerate()
+            .map(|(i, (n, _))| (n.clone(), i))
+            .collect();
+        self.secret_set = self.env.secrets.iter().cloned().collect();
+    }
+
     fn variable(&mut self, name: &str, value: &str) {
         let new = VarValue::String(value.to_owned());
-        if self.env.is_secret(name) {
+        if self.secret_set.contains(name) {
             self.conflict(format!("variable {name} kept as a secret (exists)"));
             return;
         }
-        match self.vars.iter_mut().find(|(n, _)| n == name) {
+        let existing = self.var_index.get(name).map(|&i| &mut self.vars[i]);
+        match existing {
             None => {
+                self.var_index.insert(name.to_owned(), self.vars.len());
                 self.vars.push((name.to_owned(), new));
                 self.merged.changed = true;
             }
@@ -139,7 +165,7 @@ impl Merger {
 
     /// Declare `name` as a secret; `stored` when it already has a value.
     fn secret(&mut self, name: &str, stored: bool) {
-        let is_var = self.vars.iter().any(|(n, _)| n == name);
+        let is_var = self.var_index.contains_key(name);
         let overwrite = self.policy == OnConflict::Overwrite;
         if is_var && !overwrite {
             self.conflict(format!("variable {name} skipped (exists)"));
@@ -148,9 +174,12 @@ impl Merger {
         }
         if is_var {
             self.vars.retain(|(n, _)| n != name);
+            let secrets = std::mem::take(&mut self.secret_set);
+            self.index();
+            self.secret_set = secrets;
             self.conflict(format!("variable {name} overwritten as a secret"));
         }
-        if !self.env.is_secret(name) {
+        if self.secret_set.insert(name.to_owned()) {
             self.env.secrets.push(name.to_owned());
             self.merged.changed = true;
         } else if stored && !overwrite {
