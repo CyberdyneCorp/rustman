@@ -8,7 +8,7 @@ use rustman_core::Redactor;
 use rustman_core::assertions::{self, Context, needs_body};
 use rustman_core::captures::{self, CaptureReport, Persistence, RunCaptures};
 use rustman_core::data_rows::RowSource;
-use rustman_core::model::{Assertion, Capture, Request};
+use rustman_core::model::{Assertion, Auth, Capture, Request};
 use rustman_core::redact::remember_for_logs;
 use rustman_core::run::{RequestRecord, RequestStatus, SkipReason};
 use rustman_core::secret::Secret;
@@ -159,7 +159,19 @@ impl Runner<'_> {
             cache_key: target.cache_key,
             login,
         };
-        let send = self.engine.send_authorized(resolved, &options, &context);
+        let send = async {
+            match self.options.gate {
+                Some(gate) => match gated_auth(resolved) {
+                    Ok(()) => gate.send(resolved, &options).await,
+                    Err(e) => Err(e),
+                },
+                None => {
+                    self.engine
+                        .send_authorized(resolved, &options, &context)
+                        .await
+                }
+            }
+        };
         tokio::select! {
             biased;
             () = self.options.cancel.cancelled() => None,
@@ -391,5 +403,18 @@ pub(super) fn log_record(record: &RequestRecord) {
     }
     for header in &response.headers {
         tracing::debug!(request = %record.id, "< {}: {}", header.name, header.value);
+    }
+}
+
+/// A gated send has no challenge-response round trip: refuse Digest auth
+/// up front rather than send the request without credentials. OAuth2 and
+/// JWT fail when the request is prepared, as they get no token there.
+fn gated_auth(request: &ResolvedRequest) -> Result<(), RequestError> {
+    match request.auth {
+        Some(Auth::Digest { .. }) => Err(RequestError::Auth(
+            "digest: the challenge is not answered on this path; send it with `rustman send`"
+                .into(),
+        )),
+        _ => Ok(()),
     }
 }

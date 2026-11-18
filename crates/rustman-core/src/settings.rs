@@ -6,6 +6,7 @@ use std::path::Path;
 
 use serde::Deserialize;
 
+use crate::agent::AgentSettings;
 use crate::error::{ConfigError, LoadError, Position};
 use crate::model::Variables;
 use crate::safety::SafetySettings;
@@ -50,6 +51,18 @@ const KNOWN_KEYS: &[(&str, &[&str])] = &[
     // Read by rustman-webhook (add-webhook-inspector).
     ("webhook", &["host", "port", "verifiers"]),
     ("graphql", &["endpoints"]),
+    (
+        "agent",
+        &[
+            "allow_mutations",
+            "allow_destructive",
+            "require_confirmation",
+            "allowed_hosts",
+            "allowed_origins",
+            "max_output_bytes",
+            "max_jobs",
+        ],
+    ),
 ];
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -67,6 +80,8 @@ pub struct Settings {
     pub explore: ExploreSettings,
     #[serde(default)]
     pub graphql: GraphqlSettings,
+    #[serde(default)]
+    pub agent: AgentSettings,
     #[serde(default)]
     pub variables: Variables,
 }

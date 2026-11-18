@@ -1,15 +1,17 @@
 //! Where documents come from: a local file or an `http(s)` URL, read with a
 //! size cap. URLs go through the `rustman-http` engine with TLS verification
-//! on.
+//! on, or through a [`GovernedSender`] when the caller must hold every
+//! fetch (and every redirect hop) to a safety policy.
 
 use std::fmt;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 use rustman_core::model::RequestSettings;
 use rustman_core::vars::{Resolved, ResolvedBody, ResolvedRequest, TlsFiles};
-use rustman_http::{HttpEngine, RequestError, SendOptions};
+use rustman_http::{GovernedError, GovernedSender, HttpEngine, RequestError, SendOptions};
 use url::Url;
 
 use super::error::ImportError;
@@ -130,6 +132,10 @@ fn normalize(path: &Path) -> PathBuf {
 pub struct FetchOptions {
     pub timeout: Duration,
     pub max_bytes: u64,
+    /// Fetch through this sender: its policy checks each URL and every
+    /// redirect hop, and its governor paces them. Without one, the plain
+    /// engine follows redirects anywhere.
+    pub sender: Option<Arc<GovernedSender>>,
 }
 
 impl Default for FetchOptions {
@@ -137,6 +143,7 @@ impl Default for FetchOptions {
         Self {
             timeout: FETCH_TIMEOUT,
             max_bytes: MAX_DOCUMENT_BYTES,
+            sender: None,
         }
     }
 }
@@ -183,10 +190,17 @@ async fn fetch(url: &Url, options: &FetchOptions) -> Result<String, ImportError>
         tls: TlsFiles::default(),
         secrets: Vec::new(),
     };
-    let exchange = HttpEngine::new()
-        .send(&request, &send_options(options))
-        .await
-        .map_err(|error| fetch_error(url, options, error))?;
+    let send = send_options(options);
+    let exchange = match &options.sender {
+        Some(sender) => sender
+            .send(&request, &send)
+            .await
+            .map_err(|error| governed_error(url, options, error))?,
+        None => HttpEngine::new()
+            .send(&request, &send)
+            .await
+            .map_err(|error| fetch_error(url, options, error))?,
+    };
     if !(200..300).contains(&exchange.status) {
         return Err(ImportError::Source(format!(
             "cannot fetch {}: the server answered {}",
@@ -209,6 +223,23 @@ fn send_options(options: &FetchOptions) -> SendOptions {
     send.body.max_decoded = options.max_bytes;
     send.body.max_in_memory = options.max_bytes + 1;
     send
+}
+
+fn governed_error(url: &Url, options: &FetchOptions, error: GovernedError) -> ImportError {
+    match error {
+        GovernedError::Blocked {
+            reason,
+            url: refused,
+        } => ImportError::Blocked {
+            url: shown(url),
+            refused,
+            reason: reason.reason().to_owned(),
+        },
+        GovernedError::NotRun(budget) => {
+            ImportError::Source(format!("cannot fetch {}: {budget}", shown(url)))
+        }
+        GovernedError::Request(error) => fetch_error(url, options, error),
+    }
 }
 
 fn fetch_error(url: &Url, options: &FetchOptions, error: RequestError) -> ImportError {

@@ -19,6 +19,7 @@ rustman-import.workspace = true
 rustman-report.workspace = true
 rustman-explore.workspace = true
 rustman-graphql.workspace = true
+rustman-mcp.workspace = true
 rustman-tui.workspace = true
 rustman-webhook.workspace = true
 clap.workspace = true
@@ -30,7 +31,7 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 dunce.workspace = true
-tokio = { workspace = true, features = ["rt", "signal", "macros"] }
+tokio = { workspace = true, features = ["rt", "signal", "macros", "net"] }
 tokio-util.workspace = true
 
 [dev-dependencies]

@@ -119,7 +119,7 @@ impl Redactor {
 
     /// The literal credentials of `auth`, as the `Authorization` header (or
     /// the API key's header) carries them.
-    fn add_auth(&mut self, auth: &Auth) {
+    pub fn add_auth(&mut self, auth: &Auth) {
         match auth {
             Auth::Basic { username, password } => {
                 let encoded = STANDARD.encode(format!("{username}:{password}"));

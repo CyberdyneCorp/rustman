@@ -50,6 +50,9 @@ pub enum RequestError {
     /// More redirects than `max_redirects` allows.
     #[error("too many redirects ({0})")]
     TooManyRedirects(u32),
+    /// Refused before it was sent (agent permissions or the safety policy).
+    #[error("blocked: {0}")]
+    Blocked(String),
 }
 
 impl RequestError {
@@ -63,6 +66,7 @@ impl RequestError {
             Self::Io(m) => Self::Io(clean(m)),
             Self::Proxy(m) => Self::Proxy(clean(m)),
             Self::Auth(m) => Self::Auth(clean(m)),
+            Self::Blocked(m) => Self::Blocked(clean(m)),
             other @ (Self::Timeout { .. } | Self::TooManyRedirects(_)) => other,
         }
     }

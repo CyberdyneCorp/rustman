@@ -60,6 +60,8 @@ enum Command {
     Graphql(commands::graphql::GraphqlArgs),
     /// List, inspect, replay and clear past exchanges (redacted)
     History(commands::history::HistoryArgs),
+    /// Serve the workspace to AI agents over MCP (Model Context Protocol)
+    Mcp(commands::mcp::McpArgs),
     /// Print a shell completion script: rustman completions zsh > _rustman
     Completions(commands::completions::CompletionsArgs),
     /// Open the terminal UI (the default when stdin and stdout are a terminal)
@@ -110,6 +112,7 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
         Command::Run(args) => commands::run::run(&args),
         Command::Graphql(args) => commands::graphql::run(&args),
         Command::History(args) => commands::history::run(&args),
+        Command::Mcp(args) => commands::mcp::run(&args),
         Command::Completions(args) => {
             commands::completions::run(&args, &mut Cli::command());
             Ok(exit::SUCCESS)

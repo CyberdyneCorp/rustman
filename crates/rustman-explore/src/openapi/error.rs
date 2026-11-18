@@ -28,6 +28,14 @@ pub enum ImportError {
     /// The request for a URL failed.
     #[error("cannot fetch {url}: {error}")]
     Fetch { url: String, error: RequestError },
+    /// The safety policy refused the fetch of `url` or one of its
+    /// redirect hops (`refused`); nothing was sent there.
+    #[error("cannot fetch {url}: blocked: {reason} ({refused})")]
+    Blocked {
+        url: String,
+        refused: String,
+        reason: String,
+    },
     #[error("{name} is larger than the {} limit", size(*.limit))]
     TooLarge { name: String, limit: u64 },
     #[error(

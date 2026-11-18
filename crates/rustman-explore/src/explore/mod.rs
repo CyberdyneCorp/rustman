@@ -25,6 +25,7 @@ pub mod resources;
 pub mod rules;
 pub mod runner;
 pub mod session;
+pub mod setup;
 
 use crate::openapi::model::Operation;
 

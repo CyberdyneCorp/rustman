@@ -115,12 +115,17 @@ Every outbound request triggered through the agent interface SHALL pass the safe
 - **THEN** no request SHALL be sent and the result SHALL have `code: "blocked"` with reason `host not allowed`
 
 ### Requirement: Read-only agent mode by default
-Unless `[agent].allow_mutations = true` in `rustman.toml`, the agent interface SHALL allow only GET, HEAD and OPTIONS requests and SHALL force exploration probes to read-only. `[agent].allow_destructive = true` SHALL be required for DELETE. CLI flags SHALL NOT be able to raise agent permissions above the config.
+Unless `[agent].allow_mutations = true` in `rustman.toml`, the agent interface SHALL allow only GET, HEAD and OPTIONS requests and SHALL force exploration probes to read-only. `[agent].allow_destructive = true` SHALL be required for DELETE and other methods outside GET, HEAD, OPTIONS, POST, PUT and PATCH, and SHALL imply `allow_mutations = true`, as `--allow-destructive` implies `--allow-mutations` for `rustman explore`. CLI flags SHALL NOT be able to raise agent permissions above the config.
 
 #### Scenario: POST refused by default
 - **GIVEN** `rustman.toml` has no `[agent]` table
 - **WHEN** an agent calls `send_request` with method `POST`
 - **THEN** the result SHALL have `code: "blocked"` with reason `mutations not allowed for agents`
+
+#### Scenario: DELETE needs allow_destructive
+- **GIVEN** `rustman.toml` has `[agent] allow_mutations = true` and no `allow_destructive`
+- **WHEN** an agent calls `send_request` with method `DELETE`
+- **THEN** the result SHALL have `code: "blocked"` with reason `destructive not allowed for agents`
 
 ### Requirement: Human confirmation of mutations
 When mutations are allowed and the client advertises the elicitation capability, each mutating request and each mutating `explore_run` SHALL first ask the human to confirm, via elicitation that shows the method, URL and environment. A decline or cancel SHALL block the action. Without elicitation support, `[agent].require_confirmation` (default `true`) SHALL make such calls fail with `code: "confirmation_unavailable"`.
