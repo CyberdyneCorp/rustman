@@ -71,10 +71,21 @@ Rustman sends a non-ASCII header value (`X-Label: café`) as UTF-8 bytes. Python
 
 Whatever a header, query, form or multipart value holds, the snippet sends it as text and runs nothing:
 
-- Shell snippets (`curl`, `httpie`, `wget`) single-quote every word that is not plain letters, digits and `-_=/,.+`, so `$(...)`, backticks, `!` and line breaks are not expanded; a word starting with `=` is quoted too (zsh expands `=name`). A URL starting with `-` comes after `--` (curl: `--url`), so it is never read as an option.
+- Shell snippets (`curl`, `httpie`, `wget`) single-quote every word that is not plain letters, digits and `-_=/,.+`, so `$(...)`, backticks, `!` and line breaks are not expanded; a word starting with `=` is quoted too (zsh expands `=name`). No user value can start an option: `httpie` always writes `--` before the method, so a header or part name starting with `-` (`-oFILE`, `--session-read-only=…`) is a request item; `wget` always writes `--` before the URL; `curl` gives every value as the argument of its option (`-H`, `--form-string`, `--data-raw`) and a URL starting with `-` after `--url`. A shell argument cannot carry a NUL byte, so a request holding one (in its body, for example) gets a comment instead of a command, with a warning: send it with rustman or put the body in a file.
 - `httpie` reads `:`, `;`, `=` and `@` in a request item as separators, and a header value starting with `=@` or `:=@` (or a part value starting with `@`) as "read this file". The snippet backslash-escapes every such character in a name and the first character of a value, writes an empty header as `Name;` (`Name:` would leave it out), and passes the body as `--raw=<text>`. httpie cannot write a backslash right before one of those characters: such a header or part is left out with a warning. A method that is not made of letters is read by httpie as the URL, so the snippet is a comment and a warning instead.
 - `curl` writes text parts with `--form-string`, which never reads a file, and quotes `-F` values. An empty header becomes `-H 'Name;'` (curl drops `Name:`). A header name that is not an HTTP token (`-H @file` reads headers from a file), a part name holding `=`, and a part content type other than a plain `type/subtype; param=value` (curl reads `;headers=@file` after it) are left out with a warning.
-- Code snippets write every value as a string literal of the language.
+- Code snippets write every value as a string literal of the language (C# also escapes U+0085, U+2028 and U+2029, which end a line there).
+
+### Known fidelity limits
+
+Snippets send the same request as rustman except in these cases:
+
+- `node-axios` adds `Content-Type: application/x-www-form-urlencoded` to a `POST` without a body.
+- `js-fetch` and `node-axios` send a text part that has a content type as a file part (a `Blob`), with a file name.
+- `go` escapes `"` in a part name differently (`\"` instead of `%22`).
+- A backslash in a part name is doubled in `python-requests`, `python-httpx` and `go`.
+- JavaScript reads a JSON body into numbers, so huge integers lose precision and `-0` becomes `0`.
+- File paths holding `\`, and URLs with invalid percent-escapes, may be read differently by each tool.
 
 ## Secrets
 
@@ -125,7 +136,7 @@ response = requests.get(
 print(response.status_code)
 print(response.text)
 $ rustman export snippet --lang httpie --placeholders users/get --env prod
-http --ignore-stdin --follow GET '{{base_url}}/users/{{id}}'
+http --ignore-stdin --follow -- GET '{{base_url}}/users/{{id}}'
 ```
 
 A constant takes the variable's value in the selected environment, or `{{name}}` when it has none.

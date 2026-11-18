@@ -25,6 +25,7 @@ pub use rustman_core::vars::resolve_placeholders;
 use rustman_core::vars::{PlaceholderVar, ResolvedRequest};
 
 use crate::curl::{CurlOptions, curl_command};
+use crate::curl::{NUL_WARNING, nul_refusal};
 use crate::shown::Shown;
 use code::Syntax;
 pub(crate) use code::shell_word;
@@ -244,7 +245,13 @@ pub fn snippet(request: &ResolvedRequest, lang: Lang, options: &SnippetOptions<'
             view.items = items;
             warnings.extend(left_out);
         }
-        render(lang, &view, options.placeholders.is_some())
+        let code = render(lang, &view, options.placeholders.is_some());
+        if lang.syntax() == Syntax::Shell && code.contains('\0') {
+            warnings.push(NUL_WARNING.replace("{tool}", lang.id()));
+            nul_refusal()
+        } else {
+            code
+        }
     };
     Snippet { code, warnings }
 }
@@ -375,6 +382,39 @@ mod tests {
             "snippet: unknown language 'cobol' (supported: curl, httpie, wget, python-requests, \
              python-httpx, js-fetch, node-axios, go, rust-reqwest, powershell, csharp)"
         );
+    }
+
+    /// Regression: a shell argument cannot carry a NUL byte (bash and zsh
+    /// cut it there), so the command silently sent another body. Shell
+    /// snippets refuse such a request with a comment and a warning.
+    #[test]
+    fn shell_snippets_refuse_a_nul_byte() {
+        use rustman_core::vars::{Resolved, ResolvedBody};
+        let request = ResolvedRequest {
+            method: "POST".into(),
+            url: Resolved::literal("http://localhost/x"),
+            query: Vec::new(),
+            headers: Vec::new(),
+            body: ResolvedBody::Text(Resolved::literal("a\0b")),
+            auth: None,
+            settings: Default::default(),
+            tls: Default::default(),
+            secrets: Vec::new(),
+        };
+        for lang in [Lang::Curl, Lang::Httpie, Lang::Wget] {
+            let out = snippet(&request, lang, &SnippetOptions::default());
+            assert!(!out.code.contains('\0'), "{lang}: {:?}", out.code);
+            assert!(out.code.starts_with("# "), "{lang}: {}", out.code);
+            assert!(
+                out.warnings.iter().any(|w| w.contains("NUL byte")),
+                "{lang}: {:?}",
+                out.warnings
+            );
+        }
+        let exported = crate::curl::export_curl(&request, false);
+        assert!(!exported.command.contains('\0'));
+        let python = snippet(&request, Lang::PythonRequests, &SnippetOptions::default());
+        assert!(python.code.contains(r"a\u0000b"), "{}", python.code);
     }
 
     /// A URL that would read as an option (the engine refuses it, but a

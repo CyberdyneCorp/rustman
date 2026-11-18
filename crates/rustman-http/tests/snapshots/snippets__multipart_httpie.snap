@@ -2,7 +2,7 @@
 source: crates/rustman-http/tests/snippets.rs
 expression: snippet.code
 ---
-http --ignore-stdin --follow --multipart PUT 'https://api.example/users/42/avatar' \
+http --ignore-stdin --follow --multipart -- PUT 'https://api.example/users/42/avatar' \
   'X-Trace:t-1' \
   'caption=It'\''s me' \
   'meta={"v":1}' \

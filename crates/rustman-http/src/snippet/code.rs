@@ -23,9 +23,13 @@ impl Syntax {
         match self {
             Self::Shell => shell_word(text),
             Self::PowerShell => powershell_literal(text),
-            Self::Python | Self::Js | Self::CSharp => {
-                serde_json::to_string(text).expect("strings serialize")
-            }
+            Self::Python | Self::Js => serde_json::to_string(text).expect("strings serialize"),
+            // C# rejects these line terminators inside a regular string literal.
+            Self::CSharp => serde_json::to_string(text)
+                .expect("strings serialize")
+                .replace('\u{2028}', "\\u2028")
+                .replace('\u{2029}', "\\u2029")
+                .replace('\u{0085}', "\\u0085"),
             // Go refuses a byte order mark anywhere but at the start of a file.
             Self::Go => serde_json::to_string(text)
                 .expect("strings serialize")
@@ -223,6 +227,18 @@ mod tests {
         assert_eq!(Syntax::Go.literal("a\u{feff}"), r#""a\ufeff""#);
         assert_eq!(Syntax::Shell.literal("=ls"), "'=ls'");
         assert_eq!(Syntax::Shell.literal("$(id)`id`!!"), r"'$(id)`id`'\!''\!''");
+    }
+
+    /// Regression: C# refuses U+0085, U+2028 and U+2029 inside a regular
+    /// string literal (they are line terminators there), so the snippet did
+    /// not compile.
+    #[test]
+    fn csharp_escapes_its_line_terminators() {
+        assert_eq!(
+            Syntax::CSharp.literal("a\u{85}b\u{2028}c\u{2029}d\n"),
+            r#""a\u0085b\u2028c\u2029d\n""#
+        );
+        assert_eq!(Syntax::Js.literal("\u{2028}"), "\"\u{2028}\"");
     }
 
     #[test]

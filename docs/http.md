@@ -257,7 +257,7 @@ url: https://api.example.com/health
 
 ### Export
 
-`rustman export curl <request>` prints the request, with its variables filled in for the active environment, as a single POSIX-shell-quoted curl command. Secrets are replaced by `«redacted:<name>»` unless `--show-secrets` is passed, as are the values of `Authorization`, `Cookie` and the other credential headers.
+`rustman export curl <request>` prints the request, with its variables filled in for the active environment, as a single POSIX-shell-quoted curl command. Secrets are replaced by `«redacted:<name>»` unless `--show-secrets` is passed, as are the values of `Authorization`, `Cookie` and the other credential headers. A request holding a NUL byte (in its body, for example) is printed as a comment with a warning instead, since a shell argument cannot carry one.
 
 ```yaml
 # environments/prod.yaml
