@@ -8,7 +8,8 @@ and the requirements stay in `openspec/changes/<id>/`. Change ids below are the 
 
 - **Specified:** 26 OpenSpec changes, 643 requirements, ~990 scenarios, ~645 implementation tasks.
 - **Done:** Phase 0 and **v0.1 — Headless core**: Cargo workspace and CI (#1); workspace, environments, secrets and redaction (#2); the HTTP engine (#3); assertions, `send`/`run`, reporters and history (#47); the safety policy and governed sender (#48). `bootstrap-core-engine` is archived, and its living specs are in `openspec/specs/`.
-- **In progress:** v0.2. The TUI shell (`add-terminal-ui` groups 1–3, #49) is merged; importers, runner parity, the HTTP follow-ups and the rest of the TUI are being built. The rest is tracked in issues under the [v0.2 milestone](https://github.com/CyberdyneCorp/rustman/milestone/2) and the [roadmap tracking issue](https://github.com/CyberdyneCorp/rustman/issues/46).
+- **Done:** **v0.2 — Usable**: the TUI workbench (#49, #54, #57), importers for Postman, Insomnia, Bruno, HAR and `.http` (#55), and runner parity: `run --data`, Digest/SigV4/JWT auth, code snippets (#56). All three exit criteria pass. A few follow-up tasks remain open: the TUI "Import…" and "Copy as…" actions, SigV4 credential sources, snippet `--placeholders`, and the manual terminal matrix.
+- **In progress:** v0.3 and v0.4. The OpenAPI explorer (#58) is merged, and its exit criterion (`bad-api` end to end) passes in CI on all three OSes; the agent MCP server (#10) is next. The webhook inspector (#59) is in review and the GraphQL client (#11) is being built. Open work is tracked in the [roadmap tracking issue](https://github.com/CyberdyneCorp/rustman/issues/46).
 - **CI:** fmt, clippy, tests on Linux/macOS/Windows, `cargo deny`, and `openspec validate --all --strict`.
 
 The order in `openspec/ROADMAP.md` follows the order the specs were written in. This roadmap reorders the work by
