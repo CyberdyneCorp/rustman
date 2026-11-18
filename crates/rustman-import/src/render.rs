@@ -179,9 +179,11 @@ fn file_path(src: &str, target: &Target<'_>, at: &Location, notes: &mut Vec<Note
 }
 
 /// Whether the relative path `src`, from a file `depth` folders below the
-/// root, climbs out of the workspace or is a Windows absolute path.
+/// root, climbs out of the workspace or is absolute on any OS: collections
+/// come from other machines, so `/Users/x` on Windows and `C:\x` on Unix
+/// are absolute too.
 fn escapes(src: &str, depth: usize) -> bool {
-    if src.starts_with('\\') || src.get(1..2) == Some(":") {
+    if src.starts_with(['/', '\\']) || src.get(1..2) == Some(":") {
         return true;
     }
     let mut level = depth as isize;
@@ -389,6 +391,22 @@ fn graphql_variables(vars: Option<&str>) -> (Option<Node>, Option<String>) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn absolute_paths_from_any_os_escape() {
+        for src in [
+            "/Users/someone/Desktop/invoice.pdf",
+            "C:\\Users\\x\\a.pdf",
+            "c:/x/a.pdf",
+            "\\\\server\\share\\a.pdf",
+            "\\x\\a.pdf",
+        ] {
+            assert!(super::escapes(src, 3), "{src}");
+        }
+        assert!(!super::escapes("files/a.pdf", 0));
+        assert!(!super::escapes("../a.pdf", 1));
+        assert!(super::escapes("../../a.pdf", 1));
+    }
+
     use super::*;
 
     fn target<'a>(root: &'a Path, path: &'a str, redactor: &'a Redactor) -> Target<'a> {
