@@ -183,6 +183,18 @@ fn source(
     har: HarFilter,
 ) -> Result<u8, CliError> {
     let ws = o.selection.workspace()?;
+    // One import at a time per workspace, from reading it to writing it;
+    // the workspace is read again once the lock is held.
+    let _lock = if o.dry_run {
+        None
+    } else {
+        Some(rustman_import::lock_workspace(&ws.root)?)
+    };
+    let ws = if o.dry_run {
+        ws
+    } else {
+        o.selection.workspace()?
+    };
     let env = o.selection.environment(&ws)?;
     let shown = src.display().to_string();
     let source_options = SourceOptions {

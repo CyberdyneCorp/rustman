@@ -446,18 +446,19 @@ fn weak_secret_values_never_change_other_data() {
 }
 
 #[test]
-fn a_secret_like_value_off_token_boundaries_is_kept_and_noted() {
+fn a_secret_like_value_off_token_boundaries_is_redacted_and_noted() {
     let plan = plan_postman(json!({
         "info": {"name": "Off", "schema": SCHEMA},
         "item": [{"name": "r", "request": {"method": "GET", "url": "https://x.test/?a=xSAME-VALUE-42",
             "header": [{"key": "X-Api-Key", "value": "SAME-VALUE-42"}]}}]
     }));
+    assert_nowhere(&plan, "SAME-VALUE-42");
     let r = file(&plan, "off/r.rman.yaml");
-    assert!(r.contains("value: xSAME-VALUE-42"), "{r}");
+    assert!(r.contains("value: x«redacted:x_api_key»"), "{r}");
     assert!(
-        review_notes(&plan).iter().any(|n| n
-            .starts_with("the value of secret x_api_key also appears in ")
-            && n.contains(":query a;")),
+        review_notes(&plan).iter().any(|n| n.ends_with(
+            "field query a contained secret x_api_key inside other text; it was redacted, edit the field to use {{x_api_key}}"
+        )),
         "{:?}",
         review_notes(&plan)
     );
@@ -495,4 +496,169 @@ fn environment_files_only_take_their_own_secrets_as_whole_values() {
     // Embedded values and other environments' secrets are left alone.
     assert!(base.contains("note: key SAME-VAL-42X"), "{base}");
     assert!(base.contains("other: HDR-VAL-99X"), "{base}");
+}
+
+/// `text` with each `{{name}}` of a moved secret replaced by its value:
+/// the bytes the request would send.
+fn sent(plan: &Plan, text: &str) -> String {
+    let mut out = text.to_owned();
+    for m in &plan.secrets {
+        out = out.replace(&format!("{{{{{}}}}}", m.secret.name()), m.secret.expose());
+    }
+    out
+}
+
+/// The `url:` line or JSON `content:` of a planned request file.
+fn line_of(text: &str, key: &str) -> String {
+    text.lines()
+        .find_map(|l| l.trim_start().strip_prefix(key))
+        .unwrap_or_else(|| panic!("no {key} in {text}"))
+        .trim()
+        .trim_matches('\'')
+        .replace("''", "'")
+}
+
+#[test]
+fn encoded_repeats_are_redacted_never_sent_with_different_bytes() {
+    // The reviewer's echo cases: a raw `{{name}}` in an encoded context
+    // would send invalid JSON, an extra path segment or an extra field.
+    let plan = plan_postman(json!({
+        "info": {"name": "Echo", "schema": SCHEMA},
+        "variable": [{"key": "password", "value": "Pa\"ss&w0rd+1"},
+                     {"key": "slash_secret", "value": "ab/cd-1234"},
+                     {"key": "form_secret", "value": "p@ss&w0rd=1"}],
+        "item": [
+            {"name": "json", "request": {"method": "POST", "url": "https://a.test/x",
+              "body": {"mode": "raw", "raw": "{\"note\": \"Pa\\\"ss&w0rd+1\", \"s\": \"ab\\/cd-1234\"}"}}},
+            {"name": "path", "request": {"method": "GET", "url": "https://a.test/u/ab%2Fcd-1234/x"}},
+            {"name": "form", "request": {"method": "POST", "url": "https://a.test/f",
+              "body": {"mode": "raw", "raw": "note=p%40ss%26w0rd%3D1"}}}
+        ]
+    }));
+    let originals = [
+        (
+            "json",
+            "content:",
+            r#"{"note": "Pa\"ss&w0rd+1", "s": "ab\/cd-1234"}"#,
+        ),
+        ("path", "url:", "https://a.test/u/ab%2Fcd-1234/x"),
+        ("form", "content:", "note=p%40ss%26w0rd%3D1"),
+    ];
+    for (name, key, original) in originals {
+        let text = file(&plan, &format!("echo/{name}.rman.yaml"));
+        let written = line_of(text, key);
+        let bytes = sent(&plan, &written);
+        assert!(
+            bytes == original || written.contains("«redacted:"),
+            "{name}: {written}"
+        );
+    }
+    for value in [
+        "Pa\\\"ss&w0rd+1",
+        "ab\\/cd-1234",
+        "ab%2Fcd-1234",
+        "p%40ss%26w0rd%3D1",
+    ] {
+        assert_nowhere(&plan, value);
+    }
+    let notes = review_notes(&plan);
+    assert!(
+        notes.iter().any(|n| n.contains("field body contained secret password in encoded form; it was redacted, edit the field to use {{password}}")),
+        "{notes:?}"
+    );
+}
+
+#[test]
+fn long_letter_and_digit_secrets_are_replaced_raw() {
+    let plan = plan_postman(json!({
+        "info": {"name": "Long", "schema": SCHEMA},
+        "variable": [{"key": "access_token", "value": "AbCdEfGhIjKlMnOpQrStUvWxYzAbCdEf"},
+                     {"key": "client_secret", "value": "8473629184736291"}],
+        "item": [{"name": "r", "request": {"method": "POST", "url": "https://a.test/x",
+            "header": [{"key": "X-Note", "value": "AbCdEfGhIjKlMnOpQrStUvWxYzAbCdEf"}],
+            "body": {"mode": "raw", "raw": "{\"acct\": \"8473629184736291\", \"n\": 8473629184736291}"}}}]
+    }));
+    assert_nowhere(&plan, "AbCdEfGhIjKlMnOpQrStUvWxYzAbCdEf");
+    assert_nowhere(&plan, "8473629184736291");
+    let r = file(&plan, "long/r.rman.yaml");
+    assert!(r.contains("value: '{{access_token}}'"), "{r}");
+    let body = line_of(r, "content:");
+    assert_eq!(
+        sent(&plan, &body),
+        r#"{"acct": "8473629184736291", "n": 8473629184736291}"#
+    );
+}
+
+#[test]
+fn a_token_shaped_secret_is_found_inside_a_word() {
+    let gh = "ghp_FNEGaaaaBBBBccccDDDDeeee0123456789";
+    let plan = plan_postman(json!({
+        "info": {"name": "Gh", "schema": SCHEMA},
+        "item": [{"name": "r", "request": {"method": "POST", "url": "https://a.test/x",
+            "body": {"mode": "raw", "raw": format!("{{\"enc\": \"{gh}\", \"w\": \"abc{gh}\"}}")}}}]
+    }));
+    assert_nowhere(&plan, "FNEGaaaaBBBB");
+    let body = line_of(file(&plan, "gh/r.rman.yaml"), "content:");
+    assert_eq!(
+        sent(&plan, &body),
+        format!("{{\"enc\": \"{gh}\", \"w\": \"abc{gh}\"}}")
+    );
+}
+
+#[test]
+fn a_moved_secret_never_takes_an_undeclared_referenced_name() {
+    let plan = plan_postman(json!({
+        "info": {"name": "Ref", "schema": SCHEMA},
+        "item": [
+            {"name": "A", "request": {"method": "GET", "url": "https://a.test/a",
+              "header": [{"key": "Authorization", "value": "Bearer {{token}}"}]}},
+            {"name": "B", "request": {"method": "GET", "url": "https://a.test/b",
+              "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "abc123def456ghi"}]}}}
+        ]
+    }));
+    // `{{token}}` in A is meant to come from the user's environment.
+    assert!(plan.secrets.iter().all(|m| m.secret.name() != "token"));
+    let b = file(&plan, "ref/b.rman.yaml");
+    assert!(b.contains("token: '{{token_2}}'"), "{b}");
+    assert!(file(&plan, "ref/a.rman.yaml").contains("Bearer {{token}}"));
+}
+
+#[test]
+fn concurrent_imports_into_one_workspace_keep_both_environments_changes() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("rustman.toml"),
+        "[workspace]\nname = \"t\"\nversion = 1\n",
+    )
+    .unwrap();
+    let root = dir.path().to_path_buf();
+    let import = move |name: &'static str, secret: &'static str| {
+        let root = root.clone();
+        std::thread::spawn(move || {
+            let collection = json!({
+                "info": {"name": name, "schema": SCHEMA},
+                "item": [{"name": "r", "request": {"method": "GET", "url": "https://a.test",
+                    "header": [{"key": format!("X-{name}-Key"), "value": secret}]}}]
+            });
+            let _lock = rustman_import::lock_workspace(&root).unwrap();
+            let ws = rustman_core::Workspace::load(&root).unwrap();
+            let mut setup = Setup::new(&root);
+            setup.environments = &ws.environments;
+            let parsed = Format::Postman
+                .parse(&collection.to_string(), "c.json")
+                .unwrap();
+            let plan = setup.plan_collection(Format::Postman, parsed, "c.json");
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            let save = |_: &[(&str, &rustman_core::Secret<String>)]| Ok(());
+            rustman_import::apply(&plan, &root, &save).unwrap();
+        })
+    };
+    let first = import("Alpha", "ALPHA-SECRET-1");
+    let second = import("Beta", "BETA-SECRET-2");
+    first.join().unwrap();
+    second.join().unwrap();
+    let local = std::fs::read_to_string(dir.path().join("environments/local.yaml")).unwrap();
+    assert!(local.contains("x_alpha_key"), "{local}");
+    assert!(local.contains("x_beta_key"), "{local}");
+    assert!(dir.path().join(rustman_import::IMPORT_LOCK).exists());
 }
