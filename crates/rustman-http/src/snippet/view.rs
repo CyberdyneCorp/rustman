@@ -38,9 +38,6 @@ pub(super) struct View {
     pub constants: Vec<Constant>,
     /// httpie's request items (headers and parts), escaped but not quoted.
     pub items: Vec<String>,
-    /// Whether the URL would read as an option: shell tools put `--` (or
-    /// curl `--url`) before it.
-    pub url_is_option: bool,
 }
 
 #[derive(Serialize)]
@@ -105,7 +102,6 @@ impl Context<'_> {
             method: request.method.clone(),
             method_lower: request.method.to_ascii_lowercase(),
             standard_method: STANDARD_METHODS.contains(&request.method.as_str()),
-            url_is_option: url.starts_with('-'),
             url,
             headers: self.headers(request, content_type.as_deref()),
             content_type,

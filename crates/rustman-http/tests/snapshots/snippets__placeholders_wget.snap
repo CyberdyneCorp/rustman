@@ -9,4 +9,4 @@ wget --quiet --output-document=- --content-on-error \
   --header 'Authorization: Bearer «redacted:api_token»' \
   --header 'Content-Type: application/json' \
   --body-data '{"name":"Ada Lovelace","admin":true,"teams":["core",7],"manager":null}' \
-  '{{base_url}}/users?notify=yes'
+  -- '{{base_url}}/users?notify=yes'

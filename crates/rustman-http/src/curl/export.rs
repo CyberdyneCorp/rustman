@@ -314,6 +314,14 @@ impl Command<'_> {
     }
 
     fn finish(self) -> Exported {
+        if self.words.iter().any(|w| w.contains('\0')) {
+            let mut warnings = self.warnings;
+            warnings.push(NUL_WARNING.replace("{tool}", "curl"));
+            return Exported {
+                command: nul_refusal(),
+                warnings,
+            };
+        }
         let mut command = String::from("curl");
         for word in &self.words {
             command.push(' ');
@@ -324,6 +332,18 @@ impl Command<'_> {
             warnings: self.warnings,
         }
     }
+}
+
+/// The warning for a request a shell command cannot carry: shells cut an
+/// argument at its first NUL byte, so the command would send something else.
+pub(crate) const NUL_WARNING: &str =
+    "snippet: {tool} cannot be given a NUL byte in a shell argument; send the request with rustman";
+
+/// The command written instead: a comment, so nothing different is sent.
+pub(crate) fn nul_refusal() -> String {
+    "# this request contains a NUL byte, which a shell argument cannot carry; \
+     send it with rustman or put the body in a file"
+        .to_owned()
 }
 
 /// A `-F` value in double quotes, with `"` and `\` escaped.

@@ -39,7 +39,9 @@ const PWNED: &str = "PWNED";
 
 /// Header values: each would read `decoy.txt`, run a command or expand
 /// history if written unescaped somewhere.
-const HEADER_VALUES: [(&str, &str); 9] = [
+const HEADER_VALUES: [(&str, &str); 10] = [
+    // A name starting with `-` read as an option: httpie `-o` writes a file.
+    ("-oPWNED_HDR", "v"),
     ("X-Embed", "=@decoy.txt"),
     ("X-Json-Embed", ":=@decoy.txt"),
     ("X-Header-Embed", "@decoy.txt"),
@@ -109,12 +111,34 @@ const TYPED_PART: &str = "    - name: 'typed=@decoy.txt'
       content_type: 'text/plain;headers=@decoy.txt'
 ";
 
+/// The httpie session a `--session-read-only` part name would load.
+const SESSION: &str = "sess.json";
+const SESSION_CANARY: &str = "SESSION-CANARY-91c2";
+
+/// Text parts whose names would be read as options if a tool took them
+/// for arguments: httpie `-o <path>` writes the response there, and
+/// `--session-read-only=<file>` sends a stored session's headers.
+fn option_parts(dir: &Path) -> Vec<(String, String)> {
+    let dir = dir.display();
+    vec![
+        ("-o".to_owned(), format!("{dir}/PWNED_O")),
+        (
+            format!("--session-read-only={dir}/{SESSION}"),
+            "s".to_owned(),
+        ),
+    ]
+}
+
 /// A multipart request with every payload in a text part, one real file
-/// part and [`TYPED_PART`].
-fn multipart_request() -> String {
+/// part, [`TYPED_PART`] and the [`option_parts`] of `dir`.
+fn multipart_request(dir: &Path) -> String {
+    let options: String = option_parts(dir)
+        .iter()
+        .map(|(n, v)| format!("    - name: {}\n      value: {}\n", yaml(n), yaml(v)))
+        .collect();
     format!(
         "version: 1\nkind: http\nname: multipart\nmethod: POST\nurl: '{{{{base_url}}}}/m'\n\
-         headers:\n{}body:\n  type: multipart\n  parts:\n{}    - name: upload\n      file: upload.txt\n      content_type: text/plain\n\
+         headers:\n{}body:\n  type: multipart\n  parts:\n{}{options}    - name: upload\n      file: upload.txt\n      content_type: text/plain\n\
          {TYPED_PART}",
         headers_yaml(),
         fields_yaml("    "),
@@ -136,7 +160,11 @@ impl Fixture {
             &format!("variables:\n  base_url: {base_url}\n"),
         );
         write("form.rman.yaml", &form_request());
-        write("multipart.rman.yaml", &multipart_request());
+        write("multipart.rman.yaml", &multipart_request(dir.path()));
+        write(
+            SESSION,
+            &format!(r#"{{"headers": {{"X-Session": "{SESSION_CANARY}"}}}}"#),
+        );
         write("upload.txt", "UPLOADED");
         write(DECOY, DECOY_CONTENT);
         Self { dir }
@@ -276,6 +304,10 @@ fn httpie_items_carry_every_value_as_text() {
     let f = Fixture::new("http://127.0.0.1:9");
     for name in ["form", "multipart"] {
         let words = shell_snippet(&f, name, Lang::Httpie);
+        // Regression: `--` was written only for a URL starting with `-`, so
+        // an item starting with `-` (`-oFILE`) was read as an option.
+        let method = words.iter().position(|w| w == "POST").unwrap();
+        assert_eq!(words[method - 1], "--", "{words:?}");
         let items: Vec<Item> = words
             .iter()
             .skip_while(|w| !w.starts_with("http://"))
@@ -300,6 +332,14 @@ fn httpie_items_carry_every_value_as_text() {
                     key: format!("f{i}"),
                     sep: "=".into(),
                     value: (*value).into(),
+                };
+                assert!(items.contains(&expected), "{expected:?} in {items:?}");
+            }
+            for (part, value) in option_parts(f.path()) {
+                let expected = Item {
+                    key: part,
+                    sep: "=".into(),
+                    value,
                 };
                 assert!(items.contains(&expected), "{expected:?} in {items:?}");
             }
@@ -337,8 +377,12 @@ fn curl_reads_no_file_but_the_upload() {
             assert_eq!(
                 f.snippet(name, Lang::Curl).warnings,
                 [
-                    "the content type 'text/plain;headers=@decoy.txt' of part 'typed=@decoy.txt' cannot be written for curl -F; it is left out",
-                    "part 'typed=@decoy.txt' has '=' in its name, which curl cannot send; it is left out",
+                    format!(
+                        "part '--session-read-only={}/{SESSION}' has '=' in its name, which curl cannot send; it is left out",
+                        f.path().display()
+                    ),
+                    "the content type 'text/plain;headers=@decoy.txt' of part 'typed=@decoy.txt' cannot be written for curl -F; it is left out".to_owned(),
+                    "part 'typed=@decoy.txt' has '=' in its name, which curl cannot send; it is left out".to_owned(),
                 ]
             );
         }
@@ -588,9 +632,19 @@ fn snippets_send_the_payloads_as_text_and_run_nothing() {
                 .requests
                 .recv_timeout(Duration::from_secs(20))
                 .unwrap_or_else(|_| panic!("{lang} {name}: no request"));
+            let pwned: Vec<_> = fs::read_dir(f.path())
+                .unwrap()
+                .flatten()
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .filter(|n| n.starts_with(PWNED))
+                .collect();
             assert!(
-                !f.path().join(PWNED).exists(),
-                "{lang} {name} ran a command"
+                pwned.is_empty(),
+                "{lang} {name} ran a command or wrote a file: {pwned:?}"
+            );
+            assert!(
+                !contains(&request, SESSION_CANARY.as_bytes()),
+                "{lang} {name} loaded a session"
             );
             assert!(
                 !contains(&request, DECOY_CONTENT.as_bytes()),
@@ -617,6 +671,20 @@ fn snippets_send_the_payloads_as_text_and_run_nothing() {
                     );
                 }
                 assert!(contains(&request, b"\r\n\r\nUPLOADED\r\n--"), "{lang}");
+                for (part, value) in option_parts(f.path()) {
+                    // curl cannot send a part name holding `=`.
+                    if lang == Lang::Curl && part.contains('=') {
+                        continue;
+                    }
+                    let disposition = format!("name=\"{part}\"");
+                    let body = format!("\r\n\r\n{value}\r\n--");
+                    assert!(
+                        contains(&request, disposition.as_bytes())
+                            && contains(&request, body.as_bytes()),
+                        "{lang}: part {part} in\n{}",
+                        String::from_utf8_lossy(&request)
+                    );
+                }
             } else {
                 let expected = form_body();
                 assert!(

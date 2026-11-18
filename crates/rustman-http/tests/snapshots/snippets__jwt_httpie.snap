@@ -3,4 +3,4 @@ source: crates/rustman-http/tests/snippets.rs
 expression: snippet.code
 ---
 # jwt auth: sign a JWT and send it as a bearer token
-http --ignore-stdin --follow GET 'https://api.example/private'
+http --ignore-stdin --follow -- GET 'https://api.example/private'

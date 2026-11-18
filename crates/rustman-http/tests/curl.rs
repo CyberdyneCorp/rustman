@@ -598,6 +598,11 @@ proptest! {
         request.body = body.resolved();
 
         let exported = export_curl(&request, false);
+        if exported.command.starts_with("# ") {
+            // A NUL byte cannot be a shell argument: the export refuses it.
+            prop_assert!(exported.warnings.iter().any(|w| w.contains("NUL byte")));
+            return Ok(());
+        }
         let imported = import_curl(&exported.command).unwrap();
         prop_assert!(imported.warnings.is_empty(), "{:?}", imported.warnings);
         let r = imported.request;

@@ -6,4 +6,4 @@ expression: snippet.code
 wget --quiet --output-document=- --content-on-error \
   --method=PUT \
   --header 'X-Trace: t-1' \
-  'https://api.example/users/42/avatar'
+  -- 'https://api.example/users/42/avatar'

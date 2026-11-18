@@ -2,4 +2,4 @@
 source: crates/rustman-http/tests/snippets.rs
 expression: snippet.code
 ---
-http --ignore-stdin --auth-type digest '--auth=alice:«redacted:password»' --follow GET 'https://api.example/private'
+http --ignore-stdin --auth-type digest '--auth=alice:«redacted:password»' --follow -- GET 'https://api.example/private'
