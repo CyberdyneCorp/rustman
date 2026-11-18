@@ -253,7 +253,12 @@ The environment switcher SHALL open with `Alt+E` and list all environments, with
 - **THEN** the status bar SHALL show `staging` and the next send SHALL resolve variables from `staging`
 
 ### Requirement: Secret masking and reveal
-Secret values SHALL be rendered as `••••••••` everywhere in the TUI: editors, tooltips, the environment switcher, captured values and response headers echoing them. A reveal toggle (`Alt+R`) SHALL unmask secrets for the current session only, show a persistent `SECRETS VISIBLE` badge in the status bar while active, and reset on restart.
+Secret values SHALL be rendered as `••••••••` in editors, tooltips, the environment switcher and captured values; response data echoing a secret SHALL show the engine's marker `«redacted:<name>»`, as history does, even while revealed. A reveal toggle (`Alt+R`) SHALL unmask secrets for the current session only, show a persistent `SECRETS VISIBLE` badge in the status bar while active, and reset on restart.
+
+#### Scenario: Echoed secret in a response
+- **GIVEN** the secret `token` is sent and the server echoes it in the response
+- **WHEN** the response viewer shows the echoed value
+- **THEN** it SHALL show `«redacted:token»` and never the secret value
 
 #### Scenario: Reveal is session-only
 - **GIVEN** the user revealed secrets with `Alt+R`
@@ -265,11 +270,16 @@ Secret values SHALL be rendered as `••••••••` everywhere in the 
 - **THEN** the status bar SHALL show `SECRETS VISIBLE` in the warn colour until they are masked again
 
 ### Requirement: Insecure TLS indicator
-When TLS certificate verification is disabled for the active request or environment, the status bar SHALL show a persistent `TLS: INSECURE` badge in the error colour, and each exchange sent that way SHALL be marked insecure in its summary line.
+When TLS certificate verification is disabled for the active request or for the workspace every environment sends with, the status bar SHALL show a persistent `TLS: INSECURE` badge in the error colour, and each exchange sent that way SHALL be marked insecure in its summary line.
 
 #### Scenario: Verification disabled
-- **GIVEN** the active environment disables TLS verification
+- **GIVEN** the workspace disables TLS verification (`verify_tls = false` in `rustman.toml`)
 - **THEN** the status bar SHALL show `TLS: INSECURE` for as long as it stays disabled
+
+#### Scenario: Verification disabled for one request
+- **GIVEN** the request in the active tab sets `verify_tls: false`
+- **WHEN** that tab is active
+- **THEN** the status bar SHALL show `TLS: INSECURE`, and SHALL stop showing it when a tab without that setting is active
 
 ### Requirement: Command palette
 `Ctrl+P` SHALL open a fuzzy command palette listing every action (with its current key binding), every request file and every environment. Typing SHALL rank entries by fuzzy match, `Enter` SHALL run the selected entry, and `Esc` SHALL close the palette. Recently used entries SHALL rank first when the query is empty.

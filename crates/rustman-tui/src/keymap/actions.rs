@@ -12,11 +12,29 @@ pub enum ActionId {
     RequestSave,
     TabNew,
     TabClose,
+    TabNext,
+    TabPrev,
+    TabGoto1,
+    TabGoto2,
+    TabGoto3,
+    TabGoto4,
+    TabGoto5,
+    TabGoto6,
+    TabGoto7,
+    TabGoto8,
+    TabGoto9,
     PaletteOpen,
     HelpOpen,
     SidebarToggle,
     SidebarGrow,
     SidebarShrink,
+    SidebarOpen,
+    SidebarFilter,
+    SidebarNew,
+    SidebarRename,
+    SidebarDelete,
+    TreeCollapse,
+    TreeExpand,
     FocusNext,
     FocusPrev,
     PaneLeft,
@@ -25,6 +43,7 @@ pub enum ActionId {
     EnvSwitch,
     SecretsReveal,
     EditorExternal,
+    EditorMode,
     VizOpen,
     NotificationsShow,
     ListUp,
@@ -33,6 +52,22 @@ pub enum ActionId {
     ListBottom,
     ListPageUp,
     ListPageDown,
+    ResponseNextTab,
+    ResponsePrevTab,
+    JsonToggle,
+    JsonCollapse,
+    JsonExpand,
+    JsonCollapseAll,
+    JsonExpandAll,
+    JsonCopy,
+    ResponseRaw,
+    ResponseFilter,
+    ResponseSearch,
+    SearchNext,
+    SearchPrev,
+    ResponseDiff,
+    ResponseSaveBody,
+    ReportHtml,
     Quit,
 }
 
@@ -51,17 +86,43 @@ const fn def(action: ActionId, id: &'static str, title: &'static str) -> ActionD
 }
 
 /// Every action, in the order the palette and the docs list them.
-pub const REGISTRY: [ActionDef; 27] = [
+pub const REGISTRY: [ActionDef; 62] = [
     def(ActionId::RequestSend, "request.send", "Send request"),
     def(ActionId::RequestCancel, "request.cancel", "Cancel request"),
     def(ActionId::RequestSave, "request.save", "Save request"),
     def(ActionId::TabNew, "tab.new", "New tab"),
     def(ActionId::TabClose, "tab.close", "Close tab"),
+    def(ActionId::TabNext, "tab.next", "Next tab"),
+    def(ActionId::TabPrev, "tab.prev", "Previous tab"),
+    def(ActionId::TabGoto1, "tab.goto_1", "Go to tab 1"),
+    def(ActionId::TabGoto2, "tab.goto_2", "Go to tab 2"),
+    def(ActionId::TabGoto3, "tab.goto_3", "Go to tab 3"),
+    def(ActionId::TabGoto4, "tab.goto_4", "Go to tab 4"),
+    def(ActionId::TabGoto5, "tab.goto_5", "Go to tab 5"),
+    def(ActionId::TabGoto6, "tab.goto_6", "Go to tab 6"),
+    def(ActionId::TabGoto7, "tab.goto_7", "Go to tab 7"),
+    def(ActionId::TabGoto8, "tab.goto_8", "Go to tab 8"),
+    def(ActionId::TabGoto9, "tab.goto_9", "Go to tab 9"),
     def(ActionId::PaletteOpen, "palette.open", "Command palette"),
     def(ActionId::HelpOpen, "help.open", "Help"),
     def(ActionId::SidebarToggle, "sidebar.toggle", "Toggle sidebar"),
     def(ActionId::SidebarGrow, "sidebar.grow", "Widen sidebar"),
     def(ActionId::SidebarShrink, "sidebar.shrink", "Narrow sidebar"),
+    def(ActionId::SidebarOpen, "sidebar.open", "Open request"),
+    def(ActionId::SidebarFilter, "sidebar.filter", "Filter requests"),
+    def(ActionId::SidebarNew, "sidebar.new", "New request file"),
+    def(
+        ActionId::SidebarRename,
+        "sidebar.rename",
+        "Rename request or folder",
+    ),
+    def(
+        ActionId::SidebarDelete,
+        "sidebar.delete",
+        "Delete request or folder",
+    ),
+    def(ActionId::TreeCollapse, "tree.collapse", "Collapse folder"),
+    def(ActionId::TreeExpand, "tree.expand", "Expand folder"),
     def(ActionId::FocusNext, "focus.next", "Focus next"),
     def(ActionId::FocusPrev, "focus.prev", "Focus previous"),
     def(ActionId::PaneLeft, "pane.left", "Focus pane to the left"),
@@ -73,6 +134,11 @@ pub const REGISTRY: [ActionDef; 27] = [
         ActionId::EditorExternal,
         "editor.external",
         "Edit in external editor",
+    ),
+    def(
+        ActionId::EditorMode,
+        "editor.mode",
+        "Change body mode or auth type",
     ),
     def(ActionId::VizOpen, "viz.open", "Open in viz companion"),
     def(
@@ -86,6 +152,42 @@ pub const REGISTRY: [ActionDef; 27] = [
     def(ActionId::ListBottom, "list.bottom", "Go to bottom"),
     def(ActionId::ListPageUp, "list.page_up", "Page up"),
     def(ActionId::ListPageDown, "list.page_down", "Page down"),
+    def(
+        ActionId::ResponseNextTab,
+        "response.next_tab",
+        "Next response tab",
+    ),
+    def(
+        ActionId::ResponsePrevTab,
+        "response.prev_tab",
+        "Previous response tab",
+    ),
+    def(ActionId::JsonToggle, "json.toggle", "Fold or unfold node"),
+    def(ActionId::JsonCollapse, "json.collapse", "Fold node"),
+    def(ActionId::JsonExpand, "json.expand", "Unfold node"),
+    def(ActionId::JsonCollapseAll, "json.collapse_all", "Fold all"),
+    def(ActionId::JsonExpandAll, "json.expand_all", "Unfold all"),
+    def(ActionId::JsonCopy, "json.copy", "Copy value"),
+    def(ActionId::ResponseRaw, "response.raw", "Toggle raw body"),
+    def(
+        ActionId::ResponseFilter,
+        "response.filter",
+        "Filter body (JSONPath)",
+    ),
+    def(ActionId::ResponseSearch, "response.search", "Search body"),
+    def(ActionId::SearchNext, "search.next", "Next match"),
+    def(ActionId::SearchPrev, "search.prev", "Previous match"),
+    def(
+        ActionId::ResponseDiff,
+        "response.diff",
+        "Diff with an earlier exchange",
+    ),
+    def(
+        ActionId::ResponseSaveBody,
+        "response.save_body",
+        "Save body…",
+    ),
+    def(ActionId::ReportHtml, "report.html", "Export HTML report"),
     def(ActionId::Quit, "app.quit", "Quit"),
 ];
 
@@ -111,6 +213,22 @@ impl ActionId {
         REGISTRY.iter().find(|d| d.id == id).map(|d| d.action)
     }
 
+    /// The 0-based tab index of the `tab.goto_N` actions.
+    pub fn tab_index(self) -> Option<usize> {
+        const GOTO: [ActionId; 9] = [
+            ActionId::TabGoto1,
+            ActionId::TabGoto2,
+            ActionId::TabGoto3,
+            ActionId::TabGoto4,
+            ActionId::TabGoto5,
+            ActionId::TabGoto6,
+            ActionId::TabGoto7,
+            ActionId::TabGoto8,
+            ActionId::TabGoto9,
+        ];
+        GOTO.iter().position(|a| *a == self)
+    }
+
     /// Every action, in registry order.
     pub fn all() -> impl Iterator<Item = Self> {
         REGISTRY.iter().map(|d| d.action)
@@ -134,6 +252,8 @@ mod tests {
             assert_eq!(ActionId::from_id(action.id()), Some(action));
         }
         assert_eq!(ActionId::from_id("request.sned"), None);
+        assert_eq!(ActionId::TabGoto3.tab_index(), Some(2));
+        assert_eq!(ActionId::TabNext.tab_index(), None);
     }
 
     #[test]
@@ -148,7 +268,7 @@ mod tests {
             assert!(
                 def.id
                     .chars()
-                    .all(|c| c.is_ascii_lowercase() || "._".contains(c))
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "._".contains(c))
             );
         }
     }

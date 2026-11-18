@@ -4,8 +4,8 @@ expression: text
 ---
  Sidebar   Request   Response
 ┌ › Sidebar ───────────────────────────────────────────────┐
-│ examples/ping.rman.yaml                                  │
-│                                                          │
+│ ▾ examples                                               │
+│   GET    ping                                            │
 │                                                          │
 │                                                          │
 │                                                          │

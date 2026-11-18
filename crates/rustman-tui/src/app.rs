@@ -6,22 +6,35 @@
 //! as an [`Action`].
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Instant;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent};
 use ratatui::layout::Rect;
-use rustman_core::Workspace;
+use rustman_core::model::Request;
+use rustman_core::{Secret, Workspace};
 
 use crate::commands;
 use crate::config::UiOptions;
+use crate::dialogs::{Confirm, Input};
+use crate::files::FileOp;
 use crate::keymap::{Chord, Keymap};
 use crate::launch::Launch;
 use crate::palette::{Palette, Target};
+use crate::response::html::ReportJob;
+use crate::response::json_tree::JsonTree;
+use crate::response::picker::{DiffJob, DiffView, Earlier, Picker};
+use crate::response::{Received, Source};
+use crate::reveal::Revealed;
+use crate::send::SendJob;
 use crate::shell::{self, ShellState};
 use crate::status::{StatusInfo, VimMode};
-use crate::textarea::TextArea;
+use crate::tabs::{TabId, Tabs};
 use crate::toast::{Notifications, Severity};
 use crate::vim::Vim;
+use crate::viz::{self, VizError, VizJob};
+use crate::workbench::{self, Pending};
+use crate::{reveal, send, viewer_keys};
 
 /// The whole UI state; `view` renders it and `update` changes it.
 #[derive(Debug)]
@@ -45,13 +58,22 @@ pub struct State {
     pub keymap: Keymap,
     /// Keys typed so far of a multi-key binding (`g` of `gg`).
     pub pending_keys: Vec<Chord>,
-    /// The request body text area. Until the request editor opens request
-    /// files it is a scratch buffer.
-    pub body: TextArea,
-    /// Modal editing state for the body, when vim keys are on.
+    /// The open request tabs.
+    pub tabs: Tabs,
+    /// Saves, reloads and file operations in progress.
+    pub pending: Pending,
+    /// Modal editing state for text areas, when vim keys are on.
     pub vim: Option<Vim>,
     /// Recently used palette entries, most recent first (this session only).
     pub recent: Vec<Target>,
+    /// Text for the terminal's clipboard (OSC 52), written by the loop.
+    pub clipboard: Option<String>,
+    /// The secret store backend sends use; `None`: `RUSTMAN_SECRET_STORE`.
+    pub secret_backend: Option<rustman_core::SecretBackend>,
+    /// Secret values read while secrets are revealed (memory only).
+    pub revealed: Revealed,
+    /// Where the viz companion is looked for (read once per session).
+    pub viz: viz::Discovery,
 }
 
 /// Modals drawn over the shell.
@@ -63,6 +85,14 @@ pub enum Overlay {
     Help { scroll: u16 },
     /// The command palette or the environment switcher.
     Palette(Box<Palette>),
+    /// A question: Save / Discard / Cancel, delete, conflicts.
+    Confirm(Confirm),
+    /// A one-line text prompt: new request, rename, save as.
+    Input(Input),
+    /// Earlier exchanges to diff the current one against.
+    Exchanges(Box<Picker>),
+    /// The differences between two exchanges.
+    Diff(Box<DiffView>),
 }
 
 /// What fills the terminal.
@@ -162,6 +192,79 @@ pub enum Action {
     WorkspaceCreated(Result<PathBuf, String>),
     /// Stop now: a termination signal arrived or background work failed.
     Abort(Abort),
+    /// Workspace files changed on disk (workspace-relative paths).
+    FilesChanged(Vec<PathBuf>),
+    /// A tab was written to `path` (workspace-relative).
+    Saved {
+        tab: TabId,
+        path: PathBuf,
+        result: Result<(), String>,
+    },
+    /// A sidebar file operation finished.
+    FileDone {
+        op: FileOp,
+        result: Result<(), String>,
+    },
+    /// An open request was read again after a change on disk.
+    RequestRead {
+        tab: TabId,
+        result: Result<Box<Request>, String>,
+    },
+    /// The external editor returned the edited text.
+    ExternalEdited {
+        tab: TabId,
+        result: Result<crate::external::Edited, String>,
+    },
+    /// A tab's send `seq` finished (sent by the send effect).
+    SendFinished {
+        tab: TabId,
+        seq: u64,
+        received: Box<Received>,
+    },
+    /// The matches of a JSONPath filter in a tab's body.
+    Filtered {
+        tab: TabId,
+        expr: String,
+        result: Result<Arc<JsonTree>, String>,
+    },
+    /// An off-loop tree search finished (`None`: it was cancelled).
+    Searched {
+        tab: TabId,
+        generation: u64,
+        matches: Option<Vec<usize>>,
+    },
+    /// A page of the paged raw view was read.
+    PageRead {
+        tab: TabId,
+        page: u64,
+        result: Result<Vec<String>, String>,
+    },
+    /// Earlier exchanges were read from history for the diff picker.
+    ExchangesLoaded {
+        tab: TabId,
+        result: Result<Vec<Earlier>, String>,
+    },
+    /// A diff picked in the exchange picker was computed.
+    Diffed(Box<DiffView>),
+    /// A response body was saved to `path`.
+    BodySaved {
+        path: PathBuf,
+        result: Result<(), String>,
+    },
+    /// Text was copied with a clipboard tool (`None`: no tool worked).
+    Copied {
+        text: String,
+        tool: Option<&'static str>,
+    },
+    /// The secrets of `environment` were read for the reveal toggle.
+    SecretsRead {
+        environment: String,
+        result: Result<Vec<Secret<String>>, String>,
+    },
+    /// The viz hand-off finished.
+    VizDone(Result<String, VizError>),
+    /// An HTML report was written to `path`.
+    ReportWritten(Result<PathBuf, String>),
 }
 
 /// Why the loop stopped without the user quitting.
@@ -179,6 +282,73 @@ pub enum Abort {
 pub enum Effect {
     LoadWorkspace(PathBuf),
     CreateWorkspace(PathBuf),
+    /// Write tab `tab` to `path` (workspace-relative) with `op`.
+    Save {
+        tab: TabId,
+        path: PathBuf,
+        op: FileOp,
+    },
+    /// Create, rename or delete a file from the sidebar.
+    File(FileOp),
+    /// Read the request file `path` of the workspace at `root` again.
+    ReadRequest {
+        tab: TabId,
+        root: PathBuf,
+        path: PathBuf,
+    },
+    /// Edit `text` in the external editor, in a temp file `*.extension`.
+    /// The loop suspends the terminal around it.
+    EditExternally {
+        tab: TabId,
+        text: String,
+        extension: &'static str,
+    },
+    /// Send a tab's request through the engine.
+    Send(Box<SendJob>),
+    /// Apply the JSONPath `expr` to a tab's body.
+    Filter {
+        tab: TabId,
+        expr: String,
+        source: Source,
+    },
+    /// Search a large JSON tree for an incremental search.
+    Search {
+        tab: TabId,
+        job: crate::response::SearchJob,
+    },
+    /// Read page `page` of a tab's body for the paged raw view.
+    ReadPage {
+        tab: TabId,
+        page: u64,
+        source: Source,
+    },
+    /// Read earlier exchanges from the history at `dir` (those of `file`
+    /// first).
+    LoadExchanges {
+        tab: TabId,
+        dir: PathBuf,
+        file: String,
+    },
+    /// Diff an earlier exchange against the current one.
+    Diff(Box<DiffJob>),
+    /// Write a (redacted) response body to `path`.
+    SaveBody {
+        source: Source,
+        path: PathBuf,
+    },
+    /// Put text on the system clipboard.
+    Copy(String),
+    /// Read the secrets `names` of `environment` for the reveal toggle.
+    ReadSecrets {
+        root: PathBuf,
+        environment: String,
+        names: Vec<String>,
+        backend: Option<rustman_core::SecretBackend>,
+    },
+    /// Open the current exchange in the viz companion.
+    Viz(Box<VizJob>),
+    /// Write the current exchange as an HTML report.
+    WriteReport(Box<ReportJob>),
 }
 
 impl State {
@@ -209,9 +379,14 @@ impl State {
             now: Instant::now(),
             keymap: Keymap::default(),
             pending_keys: Vec::new(),
-            body: TextArea::default(),
+            tabs: Tabs::default(),
+            pending: Pending::default(),
             vim: None,
             recent: Vec::new(),
+            clipboard: None,
+            secret_backend: None,
+            revealed: Revealed::default(),
+            viz: viz::Discovery::default(),
         }
     }
 
@@ -239,6 +414,37 @@ impl State {
 
 /// Apply `action` to `state` and return the effects to run.
 pub fn update(state: &mut State, action: Action) -> Vec<Effect> {
+    let effects = dispatch(state, action);
+    workbench::ask_conflict(state);
+    state.status.tls_insecure = tls_insecure(state);
+    effects
+}
+
+/// TLS verification is off for the workspace or for the request in the
+/// active tab (spec: Insecure TLS indicator).
+fn tls_insecure(state: &State) -> bool {
+    let Some(ws) = workbench::workspace(state) else {
+        return false;
+    };
+    if !ws.settings.defaults.verify_tls {
+        return true;
+    }
+    let Some(path) = state.tabs.active().and_then(|t| t.path.as_deref()) else {
+        return false;
+    };
+    ws.requests()
+        .iter()
+        .find(|r| r.entry.path == path)
+        .is_some_and(|r| match r.request() {
+            Request::Http(http) => http
+                .settings
+                .as_ref()
+                .is_some_and(|s| s.verify_tls == Some(false)),
+            _ => false,
+        })
+}
+
+fn dispatch(state: &mut State, action: Action) -> Vec<Effect> {
     match action {
         Action::Key(key) => on_key(state, key),
         Action::Mouse(event) => {
@@ -259,20 +465,59 @@ pub fn update(state: &mut State, action: Action) -> Vec<Effect> {
             shell::on_resize(state);
             Vec::new()
         }
-        Action::WorkspaceLoaded(result) => {
-            match result {
-                Ok(ws) => open_workspace(state, ws),
-                Err(message) => state.screen = Screen::Failed(message),
-            }
-            Vec::new()
-        }
+        Action::WorkspaceLoaded(result) => on_loaded(state, result),
         Action::WorkspaceCreated(result) => on_created(state, result),
         Action::Abort(abort) => {
             state.quit = true;
             state.abort.get_or_insert(abort);
             Vec::new()
         }
+        other => on_workbench(state, other),
     }
+}
+
+/// Completions of the request workbench.
+fn on_workbench(state: &mut State, action: Action) -> Vec<Effect> {
+    match action {
+        Action::FilesChanged(paths) => workbench::on_files_changed(state, &paths),
+        Action::Saved { tab, path, result } => workbench::on_saved(state, tab, path, result),
+        Action::FileDone { op, result } => workbench::on_file_done(state, &op, result),
+        Action::RequestRead { tab, result } => {
+            workbench::on_request_read(state, tab, result);
+            Vec::new()
+        }
+        Action::ExternalEdited { tab, result } => {
+            workbench::on_external(state, tab, result);
+            Vec::new()
+        }
+        Action::SendFinished { tab, seq, received } => {
+            send::finished(state, tab, seq, *received);
+            Vec::new()
+        }
+        Action::SecretsRead {
+            environment,
+            result,
+        } => {
+            reveal::on_read(state, environment, result);
+            Vec::new()
+        }
+        Action::VizDone(result) => {
+            viz::on_done(state, result);
+            Vec::new()
+        }
+        other => viewer_keys::on_action(state, other),
+    }
+}
+
+fn on_loaded(state: &mut State, result: Result<Box<Workspace>, String>) -> Vec<Effect> {
+    if matches!(state.screen, Screen::Shell(Session::Workspace(_))) {
+        return workbench::on_reloaded(state, result);
+    }
+    match result {
+        Ok(ws) => open_workspace(state, ws),
+        Err(message) => state.screen = Screen::Failed(message),
+    }
+    Vec::new()
 }
 
 /// Show the shell over a loaded workspace; its load warnings become toasts.
@@ -282,7 +527,6 @@ fn open_workspace(state: &mut State, ws: Box<Workspace>) {
         .ok()
         .flatten()
         .map(|env| env.name.clone());
-    state.status.tls_insecure = !ws.settings.defaults.verify_tls;
     for warning in &ws.warnings {
         state.notify(Severity::Warn, warning.clone());
     }

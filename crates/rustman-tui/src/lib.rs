@@ -6,29 +6,141 @@
 //! effect runner task performs the I/O, and [`view::view`] draws the state.
 
 pub mod app;
+pub mod clipboard;
 mod commands;
 pub mod config;
+pub mod dialogs;
 pub mod effects;
+#[cfg(test)]
+mod env_tests;
+pub mod external;
+pub mod files;
 pub mod focus;
 pub mod glyphs;
 pub mod help;
+pub mod http_pane;
+mod http_view;
 mod input;
 pub mod keymap;
+pub mod kv;
 pub mod launch;
 pub mod layout;
 pub mod palette;
+pub mod pane;
+pub mod response;
+pub mod reveal;
 mod runtime;
+pub mod send;
+#[cfg(test)]
+mod send_tests;
 pub mod shell;
 mod shell_view;
 mod signals;
+#[cfg(test)]
+mod smoke_tests;
 pub mod snapshot;
 pub mod status;
+pub mod tabs;
 pub mod terminal;
 pub mod textarea;
 pub mod theme;
 pub mod toast;
+pub mod tree;
+pub mod vars_view;
 pub mod view;
+mod viewer_keys;
 pub mod vim;
+pub mod viz;
+#[cfg(test)]
+mod viz_tests;
+pub mod watch;
+pub mod workbench;
+#[cfg(test)]
+mod workbench_tests;
+mod workbench_view;
+
+#[cfg(test)]
+pub(crate) mod testing {
+    //! Helpers shared by the unit tests.
+
+    use crate::app::State;
+    use crate::focus::Focus;
+
+    /// Open a new tab with a raw JSON body and focus the body.
+    pub fn open_raw_body(state: &mut State) {
+        crate::workbench::new_tab(state);
+        let tab = state.tabs.active_mut().expect("just opened");
+        tab.editor.set_tab(2);
+        tab.editor.cycle_mode();
+        state.shell.focus = Focus::EditorBody;
+    }
+
+    /// A fake external editor that replaces the file with
+    /// `{"edited":true}`; returns its path.
+    pub fn fake_editor(dir: &std::path::Path) -> String {
+        if cfg!(windows) {
+            let script = dir.join("fake-editor.cmd");
+            std::fs::write(&script, "@echo {\"edited\":true}> %1\r\n").unwrap();
+            return script.display().to_string();
+        }
+        let script = dir.join("fake-editor");
+        std::fs::write(&script, "#!/bin/sh\nprintf '{\"edited\":true}' > \"$1\"\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        script.display().to_string()
+    }
+
+    /// Assert a timing budget robustly: the median of `samples` within
+    /// `median`, and none above `max`. One slow sample (a CI runner
+    /// descheduling the test) does not fail; a consistently slow path does.
+    pub fn assert_timing(
+        what: &str,
+        samples: &[std::time::Duration],
+        median: std::time::Duration,
+        max: std::time::Duration,
+    ) {
+        assert!(!samples.is_empty(), "{what}: no samples");
+        let mut sorted = samples.to_vec();
+        sorted.sort();
+        let mid = sorted[sorted.len() / 2];
+        let worst = sorted[sorted.len() - 1];
+        assert!(
+            mid <= median,
+            "{what}: median {mid:?} above {median:?} (all: {samples:?})"
+        );
+        assert!(
+            worst <= max,
+            "{what}: slowest {worst:?} above {max:?} (all: {samples:?})"
+        );
+    }
+
+    #[test]
+    fn timing_tolerates_one_outlier_but_not_a_slow_median() {
+        use std::time::Duration;
+        let ms = Duration::from_millis;
+        let fine = [ms(5), ms(6), ms(200), ms(4), ms(5)];
+        assert_timing("ok", &fine, ms(50), ms(250));
+        let slow = [ms(60), ms(70), ms(80)];
+        let failed = std::panic::catch_unwind(|| assert_timing("slow", &slow, ms(50), ms(250)));
+        assert!(failed.is_err());
+        let spike = [ms(5), ms(300), ms(5)];
+        let failed = std::panic::catch_unwind(|| assert_timing("spike", &spike, ms(50), ms(250)));
+        assert!(failed.is_err());
+    }
+
+    /// The raw body of the current tab.
+    pub fn body_text(state: &State) -> String {
+        state
+            .tabs
+            .active()
+            .and_then(|t| t.editor.external_text())
+            .map(|(text, _)| text)
+            .unwrap_or_default()
+    }
+}
 
 use std::io::{self, IsTerminal};
 use std::path::{Path, PathBuf};
@@ -74,11 +186,15 @@ pub fn is_interactive() -> bool {
 }
 
 /// The initial state for `start`: `tui.toml` and `keybindings.toml` from
-/// the config directory, the command-line `overrides` and the terminal's
-/// colour mode. Problems in either file become warning toasts.
+/// the config directory, the command-line `overrides`, the terminal's
+/// colour mode and where to look for the viz companion. Problems in either
+/// file become warning toasts.
 pub fn initial_state(start: &Path, overrides: Overrides) -> (State, Vec<app::Effect>) {
     let dir = config::config_dir();
-    initial_state_with(start, overrides, dir.as_deref(), ColorMode::from_env())
+    let (mut state, effects) =
+        initial_state_with(start, overrides, dir.as_deref(), ColorMode::from_env());
+    state.viz = viz::Discovery::from_env();
+    (state, effects)
 }
 
 /// [`initial_state`] with an explicit config directory and colour mode.
@@ -100,6 +216,33 @@ pub fn initial_state_with(
     (state, effects)
 }
 
+/// The real terminal, handed over to the external editor and taken back.
+struct TerminalHost {
+    gate: input::Gate,
+    mouse: bool,
+}
+
+impl runtime::Host for TerminalHost {
+    fn suspend(&mut self) -> io::Result<()> {
+        self.gate.set_paused(true);
+        terminal::suspend(self.mouse)
+    }
+
+    fn resume(&mut self) -> io::Result<()> {
+        let resumed = terminal::resume(self.mouse);
+        self.gate.set_paused(false);
+        resumed
+    }
+
+    fn write_escape(&mut self, sequence: &str) {
+        use std::io::Write;
+        let mut out = io::stdout();
+        let _ = out
+            .write_all(sequence.as_bytes())
+            .and_then(|()| out.flush());
+    }
+}
+
 /// Drop the runtime without waiting for blocking work still running (a
 /// workspace load on a slow filesystem), so quitting is never delayed.
 fn shut_down(rt: tokio::runtime::Runtime) {
@@ -115,6 +258,8 @@ pub fn run(start: &Path, overrides: Overrides) -> Result<(), TuiError> {
     if !is_interactive() {
         return Err(TuiError::NotATerminal);
     }
+    // Spilled viz bodies go when this returns or a panic unwinds out of it.
+    let _viz_spills = viz::CleanupGuard::new();
     let (state, effects) = initial_state(start, overrides);
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -127,10 +272,20 @@ pub fn run(start: &Path, overrides: Overrides) -> Result<(), TuiError> {
         let _context = rt.enter();
         signals::spawn(&tx)?;
     }
-    let mut guard = TerminalGuard::enter_with(state.ui.mouse)?;
+    let mouse = state.ui.mouse;
+    let mut guard = TerminalGuard::enter_with(mouse)?;
     let stop = CancellationToken::new();
-    let reader = input::spawn_reader(tx.clone(), stop.clone());
-    let result = rt.block_on(runtime::run_app(guard.terminal(), state, effects, tx, rx));
+    let gate = input::Gate::default();
+    let reader = input::spawn_reader(tx.clone(), stop.clone(), gate.clone());
+    let mut host = TerminalHost { gate, mouse };
+    let result = rt.block_on(runtime::run_app(
+        guard.terminal(),
+        state,
+        effects,
+        tx,
+        rx,
+        &mut host,
+    ));
     stop.cancel();
     let _ = reader.join();
     drop(guard);

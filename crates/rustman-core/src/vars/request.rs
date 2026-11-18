@@ -334,6 +334,7 @@ fn tls_files(settings: &RequestSettings) -> TlsFiles {
 fn pairs(i: &mut Interpolator<'_, '_>, items: &[NameValue]) -> Vec<ResolvedPair> {
     items
         .iter()
+        .filter(|p| p.enabled)
         .map(|p| ResolvedPair {
             name: i.text(&p.name),
             value: i.text(&p.value),

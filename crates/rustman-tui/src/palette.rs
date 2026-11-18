@@ -10,9 +10,14 @@ use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Padding, Paragraph};
 
+use rustman_core::vars::Layer;
+use rustman_core::{Environment, Workspace};
+
 use crate::config::UiOptions;
 use crate::keymap::{ActionId, Keymap};
+use crate::reveal::Revealed;
 use crate::theme::Token;
+use crate::vars_view;
 use crate::view::{block, hint};
 
 /// How many recently used entries are remembered (this session only).
@@ -86,6 +91,48 @@ pub fn entries(scope: Scope, sources: Sources<'_>) -> Vec<Entry> {
     out
 }
 
+/// One variable an environment provides, as the switcher lists it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VarRow {
+    pub name: String,
+    /// The layer it comes from (`environment`, `rustman.toml`).
+    pub layer: &'static str,
+    /// `None` for a secret: its value is never read for the list.
+    pub value: Option<String>,
+}
+
+/// The variables seen with `env` active: the environment's own (secrets
+/// included), then those of `rustman.toml` it does not shadow.
+pub fn env_variables(ws: &Workspace, env: &Environment) -> Vec<VarRow> {
+    let layer = vars_view::layer_name(Layer::Environment);
+    let mut rows: Vec<VarRow> = env
+        .variables
+        .iter()
+        .filter(|(name, _)| !env.is_secret(name))
+        .map(|(name, value)| VarRow {
+            name: name.to_owned(),
+            layer,
+            value: Some(value.to_string()),
+        })
+        .collect();
+    rows.extend(env.secrets.iter().map(|name| VarRow {
+        name: name.clone(),
+        layer,
+        value: None,
+    }));
+    let settings = vars_view::layer_name(Layer::Settings);
+    for (name, value) in ws.settings.variables.iter() {
+        if !rows.iter().any(|r| r.name == name) {
+            rows.push(VarRow {
+                name: name.to_owned(),
+                layer: settings,
+                value: Some(value.to_string()),
+            });
+        }
+    }
+    rows
+}
+
 /// The open palette.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Palette {
@@ -96,6 +143,8 @@ pub struct Palette {
     pub entries: Vec<Entry>,
     /// Indices into `entries`, best first; only the matching ones.
     pub ranked: Vec<usize>,
+    /// The environment switcher's variables, per environment name.
+    pub variables: Vec<(String, Vec<VarRow>)>,
 }
 
 impl Palette {
@@ -106,9 +155,28 @@ impl Palette {
             selected: 0,
             entries,
             ranked: Vec::new(),
+            variables: Vec::new(),
         };
         palette.rerank(recent);
         palette
+    }
+
+    /// List these variables under the selected environment.
+    #[must_use]
+    pub fn with_variables(mut self, variables: Vec<(String, Vec<VarRow>)>) -> Self {
+        self.variables = variables;
+        self
+    }
+
+    /// The variables of the selected environment, if it has a list.
+    fn selected_variables(&self) -> Option<(&str, &[VarRow])> {
+        let Target::Environment(name) = &self.selected()?.target else {
+            return None;
+        };
+        self.variables
+            .iter()
+            .find(|(env, _)| env == name)
+            .map(|(env, rows)| (env.as_str(), rows.as_slice()))
     }
 
     pub fn title(&self) -> &'static str {
@@ -187,8 +255,15 @@ pub fn touch(recent: &mut Vec<Target>, target: Target) {
     recent.truncate(RECENT_LIMIT);
 }
 
-/// Draw the palette near the top of `area`.
-pub fn render(frame: &mut Frame, area: Rect, palette: &Palette, ui: &UiOptions) {
+/// Draw the palette near the top of `area`; secrets in the switcher's
+/// variables are masked unless `revealed` holds them.
+pub fn render(
+    frame: &mut Frame,
+    area: Rect,
+    palette: &Palette,
+    revealed: Option<&Revealed>,
+    ui: &UiOptions,
+) {
     let width = area.width.saturating_sub(4).min(72);
     let height = area.height.saturating_sub(2).min(18);
     let [column] = Layout::horizontal([Constraint::Length(width)])
@@ -205,11 +280,19 @@ pub fn render(frame: &mut Frame, area: Rect, palette: &Palette, ui: &UiOptions) 
         .padding(Padding::horizontal(1));
     let inner = block.inner(rect);
     frame.render_widget(block, rect);
-    let rows = usize::from(inner.height.saturating_sub(3));
+    let mut rows = usize::from(inner.height.saturating_sub(3));
+    let variables = palette.selected_variables();
+    if variables.is_some() {
+        // The environments first, then what the selected one holds.
+        rows = rows.min(palette.ranked.len().max(1));
+    }
     let mut lines = vec![query_line(palette, ui), Line::default()];
     lines.extend(entry_lines(palette, rows, inner.width, ui));
     if palette.ranked.is_empty() {
         lines.push(hint("No matches.", ui));
+    }
+    if let Some((env, vars)) = variables {
+        lines.extend(variable_lines(env, vars, revealed, ui));
     }
     frame.render_widget(Paragraph::new(lines), inner);
     let footer = Rect {
@@ -223,6 +306,57 @@ pub fn render(frame: &mut Frame, area: Rect, palette: &Palette, ui: &UiOptions) 
         g.up_down, g.dot, g.dot
     );
     frame.render_widget(Paragraph::new(hint(&keys, ui)), footer);
+}
+
+/// The switcher's list of `env`'s variables: name, layer and value.
+fn variable_lines(
+    env: &str,
+    vars: &[VarRow],
+    revealed: Option<&Revealed>,
+    ui: &UiOptions,
+) -> Vec<Line<'static>> {
+    let mut lines = vec![
+        Line::default(),
+        Line::styled(
+            format!(" Variables with {env}"),
+            ui.theme.fg(Token::Text).add_modifier(Modifier::BOLD),
+        ),
+    ];
+    if vars.is_empty() {
+        lines.push(hint(" No variables.", ui));
+    }
+    let name_width = vars
+        .iter()
+        .map(|v| v.name.chars().count())
+        .max()
+        .unwrap_or(0);
+    let layer_width = vars.iter().map(|v| v.layer.len()).max().unwrap_or(0);
+    for var in vars {
+        let value = match &var.value {
+            Some(value) => value.clone(),
+            None => revealed
+                .and_then(|r| r.value(Some(env), &var.name))
+                .unwrap_or(ui.glyphs.mask)
+                .to_owned(),
+        };
+        let token = if var.value.is_some() {
+            Token::Text
+        } else {
+            Token::Warn
+        };
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!(" {:name_width$}  ", var.name),
+                ui.theme.fg(Token::Accent),
+            ),
+            Span::styled(
+                format!("{:layer_width$}  ", var.layer),
+                ui.theme.fg(Token::Muted),
+            ),
+            Span::styled(value, ui.theme.fg(token)),
+        ]));
+    }
+    lines
 }
 
 fn query_line(palette: &Palette, ui: &UiOptions) -> Line<'static> {

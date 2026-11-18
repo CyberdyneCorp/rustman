@@ -10,6 +10,8 @@ publish = false
 
 [dependencies]
 rustman-core.workspace = true
+rustman-http.workspace = true
+rustman-viz-protocol.workspace = true
 ratatui.workspace = true
 crossterm.workspace = true
 thiserror.workspace = true
@@ -19,14 +21,22 @@ tokio = { workspace = true, features = ["rt", "sync", "time", "signal"] }
 tokio-util.workspace = true
 nucleo-matcher.workspace = true
 dunce.workspace = true
+notify.workspace = true
+serde_json.workspace = true
+shell-words.workspace = true
+tempfile.workspace = true
+serde_json_path.workspace = true
+syntect.workspace = true
+similar.workspace = true
+base64.workspace = true
+http.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
-tempfile.workspace = true
-tokio = { workspace = true, features = ["rt", "sync", "time", "signal", "macros"] }
-
-[target.'cfg(unix)'.dev-dependencies]
+rustman-test-support.workspace = true
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time", "signal", "macros"] }
 portable-pty.workspace = true
+vt100.workspace = true
 
 [lints]
 workspace = true

@@ -115,6 +115,8 @@ headers:
 
 This is sent as `PURGE /path?tag=a&tag=b`.
 
+A `query`, `headers` or form `fields` row with `enabled: false` stays in the file but is not sent, and a disabled header does not replace a header inherited from a collection. The TUI's per-row toggle writes it; the key is left out for enabled rows.
+
 ## Body types
 
 Every body has a `type`. File paths are resolved relative to the request file and must stay inside the workspace (see [File paths](#file-paths)).

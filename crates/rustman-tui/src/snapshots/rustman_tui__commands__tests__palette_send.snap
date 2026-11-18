@@ -1,11 +1,10 @@
 ---
 source: crates/rustman-tui/src/commands.rs
-assertion_line: 424
 expression: text
 ---
 ┌ › Sidebar ───────────────┐┌ Request ───────────────────────────────────┐┌ Response ──────────────────────────────────┐
-│ examples/ping.rman.yaml  ││ METHOD   No request open                   ││ No response yet.                           │
-│                       ┌ Command palette ─────────────────────────────────────────────────────┐                       │
+│ ▾ examples               ││ METHOD   No request open                   ││ No response yet.                           │
+│   GET    ping         ┌ Command palette ─────────────────────────────────────────────────────┐                       │
 │                       │ › send                                                               │                       │
 │                       │                                                                      │                       │
 │                       │  Send request                                    Ctrl+Enter, Ctrl+R  │                       │

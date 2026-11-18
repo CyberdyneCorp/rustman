@@ -1,18 +1,18 @@
 ---
 source: crates/rustman-tui/src/commands.rs
-assertion_line: 410
+assertion_line: 585
 expression: text(&state)
 ---
 ┌ › Sidebar ───────────────┐┌ Request ───────────────────────────────────┐┌ Response ──────────────────────────────────┐
-│ examples/ping.rman.yaml  ││ METHOD   No request open                   ││ No response yet.                           │
-│                       ┌ Switch environment ──────────────────────────────────────────────────┐                       │
+│ ▾ examples               ││ METHOD   No request open                   ││ No response yet.                           │
+│   GET    ping         ┌ Switch environment ──────────────────────────────────────────────────┐                       │
 │                       │ ›                                                                    │                       │
 │                       │                                                                      │                       │
 │                       │  local                                                       active  │                       │
 │                       │  staging                                                             │                       │
 │                       │                                                                      │                       │
-│                       │                                                                      │                       │
-│                       │                                                                      │                       │
+│                       │  Variables with local                                                │                       │
+│                       │  base_url  environment  https://httpbin.org                          │                       │
 │                       │                                                                      │                       │
 │                       │                                                                      │                       │
 │                       │                                                                      │                       │

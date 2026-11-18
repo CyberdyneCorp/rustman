@@ -68,6 +68,14 @@ Messages SHALL be UTF-8 JSON objects, one per line, written to the companion's s
 - **WHEN** `rustman` exits and the companion's stdin closes
 - **THEN** the dashboard SHALL stay open, showing the last received state and the label `Producer disconnected`
 
+### Requirement: Blob file ownership
+The producer SHALL own each `blob_ref` temp file: it SHALL keep the file until the companion process has exited and then delete it. The companion SHALL NOT delete it.
+
+#### Scenario: Blob file removed after the companion exits
+- **GIVEN** a response body sent to the companion as a `blob_ref`
+- **WHEN** the companion process exits while the producer is still running
+- **THEN** the producer SHALL delete the temp file
+
 ### Requirement: Read-only companion
 The companion SHALL NOT send network requests to API targets, execute request files, or modify workspace, environment, secret or history files. Its only outputs SHALL be its windows, protocol acknowledgements on stdout, and a log file.
 

@@ -3,9 +3,9 @@ source: crates/rustman-tui/src/shell_view.rs
 expression: text
 ---
 ┌ › Sidebar ───────────────┐───────────────────────────────────────────────────┐
-│ examples/ping.rman.yaml  │                                                   │
-│                          │h  Assertions                                      │
-│                          │debar.                                             │
+│ ▾ examples               │                                                   │
+│   GET    ping            │h  Assertions                                      │
+│                          │debar, or Ctrl+T for a new one.                    │
 │                          │                                                   │
 │                          │                                                   │
 │                          │                                                   │

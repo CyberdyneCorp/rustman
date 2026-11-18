@@ -31,6 +31,14 @@ pub fn collection_to_yaml(meta: &CollectionMeta) -> String {
     render(&node)
 }
 
+/// The YAML text of an `assertions:` list (the TUI's Assertions editor).
+pub fn assertions_to_yaml(assertions: &[Assertion]) -> String {
+    if assertions.is_empty() {
+        return String::new();
+    }
+    render(&Node::Seq(assertions.iter().map(assertion).collect()))
+}
+
 fn http_node(r: &HttpRequest) -> Node {
     MapBuilder::new()
         .node("version", Node::plain(r.version))
@@ -73,6 +81,7 @@ fn name_values(pairs: &[NameValue]) -> Node {
                 MapBuilder::new()
                     .str("name", &p.name)
                     .str("value", &p.value)
+                    .opt_plain("enabled", (!p.enabled).then_some(false))
                     .build()
             })
             .collect(),

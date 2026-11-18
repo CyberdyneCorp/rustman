@@ -198,8 +198,9 @@ impl<'a> RequestRef<'a> {
         };
         let mut merged: Vec<NameValue> = Vec::new();
         for level in inherited.chain(own) {
+            let level: Vec<&NameValue> = level.iter().filter(|h| h.enabled).collect();
             merged.retain(|h| !level.iter().any(|l| l.name.eq_ignore_ascii_case(&h.name)));
-            merged.extend(level.iter().cloned());
+            merged.extend(level.into_iter().cloned());
         }
         merged
     }

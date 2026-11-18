@@ -43,7 +43,7 @@ The shell adapts to the terminal size:
 
 Resizing the terminal re-lays out the screen without losing focus, sidebar width or anything else. The sidebar is 20 to 50 columns wide: drag its right border with the mouse, or use `Alt+Right` / `Alt+Left`.
 
-The sidebar lists the workspace's request files (read-only for now; `↑`/`↓`, `Home`/`End` and `PageUp`/`PageDown` move the selection). The request editor's method, URL and tabs and the response viewer are placeholders until editing and sending arrive; the body is a scratch text area (see [Vim mode](#vim-mode)).
+The sidebar shows the workspace as a collection tree, the request editor edits the open request (see [Requests](#requests)) and the response viewer shows its last exchange (see [Response viewer](#response-viewer)).
 
 ### Focus
 
@@ -51,7 +51,7 @@ The sidebar lists the workspace's request files (read-only for now; `↑`/`↓`,
 
 ### Status bar
 
-The bottom line shows, from the left: the workspace name (or `Scratch session`), the active environment (`env: NAME` or `no environment`), `TLS verified` or a red `TLS: INSECURE` badge when `verify_tls = false`, and how many requests are in flight. On the right: the vim mode (`NORMAL`, `INSERT`, `VISUAL`) when vim keys are on, a `SECRETS VISIBLE` badge in the warning colour while secrets are revealed, and the quit hint.
+The bottom line shows, from the left: the workspace name (or `Scratch session`), the active environment (`env: NAME` or `no environment`), `TLS verified` or a red `TLS: INSECURE` badge while certificate verification is off (`verify_tls = false` in `rustman.toml`, or `settings: verify_tls: false` in the request open in the current tab), and how many requests are in flight. On the right: the vim mode (`NORMAL`, `INSERT`, `VISUAL`) when vim keys are on, a `SECRETS VISIBLE` badge in the warning colour while secrets are revealed, and the quit hint.
 
 ### Toasts and the notification log
 
@@ -59,9 +59,109 @@ Messages appear as toasts in the top-right corner, newest on top, at most three 
 
 Warnings found while loading the workspace, a `tui.toml` that can't be read, and bad entries in `keybindings.toml` are shown as warning toasts.
 
+## Requests
+
+### Collection tree
+
+The sidebar shows the workspace's folders and request files in run order (the order `rustman run` uses). Each request has a badge: its method (`GET` in the ok colour, `POST` accent, `PUT`/`PATCH` warn, `DELETE` error) or its kind for other request kinds (`GQL`, `MCP`, `GRPC`, ...). A `●` (`*` with `--ascii`) marks a request open in a tab with unsaved changes.
+
+| Key (sidebar) | What it does |
+|---|---|
+| `↑`/`↓`, `Home`/`End`, `PageUp`/`PageDown` | move the selection |
+| `Enter` | open the request in a tab (or focus its tab); on a folder, fold or unfold it |
+| `←` / `→` | fold / unfold the selected folder |
+| `/` | filter: type to keep the requests whose path fuzzy-matches (matched characters are highlighted), `Enter` opens the selection, `Esc` clears the filter |
+| `n` | new request in the selected folder; a name such as `admin/list` also creates the folder |
+| `r` | rename the selected request or folder (open tabs follow) |
+| `d` | delete the selected request or folder, after a confirmation (Cancel is preselected) |
+
+Request kinds this build does not know (for example `kind: grpc`) still load: they open read-only, showing the file as it is, with the notice `No editor for kind "grpc"`.
+
+### Tabs
+
+Several requests can be open at once; their tabs are listed in the request editor's top border, the current one highlighted. `Ctrl+T` opens a new request, `Ctrl+W` closes the current tab, `Alt+1` … `Alt+9` go to a tab, and `Ctrl+PageUp` / `Ctrl+PageDown` go to the previous / next one (clicking a tab works too). Each tab keeps its own editor state, its last exchange and its in-flight request, so a request can keep running in one tab while you edit another.
+
+### Saving and unsaved changes
+
+A tab whose request differs from its file shows `●` after its title, and the request shows `●` in the sidebar. `Ctrl+S` saves it (`Ctrl+S` is safe to use: raw mode turns off XON/XOFF flow control); a new tab asks for a file name first, relative to the workspace root (`users/create`, `.rman.yaml` is added). Files are written in Rustman's canonical layout: a query string typed in the URL is saved as `query:` rows, and settings, variables, captures and descriptions are kept as they were. In a scratch session nothing is saved.
+
+Closing a tab with unsaved changes, or quitting with any, asks **Save / Discard / Cancel** (`s`, `d`, `c`, or the arrows and `Enter`; `Esc` cancels).
+
+The TUI watches the workspace for changes made by other programs (an editor, `git checkout`). The sidebar follows them. A tab without unsaved changes reloads its file; a tab with unsaved changes shows a conflict prompt: **Keep mine** (keep editing; saving overwrites the file) or **Load from disk**.
+
+### The HTTP editor
+
+The first row holds the method and the URL. With the method focused, `←`/`→`, `Space` or `Enter` cycle through `GET POST PUT PATCH DELETE HEAD OPTIONS`, and a letter jumps to the next method starting with it. The URL is a one-line text field.
+
+Below them, the editor tabs: `Params`, `Headers`, `Body`, `Auth` and `Assertions` (with the tab bar focused, `←`/`→` or `1`–`5` switch; clicking a label does too).
+
+- **Params** and **Headers** are tables with an enable toggle per row. Keys in a table: `Enter` edits the name, then `Tab` moves to the value and `Enter` commits (`Esc` cancels the edit); `Space` turns the row on or off; `a` (or `Insert`) adds a row; `x` (or `Delete`) removes it; `↑`/`↓` move. A disabled row stays in the file (`enabled: false`) but is not sent. Params and the URL's query string stay in sync both ways: adding the row `page` = `2` to `https://api.test/users` makes the URL `https://api.test/users?page=2`, and typing `?a=1` in the URL adds the row; disabled rows are left out of the URL.
+- **Body**: `Alt+M` cycles the mode: `none`, `raw (JSON)`, `raw (XML)` (adds `Content-Type: application/xml` when no content type is set), `raw (text)`, `form-urlencoded` and `multipart`. Raw bodies are text areas (modal with vim keys); form and multipart bodies are tables, where a multipart value `@path` sends a workspace file. A `type: file` body is shown, not edited.
+- **Auth**: `Alt+M` cycles `inherit` (no `auth:`, the nearest collection's applies), `none`, `basic`, `bearer` and `api_key`; their fields form a table. OAuth2 is shown and kept as is; edit it in the file.
+- **Assertions**: the request's `assertions:` as YAML, the same syntax as in the file (see [Assertions](assertions.md)). A list that does not parse cannot be saved: the error names the problem.
+
+### Variables
+
+Every `{{variable}}` in the URL, params, headers, auth and body is highlighted: in the accent colour when it resolves, in the error colour (and underlined, so it shows without colour) when no layer defines it. When the cursor is on a variable (in the URL, a text body, or the selected table row) a line at the bottom of the editor shows its value and the layer it comes from, e.g. `{{base_url}} = http://localhost:8080 · environment`, or `{{base_url}} is not defined in any layer`. Variables are looked up with the request's own precedence (request, collection, active environment, `rustman.toml`). Secrets are never read for this and show masked, `{{token}} = •••••••• · secret (environment)`, unless you [reveal secrets](#environments-and-secrets).
+
+### External editor
+
+`Ctrl+E` (editor focused, raw body) writes the body to a temp file named for its type (`.json`, `.xml`, `.txt`), hands the terminal to `$VISUAL`, else `$EDITOR`, else `vi` (`notepad` on Windows), and waits. When the editor exits the TUI comes back with the edited body (the tab is marked dirty if it changed) and the temp file is deleted. Values with arguments such as `EDITOR="code --wait"` work. On Unix the value is split like a shell would. On Windows a value that names an existing file (quoted or not) is used as is, so `EDITOR=C:\Windows\System32\notepad.exe` and paths with spaces work; anything else is split with the Windows command-line rules (backslashes are literal, double quotes group). If the configured editor cannot be started, `vi` (`notepad` on Windows) opens instead and a warning toast says why.
+
+### Sending and cancelling
+
+`Ctrl+Enter` sends the current tab's request (`Ctrl+R` does too, for terminals that cannot encode `Ctrl+Enter`). The request is sent in the background with the active environment, through the same engine as `rustman send`: variables are resolved the same way, cookies, captures and OAuth2 tokens are shared with the CLI, and the exchange is recorded in history (redacted), unless `[history] enabled = false`. Unsaved edits are sent as they are; the file is not saved. A new tab that was never saved is sent and recorded as `untitled.rman.yaml`, and in a scratch session nothing is recorded.
+
+While the request is in flight the response viewer shows a spinner and the elapsed time (`⠋ Sending… 1.2 s`), and the status bar counts the requests in flight. Everything else keeps working: other tabs, the sidebar, editing, even sending from another tab. `Esc` or `Ctrl+C` cancels the current tab's request: the connection is closed at once and the viewer shows `Cancelled after 3.0 s`. Closing the tab or quitting cancels it too, and sending again from the same tab replaces the request in flight. `Ctrl+C` with nothing in flight never quits; it shows `Press Ctrl+Q to quit`.
+
+## Environments and secrets
+
+`Alt+E` (or **Switch environment** in the palette) lists the workspace's environments with the active one marked. Below the list it shows the variables the selected environment provides: each name, its layer (`environment`, or `rustman.toml` for workspace variables it does not override) and its value. `Enter` makes the selected environment active for this session: the status bar shows it and the next send resolves its variables from it. The default stays the one in `rustman.toml` (`default_environment`); switching in the TUI does not change any file.
+
+Secret values are shown as `••••••••` in the variable tooltip, the environment switcher and captured values. Response headers or bodies that echo a secret are redacted by the engine before the viewer gets them and show the engine's marker, `«redacted:token»`, the same text history, copies and saved bodies hold. Secret values are not read from the keychain or `.rustman/secrets.yaml` to draw the screen.
+
+`Alt+R` reveals secrets for this session: the status bar shows a `SECRETS VISIBLE` badge in the warning colour, and the tooltip and the environment switcher show the active environment's secret values, read once from the secret store (switching environment reads the new one's). Press `Alt+R` again to mask them; the values are dropped from memory. Nothing about the reveal is saved, so the TUI always starts masked. Exchanges stay redacted while secrets are revealed: history, the response viewer, copies, saved bodies, reports and the viz companion never get secret values.
+
+While certificate verification is off for the active environment's sends (`verify_tls = false` in `rustman.toml`, which every environment uses, or `verify_tls: false` in the settings of the request in the current tab) the status bar shows `TLS: INSECURE` in the error colour, for as long as it stays off, and each exchange sent that way is marked `TLS: INSECURE` in its summary line. Environment files have no TLS setting of their own.
+
+## Response viewer
+
+The response pane starts with a summary line: the status and reason, coloured by class (2xx ok, 3xx accent, 4xx warn, 5xx error, with `✔`/`✖` so it reads without colour), the total time, the body size and the assertion tally, e.g. `✔ 201 Created · 84 ms · 1.2 KiB · 3/3 passed`. An exchange sent with TLS verification off ends with `TLS: INSECURE`. When no response arrived the line names the error category and the engine's message instead (`✖ DNS error · cannot resolve api.test: …`; also `TLS error`, `Timeout`, `Connection error`, `Proxy error`, `Auth error`, `Redirect error`).
+
+Below it are the viewer tabs `Body`, `Headers`, `Timing` and `Assertions`; with the response focused, `]` and `[` switch between them, and `↑`/`↓`, `PageUp`/`PageDown`, `Home`/`End` (`j`/`k`, `Ctrl+D`/`Ctrl+U`, `gg`/`G` with vim keys) scroll.
+
+Everything the viewer shows is redacted with the exchange's secrets, as in history: a server echoing a token shows `«redacted:token»`, and copying or saving the body copies or saves the redacted text.
+
+- **Body**: JSON is a collapsible tree, parsed once in the background so even large bodies scroll smoothly (only the rows on screen are drawn). `Enter`/`Space` folds or unfolds the selected node, `←`/`→` (or `zc`/`zo`) fold/unfold, `zM`/`zR` fold/unfold everything, and a folded array reads `items: [1000 items]`. `y` copies the selected value (a string without its quotes, anything else as JSON) with the system's clipboard tool (`pbcopy`, `clip`, `wl-copy`, `xclip` or `xsel`), or else through the terminal with an OSC 52 escape sequence, which also works over SSH in terminals that support it. `r` switches between the tree and the pretty-printed text.
+  - `f` opens a filter box that takes a [JSONPath](https://www.rfc-editor.org/rfc/rfc9535) expression (not jq): `$.items[*].id` shows only the matching nodes, each named by its path, and the match count. An expression that does not parse shows its error inline and keeps the current view; an empty filter (or `Esc` in the box) shows the whole body again.
+  - `/` searches keys and values as you type, unfolding the way to the first match; `n`/`N` go to the next/previous match. On large trees (above 20,000 nodes) the search runs in the background and the box shows `searching…` until it finishes; each keystroke cancels the previous search, so typing never waits for it.
+  - HTML, XML, YAML, JavaScript and CSS bodies are highlighted according to the `Content-Type` (bodies above 512 KiB, or with a line longer than 20 KiB such as minified HTML, are shown plain); other text is shown as it is.
+  - Binary bodies (images, audio, video, fonts, PDFs, `application/octet-stream`, or anything that is not UTF-8) show a hex dump of the first 4 KiB and the total size. `s` saves the body to a file (relative paths are taken from the workspace root); an existing file is never overwritten.
+  - Bodies above the engine's `max_body_bytes` (10 MiB by default, see [Request files](request-files.md)) are kept on disk instead of in memory. Above 50 MiB the tree is disabled: the viewer says so and shows the raw text a page at a time (scrolling past the end of a page loads the next one).
+- **Headers**: every response header in the order received, duplicates included (two `Set-Cookie` headers are two rows), then the request's captured variables with their new values; secret ones show `••••••••`.
+- **Timing**: a waterfall of the phases the engine measures (DNS, connect, TLS, waiting for the first byte, download), each bar placed and sized by its share of the total, with its duration. Phases that did not happen, such as DNS, connect and TLS on a reused connection, show `—`. Below it, a sparkline of the total times of the last 30 exchanges of the same request file from history, the newest highlighted, with the min, median, p95 and max; with fewer than two exchanges it says `not enough history`.
+- **Assertions**: each assertion as passed or failed, with the expected and actual values of failures (`✖ failed status == 200 · expected 200 · actual 404`).
+
+`D` diffs the current exchange against an earlier one: a picker lists the exchanges in history, those of the same request first (`Enter` picks, `Esc` closes), and the diff compares the status, the headers and the body. JSON bodies are compared by path with key order ignored, so `{"a":1,"b":2}` against `{"b":3,"a":1}` reports only `$.b: 2 → 3`; other bodies are compared line by line.
+
+### Viz companion and HTML report
+
+`v` (response focused) opens the current exchange in the optional graphical companion, `rustman-viz`, in its response inspector. The companion is looked for as [the viz protocol](viz-protocol.md) defines: the path in `RUSTMAN_VIZ`, then `rustman-viz` on `PATH`, then `rustman-viz` (`rustman-viz.exe`) next to the `rustman` executable. A `RUSTMAN_VIZ` that is not an executable file is an error naming it; nothing else is tried. The TUI starts the companion, performs the `rustman-viz/1` handshake and sends the exchange (already redacted; a body too large for one protocol line goes through a temp file, removed when the companion exits or when the TUI quits), then leaves the companion running on its own; a toast says `Opened in rustman-viz …`.
+
+When the companion cannot be used, a warning toast says why and offers the HTML report instead:
+
+| Toast | Why |
+|---|---|
+| `Viz companion not found: …` | no companion was found, or `RUSTMAN_VIZ` names a file that is not executable |
+| `Viz companion speaks rustman-viz/2, rustman needs rustman-viz/1; upgrade rustman-viz` | the companion rejected the protocol version |
+| `Graphics unavailable (Vulkan)` | the companion could not start its graphics (exit code 3) |
+| `Viz companion failed: …` | it could not be started, did not answer within 10 s, or answered something else |
+
+Each ends with `Export HTML report: H`. `H` (response focused, or **Export HTML report** in the palette) writes the current exchange as a self-contained HTML page (summary, assertions, response headers and body, all redacted) to `.rustman/reports/<request>-<time>.html` in the workspace, which `rustman init` keeps out of Git, or to the temp directory in a scratch session, and the toast gives the path. The run dashboard (`v` in a run view) arrives with the TUI's run view.
+
 ## Mouse
 
-When the terminal reports mouse events, clicking focuses a pane, an editor field or a pane switcher label; the wheel scrolls the pane under the pointer; and dragging the sidebar's right border resizes it. Set `mouse = false` in `tui.toml` to leave the mouse to the terminal, so its own text selection works; the TUI then doesn't capture mouse events at all.
+When the terminal reports mouse events, clicking focuses a pane, an editor field or a pane switcher label, selects a sidebar row, a request tab or an editor tab; the wheel scrolls the pane under the pointer; and dragging the sidebar's right border resizes it. Set `mouse = false` in `tui.toml` to leave the mouse to the terminal, so its own text selection works; the TUI then doesn't capture mouse events at all.
 
 ## Themes, colours and ASCII
 
@@ -92,17 +192,17 @@ Unknown keys are ignored. An invalid file is ignored as a whole, with a warning 
 
 Every key runs an *action* with a stable id such as `request.send`. Bindings belong to a context: `global`, `sidebar`, `editor` (method, URL, editor tabs and body) or `response`. A key is looked up in the focused context first, then in `global`.
 
-While a text input has the focus (the request body; the URL once it becomes editable), typed characters are text: `?`, `v` and other plain keys type themselves instead of running their action. Keys with `Ctrl` or `Alt`, function keys, `Tab` and `Esc` still work.
+While a text input has the focus (the URL, a text body, a table cell being edited, the sidebar filter), typed characters are text: `?`, `v` and other plain keys type themselves instead of running their action. Keys with `Ctrl` or `Alt`, function keys, `Tab` and `Esc` still work.
 
-`Ctrl+C` never quits. With a request in flight it cancels it; otherwise it shows `Press Ctrl+Q to quit`. Actions that later stages add (sending, saving, tabs, the external editor, viz) are already bound and listed; until they arrive they show a `… is not available yet` toast.
+`Ctrl+C` never quits. With a request in flight it cancels it; otherwise it shows `Press Ctrl+Q to quit`.
 
 ### Command palette
 
 `Ctrl+P` opens a fuzzy finder over every action (with its current keys on the right), every request file and every environment. Type to filter: the letters only have to appear in order, so `swenv` finds **Switch environment**. `↑`/`↓` (or `Ctrl+P`/`Ctrl+N`) choose, `Enter` runs, `Esc` closes. With nothing typed, the entries you used most recently in this session come first.
 
-Choosing an action runs it. Choosing a request file selects it in the sidebar. Choosing an environment makes it the active one for this session; the status bar shows it.
+Choosing an action runs it. Choosing a request file opens it. Choosing an environment makes it the active one for this session; the status bar shows it.
 
-**Switch environment** (`Alt+E`) opens the same finder with environments only, the active one marked.
+**Switch environment** (`Alt+E`) opens the same finder with environments only, the active one marked, and lists what the selected one provides (see [Environments and secrets](#environments-and-secrets)).
 
 ### Help
 
@@ -160,11 +260,29 @@ The table below is generated from the action registry; a test fails if it drifts
 | Save request | `request.save` | `Ctrl+S` |  |
 | New tab | `tab.new` | `Ctrl+T` |  |
 | Close tab | `tab.close` | `Ctrl+W` |  |
+| Next tab | `tab.next` | `Ctrl+PageDown` |  |
+| Previous tab | `tab.prev` | `Ctrl+PageUp` |  |
+| Go to tab 1 | `tab.goto_1` | `Alt+1` |  |
+| Go to tab 2 | `tab.goto_2` | `Alt+2` |  |
+| Go to tab 3 | `tab.goto_3` | `Alt+3` |  |
+| Go to tab 4 | `tab.goto_4` | `Alt+4` |  |
+| Go to tab 5 | `tab.goto_5` | `Alt+5` |  |
+| Go to tab 6 | `tab.goto_6` | `Alt+6` |  |
+| Go to tab 7 | `tab.goto_7` | `Alt+7` |  |
+| Go to tab 8 | `tab.goto_8` | `Alt+8` |  |
+| Go to tab 9 | `tab.goto_9` | `Alt+9` |  |
 | Command palette | `palette.open` | `Ctrl+P` |  |
 | Help | `help.open` | `?`, `F1` |  |
 | Toggle sidebar | `sidebar.toggle` | `Ctrl+B` |  |
 | Widen sidebar | `sidebar.grow` | `Alt+Right` |  |
 | Narrow sidebar | `sidebar.shrink` | `Alt+Left` |  |
+| Open request | `sidebar.open` | `Enter` (sidebar) |  |
+| Filter requests | `sidebar.filter` | `/` (sidebar) |  |
+| New request file | `sidebar.new` | `n` (sidebar) |  |
+| Rename request or folder | `sidebar.rename` | `r` (sidebar) |  |
+| Delete request or folder | `sidebar.delete` | `d` (sidebar) |  |
+| Collapse folder | `tree.collapse` | `Left` (sidebar) |  |
+| Expand folder | `tree.expand` | `Right` (sidebar) |  |
 | Focus next | `focus.next` | `Tab` |  |
 | Focus previous | `focus.prev` | `Shift+Tab` |  |
 | Focus pane to the left | `pane.left` |  | `h` (response) |
@@ -173,6 +291,7 @@ The table below is generated from the action registry; a test fails if it drifts
 | Switch environment | `env.switch` | `Alt+E` |  |
 | Reveal secrets | `secrets.reveal` | `Alt+R` |  |
 | Edit in external editor | `editor.external` | `Ctrl+E` (editor) |  |
+| Change body mode or auth type | `editor.mode` | `Alt+M` (editor) |  |
 | Open in viz companion | `viz.open` | `v` (response) |  |
 | Show notification log | `notifications.show` |  |  |
 | Move up | `list.up` | `Up` (sidebar, response) | `k` (sidebar, response) |
@@ -181,6 +300,22 @@ The table below is generated from the action registry; a test fails if it drifts
 | Go to bottom | `list.bottom` | `End` (sidebar, response) | `G` (sidebar, response) |
 | Page up | `list.page_up` | `PageUp` (sidebar, response) | `Ctrl+U` (sidebar, response) |
 | Page down | `list.page_down` | `PageDown` (sidebar, response) | `Ctrl+D` (sidebar, response) |
+| Next response tab | `response.next_tab` | `]` (response) |  |
+| Previous response tab | `response.prev_tab` | `[` (response) |  |
+| Fold or unfold node | `json.toggle` | `Enter` (response), `Space` (response) |  |
+| Fold node | `json.collapse` | `Left` (response), `zc` (response) |  |
+| Unfold node | `json.expand` | `Right` (response), `zo` (response) |  |
+| Fold all | `json.collapse_all` | `zM` (response) |  |
+| Unfold all | `json.expand_all` | `zR` (response) |  |
+| Copy value | `json.copy` | `y` (response) |  |
+| Toggle raw body | `response.raw` | `r` (response) |  |
+| Filter body (JSONPath) | `response.filter` | `f` (response) |  |
+| Search body | `response.search` | `/` (response) |  |
+| Next match | `search.next` | `n` (response) |  |
+| Previous match | `search.prev` | `N` (response) |  |
+| Diff with an earlier exchange | `response.diff` | `D` (response) |  |
+| Save body… | `response.save_body` | `s` (response) |  |
+| Export HTML report | `report.html` | `H` (response) |  |
 | Quit | `app.quit` | `Ctrl+Q` |  |
 
 In vim mode, text areas (the request body) are modal:
@@ -206,24 +341,45 @@ In vim mode, text areas (the request body) are modal:
 
 ## How it works
 
-The UI follows an Elm-style loop (design D2 of the change): key presses, mouse events, resizes, clock ticks and finished background work all become actions on one channel; a pure `update` function changes the state and returns effects (load a workspace, create a workspace, and later send a request); an effect runner task executes those off the render loop and reports back with new actions; `view` draws the state. Nothing on the render loop waits for the disk or the network.
+The UI follows an Elm-style loop (design D2 of the change): key presses, mouse events, resizes, clock ticks and finished background work all become actions on one channel; a pure `update` function changes the state and returns effects (load or create a workspace, save, create, rename or delete files, re-read a changed file, run the external editor, send a request, filter or page a body, read history, copy or save, read secrets to reveal them, hand an exchange to the viz companion, write an HTML report); an effect runner task executes those off the render loop and reports back with new actions; `view` draws the state. Nothing on the render loop waits for the disk or the network. A send runs on a thread of its own with the engine's runner and its own connection pool; cancelling drops the request, which closes its connection.
 
 ## Screenshots
 
 To render one frame without a terminal, for example for the README:
 
 ```text
-cargo run -p rustman-tui --example screenshot -- [--ansi] [--size WxH] [--theme NAME] [--ascii] [--no-color] [PATH]
+cargo run -p rustman-tui --example screenshot -- [--ansi] [--size WxH] [--theme NAME] [--ascii] [--no-color] [--open REQUEST] [--response BODY.json] [--keys KEYS] [PATH]
 ```
 
 It opens PATH as `rustman tui` would, runs the start-up work synchronously, and prints a 120x36 frame (or `--size`) as plain text, or with ANSI colours with `--ansi` (view it with `cat` or `less -R`). It ignores `tui.toml` and renders in 24-bit colour unless `--no-color` is given, so the output depends only on the flags and the workspace.
 
-## Screenshots
-
 The README images in `docs/images/` are real frames rendered off-screen by the `screenshot` example:
 
 ```bash
-cargo run -p rustman-tui --example screenshot -- --ansi --size 120x30 [--keys "Ctrl+P s w e n v"] <workspace> > frame.ans
+cargo run -p rustman-tui --example screenshot -- --ansi --size 120x30 \
+    [--open pets/get-pet.rman.yaml --response pet.json] [--keys "Ctrl+P s w e n v"] <workspace> > frame.ans
 ```
 
-`--keys` presses space-separated chords before the frame is captured (for example `Ctrl+P` for the palette or `?` for help). Convert the ANSI output to SVG with any ANSI-to-SVG tool to refresh the images.
+`--open` opens a request file (relative to the workspace root) in a tab, and `--response` shows a JSON file as its exchange: a `200 OK` with fixed timings and history, so a frame with a response needs no network and is the same on every run. `--keys` presses space-separated chords before the frame is captured (for example `Ctrl+P` for the palette, `?` for help, or `Tab Tab Tab ] ]` to focus the response and show its Timing tab). Convert the ANSI output to SVG with any ANSI-to-SVG tool to refresh the images.
+
+## Platform checks
+
+**Automated (CI, every pull request).** The TUI smoke test opens a fixture workspace at 80x24, opens a request from the command palette, sends it to an in-process mock server, opens a slow request, sends it, cancels it with `Esc` (the server sees the connection close), and quits with `Ctrl+Q`.
+
+- `cargo test -p rustman-tui --test pty_smoke` runs the real `rustman_tui::run` in a pseudo-terminal on all three OSes: a Unix pty on Linux and macOS, ConPTY on Windows. Raw mode, the alternate screen, the input reader and the effect runner are the real ones. Keys are written to the pty and the screen is read back through a terminal emulator (`vt100`); after `Ctrl+Q` the test checks that the emulated screen is back to the main screen with the cursor shown.
+- On Windows, crossterm turns on VT processing (Windows 10 and later) and writes the same escape sequences as on Unix, so ConPTY sees the alternate screen and cursor changes. ConPTY re-renders the child's output rather than passing it through byte for byte, so the exact `ESC[?1049h` / `ESC[?1049l` bytes are only asserted on Linux and macOS; Windows checks the resulting screen. `portable-pty` opens ConPTY with `PSEUDOCONSOLE_INHERIT_CURSOR`, which makes ConPTY ask for the cursor position first; the test answers it.
+- `cargo test -p rustman-tui --lib smoke_tests` also runs the same flow on every OS through the real event loop, effect runner, engine and mock server with an in-memory 80x24 terminal, so a ConPTY problem on a runner image is told apart from a TUI regression.
+
+**Manual check matrix.** Pending manual runs: each cell is filled in (`ok`, or a link to an issue) after opening a workspace, sending, browsing a JSON response, the palette, help and `--ascii` in that terminal and colour mode.
+
+| Terminal | Truecolor | 256 colours | `NO_COLOR` |
+|---|---|---|---|
+| Windows Terminal | pending | pending | pending |
+| conhost (classic console) | pending | pending | pending |
+| iTerm2 | pending | pending | pending |
+| Alacritty | pending | pending | pending |
+| kitty | pending | pending | pending |
+| tmux (in any of the above) | pending | pending | pending |
+| GNOME Terminal | pending | pending | pending |
+
+Force a mode with `COLORTERM=truecolor`, `COLORTERM= TERM=xterm-256color`, or `NO_COLOR=1`.

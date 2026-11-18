@@ -19,7 +19,7 @@
 //! | `/token` | `200` JSON `{"access_token": TOKEN, "user": {"id": 42}}` |
 //! | `/users/42` | `200` JSON [`USER`] with `X-Request-Id: req-1` |
 //! | `/orders` | `201` `created order-123456` with `Location` and `Set-Cookie: cart=c-9` |
-//! | `/timed/<ms>?id=<id>` | `200 done` after `<ms>` milliseconds, logging server-side start and end times (see [`timed_hits`]) |
+//! | `/timed/<ms>?id=<id>` | `200 done` after `<ms>` milliseconds, logging server-side start and end times, or when the client dropped it (see [`timed_hits`]) |
 //! | `/mirror?pad=<n>&tail=<m>` | `200` text: `<n>` `A`s, the request body as an ASCII-only JSON string (`"caf\u00e9 \"x\""`), `<m>` `B`s |
 //! | `/latin1` | `200` Latin-1 JSON (not valid UTF-8): `{"city":"Bel\xe9m","echo":"<request body>"}` |
 //! | `/me` | `200` JSON `{"id": 42}` with `Authorization: Bearer TOKEN`, else `401` |
@@ -66,6 +66,22 @@ pub struct TimedHit {
     pub start: Instant,
     /// `None` while the response is pending, or when the client went away.
     pub end: Option<Instant>,
+    /// When the server dropped the request unanswered because the client
+    /// closed the connection.
+    pub dropped: Option<Instant>,
+}
+
+/// Marks a `/timed` hit as dropped if its handler is dropped before it
+/// answers (the client went away).
+struct DropGuard(usize);
+
+impl Drop for DropGuard {
+    fn drop(&mut self) {
+        let mut hits = TIMED.lock().unwrap_or_else(|e| e.into_inner());
+        if hits[self.0].end.is_none() {
+            hits[self.0].dropped = Some(Instant::now());
+        }
+    }
 }
 
 static TIMED: Mutex<Vec<TimedHit>> = Mutex::new(Vec::new());
@@ -87,9 +103,11 @@ async fn timed(req: &Request<Incoming>, ms: &str) -> Response<TestBody> {
             id,
             start: Instant::now(),
             end: None,
+            dropped: None,
         });
         hits.len() - 1
     };
+    let _guard = DropGuard(index);
     tokio::time::sleep(millis(ms)).await;
     TIMED.lock().unwrap_or_else(|e| e.into_inner())[index].end = Some(Instant::now());
     text(StatusCode::OK, "done")

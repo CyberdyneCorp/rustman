@@ -4,6 +4,7 @@
 
 use std::io;
 use std::panic::AssertUnwindSafe;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -17,11 +18,42 @@ use crate::effects::panic_text;
 /// How long one poll waits before checking for shutdown.
 const POLL: Duration = Duration::from_millis(50);
 
+/// Pauses the reader while another program (the external editor) owns the
+/// terminal. The reader holds the lock while it polls, so pausing waits for
+/// the poll in progress to end.
+#[derive(Debug, Clone, Default)]
+pub struct Gate(Arc<Mutex<bool>>);
+
+impl Gate {
+    /// Stop reading (returns once no read is in progress) or resume.
+    pub fn set_paused(&self, paused: bool) {
+        *self.0.lock().unwrap_or_else(PoisonError::into_inner) = paused;
+    }
+
+    /// Run `read` unless paused; while paused, wait one poll period.
+    fn read(
+        &self,
+        read: impl FnOnce() -> io::Result<Option<Action>>,
+    ) -> io::Result<Option<Action>> {
+        let paused = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        if *paused {
+            drop(paused);
+            std::thread::sleep(POLL);
+            return Ok(None);
+        }
+        read()
+    }
+}
+
 /// Read terminal events until `stop` is cancelled or the loop is gone. If
 /// reading fails or panics the loop is aborted, since it could no longer be
 /// quit from the keyboard.
-pub fn spawn_reader(actions: UnboundedSender<Action>, stop: CancellationToken) -> JoinHandle<()> {
-    std::thread::spawn(move || read_until_stopped(&actions, &stop, next_action))
+pub fn spawn_reader(
+    actions: UnboundedSender<Action>,
+    stop: CancellationToken,
+    gate: Gate,
+) -> JoinHandle<()> {
+    std::thread::spawn(move || read_until_stopped(&actions, &stop, || gate.read(next_action)))
 }
 
 fn read_until_stopped(
@@ -94,6 +126,19 @@ mod tests {
         assert!(read_error.contains("tty gone"), "{read_error}");
         let panicked = failure(|| panic!("reader bug"));
         assert!(panicked.contains("reader bug"), "{panicked}");
+    }
+
+    #[test]
+    fn a_paused_gate_does_not_read() {
+        let gate = Gate::default();
+        gate.set_paused(true);
+        let read = gate.read(|| panic!("read while paused"));
+        assert!(matches!(read, Ok(None)));
+        gate.set_paused(false);
+        assert!(matches!(
+            gate.read(|| Ok(Some(Action::Tick(std::time::Instant::now())))),
+            Ok(Some(_))
+        ));
     }
 
     #[test]

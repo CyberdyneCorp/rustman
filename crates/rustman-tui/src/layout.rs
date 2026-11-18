@@ -157,6 +157,32 @@ pub fn switcher_tabs(bar: Rect) -> Vec<(Pane, Rect)> {
     tabs
 }
 
+/// Where each of `labels` sits when drawn left to right from `area`'s
+/// start as ` label ` (one space either side), clipped to `area`.
+pub fn label_rects(area: Rect, labels: &[String]) -> Vec<Rect> {
+    let mut x = area.x;
+    labels
+        .iter()
+        .map(|label| {
+            let width = u16::try_from(label.chars().count() + 2).unwrap_or(u16::MAX);
+            let rect = Rect::new(x, area.y, width, 1).intersection(area);
+            x = x.saturating_add(width);
+            rect
+        })
+        .collect()
+}
+
+/// The row of the request tab strip: the editor's top border, inside its
+/// corners.
+pub fn tab_strip(editor: Rect) -> Rect {
+    Rect::new(
+        editor.x.saturating_add(1),
+        editor.y,
+        editor.width.saturating_sub(2),
+        1.min(editor.height),
+    )
+}
+
 /// The focus targets inside the editor pane: method and URL on the first
 /// row, the editor tab bar on the second, the content below.
 pub fn editor_targets(editor: Rect) -> [(Focus, Rect); 4] {
@@ -248,6 +274,14 @@ mod tests {
         assert_eq!(tabs[0], (Pane::Sidebar, Rect::new(0, 0, 9, 1)));
         assert_eq!(tabs[1], (Pane::Editor, Rect::new(10, 0, 9, 1)));
         assert_eq!(tabs[2], (Pane::Response, Rect::new(20, 0, 10, 1)));
+    }
+
+    #[test]
+    fn labels_sit_side_by_side_and_are_clipped() {
+        let labels = vec!["Params".to_owned(), "Headers".to_owned()];
+        let rects = label_rects(Rect::new(2, 3, 14, 1), &labels);
+        assert_eq!(rects, [Rect::new(2, 3, 8, 1), Rect::new(10, 3, 6, 1)]);
+        assert_eq!(tab_strip(Rect::new(0, 0, 40, 10)), Rect::new(1, 0, 38, 1));
     }
 
     #[test]

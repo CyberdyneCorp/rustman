@@ -12,14 +12,14 @@ use crate::config::UiOptions;
 use crate::focus::{Focus, Pane};
 use crate::help;
 use crate::keymap::Context;
-use crate::layout::{editor_targets, regions, switcher_tabs};
+use crate::layout::{regions, switcher_tabs};
 use crate::palette;
-use crate::shell::sidebar_items;
+use crate::response;
 use crate::status;
-use crate::textarea::TextArea;
 use crate::theme::Token;
 use crate::toast::{Severity, toast_rects};
 use crate::view::{block, dialog, hint};
+use crate::workbench_view;
 
 /// The notice shown below the recommended terminal size.
 pub const SIZE_NOTICE: &str = "Smaller than the recommended minimum of 80x24";
@@ -28,11 +28,15 @@ pub const SIZE_NOTICE: &str = "Smaller than the recommended minimum of 80x24";
 pub fn shell(frame: &mut Frame, state: &State, session: &Session) {
     let regions = regions(frame.area(), &state.shell);
     if let Some(rect) = regions.editor {
-        editor(frame, rect, state);
+        workbench_view::editor(frame, rect, state);
     }
     if let Some(rect) = regions.response {
-        let body = vec![hint("No response yet.", &state.ui)];
-        pane(frame, rect, Pane::Response, body, state);
+        let ctx = response::view::Ctx {
+            ui: &state.ui,
+            focused: state.shell.focus.pane() == Pane::Response,
+            now: state.now,
+        };
+        response::view::render(frame, rect, state.tabs.active(), &ctx);
     }
     if let Some(rect) = regions.sidebar {
         if regions.sidebar_overlay {
@@ -42,7 +46,7 @@ pub fn shell(frame: &mut Frame, state: &State, session: &Session) {
             frame,
             rect,
             Pane::Sidebar,
-            sidebar_lines(state, session),
+            workbench_view::sidebar_lines(state, session),
             state,
         );
     }
@@ -78,97 +82,6 @@ fn pane(frame: &mut Frame, rect: Rect, pane: Pane, lines: Vec<Line<'static>>, st
             .title_style(ui.theme.fg(Token::Focus).add_modifier(Modifier::BOLD));
     }
     frame.render_widget(Paragraph::new(lines).block(block), rect);
-}
-
-fn sidebar_lines(state: &State, session: &Session) -> Vec<Line<'static>> {
-    let items = sidebar_items(&state.screen);
-    if items.is_empty() {
-        let text = match session {
-            Session::Scratch => "Scratch session.\nNothing is saved.",
-            Session::Workspace(_) => "No requests yet.",
-        };
-        return text.lines().map(|line| hint(line, &state.ui)).collect();
-    }
-    let skip = usize::from(state.shell.scroll[Pane::Sidebar.index()]);
-    let focused = state.shell.focus == Focus::Sidebar;
-    items
-        .into_iter()
-        .enumerate()
-        .skip(skip)
-        .map(|(i, item)| {
-            if focused && i == state.shell.selected {
-                Line::from(Span::styled(item, state.ui.theme.selection()))
-            } else {
-                Line::from(item)
-            }
-        })
-        .collect()
-}
-
-/// The editor: placeholders for the method, URL and tabs until the HTTP
-/// pane arrives, and the body text area.
-fn editor(frame: &mut Frame, rect: Rect, state: &State) {
-    pane(frame, rect, Pane::Editor, Vec::new(), state);
-    let ui = &state.ui;
-    for (focus, target) in editor_targets(rect) {
-        let body_shown = !state.body.is_empty() || state.shell.focus == Focus::EditorBody;
-        if focus == Focus::EditorBody && body_shown {
-            body(frame, target, state);
-            continue;
-        }
-        let text = match focus {
-            Focus::Method => "METHOD",
-            Focus::Url => "No request open",
-            Focus::EditorTabs => "Params  Headers  Body  Auth  Assertions",
-            _ => "Open a request from the sidebar.",
-        };
-        let style = if state.shell.focus == focus {
-            ui.theme.selection()
-        } else {
-            ui.theme.fg(Token::Muted)
-        };
-        let line = Line::from(Span::styled(format!(" {text}"), style));
-        frame.render_widget(Paragraph::new(line).style(style), target);
-    }
-}
-
-/// The body text, scrolled to the cursor, with the cursor drawn in reverse
-/// video while focused.
-fn body(frame: &mut Frame, rect: Rect, state: &State) {
-    let area: &TextArea = &state.body;
-    let cursor = area.cursor();
-    let rows = usize::from(rect.height).max(1);
-    let skip = (cursor.row + 1).saturating_sub(rows);
-    let focused = state.shell.focus == Focus::EditorBody;
-    let text_style = state.ui.theme.fg(Token::Text);
-    let lines: Vec<Line<'static>> = area
-        .lines()
-        .iter()
-        .enumerate()
-        .skip(skip)
-        .take(rows)
-        .map(|(row, line)| {
-            if focused && row == cursor.row {
-                cursor_line(line, cursor.col, state)
-            } else {
-                Line::from(Span::styled(format!(" {line}"), text_style))
-            }
-        })
-        .collect();
-    frame.render_widget(Paragraph::new(lines), rect);
-}
-
-fn cursor_line(line: &str, col: usize, state: &State) -> Line<'static> {
-    let before: String = line.chars().take(col).collect();
-    let at: String = line.chars().nth(col).map_or(" ".to_owned(), String::from);
-    let after: String = line.chars().skip(col + 1).collect();
-    let text = state.ui.theme.fg(Token::Text);
-    let cursor = text.add_modifier(Modifier::REVERSED);
-    Line::from(vec![
-        Span::styled(format!(" {before}"), text),
-        Span::styled(at, cursor),
-        Span::styled(after, text),
-    ])
 }
 
 fn switcher(frame: &mut Frame, bar: Rect, state: &State) {
@@ -227,7 +140,17 @@ pub fn overlay(frame: &mut Frame, state: &State) {
             let lines = help::lines(&state.keymap, context, vim_text, &state.ui);
             help::render(frame, frame.area(), lines, *scroll, &state.ui);
         }
-        Some(Overlay::Palette(palette)) => palette::render(frame, frame.area(), palette, &state.ui),
+        Some(Overlay::Palette(palette)) => palette::render(
+            frame,
+            frame.area(),
+            palette,
+            crate::reveal::visible(state),
+            &state.ui,
+        ),
+        Some(Overlay::Confirm(confirm)) => confirm.render(frame, &state.ui),
+        Some(Overlay::Input(input)) => input.render(frame, &state.ui),
+        Some(Overlay::Exchanges(picker)) => picker.render(frame, &state.ui),
+        Some(Overlay::Diff(diff)) => diff.render(frame, &state.ui),
     }
 }
 
@@ -343,7 +266,7 @@ mod tests {
     #[test]
     fn the_sidebar_scrolls() {
         let (_tmp, mut state) = workspace_state(160, 45);
-        let first = sidebar_items(&state.screen)[0].clone();
+        let first = crate::workbench::sidebar_rows(&state)[0].label.clone();
         assert!(text(&state).contains(&first));
         state.shell.scroll[Pane::Sidebar.index()] = 1;
         assert!(!text(&state).contains(&first));

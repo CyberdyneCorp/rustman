@@ -2,10 +2,10 @@
 
 ## 1. Viz protocol crate
 
-- [ ] 1.1 Create `crates/rustman-viz-protocol` (serde only, no I/O) with the message enum (`hello`, `hello_ack`, `hello_reject`, `open_view`, run/exploration events, `finding`, `load_report`, `inspect_response`, `blob_ref`, `error`, `close`) and the `rustman-viz/1` constant; verify with round-trip unit tests and a test that unknown fields and unknown `type` values decode without error.
-- [ ] 1.2 Add a line-framing codec enforcing the 16 MiB cap and `blob_ref` spill-over for larger payloads; verify with tests at 16 MiB−1 / +1 bytes.
-- [ ] 1.3 Add a `cargo fuzz` target for the decoder; verify it runs for 60 s in CI without panics.
-- [ ] 1.4 Document the protocol (messages, versioning rules, exit codes) in `docs/viz-protocol.md`; verify with a doc test that parses every example message in the doc.
+- [x] 1.1 Create `crates/rustman-viz-protocol` (serde only, no I/O) with the message enum (`hello`, `hello_ack`, `hello_reject`, `open_view`, run/exploration events, `finding`, `load_report`, `inspect_response`, `blob_ref`, `error`, `close`) and the `rustman-viz/1` constant; verify with round-trip unit tests and a test that unknown fields and unknown `type` values decode without error.
+- [x] 1.2 Add a line-framing codec enforcing the 16 MiB cap and `blob_ref` spill-over for larger payloads; verify with tests at 16 MiB−1 / +1 bytes.
+- [ ] 1.3 Add a `cargo fuzz` target for the decoder; verify it runs for 60 s in CI without panics. (Target in `crates/rustman-viz-protocol/fuzz/` and the `fuzz-viz-protocol` CI job are in place; not yet run, since it needs nightly and cargo-fuzz.)
+- [x] 1.4 Document the protocol (messages, versioning rules, exit codes) in `docs/viz-protocol.md`; verify with a doc test that parses every example message in the doc.
 
 ## 2. Producer side in rustman
 

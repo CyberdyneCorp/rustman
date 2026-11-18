@@ -8,7 +8,7 @@
 mod request;
 mod scalar;
 
-pub use request::{collection_to_yaml, request_to_yaml};
+pub use request::{assertions_to_yaml, collection_to_yaml, request_to_yaml};
 
 /// A YAML node ready to print.
 #[derive(Clone, Debug, PartialEq)]

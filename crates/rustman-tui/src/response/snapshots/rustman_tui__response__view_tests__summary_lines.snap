@@ -1,0 +1,8 @@
+---
+source: crates/rustman-tui/src/response/view_tests.rs
+expression: "lines.join(\"\\n\")"
+---
+✔ 201 Created · 84 ms · 1.2 KiB · 3/3 passed
+✖ 404 Not Found · 84 ms · 4 B
+✖ 500 Internal Server Error · 84 ms · 4 B
+✖ DNS error · cannot resolve nope.invalid: failed to lookup ad

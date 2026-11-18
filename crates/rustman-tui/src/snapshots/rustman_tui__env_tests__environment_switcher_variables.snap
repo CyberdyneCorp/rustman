@@ -1,0 +1,45 @@
+---
+source: crates/rustman-tui/src/env_tests.rs
+assertion_line: 164
+expression: masked
+---
+┌ Sidebar ─────────────────┐┌ me ────────────────────────────────────────┐┌ Response ──────────────────────────────────┐
+│ GET    me                ││ GET      {{base_url}}/me                   ││ No response yet. Ctrl+Enter sends the requ │
+│                       ┌ Switch environment ──────────────────────────────────────────────────┐                       │
+│                       │ ›                                                                    │                       │
+│                       │                                                                      │                       │
+│                       │  dev                                                         active  │                       │
+│                       │  staging                                                             │                       │
+│                       │                                                                      │                       │
+│                       │  Variables with dev                                                  │                       │
+│                       │  base_url  environment   http://localhost:8080                       │                       │
+│                       │  token     environment   ••••••••                                    │                       │
+│                       │  shared    rustman.toml  from-toml                                   │                       │
+│                       │                                                                      │                       │
+│                       │                                                                      │                       │
+│                       │                                                                      │                       │
+│                       │                                                                      │                       │
+│                       │                                                                      │                       │
+│                       │                                                                      │                       │
+│                       │ ↑↓ choose · Enter run · Esc close                                    │                       │
+│                       └──────────────────────────────────────────────────────────────────────┘                       │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││                                            ││                                            │
+│                          ││ {{base_url}} = http://localhost:8080 · envi││                                            │
+└──────────────────────────┘└────────────────────────────────────────────┘└────────────────────────────────────────────┘
+ demo │ env: dev │ TLS verified │ 0 in flight                                                               Ctrl+Q quit
