@@ -6,6 +6,7 @@ use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
@@ -47,13 +48,41 @@ pub(crate) struct Connector {
 struct Inner {
     dns: Arc<Dns>,
     config: ConnectorConfig,
+    /// Connections being opened right now (DNS, TCP, tunnel, TLS).
+    opening: Arc<AtomicUsize>,
 }
 
 impl Connector {
     pub fn new(dns: Arc<Dns>, config: ConnectorConfig) -> Self {
         Self {
-            inner: Arc::new(Inner { dns, config }),
+            inner: Arc::new(Inner {
+                dns,
+                config,
+                opening: Arc::default(),
+            }),
         }
+    }
+
+    /// How many connections this connector is opening at the moment.
+    pub fn opening(&self) -> Arc<AtomicUsize> {
+        self.inner.opening.clone()
+    }
+}
+
+/// Counts one connection attempt for as long as it lives, including when
+/// its future is dropped by a timeout.
+struct Opening(Arc<AtomicUsize>);
+
+impl Opening {
+    fn start(count: &Arc<AtomicUsize>) -> Self {
+        count.fetch_add(1, Ordering::AcqRel);
+        Self(count.clone())
+    }
+}
+
+impl Drop for Opening {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
     }
 }
 
@@ -68,7 +97,9 @@ impl tower_service::Service<Uri> for Connector {
 
     fn call(&mut self, uri: Uri) -> Self::Future {
         let inner = self.inner.clone();
+        let opening = Opening::start(&inner.opening);
         Box::pin(async move {
+            let _opening = opening;
             let timeout = inner.config.timeout;
             match tokio::time::timeout(timeout, inner.open(&uri)).await {
                 Ok(result) => result,

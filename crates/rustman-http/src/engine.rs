@@ -185,9 +185,12 @@ impl HttpEngine {
             probe: &probe,
         };
         let chain = hops.follow(outgoing);
-        let mut exchange = match tokio::time::timeout(options.timeout, chain).await {
-            Ok(result) => result?,
-            Err(_) => {
+        tokio::pin!(chain);
+        // The phase is read while the request is still alive: dropping it
+        // first would also drop a connection attempt in progress.
+        let mut exchange = tokio::select! {
+            result = &mut chain => result?,
+            () = tokio::time::sleep(options.timeout) => {
                 return Err(RequestError::Timeout {
                     after: options.timeout,
                     phase: probe.phase(),
