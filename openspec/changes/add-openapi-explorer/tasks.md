@@ -42,11 +42,11 @@
 - [x] 4.4 Implement `rustman report render` and repeatable `--report <fmt>[=path]` on `run` and `explore run`. Verify with a CLI test writing two formats at once.
 - [x] 4.5 Implement `rustman report diff` (new/fixed/unchanged, coverage delta, exit codes, `--format`). Verify with fixture report pairs.
 - [x] 4.6 Add a redaction test that renders a report built with known secret values in all five formats and greps for the secret. Verify the test fails if redaction is removed (mutation check documented in the test).
-- [ ] 4.7 Write `docs/reports.md` with format examples and CI recipes (GitHub code scanning upload of SARIF). Verify by review.
+- [x] 4.7 Write `docs/reports.md` with format examples and CI recipes (GitHub code scanning upload of SARIF). Verify by review.
 
 ## 5. Integration
 
-- [ ] 5.1 Run end-to-end against the `bad-api` fixture: import, then `explore run --allow-destructive`, then render all formats, then export regressions, then `rustman run regressions/`. Verify it runs in CI on Linux, macOS and Windows within 5 minutes.
+- [x] 5.1 Run end-to-end against the `bad-api` fixture: import, then `explore run --allow-destructive`, then render all formats, then export regressions, then `rustman run regressions/`. Verify it runs in CI on Linux, macOS and Windows within 5 minutes.
 - [x] 5.2 Run `openspec validate add-openapi-explorer --strict`. Verify the command exits 0.
 
 ## Workflow follow-up
