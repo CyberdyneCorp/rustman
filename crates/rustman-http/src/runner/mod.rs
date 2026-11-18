@@ -17,6 +17,7 @@
 mod execute;
 mod history;
 mod record;
+mod seed;
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
@@ -152,6 +153,8 @@ pub struct Runner<'a> {
     captures: Mutex<RunCaptures>,
     /// Every secret value resolved or captured so far in this run.
     known: Mutex<Redactor>,
+    /// Whether `known` holds the secrets of the run's requests yet.
+    seeded: AtomicBool,
     bailed: AtomicBool,
 }
 
@@ -175,12 +178,14 @@ impl<'a> Runner<'a> {
             state,
             captures: Mutex::new(RunCaptures::new()),
             known: Mutex::new(Redactor::new()),
+            seeded: AtomicBool::new(false),
             bailed: AtomicBool::new(false),
         })
     }
 
     /// Execute every request of `plan`, `iterations` times.
     pub async fn run(&self, plan: &Plan<'_>) -> RunRecord {
+        self.seed(&plan.requests);
         let started_at = now_rfc3339();
         let start = Instant::now();
         let mut requests = Vec::with_capacity(plan.len());

@@ -77,7 +77,7 @@ impl Runner<'_> {
             cache_key: cache_key.clone().unwrap_or_default(),
         };
         self.remember(&resolved.secrets);
-        remember_for_logs(&Redactor::for_request(&resolved));
+        remember_for_logs(&self.request_redactor(Some(&resolved), None));
         let mut sent = match self.exchange(target, &mut resolved).await {
             Some(Ok(exchange)) => replayed(record, &resolved, exchange).with_resolved(resolved),
             Some(Err(e)) => Sent::errored(record, e.to_string()).with_resolved(resolved),

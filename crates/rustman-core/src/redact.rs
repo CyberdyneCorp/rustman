@@ -15,14 +15,14 @@
 //! value holding a secret (a JSON body, auth fields) uses (see [`forms`]).
 
 mod forms;
+mod layer;
+mod runs;
 
 use std::borrow::Cow;
 use std::fmt;
 use std::io::{self, Read, Write};
-use std::ops::Range;
-use std::sync::{OnceLock, PoisonError, RwLock};
+use std::sync::{Arc, OnceLock, PoisonError, RwLock};
 
-use aho_corasick::AhoCorasick;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 
@@ -30,7 +30,8 @@ use crate::model::Auth;
 use crate::secret::{Secret, placeholder};
 use crate::vars::{Resolved, ResolvedRequest, SecretSpan};
 
-use forms::encoded_forms;
+use layer::Layer;
+use runs::{Hit, Run};
 
 /// Headers whose values are always redacted, in their canonical spelling.
 pub const SENSITIVE_HEADERS: [&str; 4] = [
@@ -48,25 +49,22 @@ pub fn sensitive_header(header: &str) -> Option<&'static str> {
 }
 
 /// Redacts secrets and sensitive headers from everything a sink writes.
+///
+/// It is a short list of shared [`Layer`]s: cloning it copies no values,
+/// a clone that adds values adds a layer of its own, and every layer builds
+/// its matchers once, on first use.
 #[derive(Clone, Default)]
 pub struct Redactor {
-    /// Every searchable form of every secret value, without duplicates.
-    needles: Vec<Vec<u8>>,
-    /// The placeholder of each needle, by index.
-    placeholders: Vec<String>,
-    /// A matcher over `needles`, rebuilt when one is added.
-    matcher: Option<AhoCorasick>,
-    /// Every [`MIN_SECRET_PIECE`]-character window of every raw value.
-    pieces: Vec<String>,
-    /// A matcher over `pieces`, rebuilt when one is added.
-    piece_matcher: Option<AhoCorasick>,
-    names: Vec<String>,
+    layers: Vec<Arc<Layer>>,
 }
+
+/// The most layers a redactor keeps before merging them into one.
+const MAX_LAYERS: usize = 8;
 
 impl fmt::Debug for Redactor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Redactor")
-            .field("secrets", &self.names)
+            .field("secrets", &self.secret_names())
             .finish()
     }
 }
@@ -83,17 +81,23 @@ impl Redactor {
     /// even when they are literals, so an echoing server cannot leak them.
     pub fn for_request(request: &ResolvedRequest) -> Self {
         let mut redactor = Self::new();
+        redactor.add_request(request);
+        redactor
+    }
+
+    /// Also redact what [`Redactor::for_request`] would for `request`. On a
+    /// clone of a larger redactor (the run's), only what it lacks is added.
+    pub fn add_request(&mut self, request: &ResolvedRequest) {
         for secret in &request.secrets {
-            redactor.add(secret);
+            self.add(secret);
         }
-        redactor.add_basic_credential(request);
+        self.add_basic_credential(request);
         for header in &request.headers {
-            redactor.add_header_value(&header.name.text, &header.value.text);
+            self.add_header_value(&header.name.text, &header.value.text);
         }
         if let Some(auth) = &request.auth {
-            redactor.add_auth(auth);
+            self.add_auth(auth);
         }
-        redactor
     }
 
     /// Redact every occurrence of the credential a sensitive header value
@@ -161,58 +165,57 @@ impl Redactor {
     /// Redact every occurrence of `value` as `«redacted:<name>»`. Used for
     /// values derived from a secret, such as an encoded credential.
     pub fn add_value(&mut self, name: &str, value: &str) {
-        if value.is_empty() {
+        if value.is_empty() || self.layers.iter().any(|l| l.has_value(value)) {
             return;
         }
-        if !self.names.iter().any(|n| n == name) {
-            self.names.push(name.to_owned());
-        }
-        for form in encoded_forms(value) {
-            if !self.needles.iter().any(|n| *n == form.as_bytes()) {
-                self.needles.push(form.into_bytes());
-                self.placeholders.push(placeholder(name));
-            }
-        }
-        self.matcher = AhoCorasick::new(&self.needles).ok();
-        self.add_pieces(&windows(value));
+        self.own_layer().add(name, value);
     }
 
-    fn add_pieces(&mut self, pieces: &[String]) {
-        let before = self.pieces.len();
-        for piece in pieces {
-            if !self.pieces.contains(piece) {
-                self.pieces.push(piece.clone());
+    /// The last layer, when no clone shares it; otherwise a new one (or,
+    /// past [`MAX_LAYERS`], every layer merged into one).
+    fn own_layer(&mut self) -> &mut Layer {
+        let owned = self
+            .layers
+            .last_mut()
+            .is_some_and(|l| Arc::get_mut(l).is_some());
+        if !owned {
+            if self.layers.len() >= MAX_LAYERS {
+                self.layers = vec![Arc::new(Layer::compacted(&self.layers))];
+            } else {
+                self.layers.push(Arc::default());
             }
         }
-        if self.pieces.len() > before {
-            self.piece_matcher = AhoCorasick::new(&self.pieces).ok();
-        }
+        let last = self.layers.last_mut().and_then(Arc::get_mut);
+        last.expect("the last layer was just made unshared")
     }
 
-    /// Also redact every value `other` knows, under the same names.
+    /// Also redact every value `other` knows, under the same names. Shares
+    /// `other`'s layers instead of copying them.
     pub fn merge(&mut self, other: &Redactor) {
-        let mut added = false;
-        for (needle, placeholder) in other.needles.iter().zip(&other.placeholders) {
-            if !self.needles.contains(needle) {
-                self.needles.push(needle.clone());
-                self.placeholders.push(placeholder.clone());
-                added = true;
+        for layer in &other.layers {
+            if !self.layers.iter().any(|l| Arc::ptr_eq(l, layer)) {
+                self.layers.push(layer.clone());
             }
         }
-        for name in &other.names {
-            if !self.names.contains(name) {
-                self.names.push(name.clone());
-            }
+        if self.layers.len() > MAX_LAYERS {
+            self.layers = vec![Arc::new(Layer::compacted(&self.layers))];
         }
-        if added {
-            self.matcher = AhoCorasick::new(&self.needles).ok();
-        }
-        self.add_pieces(&other.pieces);
     }
 
     /// The names of the secrets this redactor knows.
-    pub fn secret_names(&self) -> &[String] {
-        &self.names
+    pub fn secret_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = Vec::new();
+        for name in self.layers.iter().flat_map(|l| l.names()) {
+            if !names.contains(name) {
+                names.push(name.clone());
+            }
+        }
+        names
+    }
+
+    /// Whether this redactor knows no secret value.
+    pub fn is_empty(&self) -> bool {
+        self.layers.iter().all(|l| l.matcher().is_none())
     }
 
     /// Whether `text` holds a known secret value, in any form it is matched in.
@@ -225,10 +228,10 @@ impl Redactor {
     /// matched part of an echoed secret, straddled one or kept the end of a
     /// masked one).
     pub fn reveals_secret(&self, text: &str) -> bool {
-        let piece = self
-            .piece_matcher
-            .as_ref()
-            .is_some_and(|m| m.is_match(text.as_bytes()));
+        let piece = self.layers.iter().any(|l| {
+            l.piece_matcher()
+                .is_some_and(|m| m.is_match(text.as_bytes()))
+        });
         piece || self.finds_secret(text)
     }
 
@@ -254,51 +257,38 @@ impl Redactor {
     /// the cut never leaves a part of it: pass an `input` that runs at least
     /// [`Redactor::longest`] bytes past `keep` when one exists.
     pub fn bytes_prefix(&self, input: &[u8], keep: usize) -> Vec<u8> {
-        self.redact_prefix(input, keep).0
-    }
-
-    /// [`Redactor::bytes_prefix`], plus how many bytes of `input` it covers:
-    /// `keep`, or more when a secret starting before `keep` runs past it.
-    fn redact_prefix(&self, input: &[u8], keep: usize) -> (Vec<u8>, usize) {
         let keep = keep.min(input.len());
         let mut out = Vec::with_capacity(keep);
         let mut copied = 0;
-        let runs = merge(self.matches(input, &[]));
-        for run in runs.into_iter().take_while(|run| run.range.start < keep) {
+        let runs = self.runs(input, &[]);
+        for run in runs.iter().take_while(|run| run.range.start < keep) {
             out.extend_from_slice(&input[copied..run.range.start]);
-            out.extend_from_slice(run.placeholders.concat().as_bytes());
+            out.extend_from_slice(run.replacement().as_bytes());
             copied = run.range.end;
         }
         if copied < keep {
             out.extend_from_slice(&input[copied..keep]);
         }
-        (out, copied.max(keep))
+        out
     }
 
     /// Copy `reader` to `writer` with every known secret value replaced,
-    /// in chunks, holding back the last [`Redactor::longest`] bytes of each
-    /// so a secret split across two chunks is still replaced whole.
+    /// in chunks, so a secret split across two chunks is still replaced
+    /// whole (see [`Stream`]). The output is what [`Redactor::bytes`] gives
+    /// for the whole input.
     pub fn copy(&self, mut reader: impl Read, writer: &mut dyn Write) -> io::Result<()> {
-        if self.matcher.is_none() {
+        if self.is_empty() {
             return io::copy(&mut reader, writer).map(|_| ());
         }
-        let overlap = self.longest();
-        let mut pending: Vec<u8> = Vec::new();
+        let mut stream = Stream::default();
         let mut chunk = vec![0; COPY_CHUNK];
         loop {
             let read = match reader.read(&mut chunk) {
                 Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
                 result => result?,
             };
-            pending.extend_from_slice(&chunk[..read]);
-            let keep = if read == 0 {
-                pending.len()
-            } else {
-                pending.len().saturating_sub(overlap)
-            };
-            let (out, covered) = self.redact_prefix(&pending, keep);
-            writer.write_all(&out)?;
-            pending.drain(..covered);
+            stream.pending.extend_from_slice(&chunk[..read]);
+            writer.write_all(&stream.flush(self, read == 0))?;
             if read == 0 {
                 return Ok(());
             }
@@ -307,7 +297,7 @@ impl Redactor {
 
     /// The length in bytes of the longest form of a known secret value.
     pub fn longest(&self) -> usize {
-        self.needles.iter().map(Vec::len).max().unwrap_or(0)
+        self.layers.iter().map(|l| l.longest()).max().unwrap_or(0)
     }
 
     /// Resolved text with its secret spans and every known secret replaced.
@@ -336,43 +326,126 @@ impl Redactor {
     }
 
     fn occurs_in(&self, input: &[u8]) -> bool {
-        self.matcher.as_ref().is_some_and(|m| m.is_match(input))
+        self.layers
+            .iter()
+            .any(|l| l.matcher().is_some_and(|m| m.is_match(input)))
     }
 
     /// Replace every byte covered by a span or by any occurrence of a known
-    /// value, overlapping ones included. Overlapping matches merge into one
-    /// run, shown as the placeholders of the secrets that make it up.
+    /// value, overlapping ones included. Overlapping occurrences merge into
+    /// one run, shown as the placeholders of the secrets that make it up.
     fn scan(&self, input: &[u8], spans: &[SecretSpan]) -> Vec<u8> {
         let mut out = Vec::with_capacity(input.len());
         let mut copied = 0;
-        for run in merge(self.matches(input, spans)) {
+        for run in self.runs(input, spans) {
             out.extend_from_slice(&input[copied..run.range.start]);
-            out.extend_from_slice(run.placeholders.concat().as_bytes());
+            out.extend_from_slice(run.replacement().as_bytes());
             copied = run.range.end;
         }
         out.extend_from_slice(&input[copied..]);
         out
     }
 
-    /// Every span and every (possibly overlapping) value occurrence, sorted
-    /// by start, longest first.
-    fn matches(&self, input: &[u8], spans: &[SecretSpan]) -> Vec<Match> {
-        let mut found: Vec<Match> = spans
+    /// The runs of `input`: every span and every (possibly overlapping)
+    /// value occurrence, folded as they are found (see [`runs`]).
+    fn runs(&self, input: &[u8], spans: &[SecretSpan]) -> Vec<Run> {
+        let mut spans: Vec<Hit> = spans
             .iter()
-            .map(|s| Match {
+            .map(|s| Hit {
                 range: s.range.start.min(input.len())..s.range.end.min(input.len()),
-                placeholder: placeholder(&s.name),
+                placeholder: Arc::from(placeholder(&s.name)),
             })
-            .filter(|m| !m.range.is_empty())
             .collect();
-        if let Some(matcher) = &self.matcher {
-            found.extend(matcher.find_overlapping_iter(input).map(|m| Match {
-                range: m.range(),
-                placeholder: self.placeholders[m.pattern().as_usize()].clone(),
-            }));
+        spans.sort_by_key(|h| h.range.end);
+        let mut sources: Vec<Box<dyn Iterator<Item = Hit> + '_>> =
+            vec![Box::new(spans.into_iter())];
+        for layer in &self.layers {
+            if let Some(matcher) = layer.matcher() {
+                sources.push(Box::new(matcher.find_overlapping_iter(input).map(|m| {
+                    Hit {
+                        range: m.range(),
+                        placeholder: layer.placeholder(m.pattern().as_usize()).clone(),
+                    }
+                })));
+            }
         }
-        found.sort_by_key(|m| (m.range.start, std::cmp::Reverse(m.range.end)));
-        found
+        runs::by_end(sources).into_vec()
+    }
+}
+
+/// The state of [`Redactor::copy`] between chunks: bytes not written yet,
+/// and how much of their start a placeholder already written covers.
+#[derive(Default)]
+struct Stream {
+    pending: Vec<u8>,
+    /// The first `covered` bytes of `pending` are part of a run whose
+    /// placeholders (`shown`) are written; an occurrence starting there
+    /// continues that run instead of starting a new one.
+    covered: usize,
+    shown: Vec<Arc<str>>,
+}
+
+impl Stream {
+    /// Write what no later chunk can change: everything but the last
+    /// `longest - 1` bytes (where a match could still start) and, for a run
+    /// reaching into them, its placeholders now and its last `longest - 1`
+    /// bytes kept, so an overlapping occurrence can continue it.
+    fn flush(&mut self, redactor: &Redactor, at_end: bool) -> Vec<u8> {
+        let tail = redactor.longest().saturating_sub(1);
+        let len = self.pending.len();
+        let keep = if at_end {
+            len
+        } else {
+            len.saturating_sub(tail)
+        };
+        let mut out = Vec::with_capacity(keep);
+        let mut copied = self.covered;
+        let mut consumed = None;
+        for run in redactor.runs(&self.pending, &[]) {
+            if run.range.end <= copied {
+                continue;
+            }
+            if run.range.start < self.covered {
+                self.show_new(&mut out, &run.placeholders);
+            } else {
+                out.extend_from_slice(&self.pending[copied..run.range.start]);
+                self.shown.clear();
+                self.show_new(&mut out, &run.placeholders);
+            }
+            copied = run.range.end;
+            if run.range.end > keep {
+                consumed = Some(run.range.end.saturating_sub(tail).max(run.range.start));
+                break;
+            }
+        }
+        if consumed.is_none() && copied > keep {
+            // A run written earlier still reaches past `keep` (small reads).
+            consumed = Some(copied.saturating_sub(tail));
+        }
+        let next = match consumed {
+            Some(at) => {
+                self.covered = copied - at;
+                at
+            }
+            None => {
+                let to = keep.max(copied);
+                out.extend_from_slice(&self.pending[copied..to]);
+                self.covered = 0;
+                self.shown.clear();
+                to
+            }
+        };
+        self.pending.drain(..next);
+        out
+    }
+
+    fn show_new(&mut self, out: &mut Vec<u8>, placeholders: &[Arc<str>]) {
+        for p in placeholders {
+            if !self.shown.contains(p) {
+                out.extend_from_slice(p.as_bytes());
+                self.shown.push(p.clone());
+            }
+        }
     }
 }
 
@@ -382,15 +455,6 @@ pub const MIN_SECRET_PIECE: usize = 4;
 
 /// How much [`Redactor::copy`] reads at a time.
 const COPY_CHUNK: usize = 64 * 1024;
-
-/// Every window of [`MIN_SECRET_PIECE`] characters of `value`.
-fn windows(value: &str) -> Vec<String> {
-    let chars: Vec<char> = value.chars().collect();
-    chars
-        .windows(MIN_SECRET_PIECE)
-        .map(|w| w.iter().collect())
-        .collect()
-}
 
 /// The shortest header credential (cookie value, token) redacted wherever
 /// it occurs. Shorter ones (`theme=1`) would mangle unrelated text and are
@@ -424,42 +488,6 @@ fn unquote(value: &str) -> &str {
         .unwrap_or(value)
 }
 
-/// One secret occurrence in the input.
-struct Match {
-    range: Range<usize>,
-    placeholder: String,
-}
-
-/// A run of overlapping matches, replaced as a whole.
-struct Run {
-    range: Range<usize>,
-    placeholders: Vec<String>,
-}
-
-/// Merge sorted matches into disjoint runs. A match inside a run's current
-/// extent adds nothing; one reaching past it extends the run and adds its
-/// placeholder.
-fn merge(matches: Vec<Match>) -> Vec<Run> {
-    let mut runs: Vec<Run> = Vec::new();
-    for m in matches {
-        match runs.last_mut() {
-            Some(run) if m.range.start < run.range.end => {
-                if m.range.end > run.range.end {
-                    run.range.end = m.range.end;
-                    if !run.placeholders.contains(&m.placeholder) {
-                        run.placeholders.push(m.placeholder);
-                    }
-                }
-            }
-            _ => runs.push(Run {
-                range: m.range,
-                placeholders: vec![m.placeholder],
-            }),
-        }
-    }
-    runs
-}
-
 /// Replacing whole UTF-8 sequences in valid UTF-8 keeps it valid: a match
 /// always starts on a character boundary because a valid sequence never
 /// starts with a continuation byte.
@@ -478,7 +506,7 @@ fn log_secrets() -> &'static RwLock<Redactor> {
 /// Make [`redact_logs`] redact every value `redactor` knows. Call it as soon
 /// as secrets are resolved, before anything about the request is logged.
 pub fn remember_for_logs(redactor: &Redactor) {
-    if redactor.matcher.is_none() {
+    if redactor.is_empty() {
         return;
     }
     log_secrets()
@@ -747,7 +775,7 @@ mod tests {
         let r = Redactor::new().with(&Secret::new("pw", "a/b&c<d>'e\"f!(é)*".to_owned()));
         for echo in [
             r#"a\/b&c<d>'e\"f!(\u00e9)*"#,
-            r#"a/b\u0026c\u003cd\u003e\u0027e\"f!(é)*"#,
+            r#"a/b\u0026c\u003cd\u003e'e\"f!(é)*"#,
             "a/b%26c%3Cd%3E%27e%22f%21%28%C3%A9%29%2A",
             "a%2Fb%26c%3Cd%3E'e%22f!(%C3%A9)*",
             "a/b&amp;c&lt;d&gt;&#x27;e&quot;f!(é)*",

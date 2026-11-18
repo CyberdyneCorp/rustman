@@ -57,8 +57,8 @@ pub struct SendArgs {
 /// Where the response goes, shared by `send` and `history replay`.
 #[derive(Debug, Args)]
 pub struct OutputFlags {
-    /// Print only the response body: a text body redacted (unless
-    /// --show-secrets), a binary one byte for byte
+    /// Print only the response body, redacted (as received with
+    /// --show-secrets)
     #[arg(long)]
     body_only: bool,
     /// Write the response body, byte for byte, to FILE instead of stdout
@@ -224,9 +224,8 @@ fn failures(record: &RequestRecord) -> Vec<String> {
     lines
 }
 
-/// Print the response: redacted on stdout, unless `--show-secrets` (or
-/// `--body-only` with a binary body, which is written as received); `-o`
-/// writes the body as received.
+/// Print the response: redacted on stdout (a binary body byte-wise too),
+/// unless `--show-secrets`; `-o` writes the body as received.
 fn print_response(
     args: &OutputFlags,
     record: &RequestRecord,
@@ -246,7 +245,6 @@ fn print_response(
     let mut out = io::stdout().lock();
     let written = match (args.body_only, args.show_secrets) {
         (true, true) => write_body(exchange, &mut out),
-        (true, false) if exchange.binary => write_body(exchange, &mut out),
         (true, false) => write_redacted_body(exchange, redactor, &mut out),
         (false, true) => write_unredacted(exchange, &mut out),
         (false, false) => write_redacted(record, exchange, redactor, &mut out),

@@ -108,7 +108,7 @@ mod tests {
     #[test]
     fn escaped_echoes_are_redacted_before_quoting() {
         let r = redactor("cafeCANARYé99\"q");
-        let echo = r#"{"t":"cafeCANARYé99\"q"}"#;
+        let echo = r#"{"t":"cafeCANARY\u00e999\"q"}"#;
         let shown = finish(&quoted(echo), &r);
         assert!(!shown.contains("CANARY"), "{shown}");
         assert!(shown.contains("«redacted:tok»"), "{shown}");

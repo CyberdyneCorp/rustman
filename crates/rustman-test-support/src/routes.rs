@@ -20,6 +20,7 @@
 //! | `/orders` | `201` `created order-123456` with `Location` and `Set-Cookie: cart=c-9` |
 //! | `/timed/<ms>?id=<id>` | `200 done` after `<ms>` milliseconds, logging server-side start and end times (see [`timed_hits`]) |
 //! | `/mirror?pad=<n>&tail=<m>` | `200` text: `<n>` `A`s, the request body as an ASCII-only JSON string (`"caf\u00e9 \"x\""`), `<m>` `B`s |
+//! | `/latin1` | `200` Latin-1 JSON (not valid UTF-8): `{"city":"Bel\xe9m","echo":"<request body>"}` |
 //! | `/me` | `200` JSON `{"id": 42}` with `Authorization: Bearer TOKEN`, else `401` |
 
 use std::convert::Infallible;
@@ -100,6 +101,7 @@ pub async fn handle(req: Request<Incoming>) -> Result<Response<TestBody>, Infall
         // `/get` answers like httpbin's, for the request `rustman init` writes.
         ["echo"] | ["get"] => echo(req).await,
         ["mirror"] => Box::pin(mirror(req)).await,
+        ["latin1"] => Box::pin(latin1(req)).await,
         ["delay", ms] => {
             tokio::time::sleep(millis(ms)).await;
             text(StatusCode::OK, "done")
@@ -217,6 +219,19 @@ async fn mirror(req: Request<Incoming>) -> Response<TestBody> {
     let out = format!("{}{escaped}{}", "A".repeat(pad), "B".repeat(tail));
     Response::builder()
         .header(header::CONTENT_TYPE, "text/plain")
+        .body(Full::new(Bytes::from(out)).boxed())
+        .unwrap()
+}
+
+/// `/latin1`: a JSON body in Latin-1, so not valid UTF-8, with the request
+/// body inside it as is.
+async fn latin1(req: Request<Incoming>) -> Response<TestBody> {
+    let body = req.into_body().collect().await.map(|b| b.to_bytes());
+    let mut out = b"{\"city\":\"Bel\xe9m\",\"echo\":\"".to_vec();
+    out.extend_from_slice(&body.unwrap_or_default());
+    out.extend_from_slice(b"\"}");
+    Response::builder()
+        .header(header::CONTENT_TYPE, "application/json; charset=iso-8859-1")
         .body(Full::new(Bytes::from(out)).boxed())
         .unwrap()
 }
