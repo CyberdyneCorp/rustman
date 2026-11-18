@@ -35,8 +35,8 @@
 
 ## 5. Integration and docs
 
-- [ ] 5.1 Run an end-to-end agent scenario test with the rmcp client: list requests, `explore_plan`, then `explore_run` (read-only), poll status, `list_findings`, then `get_report`, against the `bad-api` fixture from `add-openapi-explorer`. Verify on CI on Linux, macOS and Windows.
-  - Note: `crates/rustman-mcp/tests/agent_e2e.rs` passes locally on macOS; tick once CI is green on all three OSes.
+- [x] 5.1 Run an end-to-end agent scenario test with the rmcp client: list requests, `explore_plan`, then `explore_run` (read-only), poll status, `list_findings`, then `get_report`, against the `bad-api` fixture from `add-openapi-explorer`. Verify on CI on Linux, macOS and Windows.
+  - Note: `crates/rustman-mcp/tests/agent_e2e.rs` passed in CI on Linux, macOS and Windows (#63).
 - [x] 5.2 Write `docs/agent.md`: setup for Claude Code/Desktop and generic clients, the permission model, HTTP mode security, the audit log, and the tool reference generated from schemas. Verify with a test that the tool reference section matches `tools/list`.
 - [x] 5.3 Run `openspec validate add-agent-mcp-server --strict`. Verify it exits 0.
 

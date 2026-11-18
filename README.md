@@ -591,15 +591,15 @@ graph TD
 
 ## Roadmap
 
-All 26 changes are specified in OpenSpec. v0.1 (headless core) and v0.2 (usable) are done, and v0.3 and v0.4 are in progress; open work is tracked in the [roadmap tracking issue](https://github.com/CyberdyneCorp/rustman/issues/46). Releases are ordered by dependency, user value and risk. The full delivery plan, with exit criteria, shared enablers and risks, is in [`ROADMAP.md`](ROADMAP.md).
+All 26 changes are specified in OpenSpec. v0.1 (headless core), v0.2 (usable) and v0.3 (autonomous) are done, and v0.4 is in progress; open work is tracked in the [roadmap tracking issue](https://github.com/CyberdyneCorp/rustman/issues/46). Releases are ordered by dependency, user value and risk. The full delivery plan, with exit criteria, shared enablers and risks, is in [`ROADMAP.md`](ROADMAP.md).
 
 | Release | Changes | You get | Status |
 |---|---|---|---|
 | **Phase 0** | — | Open decisions settled (license, MSRV, `rmcp` pin, YAML crate) and spec fixes | ✅ done |
 | **v0.1 - Headless core** | `bootstrap-core-engine`, plus the safety policy from `add-openapi-explorer` | CLI runner with workspace, environments, secrets, HTTP engine, assertions, history | ✅ done |
 | **v0.2 - Usable** (first public release) | `add-terminal-ui`, `add-importers`, `add-runner-parity` | TUI, import from Postman/Insomnia/Bruno/HAR/`.http`, data-driven runs, Digest/SigV4/JWT, code snippets | ✅ done |
-| **v0.3 - Autonomous** | `add-openapi-explorer`, `add-agent-mcp-server` | OpenAPI import and exploration, HTML/SARIF reports, agent interface | 🚧 in progress (explorer done) |
-| **v0.4 - Multi-protocol** | `add-graphql-client`, `add-mcp-client`, `add-webhook-inspector`, `add-snapshot-testing`, `add-openapi-mock-server` | GraphQL, MCP client, webhooks, snapshot tests, mock server | 🚧 in progress |
+| **v0.3 - Autonomous** | `add-openapi-explorer`, `add-agent-mcp-server` | OpenAPI import and exploration, HTML/SARIF reports, agent interface | ✅ done |
+| **v0.4 - Multi-protocol** | `add-graphql-client`, `add-mcp-client`, `add-webhook-inspector`, `add-snapshot-testing`, `add-openapi-mock-server` | GraphQL, MCP client, webhooks, snapshot tests, mock server | 🚧 in progress (GraphQL and webhooks done) |
 | **v0.5 - Protocols** | `add-jsonrpc-client`, `add-grpc-client`, `add-realtime-client` | JSON-RPC, gRPC, WebSocket and SSE | planned |
 | **v0.6 - Pro testing** | `add-contract-testing`, `add-trace-propagation`, `add-load-testing`, `add-docs-generator`, `add-stress-testing` | Breaking-change checks, tracing, load and stress tests, generated docs | planned |
 | **v0.7 - Operate & extend** | `add-secret-providers`, `add-scheduled-monitors`, `add-plugin-system`, `add-traffic-recorder`, `add-messaging-client` | Secret providers, monitors, plugins, traffic recorder, message brokers | planned |
