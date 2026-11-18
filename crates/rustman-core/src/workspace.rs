@@ -196,6 +196,7 @@ impl<'a> RequestRef<'a> {
             .filter_map(|c| c.meta.headers.as_deref());
         let own = match self.request() {
             Request::Http(http) => http.headers.as_deref(),
+            Request::Graphql(graphql) => graphql.headers.as_deref(),
             Request::Opaque(_) => None,
         };
         let mut merged: Vec<NameValue> = Vec::new();
@@ -212,6 +213,7 @@ impl<'a> RequestRef<'a> {
     pub fn effective_auth(&self) -> Option<&'a Auth> {
         let own = match self.request() {
             Request::Http(http) => http.auth.as_ref(),
+            Request::Graphql(graphql) => graphql.auth.as_ref(),
             Request::Opaque(_) => None,
         };
         own.or_else(|| {
@@ -389,10 +391,12 @@ fn request_path_errors(
     shown: &Path,
     request: &Request,
 ) -> Vec<LoadError> {
-    let Request::Http(http) = request else {
-        return Vec::new();
+    let paths = match request {
+        Request::Http(http) => http.file_paths(),
+        Request::Graphql(graphql) => graphql.file_paths(),
+        Request::Opaque(_) => return Vec::new(),
     };
-    http.file_paths()
+    paths
         .into_iter()
         .filter_map(|path| {
             let message = check_path(root, base, path.get()).err()?;

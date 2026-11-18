@@ -538,7 +538,10 @@ settings:
     fn unsupported_kinds_are_not_resolved() {
         let f = Fixture::new("");
         f.write("environments/prod.yaml", "");
-        f.write("g.rman.yaml", "version: 1\nkind: graphql\nname: g\n");
+        f.write(
+            "g.rman.yaml",
+            "version: 1\nkind: graphql\nname: g\nendpoint: http://x\ndocument: '{ a }'\n",
+        );
         assert!(matches!(
             resolve(&f, "g"),
             Err(ResolveError::Unsupported(_))

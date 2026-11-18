@@ -7,6 +7,7 @@ pub mod env;
 pub mod exec;
 pub mod explore;
 pub mod export;
+pub mod graphql;
 pub mod history;
 pub mod import;
 pub mod init;

@@ -25,14 +25,18 @@ use rustman_core::settings::Settings;
 use rustman_core::vars::Lookup;
 use rustman_core::workspace::RequestRef;
 use rustman_core::{Redactor, Workspace};
+use rustman_graphql::{GraphqlRunner, Interactive, SubscriptionEvent};
 use rustman_http::Exchange;
 use rustman_http::runner::{RunContext, RunOptions, Runner, Sent};
+use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio_util::sync::CancellationToken;
 
-use crate::app::{Action, Effect, State};
+use crate::app::{Action, Effect, Overlay, State};
+use crate::dialogs::Confirm;
+use crate::response::graphql::GraphqlView;
 use crate::response::timing::SPARK_POINTS;
 use crate::response::{Captured, RawBody, Received, Source};
-use crate::tabs::TabId;
+use crate::tabs::{LiveEvent, LiveEvents, TabId};
 use crate::toast::Severity;
 use crate::workbench;
 
@@ -53,6 +57,12 @@ pub struct SendJob {
     pub cancel: CancellationToken,
     /// The secret store backend; `None`: as `RUSTMAN_SECRET_STORE` says.
     pub backend: Option<SecretBackend>,
+    /// Check a GraphQL document before sending (off after "Send anyway").
+    pub validate: bool,
+    /// Stops a GraphQL subscription, keeping what arrived.
+    pub stop: CancellationToken,
+    /// Where a subscription's events go as they arrive.
+    pub live: LiveEvents,
 }
 
 impl fmt::Debug for SendJob {
@@ -74,8 +84,15 @@ impl PartialEq for SendJob {
 
 impl Eq for SendJob {}
 
-/// `request.send`: start the current tab's request in the background.
+/// `request.send`: start the current tab's request in the background. A
+/// GraphQL document with errors asks first (spec: Pre-send validation).
 pub fn start(state: &mut State) -> Vec<Effect> {
+    start_with(state, true)
+}
+
+/// Send the current tab's request; `validate: false` skips the GraphQL
+/// document check (the user chose "Send anyway").
+pub fn start_with(state: &mut State, validate: bool) -> Vec<Effect> {
     let workspace = workbench::workspace(state).cloned().map(Box::new);
     let environment = state.status.environment.clone();
     let now = state.now;
@@ -90,7 +107,13 @@ pub fn start(state: &mut State) -> Vec<Effect> {
             return Vec::new();
         }
     };
+    if validate && let Some(error) = graphql_error(tab) {
+        let confirm = Confirm::invalid_graphql(tab.id, &error);
+        state.overlay = Some(Overlay::Confirm(confirm));
+        return Vec::new();
+    }
     let (seq, cancel) = tab.start(now);
+    let flight = tab.in_flight.as_ref().expect("just started");
     let job = SendJob {
         tab: tab.id,
         seq,
@@ -100,9 +123,19 @@ pub fn start(state: &mut State) -> Vec<Effect> {
         environment,
         cancel,
         backend: state.secret_backend,
+        validate,
+        stop: flight.stop.clone(),
+        live: Arc::clone(&flight.live),
     };
     state.status.in_flight = state.tabs.in_flight();
     vec![Effect::Send(Box::new(job))]
+}
+
+/// The first error of a GraphQL tab's document, which blocks its send.
+fn graphql_error(tab: &crate::tabs::Tab) -> Option<String> {
+    let editor = tab.editor.graphql()?;
+    let error = editor.validation.errors().next()?;
+    Some(error.to_string())
 }
 
 /// `Esc` / `Ctrl+C`: cancel the current tab's request; false when it has
@@ -199,28 +232,49 @@ fn replace(collection: &mut Collection, path: &Path, request: &Request) -> bool 
     })
 }
 
-async fn send_in_workspace(job: &SendJob, ws: &Workspace) -> Received {
+/// A copy of `ws` with the edited `request` in place of the file at
+/// `path`; the path, when the file is part of the loaded tree.
+pub(crate) fn with_edit(
+    ws: &Workspace,
+    path: Option<&Path>,
+    request: &Request,
+) -> (Workspace, Option<PathBuf>) {
     let mut ws = ws.clone();
-    let path = job
-        .path
-        .clone()
-        .filter(|p| replace(&mut ws.tree, p, &job.request));
-    let (_, file) = names(job.path.as_deref());
-    let loose = RequestEntry {
-        path: PathBuf::from(&file),
-        request: job.request.clone(),
-    };
-    let requests = ws.requests();
-    let target = match &path {
-        Some(p) => requests.into_iter().find(|r| r.entry.path == *p),
-        None => None,
-    };
-    let target = target.unwrap_or_else(|| RequestRef {
+    let path = path
+        .map(Path::to_path_buf)
+        .filter(|p| replace(&mut ws.tree, p, request));
+    (ws, path)
+}
+
+/// The request at `path` in `ws`, or `loose` (a request outside the tree)
+/// with the workspace root's settings.
+pub(crate) fn target<'a>(
+    ws: &'a Workspace,
+    path: Option<&Path>,
+    loose: &'a RequestEntry,
+) -> RequestRef<'a> {
+    let found = path.and_then(|p| ws.requests().into_iter().find(|r| r.entry.path == p));
+    found.unwrap_or_else(|| RequestRef {
         root: &ws.root,
         http: &ws.settings.http,
-        entry: &loose,
+        entry: loose,
         ancestors: vec![&ws.tree],
-    });
+    })
+}
+
+/// The entry an unsaved (or moved) request is sent as.
+pub(crate) fn loose_entry(path: Option<&Path>, request: &Request) -> RequestEntry {
+    let (_, file) = names(path);
+    RequestEntry {
+        path: PathBuf::from(&file),
+        request: request.clone(),
+    }
+}
+
+async fn send_in_workspace(job: &SendJob, ws: &Workspace) -> Received {
+    let (ws, path) = with_edit(ws, job.path.as_deref(), &job.request);
+    let loose = loose_entry(job.path.as_deref(), &job.request);
+    let target = target(&ws, path.as_deref(), &loose);
     let env = ws
         .environments
         .iter()
@@ -282,10 +336,20 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         Ok(store) => store,
         Err(message) => return failed(job, message),
     };
+    let (feed, events) = unbounded_channel();
+    let graphql = GraphqlRunner {
+        validate: job.validate,
+        interactive: Some(Interactive {
+            stop: job.stop.clone(),
+            feed: Some(feed),
+        }),
+        ..GraphqlRunner::default()
+    };
     let options = RunOptions {
         cancel: job.cancel.clone(),
         history: place.history(),
         ad_hoc,
+        graphql: Some(&graphql),
         ..RunOptions::default()
     };
     let ctx = RunContext {
@@ -299,7 +363,10 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         Ok(runner) => runner,
         Err(e) => return failed(job, e.to_string()),
     };
-    let mut sent = runner.send(target, 1).await;
+    let mut sent = tokio::select! {
+        sent = runner.send(target, 1) => sent,
+        () = collect(events, &job.live) => unreachable!("the feed outlives the send"),
+    };
     if let Err(e) = runner.finish() {
         sent.record.warnings.push(e.to_string());
     }
@@ -312,10 +379,36 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         _ => None,
     };
     let mut received = prepare(sent, http);
+    received.graphql = graphql_view(&received);
     if !ad_hoc && let Some(store) = place.history() {
         received.history = latencies(&store, &received.record.file);
     }
     received
+}
+
+/// The GraphQL result of a GraphQL exchange, from its redacted record and
+/// body (a body spooled to disk is only in the Body tab).
+fn graphql_view(received: &Received) -> Option<Box<GraphqlView>> {
+    let record = received.record.graphql.as_ref()?;
+    let body = match &received.source {
+        Some(Source::Memory(bytes)) => Some(bytes.as_ref()),
+        _ => None,
+    };
+    Some(Box::new(GraphqlView::new(record, body)))
+}
+
+/// Keep a subscription's events for the live view. Never returns: the
+/// runner holds the feed's sender until the send is over.
+async fn collect(mut events: UnboundedReceiver<SubscriptionEvent>, live: &LiveEvents) {
+    while let Some(event) = events.recv().await {
+        if let Ok(mut log) = live.lock() {
+            log.push(LiveEvent {
+                elapsed_ms: rustman_http::millis(event.elapsed),
+                payload: event.payload,
+            });
+        }
+    }
+    std::future::pending::<()>().await;
 }
 
 /// The viewer's copy of what was sent: the redacted body (spooled to a
@@ -456,6 +549,9 @@ mod tests {
             environment: None,
             cancel: CancellationToken::new(),
             backend: None,
+            validate: true,
+            stop: CancellationToken::new(),
+            live: LiveEvents::default(),
         };
         let mut other = job.clone();
         assert_eq!(job, other);

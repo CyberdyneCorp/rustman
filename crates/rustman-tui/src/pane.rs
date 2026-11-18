@@ -17,6 +17,7 @@ use rustman_core::model::Request;
 
 use crate::config::UiOptions;
 use crate::focus::Focus;
+use crate::graphql_pane::{GraphqlEditor, GraphqlPane};
 use crate::http_pane::HttpPane;
 use crate::keymap::{Chord, Keymap};
 use crate::theme::Token;
@@ -72,6 +73,13 @@ pub trait PaneEditor: fmt::Debug + Send {
     fn response_tabs(&self) -> &'static [&'static str] {
         &[]
     }
+    /// The GraphQL editor, for its schema, completion and subscriptions.
+    fn graphql(&self) -> Option<&GraphqlEditor> {
+        None
+    }
+    fn graphql_mut(&mut self) -> Option<&mut GraphqlEditor> {
+        None
+    }
 }
 
 /// A pane registered for one request kind.
@@ -87,10 +95,10 @@ pub struct Registry {
 }
 
 impl Registry {
-    /// The panes shipped here: `http`.
+    /// The panes shipped here: `http` and `graphql`.
     pub fn builtin() -> Self {
         Self {
-            panes: vec![&HttpPane],
+            panes: vec![&HttpPane, &GraphqlPane],
         }
     }
 
@@ -209,7 +217,7 @@ mod tests {
     #[test]
     fn http_has_a_pane_and_unknown_kinds_open_read_only() {
         let registry = Registry::builtin();
-        assert_eq!(registry.kinds(), ["http"]);
+        assert_eq!(registry.kinds(), ["http", "graphql"]);
         let http = load("version: 1\nkind: http\nname: A\nurl: http://x/\n");
         let editor = registry.open(&http);
         assert_eq!(editor.kind(), "http");

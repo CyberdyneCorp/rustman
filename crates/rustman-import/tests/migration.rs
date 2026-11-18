@@ -17,7 +17,7 @@ fn http(text: &str) -> rustman_core::model::HttpRequest {
         .unwrap()
     {
         Request::Http(r) => *r,
-        Request::Opaque(_) => panic!("not an http request"),
+        _ => panic!("not an http request"),
     }
 }
 

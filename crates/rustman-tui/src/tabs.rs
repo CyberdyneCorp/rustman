@@ -4,7 +4,9 @@
 //! switching tabs never touches another tab's request. A tab is dirty when
 //! its request, written as YAML, differs from what its file holds.
 
+use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use rustman_core::format::write::request_to_yaml;
@@ -52,6 +54,71 @@ pub struct InFlight {
     pub started: Instant,
     /// Cancelled by `Esc` / `Ctrl+C`, closing the tab, or quitting.
     pub token: CancellationToken,
+    /// Stops a GraphQL subscription: what arrived so far is shown.
+    pub stop: CancellationToken,
+    /// The events of a GraphQL subscription, as they arrive.
+    pub live: LiveEvents,
+}
+
+/// One event a subscription pushed, redacted, while it runs.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LiveEvent {
+    pub elapsed_ms: f64,
+    pub payload: serde_json::Value,
+}
+
+/// How many of the newest events a running subscription's live view
+/// holds: more than a screen shows, so memory stays flat however long it
+/// runs.
+pub const LIVE_KEPT_EVENTS: usize = 256;
+
+/// The newest events of a running subscription, and how many arrived.
+#[derive(Debug, Default)]
+pub struct LiveLog {
+    total: usize,
+    newest: VecDeque<LiveEvent>,
+}
+
+impl LiveLog {
+    pub fn push(&mut self, event: LiveEvent) {
+        self.total += 1;
+        if self.newest.len() == LIVE_KEPT_EVENTS {
+            self.newest.pop_front();
+        }
+        self.newest.push_back(event);
+    }
+
+    /// Every event received so far.
+    pub fn total(&self) -> usize {
+        self.total
+    }
+
+    /// The newest `n` events (fewer when not as many are held), with the
+    /// number of the first one, counting from 1.
+    pub fn newest(&self, n: usize) -> (usize, Vec<LiveEvent>) {
+        let skip = self.newest.len().saturating_sub(n);
+        let first = self.total - self.newest.len() + skip + 1;
+        (first, self.newest.iter().skip(skip).cloned().collect())
+    }
+}
+
+/// The events of a running subscription, shared with the send job.
+pub type LiveEvents = Arc<Mutex<LiveLog>>;
+
+impl InFlight {
+    /// How many events arrived so far.
+    pub fn live_count(&self) -> usize {
+        self.live.lock().map(|log| log.total()).unwrap_or_default()
+    }
+
+    /// The newest `n` events and the number of the first: only what a
+    /// frame shows is copied.
+    pub fn newest_live(&self, n: usize) -> (usize, Vec<LiveEvent>) {
+        self.live
+            .lock()
+            .map(|log| log.newest(n))
+            .unwrap_or((1, Vec::new()))
+    }
 }
 
 impl Tab {
@@ -112,6 +179,8 @@ impl Tab {
             seq,
             started: now,
             token: token.clone(),
+            stop: CancellationToken::new(),
+            live: LiveEvents::default(),
         });
         (seq, token)
     }
@@ -295,6 +364,30 @@ mod tests {
     use crate::focus::Focus;
     use crate::keymap::chord::parse_chord;
     use rustman_core::model::KindRegistry;
+
+    #[test]
+    fn the_live_log_holds_only_the_newest_events_and_counts_all() {
+        let mut log = LiveLog::default();
+        let total = LIVE_KEPT_EVENTS + 44;
+        for n in 0..total {
+            log.push(LiveEvent {
+                elapsed_ms: n as f64,
+                payload: serde_json::json!(n),
+            });
+        }
+        assert_eq!(log.total(), total);
+        assert_eq!(log.newest.len(), LIVE_KEPT_EVENTS);
+        let (first, shown) = log.newest(3);
+        assert_eq!(first, total - 2);
+        let payloads: Vec<_> = shown.iter().map(|e| e.payload.clone()).collect();
+        assert_eq!(
+            payloads,
+            [total - 3, total - 2, total - 1].map(|n| serde_json::json!(n))
+        );
+        let (first, all) = log.newest(usize::MAX);
+        assert_eq!((first, all.len()), (45, LIVE_KEPT_EVENTS));
+        assert_eq!(LiveLog::default().newest(5).0, 1);
+    }
 
     fn request(url: &str) -> Request {
         let text = format!("version: 1\nkind: http\nname: R\nurl: {url}\n");

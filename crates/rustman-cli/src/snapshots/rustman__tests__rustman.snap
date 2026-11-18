@@ -18,6 +18,7 @@ Commands:
   report       Print the report schema, render reports in other formats, diff them
   send         Send one request (a file, id or name, or an ad-hoc METHOD URL) and print the response
   run          Run the requests under files or folders and report the results
+  graphql      Introspect GraphQL schemas and send GraphQL operations
   history      List, inspect, replay and clear past exchanges (redacted)
   completions  Print a shell completion script: rustman completions zsh > _rustman
   tui          Open the terminal UI (the default when stdin and stdout are a terminal)

@@ -10,7 +10,7 @@ use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 
 use crate::app::{Abort, Action, Effect};
 use crate::response::{Source, find, html, picker, received};
-use crate::{clipboard, external, files, reveal, send, viz};
+use crate::{clipboard, external, files, graphql_schema, reveal, send, viz};
 
 /// Run one effect to completion. This blocks (disk I/O), so the runner calls
 /// it on a blocking thread; tools such as the screenshot example call it
@@ -107,6 +107,7 @@ fn execute_other(effect: Effect) -> Action {
         Effect::Viz(job) => Action::VizDone(viz::open(&job)),
         Effect::WriteReport(job) => Action::ReportWritten(html::write(&job)),
         Effect::Webhook(job) => crate::webhook::execute(*job),
+        Effect::GraphqlSchema(job) => graphql_schema::execute(&job),
         other => Action::Abort(Abort::Failed(format!("unexpected effect {other:?}"))),
     }
 }

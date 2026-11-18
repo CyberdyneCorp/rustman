@@ -1,0 +1,24 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Introspect GraphQL schemas and send GraphQL operations
+
+Usage: rustman graphql [OPTIONS] <COMMAND>
+
+Commands:
+  introspect  Fetch an endpoint's schema by introspection and cache it (optionally writing it as SDL)
+  query       Validate, send and print a GraphQL operation: a request file, or --endpoint with --query
+  help        Print this message or the help of the given subcommand(s)
+
+Options:
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

@@ -13,7 +13,7 @@ use crate::shell::{self, Command};
 use crate::status::VimMode;
 use crate::toast::Severity;
 use crate::tree::{self, Filter};
-use crate::{reveal, send, viewer_keys, viz, workbench};
+use crate::{graphql, reveal, send, viewer_keys, viz, workbench};
 
 /// Handle a key while the shell is showing.
 pub fn shell_key(state: &mut State, chord: Chord) -> Vec<Effect> {
@@ -247,6 +247,12 @@ pub fn run(state: &mut State, action: ActionId) -> Vec<Effect> {
         ActionId::VizOpen => return viz::start(state),
         ActionId::WebhookOpen => crate::webhook::toggle_pane(state),
         ActionId::ReportHtml => return crate::response::html::start(state),
+        ActionId::GraphqlRefreshSchema => return graphql::refresh(state),
+        ActionId::GraphqlSubscriptionStart => return graphql::start_subscription(state),
+        ActionId::GraphqlSubscriptionStop => {
+            graphql::stop_subscription(state);
+        }
+        ActionId::EditorComplete => graphql::complete(state),
         ActionId::PaneLeft => pane_step(state, false),
         ActionId::PaneRight => pane_step(state, true),
         ActionId::ListUp

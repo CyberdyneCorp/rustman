@@ -18,6 +18,7 @@ rustman-http.workspace = true
 rustman-import.workspace = true
 rustman-report.workspace = true
 rustman-explore.workspace = true
+rustman-graphql.workspace = true
 rustman-tui.workspace = true
 rustman-webhook.workspace = true
 clap.workspace = true

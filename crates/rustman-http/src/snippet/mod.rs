@@ -169,9 +169,9 @@ pub enum SnippetError {
 /// `kind: http` request (use it as it is), its POST for `kind: graphql`.
 /// Other kinds have no snippet export.
 pub fn http_entry(target: &RequestRef<'_>) -> Result<Option<RequestEntry>, SnippetError> {
-    let opaque = match target.request() {
+    let graphql = match target.request() {
         Request::Http(_) => return Ok(None),
-        Request::Opaque(opaque) if opaque.kind == "graphql" => opaque,
+        Request::Graphql(graphql) => graphql,
         Request::Opaque(other) => return Err(SnippetError::UnsupportedKind(other.kind.clone())),
     };
     let read = |raw: &str| {
@@ -180,7 +180,7 @@ pub fn http_entry(target: &RequestRef<'_>) -> Result<Option<RequestEntry>, Snipp
     };
     let file = target.root.join(&target.entry.path);
     let http =
-        graphql_as_http(&file, opaque, read).map_err(|e| SnippetError::Invalid(e.to_string()))?;
+        graphql_as_http(&file, graphql, read).map_err(|e| SnippetError::Invalid(e.to_string()))?;
     Ok(Some(RequestEntry {
         path: target.entry.path.clone(),
         request: Request::Http(Box::new(http)),

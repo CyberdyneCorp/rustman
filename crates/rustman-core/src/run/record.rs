@@ -5,6 +5,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+use super::graphql::GraphqlRecord;
 use crate::assertions::AssertionResult;
 use crate::captures::CaptureResult;
 use crate::model::{ApiKeyLocation, Auth};
@@ -34,7 +35,7 @@ pub enum SkipReason {
     Bail,
     /// The run was interrupted (Ctrl+C) before or while it was sent.
     Interrupted,
-    /// A request kind this build cannot execute (e.g. `graphql`, `mcp`).
+    /// A request kind this run cannot execute (e.g. `mcp`).
     UnsupportedKind,
 }
 
@@ -235,6 +236,10 @@ pub struct RequestRecord {
     pub captures: Vec<CaptureResult>,
     pub warnings: Vec<String>,
     pub duration_ms: f64,
+    /// The operation, variables, result and events of a GraphQL request;
+    /// absent for every other kind.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub graphql: Option<GraphqlRecord>,
 }
 
 impl RequestRecord {
@@ -255,6 +260,7 @@ impl RequestRecord {
             captures: Vec::new(),
             warnings: Vec::new(),
             duration_ms: 0.0,
+            graphql: None,
         }
     }
 

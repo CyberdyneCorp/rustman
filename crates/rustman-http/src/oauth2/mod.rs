@@ -78,6 +78,7 @@ pub fn interactive_login_required(request: &str) -> RequestError {
 pub fn cache_key(request: &RequestRef<'_>) -> String {
     let own = match request.request() {
         rustman_core::model::Request::Http(http) => http.auth.is_some(),
+        rustman_core::model::Request::Graphql(graphql) => graphql.auth.is_some(),
         rustman_core::model::Request::Opaque(_) => false,
     };
     let owner = request

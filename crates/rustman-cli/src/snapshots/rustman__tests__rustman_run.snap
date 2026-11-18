@@ -63,6 +63,12 @@ Options:
       --report <FORMAT[=PATH]>
           Also render the report as json, junit, markdown, html or sarif, written to a file or stdout, as in html=out/report.html (repeatable)
 
+      --max-events <N>
+          GraphQL subscriptions stop after N events (default: each request's max_events, else 10)
+
+      --duration <DURATION>
+          GraphQL subscriptions stop after this long (default: each request's duration, else 30s)
+
       --color <WHEN>
           Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
           

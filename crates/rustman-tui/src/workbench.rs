@@ -294,6 +294,13 @@ pub fn decide(state: &mut State, decision: Decision) -> Vec<Effect> {
             Vec::new()
         }
         Decision::LoadFromDisk(id) => load_from_disk(state, id),
+        Decision::SendUnvalidated(id) => {
+            if state.tabs.active().is_some_and(|t| t.id == id) {
+                crate::send::start_with(state, false)
+            } else {
+                Vec::new()
+            }
+        }
     }
 }
 

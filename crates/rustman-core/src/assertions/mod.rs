@@ -9,6 +9,7 @@
 
 mod body;
 mod expected;
+mod graphql;
 mod header;
 mod json;
 mod response;
@@ -47,7 +48,9 @@ pub enum Outcome {
 /// The result of one assertion.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct AssertionResult {
-    /// The assertion type: `status`, `header`, `json`, `schema`, `body` or `latency`.
+    /// The assertion type: `status`, `header`, `json`, `schema`, `body`,
+    /// `latency`, or a GraphQL check (`no_errors`, `errors_count`,
+    /// `error_message_contains`, `error_code`, `data`).
     pub kind: &'static str,
     pub outcome: Outcome,
     /// A short description of the check, such as `json $.id equals 42`.
@@ -94,7 +97,7 @@ pub fn needs_body(assertions: &[Assertion]) -> bool {
         matches!(
             a,
             Assertion::Json(_) | Assertion::Schema(_) | Assertion::Body(_)
-        )
+        ) || graphql::reads_result(a)
     })
 }
 
@@ -128,6 +131,7 @@ fn evaluate_one(
         Assertion::Schema(schema) => schema::evaluate(schema, response, ctx.request),
         Assertion::Body(body) => body::evaluate(body, view, interp),
         Assertion::Latency(latency) => status::latency(latency, view),
+        graphql => graphql::evaluate(graphql, response, interp),
     }
 }
 

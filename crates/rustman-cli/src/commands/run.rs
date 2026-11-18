@@ -3,15 +3,19 @@
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use clap::{Args, ValueEnum};
 use rustman_core::data_rows::DataRows;
 use rustman_core::run::{DataRun, Filter, Plan, RunRecord, collection_data, plan, secret_columns};
 use rustman_core::{ConfigError, Workspace};
+use rustman_graphql::GraphqlRunner;
 use rustman_http::runner::{BailScope, RunContext, Runner};
 use rustman_report::{Report, ReportTarget, Reporter, RunReport};
 
-use super::exec::{SendFlags, cancel_on_ctrl_c, history_store, runtime, secret_store};
+use super::exec::{
+    SendFlags, cancel_on_ctrl_c, history_store, parse_duration, runtime, secret_store,
+};
 use super::{EnvSelection, current_dir, print_warnings};
 use crate::exit::{CliError, run_code};
 
@@ -66,6 +70,14 @@ pub struct RunArgs {
     /// written to a file or stdout, as in html=out/report.html (repeatable)
     #[arg(long = "report", value_name = "FORMAT[=PATH]")]
     report: Vec<ReportTarget>,
+    /// GraphQL subscriptions stop after N events (default: each request's
+    /// max_events, else 10)
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
+    max_events: Option<u32>,
+    /// GraphQL subscriptions stop after this long (default: each request's
+    /// duration, else 30s)
+    #[arg(long, value_name = "DURATION", value_parser = parse_duration)]
+    duration: Option<Duration>,
 }
 
 pub fn run(args: &RunArgs) -> Result<u8, CliError> {
@@ -93,6 +105,12 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
     options.data = data;
     options.parallel = args.parallel as usize;
     options.history = history_store(args.flags.no_history, Some(&ws), &ws.settings);
+    let graphql = GraphqlRunner {
+        max_events: args.max_events,
+        duration: args.duration,
+        ..GraphqlRunner::default()
+    };
+    options.graphql = Some(&graphql);
     let cancel = options.cancel.clone();
     let ctx = RunContext {
         root: &ws.root,

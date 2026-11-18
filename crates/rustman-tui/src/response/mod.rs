@@ -9,6 +9,7 @@
 
 pub mod diff;
 pub mod find;
+pub mod graphql;
 pub mod html;
 pub mod json_tree;
 pub mod picker;
@@ -37,10 +38,31 @@ pub enum ResponseTab {
     Headers,
     Timing,
     Assertions,
+    /// GraphQL: `data`.
+    Data,
+    /// GraphQL: `errors`.
+    Errors,
+    /// GraphQL: `extensions`.
+    Extensions,
+    /// GraphQL: a subscription's events.
+    Events,
 }
 
 impl ResponseTab {
+    /// The tabs of an HTTP exchange.
     pub const ALL: [Self; 4] = [Self::Body, Self::Headers, Self::Timing, Self::Assertions];
+
+    /// The tabs of a GraphQL exchange.
+    pub const GRAPHQL: [Self; 8] = [
+        Self::Data,
+        Self::Errors,
+        Self::Extensions,
+        Self::Events,
+        Self::Body,
+        Self::Headers,
+        Self::Timing,
+        Self::Assertions,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -48,11 +70,19 @@ impl ResponseTab {
             Self::Headers => "Headers",
             Self::Timing => "Timing",
             Self::Assertions => "Assertions",
+            Self::Data => "Data",
+            Self::Errors => "Errors",
+            Self::Extensions => "Extensions",
+            Self::Events => "Events",
         }
     }
 
-    fn index(self) -> usize {
-        Self::ALL.iter().position(|t| *t == self).unwrap_or(0)
+    /// Whether the tab shows the GraphQL result.
+    pub fn is_graphql(self) -> bool {
+        matches!(
+            self,
+            Self::Data | Self::Errors | Self::Extensions | Self::Events
+        )
     }
 }
 
@@ -186,6 +216,8 @@ pub struct Viewer {
     pub page: Option<Page>,
     /// The off-loop search in progress: its generation and cancel token.
     search_job: Option<(u64, CancellationToken)>,
+    /// The exchange is a GraphQL one: its result has tabs of its own.
+    pub graphql: bool,
 }
 
 impl Viewer {
@@ -199,10 +231,26 @@ impl Viewer {
             loading: true,
             ..Page::default()
         });
+        let graphql = received.graphql.is_some();
         Self {
             tree,
             page,
+            graphql,
+            tab: if graphql {
+                ResponseTab::Data
+            } else {
+                ResponseTab::Body
+            },
             ..Self::default()
+        }
+    }
+
+    /// The tabs this exchange has.
+    pub fn tabs(&self) -> &'static [ResponseTab] {
+        if self.graphql {
+            &ResponseTab::GRAPHQL
+        } else {
+            &ResponseTab::ALL
         }
     }
 
@@ -229,10 +277,11 @@ impl Viewer {
 
     /// `]` / `[`: the next or previous viewer tab.
     pub fn step_tab(&mut self, forward: bool) {
-        let n = ResponseTab::ALL.len();
-        let i = self.tab.index();
+        let tabs = self.tabs();
+        let n = tabs.len();
+        let i = tabs.iter().position(|t| *t == self.tab).unwrap_or(0);
         let next = if forward { i + 1 } else { i + n - 1 } % n;
-        self.set_tab(ResponseTab::ALL[next]);
+        self.set_tab(tabs[next]);
     }
 
     pub fn set_tab(&mut self, tab: ResponseTab) {

@@ -15,6 +15,7 @@
 //! captured value holding a secret becomes a secret itself.
 
 mod execute;
+mod graphql;
 mod history;
 mod record;
 mod seed;
@@ -43,6 +44,7 @@ use crate::error::RequestError;
 use crate::exchange::Exchange;
 use crate::timing::millis;
 
+pub use graphql::{GraphqlCall, GraphqlExecutor, GraphqlFuture, GraphqlOutcome};
 pub use record::{exchange_record, timings_record};
 
 /// Where requests run: the workspace (or, for an ad-hoc request outside
@@ -98,6 +100,9 @@ pub struct RunOptions<'a> {
     /// The requests are ad-hoc (`rustman send <METHOD> <URL>`): history
     /// records them as `adhoc` instead of by file.
     pub ad_hoc: bool,
+    /// Sends `kind: graphql` requests; without one they are skipped as an
+    /// unsupported kind.
+    pub graphql: Option<&'a dyn GraphqlExecutor>,
 }
 
 impl Default for RunOptions<'_> {
@@ -115,6 +120,7 @@ impl Default for RunOptions<'_> {
             cancel: CancellationToken::new(),
             history: None,
             ad_hoc: false,
+            graphql: None,
         }
     }
 }

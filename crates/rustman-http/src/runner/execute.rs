@@ -8,7 +8,7 @@ use rustman_core::Redactor;
 use rustman_core::assertions::{self, Context, needs_body};
 use rustman_core::captures::{self, CaptureReport, Persistence, RunCaptures};
 use rustman_core::data_rows::RowSource;
-use rustman_core::model::{HttpRequest, Request};
+use rustman_core::model::{Assertion, Capture, Request};
 use rustman_core::redact::remember_for_logs;
 use rustman_core::run::{RequestRecord, RequestStatus, SkipReason};
 use rustman_core::secret::Secret;
@@ -71,6 +71,9 @@ impl Runner<'_> {
         let file = (!self.options.ad_hoc).then(|| sent.record.file.clone());
         let redactor = self.sink_redactor(&sent);
         redact_error(&mut sent.record, &redactor);
+        if let Some(graphql) = sent.record.graphql.take() {
+            sent.record.graphql = Some(graphql.redacted(&redactor));
+        }
         sent.redactor = redactor.clone();
         let kept = self.record_history(&mut sent, &redactor, file, Some(cache_key(request)));
         sent.discard_spill_unless(kept);
@@ -97,8 +100,14 @@ impl Runner<'_> {
         if self.bailed.load(Ordering::SeqCst) {
             return Sent::skipped(record, SkipReason::Bail);
         }
-        let Request::Http(http) = request.request() else {
-            return Sent::skipped(record, SkipReason::UnsupportedKind);
+        let http = match request.request() {
+            Request::Http(http) => http,
+            Request::Graphql(graphql) => {
+                return self
+                    .execute_graphql(request, graphql, record, iteration)
+                    .await;
+            }
+            Request::Opaque(_) => return Sent::skipped(record, SkipReason::UnsupportedKind),
         };
         let captured = self.lock_captures().clone();
         let resolver = self.resolver(request, &captured, iteration);
@@ -118,7 +127,8 @@ impl Runner<'_> {
             None => return Sent::skipped(record, SkipReason::Interrupted),
         };
         let checked = Checked {
-            http,
+            assertions: http.assertions.as_deref().unwrap_or_default(),
+            captures: http.captures.as_deref().unwrap_or_default(),
             request,
             resolver: &resolver,
             resolved: &resolved,
@@ -159,7 +169,10 @@ impl Runner<'_> {
 
     /// The request's options with the run's `--timeout`, `--insecure` and
     /// cookie jar applied.
-    fn send_options(&self, resolved: &ResolvedRequest) -> Result<SendOptions, RequestError> {
+    pub(super) fn send_options(
+        &self,
+        resolved: &ResolvedRequest,
+    ) -> Result<SendOptions, RequestError> {
         let mut options = SendOptions::for_request(self.ctx.settings, self.ctx.root, resolved)?;
         if !self.ctx.in_workspace {
             options.body.spill_dir = crate::body::default_spill_dir();
@@ -177,7 +190,7 @@ impl Runner<'_> {
     /// The precedence chain for `request`: `--var` overrides, the run's
     /// captures, the data row of `iteration` and the persisted captures on
     /// top of the request's own chain.
-    fn resolver<'r>(
+    pub(super) fn resolver<'r>(
         &'r self,
         request: &RequestRef<'r>,
         captured: &'r RunCaptures,
@@ -201,15 +214,13 @@ impl Runner<'_> {
     }
 
     /// Evaluate assertions, then captures, and record the exchange.
-    fn evaluate(
+    pub(super) fn evaluate(
         &self,
         checked: &Checked<'_, '_>,
         exchange: Exchange,
         mut record: RequestRecord,
     ) -> Sent {
-        let http = checked.http;
-        let assertions = http.assertions.as_deref().unwrap_or_default();
-        let captures = http.captures.as_deref().unwrap_or_default();
+        let (assertions, captures) = (checked.assertions, checked.captures);
         let full_body = needs_body(assertions) || !captures.is_empty();
         let view = match exchange.view(full_body) {
             Ok(view) => view,
@@ -338,11 +349,12 @@ pub(super) struct AuthTarget {
 }
 
 /// A request whose response is being checked.
-struct Checked<'c, 'r> {
-    http: &'c HttpRequest,
-    request: &'c RequestRef<'r>,
-    resolver: &'c Resolver<'c>,
-    resolved: &'c ResolvedRequest,
+pub(super) struct Checked<'c, 'r> {
+    pub assertions: &'c [Assertion],
+    pub captures: &'c [rustman_core::model::Checked<Capture>],
+    pub request: &'c RequestRef<'r>,
+    pub resolver: &'c Resolver<'c>,
+    pub resolved: &'c ResolvedRequest,
 }
 
 /// Redact the error message of `record`, which may quote what was sent.

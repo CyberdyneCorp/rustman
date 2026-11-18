@@ -84,7 +84,7 @@ fn load(
                 request: *request,
             })
         }
-        Ok(Request::Opaque(_)) => None,
+        Ok(Request::Graphql(_) | Request::Opaque(_)) => None,
         Err(e) => {
             warnings.push(format!("{e}; the file is left as it is"));
             None

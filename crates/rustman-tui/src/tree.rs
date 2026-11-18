@@ -68,6 +68,7 @@ pub fn badge(request: &Request) -> Badge {
             let token = method_token(&method);
             (method, token)
         }
+        Request::Graphql(_) => ("GQL".to_owned(), Token::Info),
         Request::Opaque(opaque) => {
             let text = match opaque.kind.as_str() {
                 "graphql" => "GQL".to_owned(),
@@ -204,7 +205,10 @@ mod tests {
             "users/create-user.rman.yaml",
             "kind: http\nmethod: POST\nurl: http://x/\n",
         );
-        request("graph/query.rman.yaml", "kind: graphql\n");
+        request(
+            "graph/query.rman.yaml",
+            "kind: graphql\nendpoint: http://x/\ndocument: '{ a }'\n",
+        );
         request(
             "ping.rman.yaml",
             "kind: http\nmethod: DELETE\nurl: http://x/\n",

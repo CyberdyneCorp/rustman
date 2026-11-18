@@ -18,6 +18,7 @@ use crate::commands;
 use crate::config::UiOptions;
 use crate::dialogs::{Confirm, Input};
 use crate::files::FileOp;
+use crate::graphql_schema::{SchemaJob, SchemaLoaded};
 use crate::keymap::{Chord, Keymap};
 use crate::launch::Launch;
 use crate::palette::{Palette, Target};
@@ -35,7 +36,7 @@ use crate::vim::Vim;
 use crate::viz::{self, VizError, VizJob};
 use crate::webhook::{self, WebhookPane};
 use crate::workbench::{self, Pending};
-use crate::{reveal, send, viewer_keys};
+use crate::{graphql, reveal, send, viewer_keys};
 
 /// The whole UI state; `view` renders it and `update` changes it.
 #[derive(Debug)]
@@ -270,6 +271,12 @@ pub enum Action {
     ReportWritten(Result<PathBuf, String>),
     /// A webhook listener event or a webhook job finished.
     Webhook(Box<webhook::Msg>),
+    /// A GraphQL tab's schema was loaded (or refreshed).
+    GraphqlSchema {
+        tab: TabId,
+        refresh: bool,
+        result: Result<Box<SchemaLoaded>, String>,
+    },
 }
 
 /// Why the loop stopped without the user quitting.
@@ -356,6 +363,8 @@ pub enum Effect {
     WriteReport(Box<ReportJob>),
     /// Webhook pane work: settings, the listener, mocks, save and replay.
     Webhook(Box<webhook::Job>),
+    /// Load (or refresh) a GraphQL tab's schema.
+    GraphqlSchema(Box<SchemaJob>),
 }
 
 impl State {
@@ -422,7 +431,8 @@ impl State {
 
 /// Apply `action` to `state` and return the effects to run.
 pub fn update(state: &mut State, action: Action) -> Vec<Effect> {
-    let effects = dispatch(state, action);
+    let mut effects = dispatch(state, action);
+    effects.extend(graphql::pending_loads(state));
     workbench::ask_conflict(state);
     state.status.tls_insecure = tls_insecure(state);
     effects
@@ -514,6 +524,14 @@ fn on_workbench(state: &mut State, action: Action) -> Vec<Effect> {
             Vec::new()
         }
         Action::Webhook(msg) => webhook::on_msg(state, *msg),
+        Action::GraphqlSchema {
+            tab,
+            refresh,
+            result,
+        } => {
+            graphql::on_loaded(state, tab, refresh, result);
+            Vec::new()
+        }
         other => viewer_keys::on_action(state, other),
     }
 }

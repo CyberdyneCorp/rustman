@@ -172,7 +172,7 @@ impl Reader<'_> {
         let text = self.text(&entry.path)?;
         let mut request = match &entry.request {
             Request::Http(r) => self.http(r, &at),
-            Request::Opaque(o) if o.kind == "graphql" => self.graphql(&text, &entry.path)?,
+            Request::Graphql(_) => self.graphql(&text, &entry.path)?,
             Request::Opaque(o) => {
                 let message = format!("request kind '{}' not exported", o.kind);
                 self.notes

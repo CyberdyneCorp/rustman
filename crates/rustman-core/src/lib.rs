@@ -8,6 +8,7 @@ pub mod captures;
 pub mod collection;
 pub mod data_rows;
 pub mod discovery;
+pub mod duration;
 pub mod environment;
 pub mod error;
 pub mod format;

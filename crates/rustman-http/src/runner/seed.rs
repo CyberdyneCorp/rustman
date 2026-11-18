@@ -11,8 +11,11 @@
 use std::sync::atomic::Ordering;
 use std::sync::{Mutex, PoisonError};
 
+use rustman_core::model::Request;
 use rustman_core::secret::Secret;
-use rustman_core::vars::{Layer, Lookup, Resolver, SecretLookup, VarSource, resolve_request};
+use rustman_core::vars::{
+    Layer, Lookup, Resolver, SecretLookup, VarSource, resolve_graphql, resolve_request,
+};
 use rustman_core::workspace::RequestRef;
 
 use super::Runner;
@@ -33,7 +36,10 @@ impl Runner<'_> {
             let resolver =
                 Resolver::for_request(self.ctx.settings, request, self.ctx.environment, &recording)
                     .with(Anything);
-            let _ = resolve_request(request, &resolver);
+            match request.request() {
+                Request::Graphql(_) => drop(resolve_graphql(request, &resolver)),
+                _ => drop(resolve_request(request, &resolver)),
+            }
         }
         let seen = recording.seen.into_inner();
         self.remember(&seen.unwrap_or_else(PoisonError::into_inner));

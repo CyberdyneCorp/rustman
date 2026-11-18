@@ -44,10 +44,22 @@ pub(super) fn evaluate(
     response: &Parsed<'_, '_>,
     interp: &mut Interp<'_, '_>,
 ) -> AssertionResult {
+    evaluate_at(json, response, interp, "json", &json.path)
+}
+
+/// [`evaluate`] as the assertion `kind`, querying `query` (the written
+/// path, or the path rewritten under another root).
+pub(super) fn evaluate_at(
+    json: &JsonAssertion,
+    response: &Parsed<'_, '_>,
+    interp: &mut Interp<'_, '_>,
+    kind: &'static str,
+    query: &str,
+) -> AssertionResult {
     let (op, operand) = operator(json);
-    let prefix = format!("json {}", json.path);
-    let check = Check::new("json", format!("{prefix} {op} {}", label(&operand)));
-    let path = match JsonPath::parse(&json.path) {
+    let prefix = format!("{kind} {}", json.path);
+    let check = Check::new(kind, format!("{prefix} {op} {}", label(&operand)));
+    let path = match JsonPath::parse(query) {
         Ok(path) => path,
         Err(e) => return check.error(format!("{prefix}: invalid JSONPath: {e}")),
     };

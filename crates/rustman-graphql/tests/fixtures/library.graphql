@@ -1,0 +1,77 @@
+"""A small library service used by validation, explorer and completion tests."""
+schema {
+  query: Query
+  mutation: Mutation
+  subscription: Subscription
+}
+
+"An ISO-8601 instant."
+scalar DateTime @specifiedBy(url: "https://scalars.graphql.org/andimarek/date-time")
+
+scalar Upload
+
+"Directive that caches a field."
+directive @cached(ttl: Int = 60) on FIELD
+
+type Query {
+  "Find a user by id."
+  user(id: ID!): User
+  users(role: Role, first: Int = 10): [User!]!
+  search(text: String!): [SearchResult!]!
+  node(id: ID!): Node
+}
+
+type Mutation {
+  login(email: String!, password: String!): Session
+  upload(file: Upload!, tags: [String!]): Boolean!
+  createUser(input: CreateUserInput!): User
+}
+
+type Subscription {
+  onMessage(room: ID!): Message
+}
+
+interface Node {
+  id: ID!
+}
+
+"A person with an account."
+type User implements Node {
+  id: ID!
+  name: String
+  email: String
+  username: String @deprecated(reason: "Use handle")
+  handle: String
+  role: Role!
+  createdAt: DateTime
+  books(first: Int = 5, after: String): [Book!]!
+}
+
+type Book implements Node {
+  id: ID!
+  title: String!
+  author: User
+}
+
+type Session {
+  token: String!
+  user: User!
+}
+
+type Message {
+  body: String!
+}
+
+union SearchResult = User | Book
+
+enum Role {
+  ADMIN
+  MEMBER
+  GUEST @deprecated(reason: "Guests were removed")
+}
+
+input CreateUserInput {
+  name: String!
+  email: String
+  role: Role = MEMBER
+}

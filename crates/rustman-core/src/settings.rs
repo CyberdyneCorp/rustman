@@ -49,6 +49,7 @@ const KNOWN_KEYS: &[(&str, &[&str])] = &[
     ("explore", &["producers", "disabled_rules"]),
     // Read by rustman-webhook (add-webhook-inspector).
     ("webhook", &["host", "port", "verifiers"]),
+    ("graphql", &["endpoints"]),
 ];
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -65,7 +66,28 @@ pub struct Settings {
     #[serde(default)]
     pub explore: ExploreSettings,
     #[serde(default)]
+    pub graphql: GraphqlSettings,
+    #[serde(default)]
     pub variables: Variables,
+}
+
+/// `[graphql]`: settings of the GraphQL client.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct GraphqlSettings {
+    /// `[[graphql.endpoints]]`: per-endpoint settings.
+    pub endpoints: Vec<GraphqlEndpoint>,
+}
+
+/// One `[[graphql.endpoints]]` entry.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GraphqlEndpoint {
+    /// The endpoint URL, as a request's `endpoint` is written or once resolved.
+    pub url: String,
+    /// An SDL or introspection JSON file, relative to the workspace root,
+    /// used instead of the schema cache for this endpoint.
+    pub schema_file: Option<String>,
 }
 
 /// `[explore]`: settings of OpenAPI exploration.
@@ -321,6 +343,22 @@ mod tests {
         assert!(
             parse("[workspace]\nname = \"a\"\nversion = 1\n[explore]\nproducer = {}\n").is_err()
         );
+    }
+
+    #[test]
+    fn the_graphql_table_is_read() {
+        let text = "[workspace]\nname = \"a\"\nversion = 1\n\n[[graphql.endpoints]]\nurl = \"https://api.example.com/graphql\"\nschema_file = \"schemas/api.graphql\"\n";
+        let (settings, warnings) = parse(text).unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(
+            settings.graphql.endpoints,
+            [GraphqlEndpoint {
+                url: "https://api.example.com/graphql".into(),
+                schema_file: Some("schemas/api.graphql".into()),
+            }]
+        );
+        let unknown = "[workspace]\nname = \"a\"\nversion = 1\n[[graphql.endpoints]]\nurl = \"x\"\nschema = \"y\"\n";
+        assert!(parse(unknown).is_err());
     }
 
     #[test]

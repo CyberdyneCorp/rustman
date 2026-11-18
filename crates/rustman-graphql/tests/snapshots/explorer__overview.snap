@@ -1,0 +1,170 @@
+---
+source: crates/rustman-graphql/tests/explorer.rs
+expression: pretty(&overview)
+---
+{
+  "query": "Query",
+  "mutation": "Mutation",
+  "subscription": "Subscription",
+  "types": [
+    {
+      "name": "DateTime",
+      "kind": "SCALAR",
+      "description": "An ISO-8601 instant."
+    },
+    {
+      "name": "Upload",
+      "kind": "SCALAR",
+      "description": null
+    },
+    {
+      "name": "Query",
+      "kind": "OBJECT",
+      "description": null
+    },
+    {
+      "name": "Mutation",
+      "kind": "OBJECT",
+      "description": null
+    },
+    {
+      "name": "Subscription",
+      "kind": "OBJECT",
+      "description": null
+    },
+    {
+      "name": "Node",
+      "kind": "INTERFACE",
+      "description": null
+    },
+    {
+      "name": "User",
+      "kind": "OBJECT",
+      "description": "A person with an account."
+    },
+    {
+      "name": "Book",
+      "kind": "OBJECT",
+      "description": null
+    },
+    {
+      "name": "Session",
+      "kind": "OBJECT",
+      "description": null
+    },
+    {
+      "name": "Message",
+      "kind": "OBJECT",
+      "description": null
+    },
+    {
+      "name": "SearchResult",
+      "kind": "UNION",
+      "description": null
+    },
+    {
+      "name": "Role",
+      "kind": "ENUM",
+      "description": null
+    },
+    {
+      "name": "CreateUserInput",
+      "kind": "INPUT_OBJECT",
+      "description": null
+    }
+  ],
+  "directives": [
+    {
+      "name": "skip",
+      "description": "Directs the executor to skip this field or fragment when the `if` argument is true.",
+      "arguments": [
+        {
+          "name": "if",
+          "description": "Skipped when true.",
+          "ty": "Boolean!",
+          "default": null,
+          "deprecated": null
+        }
+      ],
+      "locations": [
+        "FIELD",
+        "FRAGMENT_SPREAD",
+        "INLINE_FRAGMENT"
+      ],
+      "repeatable": false
+    },
+    {
+      "name": "include",
+      "description": "Directs the executor to include this field or fragment only when the `if` argument is true.",
+      "arguments": [
+        {
+          "name": "if",
+          "description": "Included when true.",
+          "ty": "Boolean!",
+          "default": null,
+          "deprecated": null
+        }
+      ],
+      "locations": [
+        "FIELD",
+        "FRAGMENT_SPREAD",
+        "INLINE_FRAGMENT"
+      ],
+      "repeatable": false
+    },
+    {
+      "name": "deprecated",
+      "description": "Marks an element of a GraphQL schema as no longer supported.",
+      "arguments": [
+        {
+          "name": "reason",
+          "description": "Explains why this element was deprecated, usually also including a suggestion for how to access supported similar data. Formatted using the Markdown syntax, as specified by [CommonMark](https://commonmark.org/).",
+          "ty": "String",
+          "default": "\"No longer supported\"",
+          "deprecated": null
+        }
+      ],
+      "locations": [
+        "FIELD_DEFINITION",
+        "ARGUMENT_DEFINITION",
+        "INPUT_FIELD_DEFINITION",
+        "ENUM_VALUE"
+      ],
+      "repeatable": false
+    },
+    {
+      "name": "specifiedBy",
+      "description": "Exposes a URL that specifies the behavior of this scalar.",
+      "arguments": [
+        {
+          "name": "url",
+          "description": "The URL that specifies the behavior of this scalar.",
+          "ty": "String!",
+          "default": null,
+          "deprecated": null
+        }
+      ],
+      "locations": [
+        "SCALAR"
+      ],
+      "repeatable": false
+    },
+    {
+      "name": "cached",
+      "description": "Directive that caches a field.",
+      "arguments": [
+        {
+          "name": "ttl",
+          "description": null,
+          "ty": "Int",
+          "default": "60",
+          "deprecated": null
+        }
+      ],
+      "locations": [
+        "FIELD"
+      ],
+      "repeatable": false
+    }
+  ]
+}

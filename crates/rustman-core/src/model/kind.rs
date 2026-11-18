@@ -9,6 +9,7 @@ use std::path::Path;
 use serde::Deserialize;
 
 use super::common::Variables;
+use super::graphql::GraphqlRequest;
 use super::http::HttpRequest;
 use crate::error::{LoadError, Position};
 use crate::format::{Located, from_yaml};
@@ -23,7 +24,8 @@ pub type KindLoader = fn(file: &Path, text: &str) -> Result<Request, LoadError>;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Request {
     Http(Box<HttpRequest>),
-    /// A registered kind this build can list but not execute (e.g. `graphql`, `mcp`).
+    Graphql(Box<GraphqlRequest>),
+    /// A registered kind this build can list but not execute (e.g. `mcp`).
     Opaque(OpaqueRequest),
 }
 
@@ -31,6 +33,7 @@ impl Request {
     pub fn kind(&self) -> &str {
         match self {
             Self::Http(r) => &r.kind,
+            Self::Graphql(r) => &r.kind,
             Self::Opaque(r) => &r.kind,
         }
     }
@@ -38,6 +41,7 @@ impl Request {
     pub fn name(&self) -> &str {
         match self {
             Self::Http(r) => &r.name,
+            Self::Graphql(r) => &r.name,
             Self::Opaque(r) => &r.name,
         }
     }
@@ -45,6 +49,7 @@ impl Request {
     pub fn description(&self) -> Option<&str> {
         match self {
             Self::Http(r) => r.description.as_deref(),
+            Self::Graphql(r) => r.description.as_deref(),
             Self::Opaque(r) => r.description.as_deref(),
         }
     }
@@ -52,27 +57,32 @@ impl Request {
     pub fn tags(&self) -> &[String] {
         let tags = match self {
             Self::Http(r) => &r.tags,
+            Self::Graphql(r) => &r.tags,
             Self::Opaque(r) => &r.tags,
         };
         tags.as_deref().unwrap_or_default()
     }
 
+    /// The request's layer of Rustman variables. A graphql request's
+    /// `variables` are GraphQL variables sent in the payload, not a layer.
     pub fn variables(&self) -> Option<&Variables> {
         match self {
             Self::Http(r) => r.variables.as_ref(),
+            Self::Graphql(_) => None,
             Self::Opaque(r) => r.variables.as_ref(),
         }
     }
 
-    /// Why this build cannot execute the request, if it cannot.
+    /// Why `rustman run` cannot execute the request, if it cannot.
     pub fn unsupported_reason(&self) -> Option<String> {
-        match self {
-            Self::Http(_) => None,
-            Self::Opaque(r) => Some(format!(
-                "request kind '{}' is not supported by this build",
-                r.kind
-            )),
-        }
+        let kind = match self {
+            Self::Http(_) => return None,
+            Self::Graphql(r) => &r.kind,
+            Self::Opaque(r) => &r.kind,
+        };
+        Some(format!(
+            "request kind '{kind}' is not supported by this build"
+        ))
     }
 }
 
@@ -97,12 +107,12 @@ pub struct KindRegistry {
 }
 
 impl Default for KindRegistry {
-    /// The kinds registered by this change: `http`, plus the reserved `graphql` and `mcp`.
+    /// The built-in kinds: `http`, `graphql`, and the reserved `mcp`.
     fn default() -> Self {
         Self {
             kinds: vec![
                 ("http", load_http),
-                ("graphql", load_opaque),
+                ("graphql", load_graphql),
                 ("mcp", load_opaque),
             ],
             fallback: None,
@@ -221,6 +231,11 @@ fn check_version(file: &Path, version: Option<Located<Version>>) -> Result<(), L
 fn load_http(file: &Path, text: &str) -> Result<Request, LoadError> {
     let request: HttpRequest = from_yaml(file, text)?;
     Ok(Request::Http(Box::new(request)))
+}
+
+fn load_graphql(file: &Path, text: &str) -> Result<Request, LoadError> {
+    let request = GraphqlRequest::parse(file, text)?;
+    Ok(Request::Graphql(Box::new(request)))
 }
 
 #[derive(Deserialize)]
