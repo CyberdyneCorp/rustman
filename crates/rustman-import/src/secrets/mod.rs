@@ -360,7 +360,7 @@ impl<'a> Extractor<'a> {
                     self.replace(secret, "client_secret", at);
                 }
             }
-            Some(ImportedAuth::None) | None => {}
+            Some(ImportedAuth::None | ImportedAuth::Unsupported(_)) | None => {}
         }
     }
 

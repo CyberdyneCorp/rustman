@@ -119,3 +119,37 @@ fn paths_outside_the_workspace_or_missing_exit_2() {
             "export: environments is not a request file or collection folder of the workspace",
         ));
 }
+
+/// Digest, SigV4 and JWT auth have no Postman or `.http` equivalent: the
+/// request is exported with explicit "no auth" (so Postman never falls back
+/// to the collection's credential) and a warning, never a secret value.
+#[test]
+fn signature_auth_exports_as_no_auth_with_a_warning() {
+    let ws = workspace();
+    let root = ws.path();
+    write(
+        root,
+        "api/_collection.yaml",
+        "name: API\nauth:\n  type: bearer\n  token: '{{token}}'\n",
+    );
+    write(
+        root,
+        "api/digest.rman.yaml",
+        "version: 1\nkind: http\nname: Digest\nurl: '{{base}}/d'\n\
+         auth:\n  type: digest\n  username: u\n  password: '{{token}}'\n",
+    );
+    let (postman, stderr) = export(root, &["postman", "api/digest.rman.yaml"]);
+    let doc: serde_json::Value = serde_json::from_str(&postman).unwrap();
+    let item = &doc["item"][0];
+    assert_eq!(item["request"]["auth"]["type"], "noauth", "{postman}");
+    assert!(
+        stderr.contains("digest auth exported as noauth (no Postman equivalent)"),
+        "{stderr}"
+    );
+    let (http, stderr) = export(root, &["http", "api/digest.rman.yaml"]);
+    assert!(!http.contains("Authorization"), "{http}");
+    assert!(stderr.contains("digest auth not exported"), "{stderr}");
+    for text in [&postman, &http] {
+        assert!(!text.contains(SECRET));
+    }
+}
