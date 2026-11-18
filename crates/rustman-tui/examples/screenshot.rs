@@ -12,18 +12,25 @@
 //! not read, so the output only depends on the flags. `--open` opens a
 //! request file (relative to the workspace root) in a tab. `--response`
 //! shows the JSON file as that tab's exchange, a `200 OK` with fixed
-//! timings and history, so a frame with a response needs no network.
+//! timings and history, so a frame with a response needs no network; the
+//! request's assertions are evaluated against it.
 //! `--keys` presses space-separated chords last (`"Ctrl+P s w"`), e.g. to
 //! show the palette.
 
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::time::Duration;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use rustman_core::Redactor;
+use rustman_core::assertions::{self, AssertionResult, Context, ResponseView};
+use rustman_core::model::{HttpRequest, Request};
 use rustman_core::run::{
     ExchangeRecord, HeaderRecord, RequestRecord, RequestStatus, ResponseRecord, SentRequest,
     TimingsRecord,
 };
+use rustman_core::vars::Resolver;
 use rustman_tui::app::{Action, State, update};
 use rustman_tui::config::{Overrides, TuiConfig, UiOptions};
 use rustman_tui::effects::execute;
@@ -32,6 +39,14 @@ use rustman_tui::launch::discover;
 use rustman_tui::response::{RawBody, Received, Source};
 use rustman_tui::snapshot::{buffer_ansi, buffer_text, render};
 use rustman_tui::theme::ColorMode;
+
+/// The sample response's headers and timings (ms).
+const HEADERS: [(&str, &str); 2] = [
+    ("content-type", "application/json"),
+    ("x-request-id", "req-7f3a"),
+];
+const TTFB_MS: f64 = 71.0;
+const TOTAL_MS: f64 = 84.0;
 
 struct Options {
     ansi: bool,
@@ -115,21 +130,48 @@ fn key_event(chord: &Chord) -> Result<KeyEvent, String> {
     Ok(KeyEvent::new(code, modifiers))
 }
 
+/// The assertions of `request` evaluated against the sample `200 OK` of
+/// `body`, as the engine would after sending it.
+fn assess(request: Option<&HttpRequest>, body: &[u8]) -> Vec<AssertionResult> {
+    let Some(list) = request.and_then(|r| r.assertions.as_deref()) else {
+        return Vec::new();
+    };
+    let response = ResponseView {
+        status: 200,
+        headers: HEADERS.map(|(n, v)| (n.to_owned(), v.to_owned())).to_vec(),
+        body: Cow::Borrowed(body),
+        binary: false,
+        ttfb: Duration::from_secs_f64(TTFB_MS / 1000.0),
+        total: Duration::from_secs_f64(TOTAL_MS / 1000.0),
+    };
+    let ctx = Context {
+        resolver: &Resolver::new(),
+        request: None,
+        redactor: &Redactor::new(),
+    };
+    assertions::evaluate(list, &response, &ctx)
+}
+
 /// A `200 OK` exchange of `body` (JSON) for `request`, with fixed timings
 /// and a made-up history, so frames are the same on every run.
-fn exchange(request: &Path, body: Vec<u8>) -> Received {
-    let file = request.to_string_lossy().replace('\\', "/");
+fn exchange(path: &Path, request: Option<&HttpRequest>, body: Vec<u8>) -> Received {
+    let file = path.to_string_lossy().replace('\\', "/");
     let id = file.trim_end_matches(".rman.yaml").to_owned();
     let mut record = RequestRecord::new(id.clone(), id, file);
-    record.status = RequestStatus::Passed;
+    record.assertions = assess(request, &body);
+    record.status = if record.assertions.iter().all(AssertionResult::passed) {
+        RequestStatus::Passed
+    } else {
+        RequestStatus::Failed
+    };
     let size = body.len() as u64;
-    let header = |name: &str, value: &str| HeaderRecord {
+    let header = |(name, value): (&str, &str)| HeaderRecord {
         name: name.into(),
         value: value.into(),
     };
     record.exchange = Some(ExchangeRecord {
         request: SentRequest {
-            method: "GET".into(),
+            method: request.map_or("GET", HttpRequest::effective_method).into(),
             url: String::new(),
             headers: Vec::new(),
             body: None,
@@ -137,10 +179,7 @@ fn exchange(request: &Path, body: Vec<u8>) -> Received {
         response: ResponseRecord {
             status: 200,
             http_version: "HTTP/1.1".into(),
-            headers: vec![
-                header("content-type", "application/json"),
-                header("x-request-id", "req-7f3a"),
-            ],
+            headers: HEADERS.map(header).to_vec(),
             body: String::from_utf8(body.clone()).ok(),
             body_bytes: size,
             body_truncated: false,
@@ -151,9 +190,9 @@ fn exchange(request: &Path, body: Vec<u8>) -> Received {
             dns_ms: Some(4.2),
             connect_ms: Some(11.8),
             tls_ms: Some(23.5),
-            ttfb_ms: 71.0,
-            download_ms: 13.0,
-            total_ms: 84.0,
+            ttfb_ms: TTFB_MS,
+            download_ms: TOTAL_MS - TTFB_MS,
+            total_ms: TOTAL_MS,
         },
         redirects: Vec::new(),
         insecure: false,
@@ -170,6 +209,14 @@ fn exchange(request: &Path, body: Vec<u8>) -> Received {
     ]
     .to_vec();
     received
+}
+
+/// The `http` request open in the active tab, if any.
+fn open_request(state: &State) -> Option<HttpRequest> {
+    match state.tabs.active()?.editor.request().ok()? {
+        Request::Http(request) => Some(*request),
+        Request::Opaque(_) => None,
+    }
 }
 
 fn main() -> ExitCode {
@@ -206,9 +253,10 @@ fn main() -> ExitCode {
                 return ExitCode::from(2);
             }
         };
-        let request = options.open.clone().unwrap_or_default();
+        let path = options.open.clone().unwrap_or_default();
+        let request = open_request(&state);
         match state.tabs.active_mut() {
-            Some(tab) => tab.show(exchange(&request, body)),
+            Some(tab) => tab.show(exchange(&path, request.as_ref(), body)),
             None => {
                 eprintln!("error: --response needs a tab: pass --open");
                 return ExitCode::from(2);

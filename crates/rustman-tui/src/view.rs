@@ -8,6 +8,8 @@ use ratatui::widgets::{Block, Clear, Padding, Paragraph, Wrap};
 
 use crate::app::{Choice, Prompt, Screen, State};
 use crate::config::UiOptions;
+use crate::keymap::Keymap;
+use crate::keymap::actions::ActionId;
 use crate::shell_view;
 use crate::theme::Token;
 
@@ -21,13 +23,14 @@ pub fn view(state: &State, frame: &mut Frame) {
             dialog(frame, area, " Rustman ", vec![Line::from(text)], ui);
         }
         Screen::Prompt(prompt) => {
-            let lines = prompt_lines(prompt, ui);
+            let lines = prompt_lines(prompt, &quit_key(&state.keymap), ui);
             dialog(frame, area, " No workspace found ", lines, ui);
         }
         Screen::Shell(session) => shell_view::shell(frame, state, session),
         Screen::Failed(message) => {
             let mut lines: Vec<Line> = message.lines().map(|l| Line::from(l.to_owned())).collect();
-            lines.extend([Line::default(), hint("Ctrl+Q quit", ui)]);
+            let quit = format!("{} quit", quit_key(&state.keymap));
+            lines.extend([Line::default(), hint(&quit, ui)]);
             dialog(frame, area, " Workspace error ", lines, ui);
         }
     }
@@ -35,7 +38,7 @@ pub fn view(state: &State, frame: &mut Frame) {
     shell_view::toasts(frame, state);
 }
 
-fn prompt_lines(prompt: &Prompt, ui: &UiOptions) -> Vec<Line<'static>> {
+fn prompt_lines(prompt: &Prompt, quit: &str, ui: &UiOptions) -> Vec<Line<'static>> {
     let mut lines = vec![
         Line::from("No rustman.toml in this directory or any parent:"),
         Line::from(format!("  {}", prompt.dir.display())),
@@ -52,7 +55,7 @@ fn prompt_lines(prompt: &Prompt, ui: &UiOptions) -> Vec<Line<'static>> {
     }
     let g = &ui.glyphs;
     let keys = format!(
-        "{} choose {} Enter confirm {} Ctrl+Q quit",
+        "{} choose {} Enter confirm {} {quit} quit",
         g.up_down, g.dot, g.dot
     );
     lines.extend([Line::default(), hint(&keys, ui)]);
@@ -68,6 +71,28 @@ fn choice_line(choice: Choice, selected: bool, ui: &UiOptions) -> Line<'static> 
         ))
     } else {
         Line::from(format!("  {}", choice.label()))
+    }
+}
+
+/// The key that quits, for hints. The keymap always has one.
+pub(crate) fn quit_key(keymap: &Keymap) -> String {
+    keymap
+        .key(ActionId::Quit)
+        .unwrap_or_else(|| "Ctrl+Q".to_owned())
+}
+
+/// `press Ctrl+Enter to send`, with the first key of `action` in the
+/// effective keymap; `None` when the user left it unbound.
+pub(crate) fn press(keymap: &Keymap, action: ActionId, to: &str) -> Option<String> {
+    keymap.key(action).map(|key| format!("press {key} to {to}"))
+}
+
+/// An empty state and what to do about it, `No rows · press a to add`;
+/// just `what` without a `next` step.
+pub(crate) fn empty_hint(what: &str, next: Option<String>, ui: &UiOptions) -> String {
+    match next {
+        Some(next) => format!("{what} {} {next}", ui.glyphs.dot),
+        None => what.to_owned(),
     }
 }
 

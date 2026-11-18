@@ -3,7 +3,7 @@ source: crates/rustman-tui/src/workbench_tests.rs
 expression: screen
 ---
 ┌ Sidebar ─────────────────┐┌ hello ─────────────────────────────────────────────────────────┐┌ Response ──────────────────────────────────────────────────────┐
-│ ▾ grpc                   ││ No editor for kind "grpc"                                      ││ No response yet. Ctrl+Enter sends the request.                 │
+│ ▾ grpc                   ││ No editor for kind "grpc"                                      ││ No response yet · press Ctrl+Enter to send                     │
 │   GRPC   hello           ││ Raw                                                            ││                                                                │
 │ ▾ users                  ││ version: 1                                                     ││                                                                │
 │   POST   create-user     ││ kind: grpc                                                     ││                                                                │

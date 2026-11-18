@@ -232,7 +232,7 @@ Put your own bindings in `keybindings.toml` next to `tui.toml` (`~/.config/rustm
 "Ctrl+J" = "list.down"
 ```
 
-Your entries win over the vim preset, which wins over the defaults. Adding a key keeps the action's other keys; remove one with `"none"`. Help and the palette show your keys first.
+Your entries win over the vim preset, which wins over the defaults. Adding a key keeps the action's other keys; remove one with `"none"`. Help and the palette show your keys first, and on-screen hints (`No response yet · press F5 to send`, the quit key in the status bar) name your first key, or drop the advice when an action has no key. The keys of the editor's tables (`a` add, `x` remove, `Space` toggle) are fixed.
 
 Keys are written as modifiers and a key joined by `+`: `Ctrl`, `Alt` and `Shift` with a character, `Enter`, `Esc`, `Tab`, `Backspace`, `Delete`, `Insert`, `Home`, `End`, `PageUp`, `PageDown`, `Up`, `Down`, `Left`, `Right`, `Space` or `F1`–`F24` (`Ctrl+Enter`, `Alt+E`, `Shift+Tab`, `F5`). A shifted character is written as itself (`G`, `?`). Up to three keys in a row make a sequence: `"gg"`, or with spaces, `"Ctrl+K Ctrl+S"`. Many terminals can't tell `Ctrl+Enter` from `Enter`; that is why `Ctrl+R` also sends.
 
@@ -356,11 +356,11 @@ It opens PATH as `rustman tui` would, runs the start-up work synchronously, and 
 The README images in `docs/images/` are real frames rendered off-screen by the `screenshot` example:
 
 ```bash
-cargo run -p rustman-tui --example screenshot -- --ansi --size 120x30 \
+cargo run -p rustman-tui --example screenshot -- --ansi --size 136x30 \
     [--open pets/get-pet.rman.yaml --response pet.json] [--keys "Ctrl+P s w e n v"] <workspace> > frame.ans
 ```
 
-`--open` opens a request file (relative to the workspace root) in a tab, and `--response` shows a JSON file as its exchange: a `200 OK` with fixed timings and history, so a frame with a response needs no network and is the same on every run. `--keys` presses space-separated chords before the frame is captured (for example `Ctrl+P` for the palette, `?` for help, or `Tab Tab Tab ] ]` to focus the response and show its Timing tab). Convert the ANSI output to SVG with any ANSI-to-SVG tool to refresh the images.
+`--open` opens a request file (relative to the workspace root) in a tab, and `--response` shows a JSON file as its exchange: a `200 OK` with fixed timings and history, so a frame with a response needs no network and is the same on every run. The open request's assertions are evaluated against that response, so the Assertions tab and the summary line's tally are real results. `--keys` presses space-separated chords before the frame is captured (for example `Ctrl+P` for the palette, `F1` for help, `Tab 2 Tab` to show and focus the Headers tab, or `Tab Tab Tab ] ]` to focus the response and show its Timing tab; the URL has the focus first, so a printable key such as `?` is typed into it). Convert the ANSI output to SVG with any ANSI-to-SVG tool to refresh the images.
 
 ## Platform checks
 

@@ -5,7 +5,7 @@ expression: text
 ┌ › Request ───────────────────────────────────────────────────────────────────┐
 │ METHOD   No request open                                                     │
 │ Params  Headers  Body  Auth  Assertions                                      │
-│ Open a request from the sidebar, or Ctrl+T for a new one.                    │
+│ Open a request from the sidebar · press Ctrl+T for a new one                 │
 │                                                                              │
 │                                                                              │
 │                                                                              │

@@ -10,11 +10,13 @@ use ratatui::widgets::Paragraph;
 
 use crate::focus::Focus;
 use crate::http_pane::{AuthKind, BodyMode, HttpEditor, HttpTab};
-use crate::kv::{Cell, KvTable};
+use crate::keymap::actions::ActionId;
+use crate::kv::{ADD_KEY, Cell, KvTable};
 use crate::pane::RenderCtx;
 use crate::textarea::TextArea;
 use crate::theme::Token;
 use crate::vars_view::highlight;
+use crate::view::empty_hint;
 
 /// Widest name column in a table.
 const NAME_WIDTH: usize = 24;
@@ -29,10 +31,8 @@ pub fn content(frame: &mut Frame, rect: Rect, editor: &HttpEditor, ctx: &RenderC
         HttpTab::Assertions => {
             let mut lines = text(&editor.assertions, rect.height, focused, ctx);
             if editor.assertions.is_empty() && !focused {
-                lines = vec![muted(
-                    "No assertions. Type them as YAML, e.g. - status: 200",
-                    ctx,
-                )];
+                let next = Some("type them as YAML, e.g. - status: 200".to_owned());
+                lines = vec![muted(&empty_hint("No assertions", next, ctx.ui), ctx)];
             }
             lines
         }
@@ -44,16 +44,22 @@ fn muted(text: &str, ctx: &RenderCtx) -> Line<'static> {
     Line::styled(format!(" {text}"), ctx.ui.theme.fg(Token::Muted))
 }
 
-/// A mode line (`Mode: raw (JSON)  Alt+M change`).
+/// A mode line (`Mode: raw (JSON)  Alt+M change`), with the key from the
+/// effective keymap.
 fn mode_line(label: &str, value: &str, ctx: &RenderCtx) -> Line<'static> {
     let theme = &ctx.ui.theme;
+    let change = ctx
+        .keymap
+        .key(ActionId::EditorMode)
+        .map(|key| format!("  {key} change"))
+        .unwrap_or_default();
     Line::from(vec![
         Span::styled(format!(" {label}: "), theme.fg(Token::Muted)),
         Span::styled(
             value.to_owned(),
             theme.fg(Token::Accent).add_modifier(Modifier::BOLD),
         ),
-        Span::styled("  Alt+M change".to_owned(), theme.fg(Token::Muted)),
+        Span::styled(change, theme.fg(Token::Muted)),
     ])
 }
 
@@ -125,11 +131,12 @@ pub fn text(area: &TextArea, height: u16, focused: bool, ctx: &RenderCtx) -> Vec
 fn table(table: &KvTable, rect: Rect, focused: bool, ctx: &RenderCtx) -> Vec<Line<'static>> {
     if table.rows.is_empty() {
         let hint = if table.fixed {
-            "No fields."
+            "No fields.".to_owned()
         } else {
-            "No rows. a add"
+            let add = format!("press {ADD_KEY} to add");
+            empty_hint("No rows", Some(add), ctx.ui)
         };
-        return vec![muted(hint, ctx)];
+        return vec![muted(&hint, ctx)];
     }
     let width = table
         .rows
@@ -190,7 +197,7 @@ fn table(table: &KvTable, rect: Rect, focused: bool, ctx: &RenderCtx) -> Vec<Lin
         let keys = if table.fixed {
             "Enter edit".to_owned()
         } else {
-            format!("Enter edit {dot} Space toggle {dot} a add {dot} x remove")
+            format!("Enter edit {dot} Space toggle {dot} {ADD_KEY} add {dot} x remove")
         };
         if lines.len() < rows {
             lines.push(muted(&keys, ctx));

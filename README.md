@@ -137,18 +137,19 @@ rustman            # open the TUI in the current workspace
 ```
 
 <p align="center">
-  <img src="docs/images/tui-shell.svg" alt="Rustman TUI: collection sidebar, an open request and its JSON response as a collapsible tree" width="49%">
-  <img src="docs/images/tui-timing.svg" alt="Rustman TUI Timing tab: phase waterfall and latency sparkline from history" width="49%">
+  <img src="docs/images/tui-shell.svg" alt="Rustman TUI: collection sidebar, an open request on its Headers tab and its JSON response as a collapsible tree" width="49%">
+  <img src="docs/images/tui-assertions.svg" alt="Rustman TUI Assertions tab: two failed assertions with expected and actual values, and a 4/6 passed tally in the summary line" width="49%">
+</p>
+<p align="center">
+  <img src="docs/images/tui-timing.svg" alt="Rustman TUI Timing tab: phase waterfall and latency sparkline, next to bearer auth whose secret token is masked" width="49%">
+  <img src="docs/images/tui-environments.svg" alt="Rustman TUI environment switcher listing each variable's layer and value, with the secret masked" width="49%">
 </p>
 <p align="center">
   <img src="docs/images/tui-palette.svg" alt="Rustman TUI command palette fuzzy-matching 'swenv' to Switch environment" width="49%">
   <img src="docs/images/tui-help.svg" alt="Rustman TUI help overlay generated from the effective keymap" width="49%">
 </p>
-<p align="center">
-  <img src="docs/images/tui-environments.svg" alt="Rustman TUI environment switcher listing each variable's layer and value, with the secret masked" width="49%">
-</p>
 
-<sub>The TUI as of v0.2 development: an open request with its response as a JSON tree, the timing waterfall and latency sparkline, the command palette, help, and the environment switcher with secrets masked. The frames are drawn by the TUI's own renderer, but the response shown is sample data: `--response` loads a JSON file as a `200 OK` with fixed timings and a made-up latency history, so no request was sent. The images are rendered by `cargo run -p rustman-tui --example screenshot -- --ansi [--open REQUEST --response BODY.json] [--keys "Ctrl+P s w e n v"] <workspace>` and converted to SVG.</sub>
+<sub>The TUI as of v0.2 development: an open request with its headers and its response as a JSON tree, failed assertions with expected and actual values, the timing waterfall and latency sparkline next to a masked bearer token, the environment switcher, the command palette and help. The frames are drawn by the TUI's own renderer, but the response shown is sample data: `--response` loads a JSON file as a `200 OK` with fixed timings and a made-up latency history, and evaluates the request's assertions against it, so no request was sent. The images are rendered by `cargo run -p rustman-tui --example screenshot -- --ansi --size 136x30 [--open REQUEST --response BODY.json] [--keys "Tab 2 Tab"] <workspace>` and converted to SVG.</sub>
 
 | Key | Action |
 |---|---|

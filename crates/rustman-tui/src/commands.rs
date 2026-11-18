@@ -374,8 +374,8 @@ fn idle_cancel(state: &mut State) {
     if state.status.in_flight > 0 {
         return;
     }
-    let quit = state.keymap.label(ActionId::Quit);
-    let quit = quit.split(", ").next().unwrap_or("Ctrl+Q").to_owned();
+    let quit = state.keymap.key(ActionId::Quit);
+    let quit = quit.as_deref().unwrap_or("Ctrl+Q");
     state.notify(Severity::Info, format!("Press {quit} to quit"));
 }
 

@@ -4,7 +4,7 @@ assertion_line: 164
 expression: masked
 ---
 ┌ Sidebar ─────────────────┐┌ me ────────────────────────────────────────┐┌ Response ──────────────────────────────────┐
-│ GET    me                ││ GET      {{base_url}}/me                   ││ No response yet. Ctrl+Enter sends the requ │
+│ GET    me                ││ GET      {{base_url}}/me                   ││ No response yet · press Ctrl+Enter to send │
 │                       ┌ Switch environment ──────────────────────────────────────────────────┐                       │
 │                       │ ›                                                                    │                       │
 │                       │                                                                      │                       │
