@@ -299,7 +299,6 @@ fn a_tab_in_flight_keeps_going_while_another_is_edited() {
         "users/get-user".into(),
         "Get user".into(),
         "users/get-user.rman.yaml".into(),
-        1,
     );
     record.duration_ms = 12.0;
     update(

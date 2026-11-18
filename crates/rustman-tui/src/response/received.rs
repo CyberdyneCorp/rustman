@@ -299,7 +299,6 @@ pub(crate) mod fixtures {
             "users/get-user".into(),
             "Get user".into(),
             "users/get-user.rman.yaml".into(),
-            1,
         );
         record.status = RequestStatus::Passed;
         record.duration_ms = 84.0;
@@ -326,6 +325,7 @@ pub(crate) mod fixtures {
                 binary: false,
             },
             timings: TimingsRecord {
+                auth_ms: None,
                 dns_ms: Some(2.0),
                 connect_ms: Some(3.0),
                 tls_ms: None,

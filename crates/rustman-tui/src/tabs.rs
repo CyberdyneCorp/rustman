@@ -147,7 +147,7 @@ impl Tab {
             .as_deref()
             .map(|p| p.to_string_lossy().replace('\\', "/"))
             .unwrap_or_default();
-        let record = RequestRecord::new(self.title(), self.title(), file, 1);
+        let record = RequestRecord::new(self.title(), self.title(), file);
         let elapsed_ms = elapsed.as_secs_f64() * 1000.0;
         self.show(Received::cancelled(record, elapsed_ms));
         true
@@ -362,7 +362,6 @@ mod tests {
             "a".into(),
             "a".into(),
             "a.rman.yaml".into(),
-            1,
         ));
         assert!(!tab.finish(seq, stale), "a superseded send is dropped");
         tabs.renamed(Path::new("a.rman.yaml"), Path::new("b.rman.yaml"));

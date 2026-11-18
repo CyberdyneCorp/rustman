@@ -94,6 +94,9 @@ fn auth(editor: &HttpEditor, rect: Rect, focused: bool, ctx: &RenderCtx) -> Vec<
             });
             lines.push(muted(&what, ctx));
         }
+        AuthKind::Other(name) => {
+            lines.push(muted(&format!("{name} auth. Edit it in the file."), ctx));
+        }
         _ => lines.extend(table(&editor.auth, rest, focused, ctx)),
     }
     lines

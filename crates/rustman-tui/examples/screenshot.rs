@@ -120,7 +120,7 @@ fn key_event(chord: &Chord) -> Result<KeyEvent, String> {
 fn exchange(request: &Path, body: Vec<u8>) -> Received {
     let file = request.to_string_lossy().replace('\\', "/");
     let id = file.trim_end_matches(".rman.yaml").to_owned();
-    let mut record = RequestRecord::new(id.clone(), id, file, 1);
+    let mut record = RequestRecord::new(id.clone(), id, file);
     record.status = RequestStatus::Passed;
     let size = body.len() as u64;
     let header = |name: &str, value: &str| HeaderRecord {
@@ -147,6 +147,7 @@ fn exchange(request: &Path, body: Vec<u8>) -> Received {
             binary: false,
         },
         timings: TimingsRecord {
+            auth_ms: None,
             dns_ms: Some(4.2),
             connect_ms: Some(11.8),
             tls_ms: Some(23.5),
