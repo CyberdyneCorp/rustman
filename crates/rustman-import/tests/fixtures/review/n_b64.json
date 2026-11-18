@@ -1,0 +1,34 @@
+{
+ "info": {
+  "name": "NB",
+  "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+ },
+ "variable": [
+  {
+   "key": "password",
+   "value": "S3cr3t-Pass!",
+   "type": "string"
+  }
+ ],
+ "item": [
+  {
+   "name": "b64",
+   "request": {
+    "method": "POST",
+    "url": {
+     "raw": "http://127.0.0.1:18765/e"
+    },
+    "header": [
+     {
+      "key": "X-Legacy",
+      "value": "Basic dXNlcjpTM2NyM3QtUGFzcyE="
+     },
+     {
+      "key": "X-B64",
+      "value": "UzNjcjN0LVBhc3Mh"
+     }
+    ]
+   }
+  }
+ ]
+}

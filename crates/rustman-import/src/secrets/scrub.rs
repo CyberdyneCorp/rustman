@@ -12,15 +12,22 @@
 //!      sits on token boundaries, or has a token shape becomes `{{name}}`;
 //!    - an encoded or in-word secret-like repeat becomes `«redacted:name»`,
 //!      with a report note;
+//!    - a repeat of a secret from a source environment file in a request
+//!      becomes `«redacted:name»` with a note: `{{name}}` would resolve to
+//!      another value under another environment;
 //!    - any other repeat (`password` in `grant_type=password`) is left as
-//!      written, with a `review` note naming the secret, never the value.
+//!      written, with a `review` note naming the secret, never the value;
+//!    - a field whose percent-, JSON- or HTML-decoded reading still shows a
+//!      secret-like value becomes `«redacted:name»` as a whole.
+//!
+//! Environment files template only their own secrets (whole or on token
+//! boundaries) and redact every other secret-like repeat.
 //!
 //! Fields that take templates get the `{{name}}` placeholder; free text
 //! (names, descriptions, report notes and locations) gets
-//! `«redacted:name»`. Environment files only get whole-value replacements
-//! by secrets of that same environment.
+//! `«redacted:name»`.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::ops::Range;
 
 use aho_corasick::{AhoCorasick, MatchKind};
@@ -93,9 +100,13 @@ impl Kind {
 /// One text the import writes: what it is, for review notes.
 struct Field<'a> {
     kind: Kind,
+    /// `request`, `collection` or `environment`: whose field it is.
+    owner: &'static str,
     /// `url`, `header X-Note`, `description`, ...
     label: String,
     at: &'a Location,
+    /// The environment of an environment file's field.
+    env: Option<&'a str>,
 }
 
 impl Extractor<'_> {
@@ -103,18 +114,34 @@ impl Extractor<'_> {
         walk_folder(&mut collection.root, &mut |text, field| {
             self.move_tokens(text, field.kind, field.at);
         });
-        let repeats = Repeats::new(self.moved.iter().map(|m| &m.secret));
+        let repeats = Repeats::new(&self.moved);
         let mut review = Review::default();
         walk_folder(&mut collection.root, &mut |text, field| {
             repeats.scan(text, &field, Some(&mut review));
         });
         let name_field = Field {
             kind: Kind::Free,
+            owner: "collection",
             label: "name".to_owned(),
             at: &collection.root.location,
+            env: None,
         };
         repeats.scan(&mut collection.name, &name_field, Some(&mut review));
-        self.scrub_environments(collection);
+        for env in &mut collection.environments {
+            let name = super::environment_name(&env.name);
+            let at = env.location.clone();
+            for var in env.variables.iter_mut().filter(|v| !v.secret) {
+                let field = Field {
+                    kind: Kind::Template,
+                    owner: "environment",
+                    label: format!("variable {}", var.name),
+                    at: &at,
+                    env: Some(&name),
+                };
+                repeats.scan(&mut var.value, &field, Some(&mut review));
+            }
+            scrub_location(&mut env.location, &repeats);
+        }
         walk_locations(&mut collection.root, &mut |at| scrub_location(at, &repeats));
         for note in &mut collection.notes {
             scrub_note(note, &repeats);
@@ -123,32 +150,6 @@ impl Extractor<'_> {
             scrub_location(&mut moved.location, &repeats);
         }
         collection.notes.extend(review.notes);
-    }
-
-    /// Plain variables of each environment whose whole value is one of
-    /// that environment's secrets become its placeholder.
-    fn scrub_environments(&self, collection: &mut ImportedCollection) {
-        for env in &mut collection.environments {
-            let name = super::environment_name(&env.name);
-            let own = self
-                .moved
-                .iter()
-                .filter(|m| m.environment == name)
-                .map(|m| &m.secret);
-            let whole: HashMap<&str, &str> = own
-                .filter(|s| is_secret_like(s.expose()))
-                .map(|s| (s.expose().as_str(), s.name()))
-                .collect();
-            for var in env.variables.iter_mut().filter(|v| !v.secret) {
-                if let Some(secret) = whole.get(var.value.as_str()) {
-                    var.value = Kind::Template.placeholder(secret);
-                }
-            }
-        }
-        let all = Repeats::new(self.moved.iter().map(|m| &m.secret));
-        for env in &mut collection.environments {
-            scrub_location(&mut env.location, &all);
-        }
     }
 
     /// Move the well-known tokens in the literal parts of `text`, also
@@ -250,35 +251,51 @@ pub fn redact_tokens(text: &str) -> String {
 /// Report notes about repeats, one per secret, field and reason.
 #[derive(Default)]
 struct Review {
-    seen: HashSet<(String, String, &'static str)>,
+    seen: HashSet<(String, String, String)>,
     notes: Vec<Note>,
 }
 
 impl Review {
-    /// A weak value left as written.
-    fn kept(&mut self, secret: &str, field: &Field<'_>) {
+    fn push(&mut self, secret: &str, field: &Field<'_>, reason: &str, message: String) {
         let place = format!("{}:{}", field.at.display(), field.label);
-        if self.seen.insert((secret.to_owned(), place.clone(), "kept")) {
-            let message =
-                format!("the value of secret {secret} also appears in {place}; review it");
+        if self
+            .seen
+            .insert((secret.to_owned(), place, reason.to_owned()))
+        {
             self.notes
                 .push(Note::new(NoteKind::Review, message, field.at));
         }
     }
 
-    /// A secret-like value redacted where `{{name}}` would change the
-    /// bytes sent.
-    fn redacted(&mut self, secret: &str, field: &Field<'_>, how: &'static str) {
-        let place = field.at.display();
-        let key = (secret.to_owned(), format!("{place}:{}", field.label), how);
-        if self.seen.insert(key) {
-            let message = format!(
-                "request {place}: field {} contained secret {secret} {how}; it was redacted, edit the field to use {{{{{secret}}}}}",
-                field.label
-            );
-            self.notes
-                .push(Note::new(NoteKind::Review, message, field.at));
-        }
+    /// A weak value left as written.
+    fn kept(&mut self, secret: &str, field: &Field<'_>) {
+        let place = format!("{}:{}", field.at.display(), field.label);
+        let message = format!("the value of secret {secret} also appears in {place}; review it");
+        self.push(secret, field, "kept", message);
+    }
+
+    /// A secret-like value redacted where `{{name}}` would send different
+    /// bytes (`how`: `in encoded form`, `inside other text`).
+    fn redacted(&mut self, secret: &str, field: &Field<'_>, how: &str) {
+        let message = format!(
+            "{} {}: field {} contained secret {secret} {how}; it was redacted, edit the field to use {{{{{secret}}}}}",
+            field.owner,
+            field.at.display(),
+            field.label
+        );
+        self.push(secret, field, how, message);
+    }
+
+    /// A secret of another scope redacted: `{{name}}` would resolve to
+    /// another value under another environment.
+    fn other_scope(&mut self, secret: &str, env: &str, field: &Field<'_>) {
+        let message = format!(
+            "{} {}: field {} repeated secret {secret} of environment {env}; it was redacted, edit the field",
+            field.owner,
+            field.at.display(),
+            field.label
+        );
+        self.push(secret, field, "scope", message);
     }
 }
 
@@ -300,36 +317,51 @@ struct Pattern {
     /// A well-known token shape: matched anywhere, not only on token
     /// boundaries.
     token: bool,
+    /// The environment the secret is stored in.
+    env: String,
+    /// Moved from a source environment file: it resolves only under that
+    /// environment, so the collection may not use it.
+    env_scoped: bool,
 }
 
 /// The moved values, found in one pass over a text.
 struct Repeats {
     matcher: Option<AhoCorasick>,
     patterns: Vec<Pattern>,
+    /// The secret-like values as written, for decoded variants of a field.
+    strong: Option<AhoCorasick>,
+    /// The pattern index of each `strong` value.
+    strong_patterns: Vec<usize>,
 }
 
 impl Repeats {
-    fn new<'s>(secrets: impl Iterator<Item = &'s rustman_core::Secret<String>>) -> Self {
+    fn new(moved: &[super::MovedSecret]) -> Self {
         let mut seen: HashSet<String> = HashSet::new();
         let mut values: Vec<String> = Vec::new();
         let mut patterns = Vec::new();
-        for secret in secrets {
-            let value = secret.expose().as_str();
+        let mut strong_values: Vec<String> = Vec::new();
+        let mut strong_patterns = Vec::new();
+        for m in moved {
+            let value = m.secret.expose().as_str();
             let usable = value.len() <= MAX_REPEAT
                 && value.chars().count() >= MIN_REPEAT
-                && !value.contains("{{")
                 && !value.trim().is_empty();
             if !usable || !seen.insert(value.to_owned()) {
                 continue;
             }
             let strong = is_secret_like(value);
-            let token = is_known_token(value);
             let pattern = |form| Pattern {
-                name: secret.name().to_owned(),
+                name: m.secret.name().to_owned(),
                 form,
                 strong,
-                token,
+                token: is_known_token(value),
+                env: m.environment.clone(),
+                env_scoped: m.from_environment,
             };
+            if strong {
+                strong_values.push(value.to_owned());
+                strong_patterns.push(patterns.len());
+            }
             values.push(value.to_owned());
             patterns.push(pattern(Form::Raw));
             if strong {
@@ -341,61 +373,258 @@ impl Repeats {
                 }
             }
         }
-        let matcher = (!values.is_empty()).then(|| {
-            AhoCorasick::builder()
-                .match_kind(MatchKind::LeftmostLongest)
-                .build(&values)
-                .expect("literal patterns build")
-        });
-        Self { matcher, patterns }
+        let build = |values: &[String]| {
+            (!values.is_empty()).then(|| {
+                AhoCorasick::builder()
+                    .match_kind(MatchKind::LeftmostLongest)
+                    .build(values)
+                    .expect("literal patterns build")
+            })
+        };
+        Self {
+            matcher: build(&values),
+            patterns,
+            strong: build(&strong_values),
+            strong_patterns,
+        }
     }
 
-    /// Replace the repeats of `text`:
-    /// - a raw secret-like repeat, as the whole field, on token boundaries
-    ///   or (a token shape) anywhere, becomes the field's placeholder: the
-    ///   bytes sent stay the same;
-    /// - an encoded or embedded secret-like repeat becomes
-    ///   `«redacted:name»`, with a note, since `{{name}}` would send
-    ///   different bytes;
-    /// - a weak repeat stays, with a note.
-    ///
-    /// Notes go to `review` when given.
+    /// Replace the repeats of `text` (see the module documentation), then
+    /// redact the whole field when a decoded variant of it still holds a
+    /// secret-like value. Notes go to `review` when given.
     fn scan(&self, text: &mut String, field: &Field<'_>, mut review: Option<&mut Review>) {
         let Some(matcher) = &self.matcher else {
             return;
         };
+        let placeholders = placeholder_spans(text);
         let mut edits = Vec::new();
-        for span in literal_spans(text) {
-            for m in matcher.find_iter(&text[span.clone()]) {
-                let range = span.start + m.start()..span.start + m.end();
-                let p = &self.patterns[m.pattern().as_usize()];
-                if !p.strong {
-                    if let Some(review) = review.as_deref_mut() {
-                        review.kept(&p.name, field);
-                    }
-                    continue;
-                }
-                let whole = range.start == 0 && range.end == text.len();
-                let placed = whole || p.token || on_boundaries(text, &range);
-                let replacement = if p.form == Form::Raw && placed {
-                    field.kind.placeholder(&p.name)
-                } else {
-                    let how = match p.form {
-                        Form::Encoded => "in encoded form",
-                        Form::Raw => "inside other text",
-                    };
-                    if let Some(review) = review.as_deref_mut() {
-                        review.redacted(&p.name, field, how);
-                    }
-                    Kind::Free.placeholder(&p.name)
-                };
+        for m in matcher.find_iter(text.as_str()) {
+            let range = m.start()..m.end();
+            if placeholders.iter().any(|p| splits(p, &range)) {
+                continue;
+            }
+            let p = &self.patterns[m.pattern().as_usize()];
+            if let Some(replacement) =
+                self.replacement(p, text, &range, field, review.as_deref_mut())
+            {
                 edits.push((range, replacement));
             }
         }
         if !edits.is_empty() {
             *text = splice(text, edits);
         }
+        self.decoded(text, field, review);
     }
+
+    /// What replaces the repeat `range` of pattern `p`, if anything.
+    fn replacement(
+        &self,
+        p: &Pattern,
+        text: &str,
+        range: &Range<usize>,
+        field: &Field<'_>,
+        review: Option<&mut Review>,
+    ) -> Option<String> {
+        if !p.strong {
+            if let Some(review) = review {
+                review.kept(&p.name, field);
+            }
+            return None;
+        }
+        let same_scope = match field.env {
+            Some(env) => p.env == env,
+            None => !p.env_scoped,
+        };
+        if !same_scope {
+            if let Some(review) = review {
+                review.other_scope(&p.name, &p.env, field);
+            }
+            return Some(Kind::Free.placeholder(&p.name));
+        }
+        let whole = range.start == 0 && range.end == text.len();
+        let placed = whole || p.token || on_boundaries(text, range);
+        if p.form == Form::Raw && placed {
+            return Some(field.kind.placeholder(&p.name));
+        }
+        if let Some(review) = review {
+            let how = match p.form {
+                Form::Encoded => "in encoded form",
+                Form::Raw => "inside other text",
+            };
+            review.redacted(&p.name, field, how);
+        }
+        Some(Kind::Free.placeholder(&p.name))
+    }
+
+    /// When the percent-, JSON- or HTML-decoded `text` holds a secret-like
+    /// value its raw form does not (a partly or differently encoded
+    /// repeat), the whole field becomes `«redacted:name»`.
+    fn decoded(&self, text: &mut String, field: &Field<'_>, review: Option<&mut Review>) {
+        let Some(strong) = &self.strong else {
+            return;
+        };
+        for variant in decoded_variants(text) {
+            let Some(m) = strong.find(variant.as_str()) else {
+                continue;
+            };
+            let p = &self.patterns[self.strong_patterns[m.pattern().as_usize()]];
+            if let Some(review) = review {
+                review.redacted(&p.name, field, "in encoded form");
+            }
+            *text = Kind::Free.placeholder(&p.name);
+            return;
+        }
+    }
+}
+
+/// The byte ranges of the `{{...}}` placeholders of `text`.
+fn placeholder_spans(text: &str) -> Vec<Range<usize>> {
+    let mut spans = Vec::new();
+    let mut at = 0;
+    while let Some(open) = text[at..].find("{{").map(|i| at + i) {
+        let Some(close) = text[open + 2..].find("}}").map(|i| open + 2 + i) else {
+            break;
+        };
+        spans.push(open..close + 2);
+        at = close + 2;
+    }
+    spans
+}
+
+/// Whether `range` cuts into the placeholder `p` without covering it: a
+/// match inside a placeholder's name, or across its edge.
+fn splits(p: &Range<usize>, range: &Range<usize>) -> bool {
+    let overlaps = range.start < p.end && p.start < range.end;
+    let covers = range.start <= p.start && p.end <= range.end;
+    overlaps && !covers
+}
+
+/// `text` percent-decoded (`+` as a space), JSON-unescaped and
+/// HTML-unescaped, each when it differs from `text`.
+fn decoded_variants(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for variant in [
+        percent_decoded(text),
+        json_unescaped(text),
+        html_unescaped(text),
+    ] {
+        if variant != text && !out.contains(&variant) {
+            out.push(variant);
+        }
+    }
+    out
+}
+
+/// Every `%XX` decoded and `+` read as a space; invalid UTF-8 is replaced.
+fn percent_decoded(text: &str) -> String {
+    if !text.contains(['%', '+']) {
+        return text.to_owned();
+    }
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let hex = (bytes[i] == b'%')
+            .then(|| bytes.get(i + 1..i + 3))
+            .flatten()
+            .and_then(|h| std::str::from_utf8(h).ok())
+            .and_then(|h| u8::from_str_radix(h, 16).ok());
+        match (bytes[i], hex) {
+            (_, Some(byte)) => {
+                out.push(byte);
+                i += 3;
+            }
+            (b'+', None) => {
+                out.push(b' ');
+                i += 1;
+            }
+            (byte, None) => {
+                out.push(byte);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// JSON string escapes (`\"`, `\\`, `\/`, `\n`, `\uXXXX`, ...) decoded
+/// anywhere in `text`.
+fn json_unescaped(text: &str) -> String {
+    if !text.contains('\\') {
+        return text.to_owned();
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => out.push('\n'),
+            Some('t') => out.push('\t'),
+            Some('r') => out.push('\r'),
+            Some('b') => out.push('\u{8}'),
+            Some('f') => out.push('\u{c}'),
+            Some('u') => {
+                let hex: String = chars.by_ref().take(4).collect();
+                match u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32) {
+                    Some(decoded) => out.push(decoded),
+                    None => {
+                        out.push_str("\\u");
+                        out.push_str(&hex);
+                    }
+                }
+            }
+            Some(other) => out.push(other),
+            None => out.push('\\'),
+        }
+    }
+    out
+}
+
+/// HTML entities (`&amp;`, `&quot;`, `&#39;`, `&#x27;`, ...) decoded.
+fn html_unescaped(text: &str) -> String {
+    if !text.contains('&') {
+        return text.to_owned();
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find('&') {
+        out.push_str(&rest[..i]);
+        let tail = &rest[i..];
+        let entity = tail
+            .find(';')
+            .filter(|&end| end <= 10)
+            .map(|end| &tail[1..end]);
+        let decoded = entity.and_then(|e| match e {
+            "amp" => Some('&'),
+            "lt" => Some('<'),
+            "gt" => Some('>'),
+            "quot" => Some('"'),
+            "apos" => Some('\''),
+            _ => {
+                let number = e.strip_prefix('#')?;
+                let code = match number.strip_prefix(['x', 'X']) {
+                    Some(hex) => u32::from_str_radix(hex, 16).ok()?,
+                    None => number.parse().ok()?,
+                };
+                char::from_u32(code)
+            }
+        });
+        match (decoded, entity) {
+            (Some(c), Some(e)) => {
+                out.push(c);
+                rest = &tail[e.len() + 2..];
+            }
+            _ => {
+                out.push('&');
+                rest = &tail[1..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 /// The forms `value` takes once encoded, other than itself: percent-encoded
@@ -483,8 +712,10 @@ fn scrub_free(text: &mut String, repeats: &Repeats, at: &Location) {
     }
     let field = Field {
         kind: Kind::Free,
+        owner: "report",
         label: String::new(),
         at,
+        env: None,
     };
     repeats.scan(text, &field, None);
 }
@@ -526,23 +757,31 @@ type Visit<'f> = dyn FnMut(&mut String, Field<'_>) + 'f;
 fn field<'a>(kind: Kind, label: impl Into<String>, at: &'a Location) -> Field<'a> {
     Field {
         kind,
+        owner: "request",
         label: label.into(),
         at,
+        env: None,
     }
 }
 
 /// Every text of `folder` and below that is written to a file.
 fn walk_folder(folder: &mut Folder, f: &mut Visit<'_>) {
     let at = folder.location.clone();
-    f(&mut folder.name, field(Kind::Free, "name", &at));
-    if let Some(description) = &mut folder.description {
-        f(description, field(Kind::Free, "description", &at));
-    }
-    walk_auth(&mut folder.auth, &at, f);
-    walk_pairs(&mut folder.headers, "header", &at, f);
-    for var in &mut folder.variables {
-        let label = format!("variable {}", var.name);
-        f(&mut var.value, field(Kind::Template, label, &at));
+    {
+        let mut own = |text: &mut String, mut field: Field<'_>| {
+            field.owner = "collection";
+            f(text, field);
+        };
+        own(&mut folder.name, field(Kind::Free, "name", &at));
+        if let Some(description) = &mut folder.description {
+            own(description, field(Kind::Free, "description", &at));
+        }
+        walk_auth(&mut folder.auth, &at, &mut own);
+        walk_pairs(&mut folder.headers, "header", &at, &mut own);
+        for var in &mut folder.variables {
+            let label = format!("variable {}", var.name);
+            own(&mut var.value, field(Kind::Template, label, &at));
+        }
     }
     for item in &mut folder.items {
         match item {
@@ -648,11 +887,16 @@ mod tests {
     }
 
     fn scan(secrets: &[(&str, &str)], text: &str) -> (String, usize) {
-        let secrets: Vec<Secret<String>> = secrets
+        let moved: Vec<super::super::MovedSecret> = secrets
             .iter()
-            .map(|(n, v)| Secret::new(*n, (*v).to_owned()))
+            .map(|(n, v)| super::super::MovedSecret {
+                secret: Secret::new(*n, (*v).to_owned()),
+                environment: "local".into(),
+                location: Location::default(),
+                from_environment: false,
+            })
             .collect();
-        let repeats = Repeats::new(secrets.iter());
+        let repeats = Repeats::new(&moved);
         let at = Location::item("c.json", "r");
         let mut review = Review::default();
         let mut out = text.to_owned();
@@ -700,6 +944,25 @@ mod tests {
 
     #[test]
     fn encoded_forms_of_secret_like_values_are_found_too() {
+        // A partly or differently encoded repeat: the whole field.
+        let (out, notes) = scan(&[("p", "p@ss&w0rd=1")], "note=p%40ss&w0rd=1");
+        assert_eq!((out.as_str(), notes), ("«redacted:p»", 1));
+        let (out, _) = scan(&[("p", "p@ss&w0rd=1")], "note=p%40ss%26w0rd%3d1");
+        assert!(
+            out.contains("«redacted:p»") && !out.contains("w0rd"),
+            "{out}"
+        );
+        let (out, _) = scan(&[("p", "my secret pass 42")], "pw=my+secret+pass+42");
+        assert_eq!(out, "«redacted:p»");
+        let (out, _) = scan(&[("p", "p@ss&w0rd=1")], r#"{"p":"p\u0040ss\u0026w0rd=1"}"#);
+        assert_eq!(out, "«redacted:p»");
+        let (out, _) = scan(&[("p", "p@ss&w0rd=1")], "p&#64;ss&amp;w0rd=1");
+        assert_eq!(out, "«redacted:p»");
+        // A value holding `{{` is still matched as text.
+        assert_eq!(
+            scan(&[("b", "ab{{cd}}ef-123")], "ab{{cd}}ef-123"),
+            ("{{b}}".into(), 0)
+        );
         // Encoded repeats would change the bytes sent as `{{name}}`: they
         // are redacted, with a note.
         let (out, notes) = scan(

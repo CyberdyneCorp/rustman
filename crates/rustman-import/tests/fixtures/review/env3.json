@@ -1,0 +1,1 @@
+{"name":"Prod","values":[{"key":"token","value":"Tok3n-ABCDEF12","enabled":true},{"key":"cb_url","value":"https://x.test/cb?t=Tok3n-ABCDEF12","enabled":true},{"key":"copy","value":"Tok3n-ABCDEF12","enabled":true}],"_postman_variable_scope":"environment"}

@@ -1,0 +1,29 @@
+{
+ "info": {
+  "name": "NP",
+  "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+ },
+ "variable": [
+  {
+   "key": "password",
+   "value": "p@ss&w0rd=1",
+   "type": "string"
+  }
+ ],
+ "item": [
+  {
+   "name": "partial",
+   "request": {
+    "method": "POST",
+    "url": {
+     "raw": "http://127.0.0.1:18765/a?x=1"
+    },
+    "header": [],
+    "body": {
+     "mode": "raw",
+     "raw": "note=p%40ss&w0rd=1"
+    }
+   }
+  }
+ ]
+}

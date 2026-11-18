@@ -1,0 +1,29 @@
+{
+ "info": {
+  "name": "NS",
+  "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+ },
+ "variable": [
+  {
+   "key": "password",
+   "value": "my secret pass 42",
+   "type": "string"
+  }
+ ],
+ "item": [
+  {
+   "name": "plus",
+   "request": {
+    "method": "POST",
+    "url": {
+     "raw": "http://127.0.0.1:18765/c"
+    },
+    "header": [],
+    "body": {
+     "mode": "raw",
+     "raw": "pw=my+secret+pass+42"
+    }
+   }
+  }
+ ]
+}

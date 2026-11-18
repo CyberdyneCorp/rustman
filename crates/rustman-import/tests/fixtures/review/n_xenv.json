@@ -1,0 +1,46 @@
+{
+ "_type": "export",
+ "__export_format": 4,
+ "__export_source": "insomnia.desktop.app:v2023.5.8",
+ "resources": [
+  {
+   "_id": "wrk_1",
+   "_type": "workspace",
+   "name": "XEnv",
+   "parentId": null,
+   "scope": "collection"
+  },
+  {
+   "_id": "env_base",
+   "_type": "environment",
+   "parentId": "wrk_1",
+   "name": "Base Environment",
+   "data": {}
+  },
+  {
+   "_id": "env_prod",
+   "_type": "environment",
+   "parentId": "env_base",
+   "name": "Prod",
+   "data": {
+    "token": "Xyz-SECRET-1234"
+   }
+  },
+  {
+   "_id": "r1",
+   "_type": "request",
+   "parentId": "wrk_1",
+   "name": "copy",
+   "method": "GET",
+   "url": "http://127.0.0.1:18765/h",
+   "headers": [
+    {
+     "name": "X-Copy",
+     "value": "Xyz-SECRET-1234"
+    }
+   ],
+   "body": {},
+   "authentication": {}
+  }
+ ]
+}

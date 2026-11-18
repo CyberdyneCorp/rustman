@@ -481,7 +481,7 @@ fn percent_encoded_keys_and_basic_values_in_json_are_moved() {
 }
 
 #[test]
-fn environment_files_only_take_their_own_secrets_as_whole_values() {
+fn environment_files_template_only_their_own_secrets() {
     let export = json!({"_type": "export", "__export_format": 4, "resources": [
         {"_id": "wrk", "_type": "workspace", "name": "W", "parentId": null},
         {"_id": "env", "_type": "environment", "parentId": "wrk", "name": "Base",
@@ -491,11 +491,20 @@ fn environment_files_only_take_their_own_secrets_as_whole_values() {
     ]});
     let plan = plan_as(Format::Insomnia, &export.to_string());
     let base = file(&plan, "environments/base.yaml");
-    // (a) whole value, same environment.
+    // The same environment's secret: as a whole value and on boundaries.
     assert!(base.contains("copy: '{{api_key}}'"), "{base}");
-    // Embedded values and other environments' secrets are left alone.
-    assert!(base.contains("note: key SAME-VAL-42X"), "{base}");
-    assert!(base.contains("other: HDR-VAL-99X"), "{base}");
+    assert!(base.contains("note: key {{api_key}}"), "{base}");
+    // Another environment's secret (the header's, stored in `local`):
+    // redacted, with a note.
+    assert!(base.contains("other: «redacted:x_api_key»"), "{base}");
+    assert_nowhere(&plan, "HDR-VAL-99X");
+    assert!(
+        review_notes(&plan).iter().any(|n| n.ends_with(
+            "field variable other repeated secret x_api_key of environment local; it was redacted, edit the field"
+        )),
+        "{:?}",
+        review_notes(&plan)
+    );
 }
 
 /// `text` with each `{{name}}` of a moved secret replaced by its value:

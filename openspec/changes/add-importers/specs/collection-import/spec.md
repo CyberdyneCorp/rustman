@@ -227,7 +227,7 @@ Every text written to a tracked file (URLs, headers, bodies, auth, variables, na
 - **THEN** the description SHALL read `Use key «redacted:github_token»` and the token SHALL be stored as a secret
 
 ### Requirement: Repeat replacement
-A raw repeat of a secret-like moved value (8+ characters and two character classes or 16+ characters) SHALL become `{{name}}` only when it fills the field or sits on token boundaries (token shapes: anywhere). Encoded or in-word repeats of secret-like values SHALL become `«redacted:name»` with a report note. Repeats of other values SHALL be left unchanged and reported by secret name. Environment files SHALL only get whole-value replacements by their own secrets.
+A raw repeat of a secret-like collection-scoped value (8+ characters and two character classes or 16+ characters) SHALL become `{{name}}` only when it fills the field or sits on token boundaries (token shapes: anywhere). Encoded or in-word repeats, and every repeat of an environment-scoped secret in a request, SHALL become `«redacted:name»` with a report note. Other repeats SHALL be left unchanged and reported.
 
 #### Scenario: Repeated secret-like value
 - **GIVEN** `X-Api-Key: SAME-VAL-42` and the same value in another header and in the URL path
@@ -239,10 +239,31 @@ A raw repeat of a secret-like moved value (8+ characters and two character class
 - **WHEN** it is imported
 - **THEN** both SHALL become `«redacted:password»`, the report SHALL say the field contained secret `password` in encoded form, and no file SHALL hold the value in any form
 
+#### Scenario: Environment secret repeated in a request
+- **GIVEN** environment `Prod` with secret `token` and a request header with the same value
+- **WHEN** it is imported
+- **THEN** the header SHALL be `«redacted:token»` and the report SHALL say the field repeated secret `token` of environment `prod`
+
 #### Scenario: Ordinary word as a secret
 - **GIVEN** a Basic password `password` and a body `{"grant_type":"password"}` and URL `/password/reset?type=password`
 - **WHEN** it is imported
 - **THEN** the body and URL SHALL be unchanged and the report SHALL note that the value of secret `password` also appears there
+
+### Requirement: Decoded repeats
+After repeat replacement, each field SHALL be read percent-decoded (`+` as a space), JSON-unescaped and HTML-unescaped; when a reading shows a secret-like moved value, the whole field SHALL become `«redacted:name»` with a report note.
+
+#### Scenario: Partly encoded repeat
+- **GIVEN** a secret `p@ss&w0rd=1` and a raw body `note=p%40ss&w0rd=1`
+- **WHEN** it is imported
+- **THEN** the body SHALL be `«redacted:password»` and the report SHALL say so
+
+### Requirement: Environment file repeats
+In an environment file, a raw secret-like repeat of that environment's own secret, whole or on token boundaries, SHALL become `{{name}}`; any other secret-like repeat SHALL become `«redacted:name»` with a report note.
+
+#### Scenario: Secret inside a URL variable
+- **GIVEN** environment `Prod` with `token: Tok3n-ABCDEF12` and `cb_url: https://x.test/cb?t=Tok3n-ABCDEF12`
+- **WHEN** it is imported
+- **THEN** `environments/prod.yaml` SHALL hold `cb_url: https://x.test/cb?t={{token}}`
 
 ### Requirement: Fresh secret names
 A new secret name SHALL NOT be the name of any variable declared or referenced as `{{name}}` in the source, other than the variable being moved.
