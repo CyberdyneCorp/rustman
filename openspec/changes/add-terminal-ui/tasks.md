@@ -61,5 +61,5 @@
 
 ## 9. Integration checks
 
-- [ ] 9.1 Cross-platform smoke test in CI (Linux, macOS, Windows): launch under a pty at 80x24, open a fixture request, send it to a local mock, cancel a slow one, quit; verify the job passes on all three OSes. (`tests/pty_smoke.rs` under a Unix pty on Linux/macOS and ConPTY on Windows, plus `smoke_tests` through the real event loop on every OS, both in the `test` job, design D14; passes locally on macOS, the CI run on all three OSes, including the first ConPTY run and the Windows viz stub, is pending.)
+- [x] 9.1 Cross-platform smoke test in CI (Linux, macOS, Windows): launch under a pty at 80x24, open a fixture request, send it to a local mock, cancel a slow one, quit; verify the job passes on all three OSes. (`tests/pty_smoke.rs` under a Unix pty on Linux/macOS and ConPTY on Windows, plus `smoke_tests` through the real event loop on every OS, both in the `test` job, design D14; passed on ubuntu, macOS and Windows (ConPTY) in the CI run of PR #54.)
 - [ ] 9.2 Manual check matrix recorded in `docs/tui.md`: Windows Terminal, conhost, iTerm2, Alacritty, kitty, tmux and GNOME Terminal, in truecolor, 256-colour and `NO_COLOR` modes. (The matrix is in docs/tui.md, "Platform checks", every cell pending a manual run.)
