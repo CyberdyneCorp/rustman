@@ -12,6 +12,7 @@ publish = false
 rustman-core.workspace = true
 rustman-http.workspace = true
 rustman-viz-protocol.workspace = true
+rustman-webhook.workspace = true
 ratatui.workspace = true
 crossterm.workspace = true
 thiserror.workspace = true
@@ -32,6 +33,8 @@ base64.workspace = true
 http.workspace = true
 
 [dev-dependencies]
+bytes.workspace = true
+time.workspace = true
 insta.workspace = true
 rustman-test-support.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time", "signal", "macros"] }

@@ -23,7 +23,8 @@ pub fn shell_key(state: &mut State, chord: Chord) -> Vec<Effect> {
         Some(Overlay::Confirm(_)) => confirm_key(state, chord),
         Some(Overlay::Input(_)) => workbench::input_key(state, chord),
         Some(Overlay::Exchanges(_) | Overlay::Diff(_)) => viewer_keys::overlay_key(state, chord),
-        _ => match viewer_keys::box_key(state, chord) {
+        _ => match crate::webhook::key(state, chord).or_else(|| viewer_keys::box_key(state, chord))
+        {
             Some(effects) => effects,
             None => {
                 let typed = state.pending_keys.is_empty() && text_key(state, chord);
@@ -244,6 +245,7 @@ pub fn run(state: &mut State, action: ActionId) -> Vec<Effect> {
         ActionId::HelpOpen => state.overlay = Some(Overlay::Help { scroll: 0 }),
         ActionId::SecretsReveal => return reveal::toggle(state),
         ActionId::VizOpen => return viz::start(state),
+        ActionId::WebhookOpen => crate::webhook::toggle_pane(state),
         ActionId::ReportHtml => return crate::response::html::start(state),
         ActionId::PaneLeft => pane_step(state, false),
         ActionId::PaneRight => pane_step(state, true),

@@ -47,6 +47,8 @@ const KNOWN_KEYS: &[(&str, &[&str])] = &[
         &["allowed_hosts", "production_hosts", "rate", "concurrency"],
     ),
     ("explore", &["producers", "disabled_rules"]),
+    // Read by rustman-webhook (add-webhook-inspector).
+    ("webhook", &["host", "port", "verifiers"]),
 ];
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -407,6 +409,13 @@ base_url = "http://localhost"
                 "rustman.toml: unknown key 'workspace.colour' ignored",
             ]
         );
+    }
+
+    #[test]
+    fn webhook_verifiers_are_a_known_key() {
+        let text = "[workspace]\nname = \"a\"\nversion = 1\n[[webhook.verifiers]]\npath = \"/h\"\n";
+        let (_, warnings) = parse(text).unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
     }
 
     #[test]

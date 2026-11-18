@@ -54,6 +54,7 @@ pub mod viz;
 #[cfg(test)]
 mod viz_tests;
 pub mod watch;
+pub mod webhook;
 pub mod workbench;
 #[cfg(test)]
 mod workbench_tests;

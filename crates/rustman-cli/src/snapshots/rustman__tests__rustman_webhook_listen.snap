@@ -1,0 +1,45 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Capture inbound webhooks on a local port and print each event
+
+Usage: rustman webhook listen [OPTIONS]
+
+Options:
+      --host <HOST>
+          Address to bind: an IP address or localhost (default: [webhook] host in rustman.toml, else 127.0.0.1)
+
+      --port <PORT>
+          Port to bind; 0 picks a free port (default: [webhook] port in rustman.toml, else 9090)
+
+      --allow-remote
+          Allow binding an address reachable from the network
+
+      --max-body <BYTES>
+          Largest accepted request body in bytes; larger bodies get 413
+          
+          [default: 10485760]
+
+      --max-captures <N>
+          Exit with code 0 once N requests were captured
+
+      --jsonl
+          Print one JSON object per line per event (the banner goes to stderr)
+
+      --workspace <DIR>
+          Workspace whose webhook/mocks.yaml answers requests (default: search from the current directory upwards; none means the default reply)
+
+      --env <NAME>
+          Environment holding the signature verifiers' secrets (default: RUSTMAN_ENV, then the workspace default)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

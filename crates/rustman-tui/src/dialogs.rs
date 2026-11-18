@@ -27,6 +27,8 @@ pub enum Decision {
     Delete(PathBuf),
     KeepMine(TabId),
     LoadFromDisk(TabId),
+    /// Start the webhook listener on a network-reachable address.
+    WebhookStart,
     Cancel,
 }
 
@@ -100,6 +102,20 @@ impl Confirm {
         }
     }
 
+    /// Start the webhook listener on an address reachable from the network
+    /// (spec: Non-loopback bind warning). Cancel is preselected.
+    pub fn webhook_remote(warning: &str) -> Self {
+        Self {
+            title: " Webhook listener ".into(),
+            message: format!("Start anyway? {warning}."),
+            choices: vec![
+                ("Start", Decision::WebhookStart),
+                ("Cancel", Decision::Cancel),
+            ],
+            selected: 1,
+        }
+    }
+
     /// Move the selection, or return the chosen decision.
     pub fn key(&mut self, chord: Chord) -> Option<Decision> {
         let n = self.choices.len();
@@ -166,6 +182,8 @@ pub enum Purpose {
     SaveAs { tab: TabId },
     /// Save a tab's response body to a file.
     SaveBody { tab: TabId },
+    /// A webhook pane prompt (replay or save a capture).
+    Webhook(crate::webhook::Prompt),
 }
 
 /// A one-line text prompt.

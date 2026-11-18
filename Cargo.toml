@@ -19,6 +19,7 @@ rustman-explore = { path = "crates/rustman-explore", version = "0.1.0" }
 rustman-test-support = { path = "crates/rustman-test-support" }
 rustman-tui = { path = "crates/rustman-tui", version = "0.1.0" }
 rustman-viz-protocol = { path = "crates/rustman-viz-protocol", version = "0.1.0" }
+rustman-webhook = { path = "crates/rustman-webhook", version = "0.1.0" }
 
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
@@ -150,6 +151,19 @@ md-5 = { version = "0.11", default-features = false }
 # Snippet export (runner parity D7): one sandboxed template per language;
 # also the Markdown/HTML report templates.
 minijinja = { version = "3.1", default-features = false, features = ["builtins", "serde"] }
+
+# Webhook inspector (add-webhook-inspector D1, D2, D6): the request head
+# parser hyper itself uses, read again from the raw bytes for the sender's
+# header case and order and for TE+CL detection; path globs for mocks.
+httparse = "1.10"
+globset = { version = "0.4.20", default-features = false }
+# Webhook signatures (add-webhook-inspector D4): RustCrypto HMAC over
+# SHA-1/SHA-256/SHA-512 (already in the tree via aws-sigv4) and a
+# constant-time comparison.
+hmac = "0.13"
+sha1 = { version = "0.11", default-features = false }
+sha2 = { version = "0.11", default-features = false }
+subtle = { version = "2.6", default-features = false }
 
 assert_cmd = "2"
 predicates = "3"

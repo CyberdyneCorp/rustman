@@ -62,6 +62,8 @@ enum Command {
     Completions(commands::completions::CompletionsArgs),
     /// Open the terminal UI (the default when stdin and stdout are a terminal)
     Tui(commands::tui::TuiArgs),
+    /// Capture, inspect and mock inbound webhooks on a local listener
+    Webhook(commands::webhook::WebhookArgs),
 }
 
 fn main() -> ExitCode {
@@ -110,6 +112,7 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
             Ok(exit::SUCCESS)
         }
         Command::Tui(args) => Ok(commands::tui::run(&args)),
+        Command::Webhook(args) => commands::webhook::run(&args),
     }
 }
 

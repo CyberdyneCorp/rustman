@@ -51,7 +51,7 @@ The sidebar shows the workspace as a collection tree, the request editor edits t
 
 ### Status bar
 
-The bottom line shows, from the left: the workspace name (or `Scratch session`), the active environment (`env: NAME` or `no environment`), `TLS verified` or a red `TLS: INSECURE` badge while certificate verification is off (`verify_tls = false` in `rustman.toml`, or `settings: verify_tls: false` in the request open in the current tab), and how many requests are in flight. On the right: the vim mode (`NORMAL`, `INSERT`, `VISUAL`) when vim keys are on, a `SECRETS VISIBLE` badge in the warning colour while secrets are revealed, and the quit hint.
+The bottom line shows, from the left: the workspace name (or `Scratch session`), the active environment (`env: NAME` or `no environment`), `TLS verified` or a red `TLS: INSECURE` badge while certificate verification is off (`verify_tls = false` in `rustman.toml`, or `settings: verify_tls: false` in the request open in the current tab), and how many requests are in flight. On the right: the vim mode (`NORMAL`, `INSERT`, `VISUAL`) when vim keys are on, a `SECRETS VISIBLE` badge in the warning colour while secrets are revealed, the webhook listener's address while it runs (`webhook 127.0.0.1:9090`, or a red `WEBHOOK ON NETWORK 0.0.0.0:9090` badge when it is reachable from the network; see [Webhook pane](#webhook-pane)), and the quit hint.
 
 ### Toasts and the notification log
 
@@ -158,6 +158,25 @@ When the companion cannot be used, a warning toast says why and offers the HTML 
 | `Viz companion failed: …` | it could not be started, did not answer within 10 s, or answered something else |
 
 Each ends with `Export HTML report: H`. `H` (response focused, or **Export HTML report** in the palette) writes the current exchange as a self-contained HTML page (summary, assertions, response headers and body, all redacted) to `.rustman/reports/<request>-<time>.html` in the workspace, which `rustman init` keeps out of Git, or to the temp directory in a scratch session, and the toast gives the path. The run dashboard (`v` in a run view) arrives with the TUI's run view.
+
+### Webhook pane
+
+`Alt+W` (or **Webhook inspector** in the palette) shows the [webhook inspector](webhooks.md) in place of the request and response panes; `Esc` or `Alt+W` hides it again, and the listener keeps running while it is hidden. The pane shows the listener's state and address with the number of buffered captures and their size, the captures newest first (time, method, path, body size and the signature verdict as a coloured badge: `valid`, `invalid`, `missing`, `expired`), the selected capture (request line, receive time, every header in order, then the body), and the event log. Values are redacted with the signature verifier secrets; credentials such as `Authorization` show as placeholders.
+
+| Key | Action |
+|-----|--------|
+| `s` | Start or stop the listener. It binds `[webhook] host` and `port` from `rustman.toml` (default `127.0.0.1:9090`) and answers with the workspace's `webhook/mocks.yaml`. An address reachable from the network asks for confirmation first (Cancel is preselected); while such a listener runs, the pane shows `REACHABLE FROM THE NETWORK` and the status bar a red badge on every screen. |
+| `↑` `↓` (`j` `k`), `Home` `End` (`g` `G`) | Select a capture. |
+| `PageUp` `PageDown` | Scroll the selected capture's headers and body a page at a time; the title shows which lines are on screen (`41-80 of 655366`). The body is prepared once per capture and view, and only the lines on screen are drawn, so even a 10 MiB body scrolls smoothly. |
+| `v` | Cycle the body view: auto (JSON pretty-printed, form fields, or text), text, JSON, hex. A body that is not UTF-8 is always shown as hex. |
+| `r` | Replay the capture to a URL (asked for; the last one is offered again) through the HTTP engine, with the [header hygiene](webhooks.md#replay-and-save) of replay. A toast gives the status. |
+| `w` | Save the capture as a `kind: http` request file: asks for the target URL (`{{base_url}}<path>` is offered) and the file name (`webhook-<id>.rman.yaml`). |
+| `h` | Save the capture to the workspace history as an inbound entry. |
+| `y` | Copy the capture as a curl command sent to the URL it was received on (its `Host`). |
+| `c` | Clear the capture buffer. |
+| `m` | Edit `webhook/mocks.yaml` (a commented template when it does not exist yet). `Ctrl+S` checks and saves it: a file that does not parse is not written and the error is shown under the text; a running listener reloads the saved mocks. `Esc` closes the editor without saving. |
+
+`?` opens the help; other letters do nothing while the pane is shown. Quitting the TUI stops the listener.
 
 ## Mouse
 
@@ -316,6 +335,7 @@ The table below is generated from the action registry; a test fails if it drifts
 | Diff with an earlier exchange | `response.diff` | `D` (response) |  |
 | Save body… | `response.save_body` | `s` (response) |  |
 | Export HTML report | `report.html` | `H` (response) |  |
+| Webhook inspector | `webhook.open` | `Alt+W` |  |
 | Quit | `app.quit` | `Ctrl+Q` |  |
 
 In vim mode, text areas (the request body) are modal:

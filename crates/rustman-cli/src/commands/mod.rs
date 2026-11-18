@@ -15,6 +15,7 @@ pub mod run;
 pub mod secret;
 pub mod send;
 pub mod tui;
+pub mod webhook;
 
 use std::path::{Path, PathBuf};
 

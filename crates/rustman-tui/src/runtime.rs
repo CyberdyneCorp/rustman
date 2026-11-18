@@ -94,6 +94,7 @@ pub async fn run_app<B: Backend>(
     }
     // Requests still in flight stop with the loop: their connections close.
     workbench::cancel_all(&mut state);
+    crate::webhook::shut_down(&mut state);
     Ok(state)
 }
 

@@ -33,6 +33,7 @@ use crate::tabs::{TabId, Tabs};
 use crate::toast::{Notifications, Severity};
 use crate::vim::Vim;
 use crate::viz::{self, VizError, VizJob};
+use crate::webhook::{self, WebhookPane};
 use crate::workbench::{self, Pending};
 use crate::{reveal, send, viewer_keys};
 
@@ -74,6 +75,8 @@ pub struct State {
     pub revealed: Revealed,
     /// Where the viz companion is looked for (read once per session).
     pub viz: viz::Discovery,
+    /// The webhook inspector pane and its listener.
+    pub webhook: WebhookPane,
 }
 
 /// Modals drawn over the shell.
@@ -265,6 +268,8 @@ pub enum Action {
     VizDone(Result<String, VizError>),
     /// An HTML report was written to `path`.
     ReportWritten(Result<PathBuf, String>),
+    /// A webhook listener event or a webhook job finished.
+    Webhook(Box<webhook::Msg>),
 }
 
 /// Why the loop stopped without the user quitting.
@@ -349,6 +354,8 @@ pub enum Effect {
     Viz(Box<VizJob>),
     /// Write the current exchange as an HTML report.
     WriteReport(Box<ReportJob>),
+    /// Webhook pane work: settings, the listener, mocks, save and replay.
+    Webhook(Box<webhook::Job>),
 }
 
 impl State {
@@ -387,6 +394,7 @@ impl State {
             secret_backend: None,
             revealed: Revealed::default(),
             viz: viz::Discovery::default(),
+            webhook: WebhookPane::default(),
         }
     }
 
@@ -505,6 +513,7 @@ fn on_workbench(state: &mut State, action: Action) -> Vec<Effect> {
             viz::on_done(state, result);
             Vec::new()
         }
+        Action::Webhook(msg) => webhook::on_msg(state, *msg),
         other => viewer_keys::on_action(state, other),
     }
 }
