@@ -1,0 +1,21 @@
+---
+source: crates/rustman-tui/src/view.rs
+expression: text
+---
+
+
+
+
+
+
+
+
+       ┌ No workspace found ────────────────────────────────────────────┐
+       │ No rustman.toml in this directory or any parent:               │
+       │   /home/dev/api                                                │
+       │                                                                │
+       │ › Create workspace here                                        │
+       │   Scratch session                                              │
+       │                                                                │
+       │ ↑↓ choose · Enter confirm · Ctrl+Q quit                        │
+       └────────────────────────────────────────────────────────────────┘

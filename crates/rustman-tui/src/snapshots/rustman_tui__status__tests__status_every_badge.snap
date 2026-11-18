@@ -1,0 +1,5 @@
+---
+source: crates/rustman-tui/src/status.rs
+expression: text(&info)
+---
+ demo │ env: staging │ TLS: INSECURE │ 1 in flight            NORMAL   SECRETS VISIBLE  Ctrl+Q quit

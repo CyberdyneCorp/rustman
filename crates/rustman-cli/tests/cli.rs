@@ -317,3 +317,54 @@ mod env {
         env_list(tmp.path()).assert().success().stdout("* local\n");
     }
 }
+
+mod tui {
+    use super::*;
+
+    #[test]
+    fn tui_help_prints_usage() {
+        rustman()
+            .args(["tui", "--help"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "Usage: rustman tui [OPTIONS] [PATH]",
+            ))
+            .stdout(predicate::str::contains("--theme <NAME>"))
+            .stdout(predicate::str::contains("--ascii"))
+            .stdout(predicate::str::contains("--vim"));
+    }
+
+    #[test]
+    fn tui_rejects_an_unknown_theme() {
+        rustman()
+            .args(["tui", "--theme", "neon"])
+            .assert()
+            .code(2)
+            .stderr(predicate::str::contains("unknown theme `neon`"));
+    }
+
+    #[test]
+    fn tui_without_a_terminal_is_a_usage_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        rustman()
+            .arg("tui")
+            .arg(tmp.path())
+            .assert()
+            .code(2)
+            .stderr(predicate::str::contains(
+                "error: the terminal UI needs an interactive terminal",
+            ));
+    }
+
+    #[test]
+    fn tui_on_a_missing_directory_exits_2() {
+        let tmp = tempfile::tempdir().unwrap();
+        rustman()
+            .arg("tui")
+            .arg(tmp.path().join("missing"))
+            .assert()
+            .code(2)
+            .stderr(predicate::str::contains("is not a directory"));
+    }
+}

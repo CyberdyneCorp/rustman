@@ -31,6 +31,12 @@ allow = [
 ]
 confidence-threshold = 0.9
 unused-allowed-license = "allow"
+# MPL-2.0 is file-level copyleft and compatible with distributing Rustman
+# under MIT OR Apache-2.0 when the crate is used unmodified. Allowed only for
+# the command palette's fuzzy matcher, not workspace-wide.
+exceptions = [
+    { allow = ["MPL-2.0"], crate = "nucleo-matcher" },
+]
 
 [licenses.private]
 ignore = true

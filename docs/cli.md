@@ -8,6 +8,7 @@ This page covers sending and running requests, reporters, terminal behavior, log
 
 | Command | What it does | Described in |
 |---------|--------------|--------------|
+| `rustman` / `rustman tui [path]` | Open the terminal UI (`rustman` alone does so when stdin and stdout are a terminal, and prints help otherwise); `--theme`, `--ascii`, `--vim` | [Terminal UI](tui.md) |
 | `rustman init [dir] [--bare]` | Create a workspace: `rustman.toml`, a `local` environment and a sample request | [Request files](request-files.md#workspace-layout) |
 | `rustman env list` | List the environments and mark the active one | [Environments](environments.md#the-active-environment) |
 | `rustman secret set <name> --env <env>` | Store a secret value (read from stdin or a no-echo prompt) | [Secrets](environments.md#declaring-and-setting-a-secret) |

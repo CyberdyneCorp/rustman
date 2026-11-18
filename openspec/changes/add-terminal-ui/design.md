@@ -44,7 +44,7 @@ Non-JSON bodies use `syntect` highlighting chosen by `Content-Type` (HTML, XML, 
 
 ### D7. Theming and colour capability detection
 Themes are TOML palettes of semantic tokens (`accent`, `ok`, `warn`, `error`, `muted`, `selection`, …), never raw colours in widget code. Capability detection:
-- `NO_COLOR` set (any value) → monochrome. Status uses symbols or text (`✔ 200`, `✖ 500`) and reverse-video selection.
+- `NO_COLOR` set to a non-empty value → monochrome. Status uses symbols or text (`✔ 200`, `✖ 500`) and reverse-video selection.
 - `COLORTERM` = `truecolor` or `24bit` → RGB.
 - Otherwise → the nearest xterm-256 colour.
 Users can force a theme with `--theme` or in `tui.toml`.

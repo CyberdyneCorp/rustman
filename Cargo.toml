@@ -15,6 +15,7 @@ rustman-http = { path = "crates/rustman-http", version = "0.1.0" }
 rustman-report = { path = "crates/rustman-report", version = "0.1.0" }
 # Test servers shared by the integration tests; never published.
 rustman-test-support = { path = "crates/rustman-test-support" }
+rustman-tui = { path = "crates/rustman-tui", version = "0.1.0" }
 
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
@@ -124,6 +125,18 @@ httpdate = "1.0.3"
 
 assert_cmd = "2"
 predicates = "3"
+
+# Terminal UI (add-terminal-ui design D1): ratatui over crossterm. cursive
+# (retained mode) and termion (no Windows) are rejected.
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm_0_29", "layout-cache", "unstable-rendered-line-info"] }
+crossterm = { version = "0.29", default-features = false, features = ["bracketed-paste", "events", "windows"] }
+# Pseudo-terminal for the panic-restores-the-terminal test (Unix only).
+portable-pty = "0.9"
+# Fuzzy matching for the command palette (add-terminal-ui task 3.2): the
+# matcher of `nucleo`, used synchronously; the `nucleo` worker pool is not
+# needed for a few hundred entries. `fuzzy-matcher` (unmaintained) and
+# `sublime_fuzzy` (no Unicode case folding) are rejected.
+nucleo-matcher = { version = "0.3.1", default-features = false, features = ["unicode-casefold", "unicode-normalization"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

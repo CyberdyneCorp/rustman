@@ -1,0 +1,41 @@
+---
+source: crates/rustman-tui/src/commands.rs
+assertion_line: 467
+expression: text
+---
+┌ › Sidebar ───────────────┐┌ Request ───────────────────────────────────┐┌ Response ──────────────────────────────────┐
+│ examples/ping.rman.yaml  ││ METHOD   No request open                   ││ No response yet.                           │
+│                          ││ Params  Headers  Body  Auth  Assertions    ││                                            │
+│                          ││ Open a request from the sidebar.           ││                                            │
+│                       ┌ Help ────────────────────────────────────────────────────────────────┐                       │
+│                       │ Sidebar                                                              │                       │
+│                       │   Up                       Move up                                   │                       │
+│                       │   Down                     Move down                                 │                       │
+│                       │   Home                     Go to top                                 │                       │
+│                       │   End                      Go to bottom                              │                       │
+│                       │   PageUp                   Page up                                   │                       │
+│                       │   PageDown                 Page down                                 │                       │
+│                       │                                                                      │                       │
+│                       │ Global                                                               │                       │
+│                       │   F5, Ctrl+Enter, Ctrl+R   Send request                              │                       │
+│                       │   Ctrl+C                   Cancel request                            │                       │
+│                       │   Ctrl+S                   Save request                              │                       │
+│                       │   Ctrl+T                   New tab                                   │                       │
+│                       │   Ctrl+W                   Close tab                                 │                       │
+│                       │   Ctrl+P                   Command palette                           │                       │
+│                       │   ?, F1                    Help                                      │                       │
+│                       │   Ctrl+B                   Toggle sidebar                            │                       │
+│                       │   Alt+Right                Widen sidebar                             │                       │
+│                       │   Alt+Left                 Narrow sidebar                            │                       │
+│                       │   Tab                      Focus next                                │                       │
+│                       │   Shift+Tab                Focus previous                            │                       │
+│                       │   Esc                      Close or dismiss                          │                       │
+│                       │   Alt+E                    Switch environment                        │                       │
+│                       │   Alt+R                    Reveal secrets                            │                       │
+│                       │   Ctrl+Q                   Quit                                      │                       │
+│                       │                                                                      │                       │
+│                       │ ↑↓ scroll · Esc close                                                │                       │
+│                       └──────────────────────────────────────────────────────────────────────┘                       │
+│                          ││                                            ││                                            │
+└──────────────────────────┘└────────────────────────────────────────────┘└────────────────────────────────────────────┘
+ demo │ env: local │ TLS verified │ 0 in flight                                                             Ctrl+Q quit

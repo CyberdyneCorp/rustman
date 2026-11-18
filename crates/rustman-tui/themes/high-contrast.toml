@@ -1,0 +1,13 @@
+# Maximum contrast on a black background.
+[colors]
+text = "#ffffff"
+muted = "#c0c0c0"
+accent = "#00d7ff"
+border = "#ffffff"
+focus = "#ffff00"
+selection = "#005fd7"
+ok = "#00ff00"
+info = "#00ffff"
+warn = "#ffff00"
+error = "#ff3030"
+background = "#000000"

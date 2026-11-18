@@ -1,0 +1,28 @@
+---
+source: crates/rustman-tui/src/shell_view.rs
+expression: text
+---
+┌ › Request ───────────────────────────────────────────────────────────────────┐
+│ METHOD   No request open                                                     │
+│ Params  Headers  Body  Auth  Assertions                                      │
+│ Open a request from the sidebar.                                             │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+┌ Response ────────────────────────────────────────────────────────────────────┐
+│ No response yet.                                                             │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+ demo │ env: local │ TLS verified │ 0 in flight                     Ctrl+Q quit

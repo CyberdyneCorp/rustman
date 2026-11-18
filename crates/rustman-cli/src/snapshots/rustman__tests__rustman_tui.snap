@@ -1,0 +1,32 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Open the terminal UI (the default when stdin and stdout are a terminal)
+
+Usage: rustman tui [OPTIONS] [PATH]
+
+Arguments:
+  [PATH]
+          Directory to open; the workspace is searched for from here upwards (default: the current directory)
+
+Options:
+      --theme <NAME>
+          Colour theme: dark (default), light or high-contrast; overrides `theme` in tui.toml
+
+      --ascii
+          Draw with ASCII characters only (borders, symbols)
+
+      --vim
+          Vim keys: hjkl navigation and modal editing; overrides `keymap` in tui.toml
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

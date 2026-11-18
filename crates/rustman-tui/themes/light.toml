@@ -1,0 +1,13 @@
+# For light terminal backgrounds.
+[colors]
+text = "#343b58"
+muted = "#6c6e75"
+accent = "#2e5cb8"
+border = "#9699a3"
+focus = "#166775"
+selection = "#c4c8da"
+ok = "#33635c"
+info = "#166775"
+warn = "#8f5e15"
+error = "#8c4351"
+background = "#e6e7ed"
