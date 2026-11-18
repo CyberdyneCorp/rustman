@@ -2,7 +2,7 @@
 //! and timing logic around each request.
 
 use std::error::Error as _;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -35,42 +35,57 @@ pub(crate) struct TransportKey {
 
 pub(crate) struct Transport {
     client: Client<Connector, Full<Bytes>>,
+    opening: Arc<AtomicUsize>,
 }
 
-/// Which phase one request is in: `connect` until the client hands it a
-/// connection (fresh or pooled), `response` after. Kept per request, since
-/// requests share the connector.
+/// Which phase one request is in: `connect` while a connection for it is
+/// being opened, `response` once it has one (fresh or pooled). Kept per
+/// request, since requests share the connector.
 #[derive(Default)]
 pub(crate) struct PhaseProbe {
     capture: Mutex<Option<CaptureConnection>>,
-    /// Set once a response head arrived. The captured connection alone is
-    /// not enough: on some platforms it is not yet visible when the body
-    /// stalls, which would misreport a body timeout as a connect timeout.
+    /// The connector's count of connections still opening.
+    opening: Mutex<Option<Arc<AtomicUsize>>>,
+    /// Set once a response head arrived.
     responded: AtomicBool,
 }
 
 impl PhaseProbe {
     /// Follow `request` (the latest hop) from now on.
-    fn watch(&self, request: &mut Request<Full<Bytes>>) {
+    fn watch(&self, request: &mut Request<Full<Bytes>>, opening: Arc<AtomicUsize>) {
         self.responded.store(false, Ordering::Release);
-        *self.capture.lock().unwrap_or_else(PoisonError::into_inner) =
-            Some(capture_connection(request));
+        *lock(&self.capture) = Some(capture_connection(request));
+        *lock(&self.opening) = Some(opening);
     }
 
     fn mark_responded(&self) {
         self.responded.store(true, Ordering::Release);
     }
 
+    /// `response` when the head arrived, when hyper reports the request's
+    /// connection, or when no connection is being opened (the captured
+    /// metadata is not always visible yet while the server is slow to
+    /// answer). With concurrent requests on one transport, another
+    /// request's connection attempt can still make this say `connect`.
     pub fn phase(&self) -> Phase {
-        if self.responded.load(Ordering::Acquire) {
+        if self.responded.load(Ordering::Acquire) || self.has_connection() {
             return Phase::Response;
         }
-        let captured = self.capture.lock().unwrap_or_else(PoisonError::into_inner);
-        match captured.as_ref() {
-            Some(capture) if capture.connection_metadata().is_some() => Phase::Response,
+        match lock(&self.opening).as_ref() {
+            Some(opening) if opening.load(Ordering::Acquire) == 0 => Phase::Response,
             _ => Phase::Connect,
         }
     }
+
+    fn has_connection(&self) -> bool {
+        lock(&self.capture)
+            .as_ref()
+            .is_some_and(|capture| capture.connection_metadata().is_some())
+    }
+}
+
+fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// A response read in full, with its timings.
@@ -95,12 +110,13 @@ impl Transport {
             timeout: key.connect_timeout,
         };
         let connector = Connector::new(dns, config);
+        let opening = connector.opening();
         let client = Client::builder(TokioExecutor::new())
             .pool_timer(TokioTimer::new())
             .timer(TokioTimer::new())
             .http2_only(key.http2_prior_knowledge)
             .build(connector);
-        Ok(Self { client })
+        Ok(Self { client, opening })
     }
 
     /// Send `request` and read the whole response; `id` names a spilled
@@ -113,7 +129,7 @@ impl Transport {
         id: &str,
         probe: &PhaseProbe,
     ) -> Result<Received, RequestError> {
-        probe.watch(&mut request);
+        probe.watch(&mut request, self.opening.clone());
         let started = Instant::now();
         let response = self.client.request(request).await.map_err(client_error)?;
         probe.mark_responded();
@@ -193,13 +209,20 @@ mod tests {
     fn a_timeout_after_the_response_head_is_in_the_response_phase() {
         let probe = PhaseProbe::default();
         assert_eq!(probe.phase(), Phase::Connect);
+        let opening = Arc::new(AtomicUsize::new(1));
+        let mut first_hop = Request::new(Full::new(Bytes::new()));
+        probe.watch(&mut first_hop, opening.clone());
+        assert_eq!(probe.phase(), Phase::Connect);
         // No captured connection metadata, as seen on Windows: the head
         // having arrived is enough.
         probe.mark_responded();
         assert_eq!(probe.phase(), Phase::Response);
         let mut next_hop = Request::new(Full::new(Bytes::new()));
-        probe.watch(&mut next_hop);
+        probe.watch(&mut next_hop, opening.clone());
         assert_eq!(probe.phase(), Phase::Connect);
+        // The connection is open, the head has not arrived: a slow server.
+        opening.store(0, Ordering::Release);
+        assert_eq!(probe.phase(), Phase::Response);
     }
 
     #[test]
