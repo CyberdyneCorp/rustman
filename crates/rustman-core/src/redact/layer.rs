@@ -49,6 +49,9 @@ impl Layer {
                     layer.names.push(name.clone());
                 }
             }
+            layer
+                .by_name
+                .extend(other.by_name.iter().map(|(n, p)| (n.clone(), p.clone())));
             for (needle, placeholder) in other.needles.iter().zip(&other.placeholders) {
                 if layer.forms.insert(needle.clone()) {
                     layer.needles.push(needle.clone());

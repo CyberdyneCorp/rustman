@@ -198,7 +198,7 @@ Rustman tracks which bytes of a request came from a secret, and also scans every
 - percent-encoding in upper- or lowercase hex: every byte but `A-Z a-z 0-9 - . _ ~` encoded, with a space as `%20` or as `+` (form encoding); the same leaving `/` as is (Python's `quote`); or leaving `!'()*` as is (JavaScript's `encodeURIComponent`);
 - HTML escapes of `&`, `<` and `>` as `&amp;`, `&lt;` and `&gt;`, with `"` and `'` as `&quot;` and `&#x27;` (Python), `&quot;` and `&#39;`, or `&#34;` and `&#39;` (Go); or every character but letters and digits as a decimal entity such as `&#47;`.
 
-A secret value longer than 8 KiB is matched as is only, not in these encoded forms: building a matcher over the encoded forms of very long values would take memory out of proportion.
+A secret value longer than 8 KiB is redacted in output only as is, not in these encoded forms: building a matcher over the encoded forms of very long values would take memory out of proportion. Captures are still checked for it through decoding (below), so a captured echo of it in any of these forms is still treated as a secret: never persisted, and redacted wherever a later request uses it.
 
 Not covered: Java's `URLEncoder` and PHP's `urlencode` (which keep `*` and encode `~`), XML escapes (`&apos;`), hexadecimal HTML entities other than `&#x27;`, and Go's `\u0008` and `\u000c` for backspace and form feed.
 
@@ -208,7 +208,7 @@ Two kinds of files are working state rather than artifacts, and hold what the se
 
 A secret the server transforms before echoing it (base64-encodes it, changes its case, hashes it, splits it) is not recognized, and is shown as the server sent it. Only the forms listed above are matched.
 
-A captured value that holds any piece of a known secret at least 4 characters long (a capture that straddles the secret, or a masked echo such as `****wP3K`) is treated as a secret for the rest of the run and never persisted (see [Captures](assertions.md#captures)). Pieces shorter than 4 characters are too common to tell apart from other text and are not recognized.
+A captured value that holds any piece of a known secret at least 4 characters long (a capture that straddles the secret, or a masked echo such as `****wP3K`) is treated as a secret for the rest of the run and never persisted (see [Captures](assertions.md#captures)). The piece counts as is, or once the captured value is percent-decoded (`+` as a space or as is), JSON-unescaped (`\uXXXX`, `\/`, `\"`, `\\`...) or HTML-unescaped (named and numeric entities), so `%2Fc%2Fd%2Fe%2F` reveals `a/b/c/d/e/f/g`; invalid sequences are left as they are. Pieces shorter than 4 characters are too common to tell apart from other text and are not recognized.
 
 Short secrets may also redact unrelated text: every occurrence of the value is replaced wherever it appears, so a 4-digit PIN `1234` also turns `"duration_ms":1234` in a report into `"duration_ms":«redacted:pin»`, and a secret shorter than 4 characters is matched in almost any text. `rustman secret set` warns when it stores a value shorter than 8 characters.
 
