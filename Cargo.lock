@@ -4009,6 +4009,7 @@ dependencies = [
  "rustman-core",
  "rustman-graphql",
  "rustman-http",
+ "rustman-import",
  "rustman-test-support",
  "rustman-viz-protocol",
  "rustman-webhook",

@@ -1,0 +1,34 @@
+---
+source: crates/rustman-tui/src/import_dialog_tests.rs
+expression: screen
+---
+┌ me ──────────────────────────────────────────────────────────────────────────────────────────────┐
+│ GET      {{base_url}}/me                                                                         │
+│ Params  Headers  Body  Auth  Assertions                                                          │
+│ No rows · press a to add                                                                         │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                ┌ Import preview ────────────────────────────────────────────────┐                │
+│                │ would import Shop (postman) into shop/                         │                │
+│                │ written: 1 requests, 1 collections, 1 environments; skipped:   │                │
+│                │ 0; dropped: 0; secrets moved: 1; unsupported: 0; unmapped: 0   │                │
+│ {{base_url}} = │ dry run: nothing was written                                   │                │
+└────────────────│   create shop/list-orders.rman.yaml                            │────────────────┘
+┌ Response ──────│   create shop/_collection.yaml                                 │────────────────┐
+│ No response yet│   update environments/dev.yaml                                 │                │
+│                │ secret: token_2 -> environment 'dev' (shop.json > List orders) │                │
+│                │                                                                │                │
+│                │ Enter import · ↑↓ scroll · Esc cancel                          │                │
+│                └────────────────────────────────────────────────────────────────┘                │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ demo │ env: dev │ TLS verified │ 0 in flight                                           Ctrl+Q quit

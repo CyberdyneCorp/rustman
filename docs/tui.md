@@ -127,6 +127,18 @@ Every `{{variable}}` in the URL, params, headers, auth and body is highlighted: 
 
 While the request is in flight the response viewer shows a spinner and the elapsed time (`⠋ Sending… 1.2 s`), and the status bar counts the requests in flight. Everything else keeps working: other tabs, the sidebar, editing, even sending from another tab. `Esc` or `Ctrl+C` cancels the current tab's request: the connection is closed at once and the viewer shows `Cancelled after 3.0 s`. Closing the tab or quitting cancels it too, and sending again from the same tab replaces the request in flight. `Ctrl+C` with nothing in flight never quits; it shows `Press Ctrl+Q to quit`.
 
+### Copy as code
+
+`Alt+C` (or **Copy as…** in the palette) opens a picker of the snippet languages of [`rustman export snippet`](snippets.md), the one you used last first. Type to filter (`py req` finds `python-requests`), `↑`/`↓` choose, `Enter` copies the current tab's request, as edited, with the active environment: the toast reads `Copied python-requests snippet`. Each language is also in the palette as **Copy as curl**, **Copy as go** and so on. A `graphql` request is copied as its HTTP POST; other kinds have no snippet and `Alt+C` only shows a toast such as `No snippet export for kind 'kafka'`.
+
+The snippet goes to the clipboard through the OSC 52 escape sequence, which works over SSH and inside tmux and needs no clipboard tool. Rustman uses it in Windows Terminal, iTerm2, WezTerm, kitty, Alacritty, foot, Ghostty, Contour, Rio and VS Code's terminal (`TERM`, `TERM_PROGRAM`, or `LC_TERMINAL`, which SSH forwards), and inside tmux when tmux's `set-clipboard` option is `on` (`set -g set-clipboard on`; tmux's default, `external`, drops the sequence); set `RUSTMAN_OSC52=1` to use it in another terminal, or `RUSTMAN_OSC52=0` to never use it. Without it, or when the sequence would be over 100 KB (base64 makes it about 4/3 of the snippet, so a snippet over about 75 KB), the snippet opens in a read-only pane with the hint `Select to copy`; `↑`/`↓` scroll, `Esc` closes.
+
+Snippets are redacted (`«redacted:token»`) like `export snippet`. While secrets are revealed (`Alt+R`) they hold the secret values instead: the picker shows the row `Secrets revealed: snippet will contain secret values`, and copying takes a second `Enter` (moving the selection or typing asks again). A palette **Copy as** entry opens the picker on its language in that case.
+
+### Importing collections
+
+**Import…** in the palette imports a Postman collection or environment, an Insomnia export, a Bruno collection, a HAR capture or `.http` files into the workspace, with the engine of [`rustman import`](import.md). Type the file or folder (relative to the workspace root, or absolute) and press `Enter`: the format is detected and a dry run shows its preview, the same summary as `rustman import --dry-run`: what would be written, skipped or updated, and which secrets move into the active environment (by name only). `Enter` imports that previewed source; `Esc` before it cancels without writing anything. Once the import runs it cannot be cancelled: the dialog shows `Importing…` until it is done, then the result is reported. The collection goes to the folder named after it, existing files are kept (`--on-conflict skip`), and the sidebar shows the new requests. For `--into`, other conflict policies, HAR filters or the JSON report, use the CLI.
+
 ## Environments and secrets
 
 `Alt+E` (or **Switch environment** in the palette) lists the workspace's environments with the active one marked. Below the list it shows the variables the selected environment provides: each name, its layer (`environment`, or `rustman.toml` for workspace variables it does not override) and its value. `Enter` makes the selected environment active for this session: the status bar shows it and the next send resolves its variables from it. The default stays the one in `rustman.toml` (`default_environment`); switching in the TUI does not change any file.
@@ -353,6 +365,8 @@ The table below is generated from the action registry; a test fails if it drifts
 | Refresh GraphQL schema | `graphql.refresh_schema` | `Ctrl+G` |  |
 | Start GraphQL subscription | `graphql.subscription_start` | `Alt+S` |  |
 | Stop GraphQL subscription | `graphql.subscription_stop` | `Alt+X` |  |
+| Copy as… | `request.copy_as` | `Alt+C` |  |
+| Import… | `import.open` |  |  |
 | Quit | `app.quit` | `Ctrl+Q` |  |
 
 In vim mode, text areas (the request body) are modal:

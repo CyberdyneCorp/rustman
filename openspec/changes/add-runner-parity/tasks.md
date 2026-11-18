@@ -3,7 +3,8 @@
 ## 1. Shared data rows
 
 - [x] 1.1 Add `rustman_core::data_rows` with the CSV reader (RFC 4180, header row, BOM stripped, strings) and the JSON reader (array of objects, scalars converted to strings, nested values as compact JSON). Verify: unit tests for BOM, quoted commas, ragged rows, empty file and object-instead-of-array, each checking the exact error message.
-- [ ] 1.2 Switch `load-testing`'s `--data` to `data_rows`. If load testing isn't built yet, add a note to its tasks instead. Verify: the bench data-feeding tests pass against the shared reader.
+- [x] 1.2 Switch `load-testing`'s `--data` to `data_rows`. If load testing isn't built yet, add a note to its tasks instead. Verify: the bench data-feeding tests pass against the shared reader.
+  - Note: load testing isn't built yet (no `bench` command), so the task's fallback applies: `add-load-testing` task 3.4 now says to read data files with `rustman_core::data_rows`, and its data-feeding tests carry this Verify clause.
 - [x] 1.3 Add the data-row layer to the variable resolver, directly below in-run captures in the `environments` chain. Verify: a precedence table test covering all eight layers.
 
 ## 2. Data-driven runs
@@ -30,17 +31,18 @@
 - [x] 4.1 Build the snippet engine: `minijinja` templates over `ResolvedRequest`, a quoting filter per language, `--list`, and the unknown-language error. Verify: insta snapshots of all 11 languages for a fixture request (JSON body, query, headers, multipart).
 - [x] 4.2 Apply redaction and `--show-secrets`, export `graphql` as HTTP POST, and refuse other kinds. Verify: tests for the redacted bearer token, GraphQL export, and `kafka` exiting 2.
 - [x] 4.3 Add signature-auth handling: native helpers (curl `--digest` and `--aws-sigv4`, httpie `--auth-type digest`, python-requests `HTTPDigestAuth`), otherwise a comment and a stderr warning. Verify: snapshot tests per auth type × language.
-- [ ] 4.4 Add a CI job that runs each snippet against a local echo server for every interpreter on the runner (curl, wget, httpie, python, node, go, pwsh, dotnet, cargo). Verify: the job asserts identical method, path, query, headers and body; missing interpreters are reported as skipped, never as passed.
-  - Note: the `snippets` job in `ci.yml` runs `crates/rustman-cli/tests/snippet_run.rs` and requires all 11 languages (axios is installed in a folder of its own, cargo fetches reqwest). It also sends a non-ASCII header and body, except from PowerShell and C#, whose .NET client refuses non-ASCII header values (`export snippet` warns). Locally curl, httpie, python-requests, python-httpx, js-fetch, node-axios, go and rust-reqwest pass; wget, pwsh and dotnet are not installed here. Tick once the job is green in CI.
+- [x] 4.4 Add a CI job that runs each snippet against a local echo server for every interpreter on the runner (curl, wget, httpie, python, node, go, pwsh, dotnet, cargo). Verify: the job asserts identical method, path, query, headers and body; missing interpreters are reported as skipped, never as passed.
+  - Note: the `snippets` job in `ci.yml` runs `crates/rustman-cli/tests/snippet_run.rs` and requires all 11 languages (axios is installed in a folder of its own, cargo fetches reqwest). It also sends a non-ASCII header and body, except from PowerShell and C#, whose .NET client refuses non-ASCII header values (`export snippet` warns). Locally curl, httpie, python-requests, python-httpx, js-fetch, node-axios, go and rust-reqwest pass; wget, pwsh and dotnet are not installed here. The job is green on main (run 44364626252, all 11 languages `passed:`); locally the same test passes with the missing interpreters reported as `skipped:`.
 
 - [ ] 4.5 Implement `--placeholders` (`{{name}}` in shell tools, constants in code) and the `fetch`/`python`/`rust` aliases. Verify: snapshot tests per language in placeholder mode; a test checks that `rustman docs` output and `export snippet --placeholders` match byte for byte.
   - Note: `--placeholders`, the aliases and the per-language placeholder snapshots are done; the `rustman docs` comparison waits for `add-docs-generator`, which has to call `rustman_http::snippet` in placeholder mode.
 
 ## 5. TUI
 
-- [ ] 5.1 Add the "Copy as…" picker on `Alt+C`, the per-language palette entries, MRU ordering, and the unsupported-kind toast. Verify: ratatui `TestBackend` snapshots and key-sequence tests.
-- [ ] 5.2 Add the OSC 52 clipboard writer, with capability detection and the read-only pane fallback (no support, or over 100 KB). Verify: unit test of the escape sequence bytes; fallback test with the capability turned off.
-- [ ] 5.3 Add the revealed-secrets warning row with double-`Enter` confirmation. Verify: a key-sequence test asserting nothing is written after one `Enter`.
+- [x] 5.1 Add the "Copy as…" picker on `Alt+C`, the per-language palette entries, MRU ordering, and the unsupported-kind toast. Verify: ratatui `TestBackend` snapshots and key-sequence tests.
+- [x] 5.2 Add the OSC 52 clipboard writer, with capability detection and the read-only pane fallback (no support, or over 100 KB). Verify: unit test of the escape sequence bytes; fallback test with the capability turned off.
+- [x] 5.3 Add the revealed-secrets warning row with double-`Enter` confirmation. Verify: a key-sequence test asserting nothing is written after one `Enter`.
+  - Note: `crates/rustman-tui/src/copy_as.rs` (picker, snippet off the loop, OSC 52 or the read-only pane), `copy_as_view.rs`, capability detection in `clipboard.rs` (`TMUX`, `WT_SESSION`, `TERM`, `TERM_PROGRAM`, `LC_TERMINAL`, override `RUSTMAN_OSC52`); tests in `copy_as_tests.rs` (snapshots `copy_as_picker`, `copy_as_revealed`) and `clipboard.rs`. Documented in `docs/tui.md#copy-as-code`.
 
 ## 6. Script migration
 

@@ -30,6 +30,8 @@ pub enum Target {
     /// A request file, by its path in the workspace.
     Request(String),
     Environment(String),
+    /// "Copy as <language>": the focused request as a snippet.
+    Snippet(rustman_http::Lang),
 }
 
 /// What the palette lists.
@@ -67,6 +69,11 @@ pub fn entries(scope: Scope, sources: Sources<'_>) -> Vec<Entry> {
             target: Target::Action(action),
             label: action.title().to_owned(),
             detail: sources.keymap.label(action),
+        }));
+        out.extend(rustman_http::Lang::ALL.map(|lang| Entry {
+            target: Target::Snippet(lang),
+            label: format!("Copy as {lang}"),
+            detail: "snippet".to_owned(),
         }));
         out.extend(sources.requests.iter().map(|path| Entry {
             target: Target::Request(path.clone()),

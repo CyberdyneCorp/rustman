@@ -9,6 +9,7 @@
 
 mod code;
 mod httpie;
+mod request;
 pub(crate) mod url;
 mod view;
 
@@ -30,6 +31,8 @@ use crate::shown::Shown;
 use code::Syntax;
 pub(crate) use code::shell_word;
 use view::{Context, View};
+
+pub use request::{RequestSnippet, RequestSnippetError, request_snippet};
 
 /// A snippet language.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

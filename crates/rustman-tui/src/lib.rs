@@ -9,6 +9,10 @@ pub mod app;
 pub mod clipboard;
 mod commands;
 pub mod config;
+pub mod copy_as;
+#[cfg(test)]
+mod copy_as_tests;
+mod copy_as_view;
 pub mod dialogs;
 pub mod effects;
 #[cfg(test)]
@@ -26,6 +30,9 @@ mod graphql_view;
 pub mod help;
 pub mod http_pane;
 mod http_view;
+pub mod import_dialog;
+#[cfg(test)]
+mod import_dialog_tests;
 mod input;
 pub mod keymap;
 pub mod kv;
@@ -201,6 +208,10 @@ pub fn initial_state(start: &Path, overrides: Overrides) -> (State, Vec<app::Eff
     let (mut state, effects) =
         initial_state_with(start, overrides, dir.as_deref(), ColorMode::from_env());
     state.viz = viz::Discovery::from_env();
+    state.osc52 = clipboard::osc52_supported(
+        |name| std::env::var(name).ok(),
+        clipboard::tmux_set_clipboard,
+    );
     (state, effects)
 }
 

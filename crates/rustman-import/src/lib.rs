@@ -25,6 +25,7 @@ pub mod render;
 pub mod report;
 pub mod scripts;
 pub mod secrets;
+pub mod session;
 pub mod slug;
 pub mod source;
 pub mod translate;

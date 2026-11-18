@@ -187,7 +187,7 @@ fn failed(job: &SendJob, message: String) -> Received {
 }
 
 /// The id and file a request is recorded under.
-fn names(path: Option<&Path>) -> (String, String) {
+pub(crate) fn names(path: Option<&Path>) -> (String, String) {
     let file = path.map_or_else(
         || format!("{UNTITLED}{REQUEST_FILE_SUFFIX}"),
         |p| p.to_string_lossy().replace('\\', "/"),
@@ -221,7 +221,7 @@ async fn send(job: &SendJob) -> Received {
 }
 
 /// Replace the request at `path` in the loaded tree with the edited one.
-fn replace(collection: &mut Collection, path: &Path, request: &Request) -> bool {
+pub(crate) fn replace(collection: &mut Collection, path: &Path, request: &Request) -> bool {
     collection.entries.iter_mut().any(|entry| match entry {
         Entry::Request(r) if r.path == path => {
             r.request = request.clone();

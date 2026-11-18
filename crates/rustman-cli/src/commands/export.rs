@@ -8,11 +8,11 @@ use std::path::{Path, PathBuf};
 
 use clap::{Args, Subcommand};
 use rustman_core::secrets::BACKEND_VAR;
-use rustman_core::vars::{Resolver, resolve_placeholders, resolve_request};
-use rustman_core::{ConfigError, RequestRef, SecretBackend, SecretStore};
+use rustman_core::vars::{Resolver, resolve_request};
+use rustman_core::{ConfigError, SecretBackend, SecretStore};
 use rustman_core::{Environment, Redactor, Workspace};
-use rustman_http::snippet::http_entry;
-use rustman_http::{Lang, SnippetOptions, export_curl, snippet};
+use rustman_http::snippet::{RequestSnippet, request_snippet};
+use rustman_http::{Lang, export_curl};
 use rustman_import::ImportError;
 use rustman_import::export::{Target, export};
 
@@ -185,28 +185,17 @@ fn export_snippet(args: &SnippetArgs) -> Result<(), CliError> {
     let lang = Lang::parse(lang)?;
     let ws = args.selection.workspace()?;
     let env = args.selection.environment(&ws)?;
-    let found = ws.find_request(request, &current_dir()?)?;
-    let converted = http_entry(&found)?;
-    let target = match &converted {
-        Some(entry) => RequestRef { entry, ..found },
-        None => found,
-    };
+    let target = ws.find_request(request, &current_dir()?)?;
     let store = secret_store(&ws)?;
-    let resolver = Resolver::for_request(&ws.settings, &target, env, &store);
-    let mut options = SnippetOptions {
+    let how = RequestSnippet {
+        settings: &ws.settings,
+        environment: env,
+        secrets: &store,
+        lang,
         show_secrets: args.show_secrets,
-        placeholders: None,
-        root: Some(&ws.root),
+        placeholders: args.placeholders,
     };
-    let (resolved, vars) = if args.placeholders {
-        let (resolved, vars) = resolve_placeholders(&target, &resolver)?;
-        (resolved, Some(vars))
-    } else {
-        (resolve_request(&target, &resolver)?, None)
-    };
-    print_warnings(&store.take_warnings());
-    options.placeholders = vars.as_deref();
-    let snippet = snippet(&resolved, lang, &options);
+    let snippet = request_snippet(target, &how)?;
     print_warnings(&snippet.warnings);
     println!("{}", snippet.code);
     Ok(())
