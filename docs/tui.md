@@ -217,3 +217,13 @@ cargo run -p rustman-tui --example screenshot -- [--ansi] [--size WxH] [--theme 
 ```
 
 It opens PATH as `rustman tui` would, runs the start-up work synchronously, and prints a 120x36 frame (or `--size`) as plain text, or with ANSI colours with `--ansi` (view it with `cat` or `less -R`). It ignores `tui.toml` and renders in 24-bit colour unless `--no-color` is given, so the output depends only on the flags and the workspace.
+
+## Screenshots
+
+The README images in `docs/images/` are real frames rendered off-screen by the `screenshot` example:
+
+```bash
+cargo run -p rustman-tui --example screenshot -- --ansi --size 120x30 [--keys "Ctrl+P s w e n v"] <workspace> > frame.ans
+```
+
+`--keys` presses space-separated chords before the frame is captured (for example `Ctrl+P` for the palette or `?` for help). Convert the ANSI output to SVG with any ANSI-to-SVG tool to refresh the images.

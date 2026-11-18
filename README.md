@@ -136,6 +136,16 @@ Open a workspace, then pick a request from the collection tree, edit it, and sen
 rustman            # open the TUI in the current workspace
 ```
 
+<p align="center">
+  <img src="docs/images/tui-shell.svg" alt="Rustman TUI: collection sidebar, request and response panes, status bar" width="49%">
+  <img src="docs/images/tui-palette.svg" alt="Rustman TUI command palette fuzzy-matching 'swenv' to Switch environment" width="49%">
+</p>
+<p align="center">
+  <img src="docs/images/tui-help.svg" alt="Rustman TUI help overlay generated from the effective keymap" width="49%">
+</p>
+
+<sub>The TUI shell as of v0.2 development (layout, themes, keymap, command palette, help). Request editing and the response viewer are in progress. The images are rendered by `cargo run -p rustman-tui --example screenshot -- --ansi [--keys "Ctrl+P s w e n v"] <workspace>`.</sub>
+
 | Key | Action |
 |---|---|
 | `Ctrl+Enter` / `Ctrl+R` | Send request |
@@ -590,8 +600,6 @@ All 26 changes are specified in OpenSpec; v0.1 (headless core) is in progress. R
 | **v0.7 - Operate & extend** | `add-secret-providers`, `add-scheduled-monitors`, `add-plugin-system`, `add-traffic-recorder`, `add-messaging-client` | Secret providers, monitors, plugins, traffic recorder, message brokers | planned |
 | **Side tracks** | `add-raven-visualizer`, `add-evm-toolkit` | Raven dashboards, Ethereum console (never block a release) | — |
 | **v1.0 - Stable** | — | Frozen request-file, report, viz and plugin formats; signed release artifacts | — |
-
-Screenshots will be added once the TUI lands in v0.2.
 
 The glossary, capability map and cross-cutting contracts are in [`openspec/ROADMAP.md`](openspec/ROADMAP.md).
 
