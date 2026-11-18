@@ -426,9 +426,8 @@ mod tests {
 
     #[tokio::test]
     async fn every_address_failing_reports_the_last_error() {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let closed = listener.local_addr().unwrap();
-        drop(listener);
+        // Port 0 is never connectable, so no concurrent test can take it.
+        let closed: SocketAddr = "127.0.0.1:0".parse().unwrap();
         let err = connect_any("localhost", closed.port(), &[closed])
             .await
             .unwrap_err();

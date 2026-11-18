@@ -6,7 +6,9 @@
 //! the origin (scheme, host or port), so they never follow a redirect to
 //! another server or onto cleartext: `Authorization`, `Proxy-Authorization`,
 //! an explicit `Cookie` (the jar adds its own cookies for each hop) and the
-//! `api_key` header or query parameter.
+//! `api_key` header or query parameter. Any other header, and a kept
+//! `307`/`308` body, that carries one of the request's secrets is dropped
+//! too, with a warning naming what was left behind.
 
 use bytes::Bytes;
 use http::header::{
@@ -14,7 +16,8 @@ use http::header::{
     TRANSFER_ENCODING,
 };
 use http::{HeaderMap, HeaderName, Method, Request, StatusCode, Uri};
-use http_body_util::Full;
+use http_body_util::{BodyExt, Full};
+use rustman_core::Redactor;
 use serde::Serialize;
 
 use crate::error::RequestError;
@@ -37,14 +40,23 @@ pub(crate) struct Credentials {
     pub query: Option<String>,
 }
 
-/// The request for the next hop when `status` and `headers` are a redirect
-/// to follow, else `None`.
-pub(crate) fn next_request(
+/// The request for a redirect hop, and the warning when leaving the origin
+/// dropped a header or body that carries a secret.
+pub(crate) struct Next {
+    pub request: Request<Full<Bytes>>,
+    pub warning: Option<String>,
+}
+
+/// The next hop when `status` and `headers` are a redirect to follow, else
+/// `None`. `secrets` finds the request's secrets in any other header or the
+/// body.
+pub(crate) async fn next_request(
     current: &Request<Full<Bytes>>,
     status: StatusCode,
     headers: &HeaderMap,
     credentials: &Credentials,
-) -> Result<Option<Request<Full<Bytes>>>, RequestError> {
+    secrets: &Redactor,
+) -> Result<Option<Next>, RequestError> {
     if !is_redirect(status) {
         return Ok(None);
     }
@@ -56,15 +68,76 @@ pub(crate) fn next_request(
     *next.uri_mut() = uri;
     if rewrites_to_get(status, current.method()) {
         *next.method_mut() = Method::GET;
-        *next.body_mut() = Full::new(Bytes::new());
-        for name in [CONTENT_TYPE, CONTENT_LENGTH, TRANSFER_ENCODING] {
-            next.headers_mut().remove(name);
-        }
+        drop_body(&mut next);
     }
+    let mut warning = None;
     if !same_origin(current.uri(), next.uri()) {
         strip_credentials(&mut next, credentials)?;
+        let dropped = strip_secrets(&mut next, secrets).await;
+        warning = dropped_warning(next.uri(), &dropped);
     }
-    Ok(Some(next))
+    Ok(Some(Next {
+        request: next,
+        warning,
+    }))
+}
+
+fn drop_body(request: &mut Request<Full<Bytes>>) {
+    *request.body_mut() = Full::new(Bytes::new());
+    for name in [CONTENT_TYPE, CONTENT_LENGTH, TRANSFER_ENCODING] {
+        request.headers_mut().remove(name);
+    }
+}
+
+/// Drop every header and the body that carry one of `secrets`, returning
+/// what was dropped (`header <name>`, `the body`).
+async fn strip_secrets(request: &mut Request<Full<Bytes>>, secrets: &Redactor) -> Vec<String> {
+    if secrets.is_empty() {
+        return Vec::new();
+    }
+    let carries = |value: &[u8]| matches!(secrets.bytes(value), std::borrow::Cow::Owned(_));
+    let mut names: Vec<HeaderName> = Vec::new();
+    for (name, value) in request.headers() {
+        if carries(value.as_bytes()) && !names.contains(name) {
+            names.push(name.clone());
+        }
+    }
+    let mut dropped = Vec::new();
+    for name in names {
+        request.headers_mut().remove(&name);
+        dropped.push(format!("header {name}"));
+    }
+    let body = match request.body().clone().collect().await {
+        Ok(collected) => collected.to_bytes(),
+        Err(never) => match never {},
+    };
+    if carries(&body) {
+        drop_body(request);
+        dropped.push("the body".to_owned());
+    }
+    dropped
+}
+
+fn dropped_warning(uri: &Uri, dropped: &[String]) -> Option<String> {
+    if dropped.is_empty() {
+        return None;
+    }
+    let origin = match uri.port_u16() {
+        Some(port) => format!(
+            "{}://{}:{port}",
+            scheme(uri),
+            uri.host().unwrap_or_default()
+        ),
+        None => format!("{}://{}", scheme(uri), uri.host().unwrap_or_default()),
+    };
+    Some(format!(
+        "cross-origin redirect to {origin}: dropped {}, which carry a secret",
+        dropped.join(", ")
+    ))
+}
+
+fn scheme(uri: &Uri) -> &str {
+    uri.scheme_str().unwrap_or("http")
 }
 
 fn strip_credentials(
@@ -125,7 +198,13 @@ fn resolve(base: &Uri, location: &[u8]) -> Result<Uri, RequestError> {
 }
 
 fn same_origin(a: &Uri, b: &Uri) -> bool {
-    a.scheme() == b.scheme() && a.host() == b.host() && port(a) == port(b)
+    a.scheme() == b.scheme() && host(a) == host(b) && port(a) == port(b)
+}
+
+/// The host of `uri`, lowercased and without a trailing dot.
+fn host(uri: &Uri) -> Option<String> {
+    uri.host()
+        .map(|h| h.strip_suffix('.').unwrap_or(h).to_ascii_lowercase())
 }
 
 fn port(uri: &Uri) -> Option<u16> {
@@ -166,10 +245,27 @@ mod tests {
         to: &str,
         credentials: &Credentials,
     ) -> Request<Full<Bytes>> {
+        next(req, code, to, credentials, &Redactor::new()).request
+    }
+
+    fn next(
+        req: &Request<Full<Bytes>>,
+        code: u16,
+        to: &str,
+        credentials: &Credentials,
+        secrets: &Redactor,
+    ) -> Next {
         let status = StatusCode::from_u16(code).unwrap();
-        next_request(req, status, &location(to), credentials)
+        let to = location(to);
+        let next = next_request(req, status, &to, credentials, secrets);
+        block_on(next).unwrap().unwrap()
+    }
+
+    fn block_on<F: Future>(future: F) -> F::Output {
+        tokio::runtime::Builder::new_current_thread()
+            .build()
             .unwrap()
-            .unwrap()
+            .block_on(future)
     }
 
     #[test]
@@ -220,6 +316,17 @@ mod tests {
     }
 
     #[test]
+    fn host_case_and_a_trailing_dot_keep_the_origin() {
+        let req = request("GET", "https://API.Example.com/x");
+        for to in ["https://api.example.com/y", "https://api.example.com./y"] {
+            assert!(
+                follow(&req, 302, to).headers().contains_key(AUTHORIZATION),
+                "{to}"
+            );
+        }
+    }
+
+    #[test]
     fn every_credential_is_dropped_when_the_origin_changes() {
         let mut req = request("GET", "https://api.example.com/x");
         for (name, value) in [
@@ -254,23 +361,108 @@ mod tests {
     #[test]
     fn other_statuses_or_a_missing_location_are_final() {
         let req = request("GET", "http://h/a");
-        let none = Credentials::default();
-        let next = next_request(&req, StatusCode::NOT_MODIFIED, &location("/b"), &none).unwrap();
-        assert!(next.is_none());
-        let next = next_request(&req, StatusCode::FOUND, &HeaderMap::new(), &none).unwrap();
-        assert!(next.is_none());
+        let (none, secrets) = (Credentials::default(), Redactor::new());
+        let (to_b, empty) = (location("/b"), HeaderMap::new());
+        let next = next_request(&req, StatusCode::NOT_MODIFIED, &to_b, &none, &secrets);
+        assert!(block_on(next).unwrap().is_none());
+        let next = next_request(&req, StatusCode::FOUND, &empty, &none, &secrets);
+        assert!(block_on(next).unwrap().is_none());
     }
 
     #[test]
     fn an_unparsable_location_is_an_error() {
         let req = request("GET", "http://h/a");
-        let none = Credentials::default();
-        let err =
-            next_request(&req, StatusCode::FOUND, &location("http://[bad"), &none).unwrap_err();
+        let (none, secrets) = (Credentials::default(), Redactor::new());
+        let bad = location("http://[bad");
+        let next = next_request(&req, StatusCode::FOUND, &bad, &none, &secrets);
+        let err = block_on(next).err().unwrap();
         assert!(
             err.to_string()
                 .starts_with("invalid redirect location 'http://[bad'"),
             "{err}"
         );
+    }
+
+    fn secret_request(method: &str) -> Request<Full<Bytes>> {
+        Request::builder()
+            .method(method)
+            .uri("https://api.example.com/token")
+            .header("x-api-key", "k-s3cr3t-value")
+            .header("x-trace", "plain")
+            .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .body(Full::new(Bytes::from_static(
+                b"grant_type=client_credentials&client_secret=k-s3cr3t-value",
+            )))
+            .unwrap()
+    }
+
+    fn secrets() -> Redactor {
+        Redactor::new().with(&rustman_core::Secret::new(
+            "tok",
+            "k-s3cr3t-value".to_owned(),
+        ))
+    }
+
+    async fn body_of(request: &Request<Full<Bytes>>) -> Bytes {
+        let collected = request.body().clone().collect().await;
+        collected.map(|c| c.to_bytes()).unwrap_or_default()
+    }
+
+    #[test]
+    fn secret_headers_and_bodies_are_dropped_when_the_origin_changes() {
+        let req = secret_request("POST");
+        let none = Credentials::default();
+        for code in [307, 308] {
+            let other = next(&req, code, "https://evil.example/t", &none, &secrets());
+            assert!(!other.request.headers().contains_key("x-api-key"), "{code}");
+            assert_eq!(other.request.headers()["x-trace"], "plain");
+            assert!(!other.request.headers().contains_key(CONTENT_TYPE));
+            assert_eq!(other.request.method(), Method::POST);
+            assert!(block_on(body_of(&other.request)).is_empty(), "{code}");
+            assert_eq!(
+                other.warning.as_deref(),
+                Some(
+                    "cross-origin redirect to https://evil.example: dropped header x-api-key, \
+                     the body, which carry a secret"
+                )
+            );
+        }
+    }
+
+    #[test]
+    fn secrets_stay_on_a_same_origin_redirect() {
+        let req = secret_request("POST");
+        let same = next(&req, 307, "/t2", &Credentials::default(), &secrets());
+        assert_eq!(same.request.headers()["x-api-key"], "k-s3cr3t-value");
+        assert_eq!(body_of_sync(&same.request), body_of_sync(&req));
+        assert!(same.warning.is_none());
+    }
+
+    fn body_of_sync(request: &Request<Full<Bytes>>) -> Bytes {
+        block_on(body_of(request))
+    }
+
+    #[test]
+    fn requests_without_secrets_cross_origins_unchanged() {
+        let req = secret_request("POST");
+        let other = next(
+            &req,
+            308,
+            "http://other:8080/t",
+            &Credentials::default(),
+            &Redactor::new(),
+        );
+        assert_eq!(other.request.headers()["x-api-key"], "k-s3cr3t-value");
+        assert_eq!(body_of_sync(&other.request), body_of_sync(&req));
+        assert!(other.warning.is_none());
+        let plain = Redactor::new().with(&rustman_core::Secret::new("o", "elsewhere".to_owned()));
+        let other = next(
+            &req,
+            308,
+            "http://other:8080/t",
+            &Credentials::default(),
+            &plain,
+        );
+        assert!(other.warning.is_none());
     }
 }

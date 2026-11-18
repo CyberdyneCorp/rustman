@@ -62,16 +62,36 @@ async fn produced_messages() -> Vec<String> {
         .unwrap_err()
         .to_string();
 
+    let mut capped = SendOptions::default();
+    capped.body.max_download = 1024;
+    let endless = engine
+        .send(&get(&server.url("/endless")), &capped)
+        .await
+        .unwrap_err()
+        .to_string();
+
     let mut messages = vec![
         error(slow).await,
         error(get(&server.url("/loop"))).await,
         error(get(&self_signed.url("/echo"))).await,
         bomb,
+        endless,
         interactive_login_required("<request>").to_string(),
     ];
     messages.extend(warnings);
+    messages.extend(cross_origin_warning(&engine, &server).await);
     messages.extend(import_curl("curl --limit-rate 1k x.io").unwrap().warnings);
     messages
+}
+
+/// The warning of a `307` to another origin that drops a secret header.
+async fn cross_origin_warning(engine: &HttpEngine, server: &TestServer) -> Vec<String> {
+    let to = format!("http://127.0.0.1:{}/echo", server.port());
+    let mut request = get(&server.url(&format!("/redirect/307?to={to}")));
+    request.headers = vec![pair("X-Api-Key", "k-secret-1")];
+    request.secrets = vec![rustman_core::Secret::new("key", "k-secret-1".to_owned())];
+    let exchange = engine.send(&request, &SendOptions::default()).await;
+    exchange.unwrap().warnings
 }
 
 #[tokio::test]

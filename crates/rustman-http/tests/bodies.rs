@@ -257,6 +257,44 @@ fn spilled_files(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
     }
 }
 
+async fn send_err(url: &str, options: &SendOptions) -> String {
+    let err = HttpEngine::new().send(&get(url), options).await;
+    err.unwrap_err().to_string()
+}
+
+#[tokio::test]
+async fn an_endless_body_stops_at_the_download_limit() {
+    let server = TestServer::http().await;
+    let dir = tempfile::tempdir().unwrap();
+    let mut options = spilling_to(dir.path(), 64 * 1024);
+    options.body.max_download = 2 * 1024 * 1024;
+    assert_eq!(
+        send_err(&server.url("/endless"), &options).await,
+        "network: the response body is larger than 2097152 bytes"
+    );
+    assert_eq!(spilled_files(dir.path()), Vec::<std::path::PathBuf>::new());
+}
+
+#[tokio::test]
+async fn the_download_limit_applies_to_bodies_left_encoded() {
+    let server = TestServer::http().await;
+    let dir = tempfile::tempdir().unwrap();
+    let mut options = spilling_to(dir.path(), 1024);
+    options.body.max_download = 300_000;
+    let exact = send(&get(&server.url("/bytes/300000")), &options).await;
+    assert_eq!(exact.size_bytes, 300_000);
+    assert_eq!(
+        send_err(&server.url("/bytes/300001"), &options).await,
+        "network: the response body is larger than 300000 bytes"
+    );
+    options.body.decompress = false;
+    options.body.max_download = 10;
+    assert_eq!(
+        send_err(&server.url("/compressed/gzip"), &options).await,
+        "network: the response body is larger than 10 bytes"
+    );
+}
+
 #[tokio::test]
 async fn a_decompression_bomb_stops_at_the_decoded_limit() {
     let server = TestServer::http().await;

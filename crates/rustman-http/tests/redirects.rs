@@ -215,3 +215,61 @@ async fn the_total_timeout_covers_every_hop() {
         .unwrap_err();
     assert_eq!(err.to_string(), "timeout after 1000 ms (response)");
 }
+
+/// A `POST` of a form with a secret in `X-Api-Key` and in the body.
+fn secret_post(url: &str) -> rustman_core::vars::ResolvedRequest {
+    let mut request = get(url);
+    request.method = "POST".into();
+    request.headers = vec![pair("X-Api-Key", "k-CANARY-41"), pair("X-Keep", "1")];
+    request.body = ResolvedBody::Form(vec![
+        pair("grant_type", "client_credentials"),
+        pair("client_secret", "k-CANARY-41"),
+    ]);
+    request.secrets = vec![rustman_core::Secret::new("tok", "k-CANARY-41".to_owned())];
+    request
+}
+
+#[tokio::test]
+async fn secret_headers_and_bodies_stay_behind_on_a_cross_origin_redirect() {
+    let server = TestServer::http().await;
+    let other_host = format!("http://127.0.0.1:{}/echo", server.port());
+    for code in [307, 308] {
+        let request = secret_post(&server.url(&format!("/redirect/{code}?to={other_host}")));
+        let exchange = HttpEngine::new()
+            .send(&request, &SendOptions::default())
+            .await
+            .unwrap();
+        let echo = echo(&exchange.body);
+        assert_eq!(echo["method"], "POST", "{code}");
+        assert_eq!(echo["body"], "", "{code}");
+        assert!(echoed_header(&echo, "x-api-key").is_empty(), "{code}");
+        assert_eq!(echoed_header(&echo, "x-keep"), ["1"], "{code}");
+        let origin = format!("http://127.0.0.1:{}", server.port());
+        assert_eq!(
+            exchange.warnings,
+            [format!(
+                "cross-origin redirect to {origin}: dropped header x-api-key, the body, \
+                 which carry a secret"
+            )]
+        );
+        let shown = format!("{:?}", exchange.warnings);
+        assert!(!shown.contains("CANARY"), "{shown}");
+    }
+}
+
+#[tokio::test]
+async fn secret_headers_and_bodies_follow_a_same_origin_redirect() {
+    let server = TestServer::http().await;
+    let request = secret_post(&server.url("/redirect/307?to=/echo"));
+    let exchange = HttpEngine::new()
+        .send(&request, &SendOptions::default())
+        .await
+        .unwrap();
+    let echo = echo(&exchange.body);
+    assert_eq!(echoed_header(&echo, "x-api-key"), ["k-CANARY-41"]);
+    assert_eq!(
+        echo["body"],
+        "grant_type=client_credentials&client_secret=k-CANARY-41"
+    );
+    assert!(exchange.warnings.is_empty(), "{:?}", exchange.warnings);
+}

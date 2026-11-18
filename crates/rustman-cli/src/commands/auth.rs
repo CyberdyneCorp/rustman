@@ -6,7 +6,9 @@ use clap::{Args, Subcommand};
 use rustman_core::secrets::BACKEND_VAR;
 use rustman_core::vars::{Resolver, resolve_request};
 use rustman_core::{ConfigError, SecretBackend, SecretStore};
-use rustman_http::{HttpEngine, Login, OAuth2Context, SendOptions, oauth2_cache_key};
+use rustman_http::{
+    HttpEngine, Login, OAuth2Context, SendOptions, oauth2_cache_key, oauth2_login_warnings,
+};
 
 use super::exec::{runtime, show_login_url};
 use super::{EnvSelection, current_dir, env_label, print_warnings};
@@ -55,8 +57,14 @@ fn login(args: &LoginArgs) -> Result<(), CliError> {
         login: Login::Interactive(&show_login_url),
     };
     let result = runtime()?.block_on(HttpEngine::new().oauth2_login(&request, &options, &context));
-    print_warnings(&store.take_warnings());
-    result?;
+    let stored = match result {
+        Ok(stored) => stored,
+        Err(err) => {
+            print_warnings(&store.take_warnings());
+            return Err(err.into());
+        }
+    };
+    print_warnings(&oauth2_login_warnings(store.take_warnings(), stored));
     println!(
         "logged in: token for '{}' stored for {}",
         target.entry.id(),

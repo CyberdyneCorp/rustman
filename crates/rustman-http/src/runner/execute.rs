@@ -152,7 +152,7 @@ impl Runner<'_> {
     fn send_options(&self, resolved: &ResolvedRequest) -> Result<SendOptions, RequestError> {
         let mut options = SendOptions::for_request(self.ctx.settings, self.ctx.root, resolved)?;
         if !self.ctx.in_workspace {
-            options.body.spill_dir = std::env::temp_dir().join("rustman-bodies");
+            options.body.spill_dir = crate::body::default_spill_dir();
             options.body.workspace = None;
         }
         if let Some(timeout) = self.options.timeout {

@@ -4,11 +4,15 @@
 //! Connections are served concurrently, each with its own short read
 //! timeout, and a callback with the wrong `state` is answered `400` and
 //! ignored, so another local process can neither hold the listener nor end
-//! the login.
+//! the login. At most [`MAX_CONNECTIONS`] are served at once (others wait in
+//! the listen queue), and a failing `accept` (out of file descriptors, for
+//! instance) is retried with a growing delay instead of in a busy loop.
 
+use std::future::Future;
+use std::io;
 use std::time::Duration;
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinSet;
 
@@ -22,6 +26,14 @@ const MAX_HEAD: usize = 16 * 1024;
 
 /// How long one connection may take to send its request head.
 const HEAD_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// The most connections served at once.
+const MAX_CONNECTIONS: usize = 16;
+
+/// The delay before retrying a failed `accept`, doubled on each failure in a
+/// row up to [`MAX_BACKOFF`].
+const FIRST_BACKOFF: Duration = Duration::from_millis(10);
+const MAX_BACKOFF: Duration = Duration::from_secs(1);
 
 const DONE_PAGE: &str = "<!doctype html><title>rustman</title>\
     <p>Login complete. You can close this window and return to the terminal.</p>";
@@ -70,7 +82,8 @@ impl Loopback {
         state: &str,
         timeout: Duration,
     ) -> Result<String, RequestError> {
-        tokio::time::timeout(timeout, self.accept_code(state))
+        let accepting = accept_code(&self.listener, state, MAX_CONNECTIONS);
+        tokio::time::timeout(timeout, accepting)
             .await
             .unwrap_or_else(|_| {
                 Err(RequestError::Auth(format!(
@@ -79,28 +92,73 @@ impl Loopback {
                 )))
             })
     }
+}
 
-    async fn accept_code(&self, state: &str) -> Result<String, RequestError> {
-        let mut connections = JoinSet::new();
-        loop {
-            tokio::select! {
-                accepted = self.listener.accept() => {
-                    if let Ok((stream, _)) = accepted {
+/// A source of connections: the TCP listener, or a fake one in tests.
+trait Accept {
+    type Stream: AsyncRead + AsyncWrite + Unpin + Send + 'static;
+
+    fn next_connection(&self) -> impl Future<Output = io::Result<Self::Stream>> + Send;
+}
+
+impl Accept for TcpListener {
+    type Stream = TcpStream;
+
+    async fn next_connection(&self) -> io::Result<TcpStream> {
+        TcpListener::accept(self).await.map(|(stream, _)| stream)
+    }
+}
+
+/// Serve connections from `acceptor`, at most `max_connections` at once,
+/// until one delivers the outcome for `state`.
+async fn accept_code<A: Accept + Sync>(
+    acceptor: &A,
+    state: &str,
+    max_connections: usize,
+) -> Result<String, RequestError> {
+    let mut connections = JoinSet::new();
+    let mut backoff = Backoff::default();
+    loop {
+        tokio::select! {
+            accepted = acceptor.next_connection(), if connections.len() < max_connections => {
+                match accepted {
+                    Ok(stream) => {
+                        backoff = Backoff::default();
                         connections.spawn(serve(stream, state.to_owned()));
                     }
+                    Err(_) => backoff.wait().await,
                 }
-                Some(served) = connections.join_next() => {
-                    if let Ok(Some(outcome)) = served {
-                        return outcome;
-                    }
+            }
+            Some(served) = connections.join_next() => {
+                if let Ok(Some(outcome)) = served {
+                    return outcome;
                 }
             }
         }
     }
 }
 
+/// The growing delay between failed `accept` calls.
+struct Backoff(Duration);
+
+impl Default for Backoff {
+    fn default() -> Self {
+        Self(FIRST_BACKOFF)
+    }
+}
+
+impl Backoff {
+    async fn wait(&mut self) {
+        tokio::time::sleep(self.0).await;
+        self.0 = (self.0 * 2).min(MAX_BACKOFF);
+    }
+}
+
 /// Answer one connection; `Some` when it ends the login.
-async fn serve(mut stream: TcpStream, state: String) -> Option<Result<String, RequestError>> {
+async fn serve<S: AsyncRead + AsyncWrite + Unpin>(
+    mut stream: S,
+    state: String,
+) -> Option<Result<String, RequestError>> {
     let head = tokio::time::timeout(HEAD_TIMEOUT, read_head(&mut stream))
         .await
         .ok()?
@@ -119,7 +177,7 @@ async fn serve(mut stream: TcpStream, state: String) -> Option<Result<String, Re
     }
 }
 
-async fn read_head(stream: &mut TcpStream) -> std::io::Result<String> {
+async fn read_head(stream: &mut (impl AsyncRead + Unpin)) -> io::Result<String> {
     let mut head = Vec::new();
     let mut buf = [0u8; 2048];
     while !head.windows(4).any(|w| w == b"\r\n\r\n") && head.len() < MAX_HEAD {
@@ -132,7 +190,7 @@ async fn read_head(stream: &mut TcpStream) -> std::io::Result<String> {
     Ok(String::from_utf8_lossy(&head).into_owned())
 }
 
-async fn respond(stream: &mut TcpStream, status: &str, page: &str) {
+async fn respond(stream: &mut (impl AsyncWrite + Unpin), status: &str, page: &str) {
     let response = format!(
         "HTTP/1.1 {status}\r\ncontent-type: text/html; charset=utf-8\r\n\
          content-length: {}\r\nconnection: close\r\n\r\n{page}",
@@ -259,6 +317,63 @@ mod tests {
         let (forged, done) = browser.await.unwrap();
         assert!(forged.starts_with("HTTP/1.1 400"), "{forged}");
         assert!(done.starts_with("HTTP/1.1 200"), "{done}");
+    }
+
+    /// A fake listener: hands out in-memory connections that never send
+    /// anything, or fails every `accept`, and counts the calls.
+    struct FakeListener {
+        fail: bool,
+        calls: std::sync::atomic::AtomicUsize,
+        peers: std::sync::Mutex<Vec<tokio::io::DuplexStream>>,
+    }
+
+    impl FakeListener {
+        fn new(fail: bool) -> Self {
+            Self {
+                fail,
+                calls: 0.into(),
+                peers: Vec::new().into(),
+            }
+        }
+
+        fn calls(&self) -> usize {
+            self.calls.load(std::sync::atomic::Ordering::SeqCst)
+        }
+    }
+
+    impl Accept for FakeListener {
+        type Stream = tokio::io::DuplexStream;
+
+        async fn next_connection(&self) -> io::Result<Self::Stream> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if self.fail {
+                return Err(io::Error::other("too many open files"));
+            }
+            let (ours, theirs) = tokio::io::duplex(1024);
+            self.peers.lock().unwrap().push(theirs);
+            Ok(ours)
+        }
+    }
+
+    #[tokio::test]
+    async fn failing_accepts_back_off_instead_of_spinning() {
+        let listener = FakeListener::new(true);
+        let accepting = accept_code(&listener, "st", MAX_CONNECTIONS);
+        let waited = tokio::time::timeout(Duration::from_millis(500), accepting).await;
+        assert!(waited.is_err(), "the login cannot end without a callback");
+        // 10, 20, 40, 80, 160 ms of delay fit in 500 ms: about 6 calls, where
+        // an immediate retry would make millions.
+        let calls = listener.calls();
+        assert!((2..=10).contains(&calls), "{calls} accept calls");
+    }
+
+    #[tokio::test]
+    async fn concurrent_connections_are_capped() {
+        let listener = FakeListener::new(false);
+        let accepting = accept_code(&listener, "st", 3);
+        let waited = tokio::time::timeout(Duration::from_millis(300), accepting).await;
+        assert!(waited.is_err(), "the login cannot end without a callback");
+        assert_eq!(listener.calls(), 3, "silent connections hold every slot");
     }
 
     #[tokio::test]

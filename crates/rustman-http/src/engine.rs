@@ -106,6 +106,7 @@ impl SendOptions {
     ) -> Result<Self, RequestError> {
         let mut options = Self::new(&settings.defaults, &request.settings);
         options.body.max_in_memory = settings.http.max_body_bytes;
+        options.body.max_download = settings.http.max_download_bytes;
         options.body.spill_dir = root.join(BODIES_DIR);
         options.body.workspace = Some(root.to_path_buf());
         let password = request.settings.client_pkcs12_password.as_deref();
@@ -205,6 +206,7 @@ impl HttpEngine {
             transport: &transport,
             options,
             credentials: auth::credentials(request.auth.as_ref()),
+            secrets: Redactor::for_request(request),
             probe: &probe,
             gate,
         };
@@ -283,6 +285,9 @@ struct Hops<'a, G> {
     options: &'a SendOptions,
     /// Dropped when a redirect leaves the origin.
     credentials: redirect::Credentials,
+    /// Finds the request's secrets in the headers and body of a redirect
+    /// that leaves the origin.
+    secrets: Redactor,
     probe: &'a PhaseProbe,
     gate: &'a G,
 }
@@ -293,6 +298,7 @@ impl<G: Gate> Hops<'_, G> {
     async fn follow(&self, mut request: Request<Full<Bytes>>) -> Result<Exchange, G::Error> {
         let options = self.options;
         let mut redirects = Vec::new();
+        let mut warnings = Vec::new();
         let mut credentials = Redactor::new();
         loop {
             let id = uuid::Uuid::new_v4().to_string();
@@ -300,7 +306,9 @@ impl<G: Gate> Hops<'_, G> {
             let head = &received.head;
             self.gate.after_hop(head.status, &head.headers);
             let next = if options.follow_redirects {
-                redirect::next_request(&request, head.status, &head.headers, &self.credentials)?
+                let (status, headers) = (head.status, &head.headers);
+                redirect::next_request(&request, status, headers, &self.credentials, &self.secrets)
+                    .await?
             } else {
                 None
             };
@@ -308,6 +316,8 @@ impl<G: Gate> Hops<'_, G> {
                 let url = request.uri().to_string();
                 let mut exchange = exchange(id, url, redirects, received, !options.tls.verify);
                 exchange.credentials = credentials;
+                warnings.append(&mut exchange.warnings);
+                exchange.warnings = warnings;
                 return Ok(exchange);
             };
             discard_spill(&received);
@@ -318,8 +328,9 @@ impl<G: Gate> Hops<'_, G> {
                 status: received.head.status.as_u16(),
                 url: request.uri().to_string(),
             });
-            self.gate.before_redirect(&next).await?;
-            request = next;
+            self.gate.before_redirect(&next.request).await?;
+            warnings.extend(next.warning);
+            request = next.request;
         }
     }
 
@@ -518,7 +529,7 @@ mod tests {
     #[test]
     fn body_options_come_from_the_workspace_and_request() {
         let dir = tempfile::tempdir().unwrap();
-        let settings = workspace("[http]\nmax_body_bytes = 1024\n");
+        let settings = workspace("[http]\nmax_body_bytes = 1024\nmax_download_bytes = 2048\n");
         let off = RequestSettings {
             decompress: Some(false),
             ..RequestSettings::default()
@@ -531,10 +542,12 @@ mod tests {
         )
         .unwrap();
         assert_eq!(options.body.max_in_memory, 1024);
+        assert_eq!(options.body.max_download, 2048);
         assert_eq!(options.body.spill_dir, dir.path().join(".rustman/bodies"));
         assert!(!options.body.decompress);
         let defaults = SendOptions::default().body;
         assert_eq!(defaults.max_in_memory, 10 * 1024 * 1024);
+        assert_eq!(defaults.max_download, 1024 * 1024 * 1024);
         assert!(defaults.decompress);
     }
 

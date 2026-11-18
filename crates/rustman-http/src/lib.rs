@@ -23,7 +23,10 @@ mod transport;
 mod tunnel;
 mod wire;
 
-pub use body::{BODIES_DIR, BodyOptions, DEFAULT_MAX_BODY_BYTES, PREVIEW_BYTES};
+pub use body::{
+    BODIES_DIR, BodyOptions, DEFAULT_MAX_BODY_BYTES, DEFAULT_MAX_DOWNLOAD_BYTES, PREVIEW_BYTES,
+    default_spill_dir,
+};
 pub use client_auth::ClientAuth;
 pub use cookies::{COOKIES_DIR, CookieJar, NO_ENVIRONMENT};
 pub use curl::{
@@ -35,7 +38,8 @@ pub use error::{Phase, RequestError};
 pub use exchange::{Exchange, HttpVersion};
 pub use governed::{GovernedError, GovernedSender};
 pub use oauth2::{
-    LOGIN_TIMEOUT, Login, OAuth2Context, cache_key as oauth2_cache_key, interactive_login_required,
+    LOGIN_TIMEOUT, Login, OAuth2Context, TOKEN_FILE_WARNING, cache_key as oauth2_cache_key,
+    interactive_login_required, login_warnings as oauth2_login_warnings,
 };
 pub use proxy::{NoProxy, ProxyKind, ProxySettings, ProxyUrl};
 pub use redirect::RedirectHop;

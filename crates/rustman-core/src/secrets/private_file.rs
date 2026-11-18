@@ -158,6 +158,69 @@ pub fn create_private_dir(dir: &Path) -> io::Result<()> {
     fs::create_dir_all(dir)
 }
 
+/// A folder named `name` in the system temp folder, private to the current
+/// user: on Unix the user id is part of the name (`<name>-<uid>`), since
+/// `/tmp` is shared; on Windows the temp folder is already per user.
+pub fn user_temp_dir(name: &str) -> PathBuf {
+    #[cfg(unix)]
+    let name = format!("{name}-{}", rustix::process::geteuid().as_raw());
+    std::env::temp_dir().join(name)
+}
+
+/// Create `dir` (and its parents) for files only the current user may read,
+/// and check that it is safe to write into: a real folder, not a symbolic
+/// link, and on Unix owned by the current user. An existing folder of ours
+/// that others can access is tightened to `0700`.
+pub fn ensure_private_dir(dir: &Path) -> io::Result<()> {
+    if let Some(parent) = dir.parent().filter(|p| !p.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)?;
+    }
+    match make_private_dir(dir) {
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
+        other => other?,
+    }
+    let meta = fs::symlink_metadata(dir)?;
+    if meta.file_type().is_symlink() {
+        return Err(refused(dir, "is a symbolic link"));
+    }
+    if !meta.is_dir() {
+        return Err(refused(dir, "is not a folder"));
+    }
+    check_owner(dir, &meta)
+}
+
+fn refused(dir: &Path, why: &str) -> io::Error {
+    io::Error::other(format!("{} {why}; refusing to use it", dir.display()))
+}
+
+#[cfg(unix)]
+fn make_private_dir(dir: &Path) -> io::Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+    fs::DirBuilder::new().mode(0o700).create(dir)
+}
+
+#[cfg(not(unix))]
+fn make_private_dir(dir: &Path) -> io::Result<()> {
+    fs::create_dir(dir)
+}
+
+#[cfg(unix)]
+fn check_owner(dir: &Path, meta: &fs::Metadata) -> io::Result<()> {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    if meta.uid() != rustix::process::geteuid().as_raw() {
+        return Err(refused(dir, "belongs to another user"));
+    }
+    if meta.mode() & 0o077 != 0 {
+        fs::set_permissions(dir, fs::Permissions::from_mode(0o700))?;
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn check_owner(_dir: &Path, _meta: &fs::Metadata) -> io::Result<()> {
+    Ok(())
+}
+
 #[cfg(unix)]
 fn restrict_to_user(_path: &Path) -> io::Result<()> {
     // The mode given at creation already restricts it.
@@ -306,6 +369,72 @@ mod tests {
             .unwrap()
             .permissions()
             .mode();
+        assert_eq!(mode & 0o777, 0o700);
+    }
+
+    #[test]
+    fn ensure_private_dir_creates_missing_folders() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a/b");
+        ensure_private_dir(&path).unwrap();
+        ensure_private_dir(&path).unwrap();
+        assert!(path.is_dir());
+    }
+
+    #[test]
+    fn ensure_private_dir_refuses_a_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("file");
+        fs::write(&path, "x").unwrap();
+        let err = ensure_private_dir(&path).unwrap_err();
+        assert!(err.to_string().contains("is not a folder"), "{err}");
+    }
+
+    #[test]
+    fn user_temp_dir_is_inside_the_temp_folder() {
+        let dir = user_temp_dir("rustman-x");
+        assert_eq!(dir.parent(), Some(std::env::temp_dir().as_path()));
+        let name = dir.file_name().unwrap().to_string_lossy().to_string();
+        assert!(name.starts_with("rustman-x"), "{name}");
+        #[cfg(unix)]
+        assert_eq!(
+            name,
+            format!("rustman-x-{}", rustix::process::geteuid().as_raw())
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ensure_private_dir_refuses_a_symbolic_link() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("target");
+        fs::create_dir(&target).unwrap();
+        let link = dir.path().join("link");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        let err = ensure_private_dir(&link).unwrap_err();
+        assert!(err.to_string().contains("symbolic link"), "{err}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ensure_private_dir_refuses_a_folder_of_another_user() {
+        if rustix::process::geteuid().is_root() {
+            return;
+        }
+        let err = ensure_private_dir(Path::new("/")).unwrap_err();
+        assert!(err.to_string().contains("belongs to another user"), "{err}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ensure_private_dir_tightens_our_own_open_folder() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("open");
+        fs::create_dir(&path).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o777)).unwrap();
+        ensure_private_dir(&path).unwrap();
+        let mode = fs::metadata(&path).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o700);
     }
 

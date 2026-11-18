@@ -5,8 +5,9 @@
 //! streamed to `<spill_dir>/<exchange-id>.bin`, and only its first
 //! [`PREVIEW_BYTES`] are kept. Decoders are read through a fixed buffer, so a
 //! highly compressed body never decodes into memory at once, and a decoded
-//! body stops at `max_decoded`. A spill file is removed when the body is not
-//! read to the end (an error, a timeout or a cancelled request).
+//! body stops at `max_decoded`; a body kept as received stops at
+//! `max_download`. A spill file is removed when the body is not read to the
+//! end (an error, a timeout or a cancelled request).
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -32,6 +33,16 @@ pub const DEFAULT_MAX_BODY_BYTES: u64 = 10 * 1024 * 1024;
 /// The default limit of a decompressed body: 1 GiB.
 pub const DEFAULT_MAX_DECODED_BYTES: u64 = 1024 * 1024 * 1024;
 
+/// The default limit of a body that is not decoded: 1 GiB.
+pub const DEFAULT_MAX_DOWNLOAD_BYTES: u64 = 1024 * 1024 * 1024;
+
+/// The folder bodies spill to outside a workspace, in the temp folder:
+/// `rustman-bodies-<uid>` on Unix, `rustman-bodies` on Windows (whose temp
+/// folder is per user).
+pub fn default_spill_dir() -> PathBuf {
+    rustman_core::secrets::user_temp_dir("rustman-bodies")
+}
+
 /// How much of a spilled body the exchange keeps in memory.
 pub const PREVIEW_BYTES: usize = 64 * 1024;
 
@@ -43,7 +54,8 @@ const READ_BUFFER: usize = 64 * 1024;
 pub struct BodyOptions {
     /// Bodies larger than this are spilled to disk.
     pub max_in_memory: u64,
-    /// The folder spilled bodies are written to.
+    /// The folder spilled bodies are written to. It must be a real folder of
+    /// the current user (see [`rustman_core::secrets::ensure_private_dir`]).
     pub spill_dir: PathBuf,
     /// The workspace root when `spill_dir` is its [`BODIES_DIR`]: before the
     /// first spill, `.rustman/` is checked to be a real, git-ignored folder.
@@ -51,18 +63,23 @@ pub struct BodyOptions {
     /// Decode `Content-Encoding: gzip|br|deflate|zstd`.
     pub decompress: bool,
     /// A decompressed body larger than this is an error (a decompression
-    /// bomb guard); bodies that are not decoded have no limit.
+    /// bomb guard).
     pub max_decoded: u64,
+    /// A body that is not decoded (no `Content-Encoding`, or `decompress`
+    /// off) larger than this is an error, so an endless stream cannot fill
+    /// the disk.
+    pub max_download: u64,
 }
 
 impl Default for BodyOptions {
     fn default() -> Self {
         Self {
             max_in_memory: DEFAULT_MAX_BODY_BYTES,
-            spill_dir: std::env::temp_dir().join("rustman-bodies"),
+            spill_dir: default_spill_dir(),
             workspace: None,
             decompress: true,
             max_decoded: DEFAULT_MAX_DECODED_BYTES,
+            max_download: DEFAULT_MAX_DOWNLOAD_BYTES,
         }
     }
 }
@@ -91,7 +108,7 @@ pub(crate) async fn read(
     let mut sink = Sink::new(options.max_in_memory, spill_path);
     sink.workspace.clone_from(&options.workspace);
     let mut source = BodyReader::new(body);
-    decode(&mut source, encoding, options.max_decoded, &mut sink).await?;
+    decode(&mut source, encoding, options, &mut sink).await?;
     let mut read = sink.finish().await?;
     read.warnings = warnings;
     Ok(read)
@@ -157,18 +174,19 @@ fn encoding(headers: &HeaderMap, decompress: bool, warnings: &mut Vec<String>) -
 async fn decode(
     source: &mut BodyReader,
     encoding: Option<Encoding>,
-    max_decoded: u64,
+    options: &BodyOptions,
     sink: &mut Sink,
 ) -> Result<(), RequestError> {
     let empty = source.fill_buf().await.map(<[u8]>::is_empty);
     let encoding = match (empty, encoding) {
         (Ok(false), Some(encoding)) => encoding,
         _ => {
-            let copied = pump(&mut *source, None, sink).await;
+            let copied = pump(&mut *source, Limit::raw(options.max_download), sink).await;
             return copied.map_err(|e| e.failure(source));
         }
     };
-    let decoded = pump(encoding.decoder(&mut *source), Some(max_decoded), sink).await;
+    let limit = Limit::decoded(options.max_decoded);
+    let decoded = pump(encoding.decoder(&mut *source), limit, sink).await;
     decoded.map_err(|e| match e {
         PumpError::Read(err) if source.failure.is_none() => RequestError::Network(format!(
             "network: cannot decode the {} response body: {err}",
@@ -198,10 +216,41 @@ impl PumpError {
     }
 }
 
-/// Read `reader` to the end into `sink`, failing past `limit` bytes.
+/// The most bytes a body may have, as received or once decoded.
+#[derive(Clone, Copy, Debug)]
+struct Limit {
+    bytes: u64,
+    decoded: bool,
+}
+
+impl Limit {
+    fn raw(bytes: u64) -> Self {
+        Self {
+            bytes,
+            decoded: false,
+        }
+    }
+
+    fn decoded(bytes: u64) -> Self {
+        Self {
+            bytes,
+            decoded: true,
+        }
+    }
+
+    fn error(self) -> RequestError {
+        let kind = if self.decoded { "decompressed " } else { "" };
+        RequestError::Network(format!(
+            "network: the {kind}response body is larger than {} bytes",
+            self.bytes
+        ))
+    }
+}
+
+/// Read `reader` to the end into `sink`, failing past the limit.
 async fn pump(
     mut reader: impl AsyncRead + Unpin,
-    limit: Option<u64>,
+    limit: Limit,
     sink: &mut Sink,
 ) -> Result<(), PumpError> {
     let mut buffer = vec![0u8; READ_BUFFER];
@@ -210,11 +259,8 @@ async fn pump(
         if n == 0 {
             return Ok(());
         }
-        if limit.is_some_and(|limit| sink.size + n as u64 > limit) {
-            let limit = limit.unwrap_or_default();
-            return Err(PumpError::Sink(RequestError::Network(format!(
-                "network: the decompressed response body is larger than {limit} bytes"
-            ))));
+        if sink.size + n as u64 > limit.bytes {
+            return Err(PumpError::Sink(limit.error()));
         }
         let chunk = Bytes::copy_from_slice(&buffer[..n]);
         sink.push(chunk).await.map_err(PumpError::Sink)?;
@@ -371,9 +417,10 @@ async fn write(file: &mut tokio::fs::File, data: &[u8], path: &Path) -> Result<(
     file.write_all(data).await.map_err(|e| io_error(path, &e))
 }
 
-/// Create `path`, readable by the current user only, in a private folder.
-/// With a `workspace`, its `.rustman/` must first pass the private-state
-/// checks (no symbolic link, git-ignored).
+/// Create `path`, readable by the current user only, in a private folder of
+/// the current user. With a `workspace`, its `.rustman/` must first pass the
+/// private-state checks (no symbolic link, git-ignored). An existing file is
+/// never opened: `path` is created new.
 async fn create_spill_file(
     path: &Path,
     workspace: Option<PathBuf>,
@@ -384,7 +431,7 @@ async fn create_spill_file(
         .map_err(|e| io_error(path, &e))?
         .map_err(|e| io_error(path, &e))?;
     let mut options = tokio::fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
+    options.write(true).create_new(true);
     #[cfg(unix)]
     options.mode(0o600);
     options.open(path).await.map_err(|e| io_error(path, &e))
@@ -394,7 +441,7 @@ fn prepare_spill_dir(dir: &Path, workspace: Option<&Path>) -> Result<(), String>
     if let Some(root) = workspace {
         rustman_core::secrets::ensure_private(root, BODIES_DIR).map_err(|e| e.to_string())?;
     }
-    rustman_core::secrets::create_private_dir(dir).map_err(|e| e.to_string())
+    rustman_core::secrets::ensure_private_dir(dir).map_err(|e| e.to_string())
 }
 
 fn io_error(path: &Path, err: &dyn std::fmt::Display) -> RequestError {
@@ -542,6 +589,43 @@ mod tests {
         assert_eq!(std::fs::read_dir(elsewhere.path()).unwrap().count(), 0);
     }
 
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_symlinked_spill_dir_outside_a_workspace_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let elsewhere = tempfile::tempdir().unwrap();
+        let link = dir.path().join("bodies");
+        std::os::unix::fs::symlink(elsewhere.path(), &link).unwrap();
+        let mut sink = Sink::new(1, link.join("x.bin"));
+        let err = sink.push(Bytes::from_static(b"ab")).await.unwrap_err();
+        assert!(err.to_string().contains("symbolic link"), "{err}");
+        assert_eq!(std::fs::read_dir(elsewhere.path()).unwrap().count(), 0);
+    }
+
+    #[tokio::test]
+    async fn an_existing_spill_file_is_never_opened() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("x.bin");
+        std::fs::write(&path, "planted").unwrap();
+        let mut sink = Sink::new(1, path.clone());
+        let err = sink.push(Bytes::from_static(b"ab")).await.unwrap_err();
+        assert!(
+            err.to_string()
+                .starts_with("cannot write the response body to"),
+            "{err}"
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), b"planted");
+    }
+
+    #[test]
+    fn the_default_spill_dir_is_private_to_the_user() {
+        let dir = BodyOptions::default().spill_dir;
+        assert_eq!(dir, default_spill_dir());
+        assert_eq!(dir.parent(), Some(std::env::temp_dir().as_path()));
+        #[cfg(unix)]
+        assert_ne!(dir.file_name().unwrap(), "rustman-bodies");
+    }
+
     #[tokio::test]
     async fn an_unwritable_spill_dir_is_an_io_error() {
         let dir = tempfile::tempdir().unwrap();
@@ -592,7 +676,8 @@ mod tests {
         let path = dir.path().join("bomb.bin");
         let mut sink = Sink::new(1024, path.clone());
         let decoder = ZstdDecoder::new(&bomb[..]);
-        let Err(PumpError::Sink(err)) = pump(decoder, Some(1_000_000), &mut sink).await else {
+        let Err(PumpError::Sink(err)) = pump(decoder, Limit::decoded(1_000_000), &mut sink).await
+        else {
             panic!("the limit was not enforced");
         };
         assert_eq!(
@@ -610,7 +695,7 @@ mod tests {
         let compressed = zstd_zeros(3 * READ_BUFFER as u64).await;
         let mut sink = Sink::new(u64::MAX, PathBuf::from("unused"));
         let decoder = ZstdDecoder::new(&compressed[..]);
-        assert!(pump(decoder, None, &mut sink).await.is_ok());
+        assert!(pump(decoder, Limit::raw(u64::MAX), &mut sink).await.is_ok());
         assert!(sink.chunks.len() >= 3);
         assert!(sink.chunks.iter().all(|c| c.len() <= READ_BUFFER));
         assert_eq!(sink.size, 3 * READ_BUFFER as u64);
@@ -621,7 +706,7 @@ mod tests {
         let mut sink = Sink::new(u64::MAX, PathBuf::from("unused"));
         let decoder = GzipDecoder::new(&b"not gzip at all"[..]);
         assert!(matches!(
-            pump(decoder, None, &mut sink).await,
+            pump(decoder, Limit::raw(u64::MAX), &mut sink).await,
             Err(PumpError::Read(_))
         ));
     }
