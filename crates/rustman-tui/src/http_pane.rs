@@ -114,6 +114,9 @@ pub enum AuthKind {
     ApiKey,
     /// Kept as loaded; edited in the file.
     OAuth2,
+    /// Another type (digest, aws_sigv4, jwt), kept as loaded and edited in
+    /// the file until the Auth tab has an editor for it.
+    Other(&'static str),
 }
 
 impl AuthKind {
@@ -133,7 +136,13 @@ impl AuthKind {
             Self::Bearer => "bearer",
             Self::ApiKey => "api_key",
             Self::OAuth2 => "oauth2",
+            Self::Other(name) => name,
         }
+    }
+
+    /// Kept as loaded: the Auth tab shows it but can't edit it.
+    pub fn is_kept(self) -> bool {
+        matches!(self, Self::OAuth2 | Self::Other(_))
     }
 
     fn fields(self) -> &'static [&'static str] {
@@ -318,7 +327,7 @@ impl HttpEditor {
                     _ => None,
                 },
             }),
-            AuthKind::OAuth2 => self.base.auth.clone(),
+            AuthKind::OAuth2 | AuthKind::Other(_) => self.base.auth.clone(),
         }
     }
 
@@ -544,7 +553,7 @@ impl PaneEditor for HttpEditor {
                 self.set_body_mode(self.body_mode.next());
                 true
             }
-            HttpTab::Auth if self.auth_kind != AuthKind::OAuth2 => {
+            HttpTab::Auth if !self.auth_kind.is_kept() => {
                 let i = AuthKind::CYCLE.iter().position(|k| *k == self.auth_kind);
                 let next = AuthKind::CYCLE[i.map_or(0, |i| (i + 1) % AuthKind::CYCLE.len())];
                 self.set_auth_kind(next);
@@ -724,6 +733,9 @@ fn auth_state(auth: Option<&Auth>) -> (AuthKind, KvTable) {
             vec![name, value, location.map_or("", |l| l.as_str())],
         ),
         Some(Auth::OAuth2(_)) => (AuthKind::OAuth2, vec![]),
+        Some(Auth::Digest { .. }) => (AuthKind::Other("digest"), vec![]),
+        Some(Auth::AwsSigV4(_)) => (AuthKind::Other("aws_sigv4"), vec![]),
+        Some(Auth::Jwt(_)) => (AuthKind::Other("jwt"), vec![]),
     };
     let rows = kind
         .fields()
@@ -757,6 +769,23 @@ mod tests {
 
     fn yaml(editor: &HttpEditor) -> String {
         request_to_yaml(&editor.request().unwrap())
+    }
+
+    #[test]
+    fn signature_auth_types_are_kept_as_loaded() {
+        let request = load(
+            "method: GET\nurl: https://x.test\nauth: {type: digest, username: u, password: '{{pw}}'}\n",
+        );
+        let mut editor = HttpEditor::new(&request);
+        assert_eq!(editor.auth_kind, AuthKind::Other("digest"));
+        assert!(editor.auth_kind.is_kept());
+        // Cycling the auth type is disabled, so the loaded auth survives a save.
+        editor.tab = HttpTab::Auth;
+        editor.cycle_mode();
+        assert_eq!(editor.auth_kind, AuthKind::Other("digest"));
+        let saved = yaml(&editor);
+        assert!(saved.contains("type: digest"), "{saved}");
+        assert!(saved.contains("{{pw}}"), "{saved}");
     }
 
     #[test]

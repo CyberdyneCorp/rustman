@@ -149,7 +149,7 @@ pub fn execute(job: &SendJob) -> Action {
 /// A send that could not start.
 fn failed(job: &SendJob, message: String) -> Received {
     let (id, file) = names(job.path.as_deref());
-    let record = RequestRecord::new(id, job.request.name().to_owned(), file, 1);
+    let record = RequestRecord::new(id, job.request.name().to_owned(), file);
     Received::without_body(record.errored(message))
 }
 

@@ -98,7 +98,7 @@ fn summary_lines_by_status_class_and_transport_failure() {
         let style = style_of(&buffer, &status.to_string()).unwrap();
         assert_eq!(style.fg, state.ui.theme.fg(token).fg);
     }
-    let failed = RequestRecord::new("a".into(), "a".into(), "a.rman.yaml".into(), 1)
+    let failed = RequestRecord::new("a".into(), "a".into(), "a.rman.yaml".into())
         .errored("dns: cannot resolve nope.invalid: failed to lookup address information".into());
     show(&mut state, Received::without_body(failed));
     lines.push(summary(&state));

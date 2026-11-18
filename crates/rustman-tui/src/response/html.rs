@@ -257,7 +257,7 @@ mod tests {
 
     #[test]
     fn a_record_without_exchange_shows_its_error() {
-        let mut record = RequestRecord::new("r".into(), "<R>".into(), "r.rman.yaml".into(), 1);
+        let mut record = RequestRecord::new("r".into(), "<R>".into(), "r.rman.yaml".into());
         record.error = Some("dns: no such host".into());
         let html = render(&record, b"");
         assert!(html.contains("<h1>&lt;R&gt;</h1>"), "{html}");

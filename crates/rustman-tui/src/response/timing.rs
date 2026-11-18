@@ -196,6 +196,7 @@ mod tests {
 
     fn timings(dns: Option<f64>, connect: Option<f64>, tls: Option<f64>) -> TimingsRecord {
         TimingsRecord {
+            auth_ms: None,
             dns_ms: dns,
             connect_ms: connect,
             tls_ms: tls,
