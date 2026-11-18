@@ -62,31 +62,31 @@ struct TokenFormat {
 const TOKEN_FORMATS: &[TokenFormat] = &[
     TokenFormat {
         name: "github_token",
-        pattern: r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_\w{20,})",
+        pattern: r"(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_\w{20,})",
     },
     TokenFormat {
         name: "gitlab_token",
-        pattern: r"\bglpat-[\w-]{20,}",
+        pattern: r"glpat-[\w-]{20,}",
     },
     TokenFormat {
         name: "slack_token",
-        pattern: r"\bxox[abposr]-[\w-]{10,}",
+        pattern: r"xox[abposr]-[\w-]{10,}",
     },
     TokenFormat {
         name: "stripe_key",
-        pattern: r"\b[sr]k_live_\w{10,}",
+        pattern: r"[sr]k_live_\w{10,}",
     },
     TokenFormat {
         name: "aws_access_key",
-        pattern: r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b",
+        pattern: r"(?:AKIA|ASIA)[0-9A-Z]{16}\b",
     },
     TokenFormat {
         name: "google_api_key",
-        pattern: r"\bAIza[0-9A-Za-z_-]{35}",
+        pattern: r"AIza[0-9A-Za-z_-]{35}",
     },
     TokenFormat {
         name: "jwt",
-        pattern: r"\beyJ[\w-]{8,}\.eyJ[\w-]{8,}\.[\w-]+",
+        pattern: r"eyJ[\w-]{8,}\.eyJ[\w-]{8,}\.[\w-]+",
     },
     TokenFormat {
         name: "private_key",

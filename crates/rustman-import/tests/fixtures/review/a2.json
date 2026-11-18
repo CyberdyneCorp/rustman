@@ -1,0 +1,64 @@
+{
+ "info": {
+  "name": "Enc",
+  "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+ },
+ "variable": [
+  {
+   "key": "password",
+   "value": "p@ss&w0rd=1"
+  },
+  {
+   "key": "slash_secret",
+   "value": "ab/cd-1234"
+  }
+ ],
+ "item": [
+  {
+   "name": "path",
+   "request": {
+    "method": "POST",
+    "url": {
+     "raw": "http://127.0.0.1:18767/u/ab%2Fcd-1234/x"
+    }
+   }
+  },
+  {
+   "name": "rawform",
+   "request": {
+    "method": "POST",
+    "url": {
+     "raw": "http://127.0.0.1:18767/f"
+    },
+    "header": [
+     {
+      "key": "Content-Type",
+      "value": "application/x-www-form-urlencoded"
+     }
+    ],
+    "body": {
+     "mode": "raw",
+     "raw": "user=u&note=p%40ss%26w0rd%3D1"
+    }
+   }
+  },
+  {
+   "name": "urlenc",
+   "request": {
+    "method": "POST",
+    "url": {
+     "raw": "http://127.0.0.1:18767/g"
+    },
+    "body": {
+     "mode": "urlencoded",
+     "urlencoded": [
+      {
+       "key": "note",
+       "value": "p%40ss%26w0rd%3D1"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

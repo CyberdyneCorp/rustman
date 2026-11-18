@@ -1,0 +1,115 @@
+{
+ "info": {
+  "name": "Attack",
+  "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+ },
+ "variable": [
+  {
+   "key": "password",
+   "value": "Pa\"ss&w0rd+1",
+   "type": "string"
+  },
+  {
+   "key": "api_key",
+   "value": "v2.1.0-beta",
+   "type": "string"
+  },
+  {
+   "key": "client_secret",
+   "value": "8473629184736291",
+   "type": "string"
+  },
+  {
+   "key": "access_token",
+   "value": "AbCdEfGhIjKlMnOpQrStUvWxYzAbCdEf",
+   "type": "string"
+  },
+  {
+   "key": "secret_word",
+   "value": "Passw0rd!",
+   "type": "string"
+  },
+  {
+   "key": "slash_secret",
+   "value": "ab/cd-1234",
+   "type": "string"
+  }
+ ],
+ "item": [
+  {
+   "name": "enc",
+   "request": {
+    "method": "POST",
+    "url": {
+     "raw": "https://a.test/x?q=Pa%22ss%26w0rd%2B1&r=1"
+    },
+    "header": [
+     {
+      "key": "X-Note",
+      "value": "AbCdEfGhIjKlMnOpQrStUvWxYzAbCdEf"
+     },
+     {
+      "key": "X-Client-Version",
+      "value": "v2.1.0-beta"
+     }
+    ],
+    "body": {
+     "mode": "raw",
+     "raw": "{\"note\": \"Pa\\\"ss&w0rd+1\", \"acct\": \"8473629184736291\", \"word\": \"myPassw0rd!\", \"s\": \"ab\\/cd-1234\"}",
+     "options": {
+      "raw": {
+       "language": "json"
+      }
+     }
+    },
+    "description": "Requires client v2.1.0-beta; demo password Passw0rd!"
+   }
+  },
+  {
+   "name": "Client v2.1.0-beta",
+   "request": {
+    "method": "POST",
+    "url": {
+     "raw": "https://a.test/v2.1.0-beta/status"
+    },
+    "header": [],
+    "body": {
+     "mode": "raw",
+     "raw": "{\"version\":\"v2.1.0-beta\",\"n\":8473629184736291}",
+     "options": {
+      "raw": {
+       "language": "json"
+      }
+     }
+    }
+   }
+  },
+  {
+   "name": "F",
+   "variable": [
+    {
+     "key": "token",
+     "value": "FOLDER-Tok3n-99",
+     "type": "string"
+    }
+   ],
+   "item": [
+    {
+     "name": "inF",
+     "request": {
+      "method": "POST",
+      "url": {
+       "raw": "https://a.test/f"
+      },
+      "header": [
+       {
+        "key": "X-Echo",
+        "value": "FOLDER-Tok3n-99"
+       }
+      ]
+     }
+    }
+   ]
+  }
+ ]
+}

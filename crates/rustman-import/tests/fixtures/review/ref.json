@@ -1,0 +1,3 @@
+{"info":{"name":"Ref","schema":"https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
+"item":[{"name":"A","request":{"method":"GET","url":"https://a.test/a","header":[{"key":"Authorization","value":"Bearer {{token}}"}]}},
+{"name":"B","request":{"method":"GET","url":"https://a.test/b","auth":{"type":"bearer","bearer":[{"key":"token","value":"abc123def456ghi"}]}}}]}
