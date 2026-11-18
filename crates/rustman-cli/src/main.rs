@@ -10,7 +10,7 @@ use clap::{ArgAction, CommandFactory, Parser, Subcommand};
 use terminal::ColorWhen;
 
 #[derive(Debug, Parser)]
-#[command(name = "rustman", version = rustman_core::VERSION, about)]
+#[command(name = "rustman", bin_name = "rustman", version = rustman_core::VERSION, about)]
 struct Cli {
     /// Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
     #[arg(
