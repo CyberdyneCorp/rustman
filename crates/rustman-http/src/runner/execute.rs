@@ -55,6 +55,7 @@ impl Runner<'_> {
     /// adding its own. Under `--bail`, a failure or error makes every later
     /// request skip.
     pub async fn send(&self, request: &RequestRef<'_>, iteration: u32) -> Sent {
+        self.seed(std::slice::from_ref(request));
         let started = Instant::now();
         let file = request.entry.path.to_string_lossy().replace('\\', "/");
         let name = request.request().name().to_owned();
@@ -96,7 +97,7 @@ impl Runner<'_> {
             Err(e) => return Sent::errored(record, e.to_string()),
         };
         self.remember(&resolved.secrets);
-        remember_for_logs(&Redactor::for_request(&resolved));
+        remember_for_logs(&self.request_redactor(Some(&resolved), None));
         let target = AuthTarget {
             request: request.entry.id(),
             cache_key: cache_key(request),
@@ -193,8 +194,7 @@ impl Runner<'_> {
             Ok(view) => view,
             Err(e) => return Sent::errored(record, format!("cannot read the response body: {e}")),
         };
-        let mut redactor = exchange.redactor(checked.resolved);
-        redactor.merge(&self.known());
+        let mut redactor = self.request_redactor(Some(checked.resolved), Some(&exchange));
         let ctx = Context {
             resolver: checked.resolver,
             request: Some(checked.request),
@@ -284,12 +284,23 @@ impl Runner<'_> {
     /// The redactor for everything recorded about `sent`: the run's secrets,
     /// plus the request's own credentials and those of its exchange.
     pub(super) fn sink_redactor(&self, sent: &Sent) -> Redactor {
-        let mut redactor = match (&sent.exchange, &sent.resolved) {
-            (Some(exchange), Some(resolved)) => exchange.redactor(resolved),
-            (None, Some(resolved)) => Redactor::for_request(resolved),
-            (_, None) => Redactor::new(),
-        };
-        redactor.merge(&self.known());
+        self.request_redactor(sent.resolved.as_ref(), sent.exchange.as_ref())
+    }
+
+    /// The run's redactor (shared, not copied) plus what `request` and the
+    /// credentials of its `exchange` add.
+    pub(super) fn request_redactor(
+        &self,
+        request: Option<&ResolvedRequest>,
+        exchange: Option<&Exchange>,
+    ) -> Redactor {
+        let mut redactor = self.known();
+        if let Some(request) = request {
+            redactor.add_request(request);
+        }
+        if let Some(exchange) = exchange {
+            redactor.merge(&exchange.credentials);
+        }
         redactor
     }
 

@@ -9,7 +9,7 @@ use std::fs;
 use std::path::Path;
 
 use common::{Server, request, rustman, workspace, write};
-use rustman_test_support::routes::SESSION;
+use rustman_test_support::routes::{SESSION, TOKEN};
 
 const LITERAL: &str = "LITERALabc123-tok";
 
@@ -294,4 +294,168 @@ fn a_spilled_body_is_printed_redacted_unless_asked() {
     let replayed = stdout(&["history", "replay", &id]);
     assert!(!replayed.contains("CANARY"), "replay: no canary");
     assert!(replayed.contains(r#"AAA"«redacted:tok»"BBB"#));
+}
+
+/// A workspace whose `dev` environment declares `secrets` and sets each
+/// to its value.
+fn secret_workspace(server: &Server, secrets: &[(&str, &str)]) -> tempfile::TempDir {
+    let ws = workspace(server);
+    let names: Vec<&str> = secrets.iter().map(|(n, _)| *n).collect();
+    let env = format!(
+        "variables:\n  base_url: {}\nsecrets: [{}]\n",
+        server.url(""),
+        names.join(", ")
+    );
+    write(ws.path(), "environments/dev.yaml", &env);
+    for (name, value) in secrets {
+        rustman(ws.path())
+            .args(["secret", "set", name, "--env", "dev"])
+            .write_stdin(*value)
+            .assert()
+            .success();
+    }
+    ws
+}
+
+fn stdout_of(ws: &Path, args: &[&str]) -> Vec<u8> {
+    let out = rustman(ws).args(args).output().unwrap();
+    assert!(
+        out.status.code().is_some_and(|c| c <= 1),
+        "{args:?}: {out:?}"
+    );
+    out.stdout
+}
+
+fn has(haystack: &[u8], needle: &str) -> bool {
+    haystack
+        .windows(needle.len())
+        .any(|w| w == needle.as_bytes())
+}
+
+/// Every secret the requests of a run reference is redacted from the first
+/// request on: `/token` echoes `later`'s value before `2-later` uses it.
+/// A secret no request of the run references is not looked up.
+#[test]
+fn a_run_redacts_every_secret_its_requests_reference_from_the_start() {
+    let server = Server::http();
+    let ws = secret_workspace(&server, &[("later", TOKEN)]);
+    write(
+        ws.path(),
+        "api/1-token.rman.yaml",
+        &request("token", "{{base_url}}/token", ""),
+    );
+    let later = "headers:\n  - name: X-Later\n    value: '{{later}}'\n";
+    write(
+        ws.path(),
+        "api/2-later.rman.yaml",
+        &request("later", "{{base_url}}/echo", later),
+    );
+    let run = stdout_of(
+        ws.path(),
+        &["run", "api", "--env", "dev", "--reporter", "json"],
+    );
+    assert!(!has(&run, TOKEN), "{}", String::from_utf8_lossy(&run));
+    assert!(has(&run, r#"\"access_token\":\"«redacted:later»\""#));
+    // Outside that scope (no request of this run references it), the
+    // server's token is shown as sent.
+    let alone = stdout_of(
+        ws.path(),
+        &[
+            "run",
+            "api/1-token.rman.yaml",
+            "--env",
+            "dev",
+            "--reporter",
+            "json",
+        ],
+    );
+    assert!(has(&alone, TOKEN));
+    let sent = stdout_of(
+        ws.path(),
+        &["send", "api/2-later.rman.yaml", "--env", "dev"],
+    );
+    assert!(!has(&sent, TOKEN));
+}
+
+/// A body that is not valid UTF-8 (Latin-1 JSON) is redacted byte-wise on
+/// stdout too; only `-o` and `--show-secrets` keep it as received.
+#[test]
+fn a_binary_body_is_printed_redacted() {
+    let server = Server::http();
+    const CANARY: &str = "L4t1n-CANARY-x9";
+    let ws = secret_workspace(&server, &[("tok", CANARY)]);
+    let body = "method: POST\nbody:\n  type: text\n  content: '{{tok}}'\n";
+    write(
+        ws.path(),
+        "latin.rman.yaml",
+        &request("latin", "{{base_url}}/latin1", body),
+    );
+    for args in [
+        &["send", "latin", "--env", "dev"][..],
+        &["send", "latin", "--env", "dev", "--body-only"],
+    ] {
+        let out = stdout_of(ws.path(), args);
+        assert!(!has(&out, CANARY), "{args:?}");
+        assert!(has(&out, "\"echo\":\"«redacted:tok»\""), "{args:?}");
+        assert!(
+            out.windows(4).any(|w| w == b"Bel\xe9"),
+            "the other bytes stay"
+        );
+    }
+    let shown = stdout_of(
+        ws.path(),
+        &[
+            "send",
+            "latin",
+            "--env",
+            "dev",
+            "--body-only",
+            "--show-secrets",
+        ],
+    );
+    assert!(has(&shown, CANARY));
+    stdout_of(
+        ws.path(),
+        &["send", "latin", "--env", "dev", "-o", "latin.json"],
+    );
+    assert!(has(
+        &fs::read(ws.path().join("latin.json")).unwrap(),
+        CANARY
+    ));
+}
+
+/// Fifty secrets of 1 KiB, all sent and echoed: `send` stays fast (a
+/// generous bound for a debug build; release takes well under a second).
+#[test]
+fn a_send_with_fifty_long_secrets_stays_fast() {
+    let server = Server::http();
+    let values: Vec<(String, String)> = (0..50)
+        .map(|j| {
+            let value: String = (0..1024)
+                .map(|i| ['a', 'b', '/', '&', '<', '~', 'Q', '9', '.', '-'][(i * 7 + j * 3) % 10])
+                .collect();
+            (format!("s{j}"), format!("{j:02}{value}"))
+        })
+        .collect();
+    let pairs: Vec<(&str, &str)> = values
+        .iter()
+        .map(|(n, v)| (n.as_str(), v.as_str()))
+        .collect();
+    let ws = secret_workspace(&server, &pairs);
+    let content: Vec<String> = values.iter().map(|(n, _)| format!("{{{{{n}}}}}")).collect();
+    let body = format!(
+        "method: POST\nbody:\n  type: text\n  content: '{}'\n",
+        content.join(",")
+    );
+    write(
+        ws.path(),
+        "all.rman.yaml",
+        &request("all", "{{base_url}}/echo", &body),
+    );
+    let started = std::time::Instant::now();
+    let out = stdout_of(ws.path(), &["send", "all", "--env", "dev"]);
+    let elapsed = started.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(60), "{elapsed:?}");
+    assert!(!has(&out, &values[7].1), "echoed secrets are redacted");
+    assert!(has(&out, "«redacted:s7»"));
 }

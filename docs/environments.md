@@ -191,12 +191,14 @@ Secret values never appear in any artifact Rustman produces: terminal output, lo
 Authorization: «redacted:Authorization»
 ```
 
-Rustman tracks which bytes of a request came from a secret, and also scans every output for the secret values themselves. That second check catches a server that echoes a secret back in its response, as is or in the form a common encoder writes it:
+Rustman tracks which bytes of a request came from a secret, and also scans every output for the secret values themselves. That second check catches a server that echoes a secret back in its response, as is or in the form a common encoder writes it. It covers the secrets the requests of the command reference (every request of a `rustman run`, from its first request on, whether or not that request sends them; the one request of `rustman send` or `history replay`), resolved before anything is sent, plus captured values that became secrets (see below). An environment secret no request of the command references is not read from the store, so it is not recognized if a server happens to send it. The forms matched:
 
-- JSON string escapes (`\"`, `\\`, control characters), each with or without `\/` for `/` (PHP), with or without `\u0026`, `\u003c`, `\u003e` and `\u0027` for `&`, `<`, `>` and `'` (Go), and with non-ASCII characters as is or as `\uXXXX` escapes in upper- or lowercase hex (Python, PHP);
+- JSON string escapes (`\"`, `\\`, control characters), each with or without `\/` for `/` (PHP), with or without `\u0026`, `\u003c` and `\u003e` for `&`, `<` and `>` and `\u2028` and `\u2029` for U+2028 and U+2029 (Go), and with non-ASCII characters as is or as `\uXXXX` escapes in upper- or lowercase hex (Python, PHP);
 - Rust `Debug` escapes;
 - percent-encoding in upper- or lowercase hex: every byte but `A-Z a-z 0-9 - . _ ~` encoded, with a space as `%20` or as `+` (form encoding); the same leaving `/` as is (Python's `quote`); or leaving `!'()*` as is (JavaScript's `encodeURIComponent`);
 - HTML escapes of `&`, `<` and `>` as `&amp;`, `&lt;` and `&gt;`, with `"` and `'` as `&quot;` and `&#x27;` (Python), `&quot;` and `&#39;`, or `&#34;` and `&#39;` (Go); or every character but letters and digits as a decimal entity such as `&#47;`.
+
+Not covered: Java's `URLEncoder` and PHP's `urlencode` (which keep `*` and encode `~`), XML escapes (`&apos;`), hexadecimal HTML entities other than `&#x27;`, and Go's `\u0008` and `\u000c` for backspace and form feed.
 
 Redaction happens before anything is quoted or shortened: an assertion message that quotes 200 characters of a body, or the 64 KiB preview of a large body, never ends with the start of a secret, and never splits a `«redacted:<name>»` placeholder.
 
@@ -206,18 +208,18 @@ A secret the server transforms before echoing it (base64-encodes it, changes its
 
 A captured value that holds any piece of a known secret at least 4 characters long (a capture that straddles the secret, or a masked echo such as `****wP3K`) is treated as a secret for the rest of the run and never persisted (see [Captures](assertions.md#captures)). Pieces shorter than 4 characters are too common to tell apart from other text and are not recognized.
 
-Secrets shorter than 4 characters are still redacted, but every occurrence of such a short string is replaced, in unrelated text too (`id` in every key named `id`, say). `rustman secret set` warns when it stores one.
+Short secrets may also redact unrelated text: every occurrence of the value is replaced wherever it appears, so a 4-digit PIN `1234` also turns `"duration_ms":1234` in a report into `"duration_ms":«redacted:pin»`, and a secret shorter than 4 characters is matched in almost any text. `rustman secret set` warns when it stores a value shorter than 8 characters.
 
 The only exception is an explicit, per-command opt-in, `--show-secrets`, which affects terminal output only: history, reports and logs stay redacted. `rustman send` and `rustman history replay` accept it to print the response headers and body as received, and `rustman export curl` accepts it to print the real values in the command. Without it, `send` and `replay` print the response redacted, a large body streamed from its spill file too:
 
-| Output | Text body | Binary body |
-|--------|-----------|-------------|
-| default (status, headers, body) | redacted | redacted |
-| `--body-only` | redacted | as received, byte for byte |
-| `--show-secrets` (with or without `--body-only`) | as received | as received |
-| `-o <file>` | as received | as received |
+| Output | Body |
+|--------|------|
+| default (status, headers, body) | redacted |
+| `--body-only` | redacted |
+| `--show-secrets` (with or without `--body-only`) | as received |
+| `-o <file>` | as received |
 
-`-o` writes the file you named byte for byte, as `curl -o` does: it is how to save a body exactly, so treat that file like the response itself. A binary `--body-only` body is written as received so pipes (`| file -`, `> logo.png`) keep working.
+A binary body (any body that is not valid UTF-8, such as an image, or JSON in Latin-1) is redacted byte by byte like a text one: every other byte is printed as received. `-o` writes the file you named byte for byte, as `curl -o` does: it is how to save a body exactly (an image, say), so treat that file like the response itself.
 
 An end-to-end test (`crates/rustman-cli/tests/e2e.rs`) checks this contract: it runs a workspace through `init`, `secret set`, `run` with the json and junit reporters and `-vvv` logs, `export curl`, a failing request, and `history list`, `show` and `replay`, then searches every file it produced and everything it printed for the secret, and finds nothing. Its secret is non-ASCII and contains a `"`, and the server also echoes it JSON-escaped, in a failing assertion message cut mid-secret and across the cut of a spilled body's preview.
 

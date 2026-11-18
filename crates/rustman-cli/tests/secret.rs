@@ -347,15 +347,17 @@ fn canary_never_reaches_any_output_or_workspace_file() {
 }
 
 #[test]
-fn a_secret_shorter_than_four_characters_is_set_with_a_warning() {
+fn a_secret_shorter_than_eight_characters_is_set_with_a_warning() {
     let ws = workspace(None);
-    set(ws.path(), "api_token", "prod", "t0k\n")
-        .success()
-        .stderr(
-            "warning: secret 'api_token' is shorter than 4 characters: every occurrence \
-             of it is redacted, even in unrelated text\n",
-        );
-    set(ws.path(), "other", "prod", "t0ke\n")
+    for short in ["t0k", "1234", "t0k3n-7"] {
+        set(ws.path(), "api_token", "prod", &format!("{short}\n"))
+            .success()
+            .stderr(
+                "warning: secret 'api_token' is shorter than 8 characters: \
+                 short secrets may also redact unrelated text\n",
+            );
+    }
+    set(ws.path(), "other", "prod", "t0k3n-78\n")
         .success()
         .stderr("");
 }

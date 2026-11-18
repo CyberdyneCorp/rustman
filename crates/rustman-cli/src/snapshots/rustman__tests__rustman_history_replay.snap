@@ -15,7 +15,7 @@ Options:
           Do not record the replayed exchange
 
       --body-only
-          Print only the response body: a text body redacted (unless --show-secrets), a binary one byte for byte
+          Print only the response body, redacted (as received with --show-secrets)
 
   -o, --output <FILE>
           Write the response body, byte for byte, to FILE instead of stdout

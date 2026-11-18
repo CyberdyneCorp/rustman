@@ -8,7 +8,6 @@ use std::path::{Path, PathBuf};
 
 use clap::{Args, Subcommand};
 use rustman_core::environment::ENV_VAR;
-use rustman_core::redact::MIN_SECRET_PIECE;
 use rustman_core::secrets::{BACKEND_VAR, SECRETS_FILE, StoredIn};
 use rustman_core::{
     ConfigError, Environment, Secret, SecretBackend, SecretError, SecretStore, Workspace,
@@ -117,15 +116,18 @@ fn run_set(args: &NameArgs) -> Result<(), ConfigError> {
     Ok(())
 }
 
-/// A warning for a non-empty value shorter than [`MIN_SECRET_PIECE`]
-/// characters: it is still redacted, but every occurrence of such a short
-/// string is, and captures holding a piece of it are not recognized.
+/// Secret values shorter than this many characters are set with a warning:
+/// every occurrence is redacted, so a short one (`1234`) also replaces
+/// unrelated text, such as a number in a report (`"duration_ms":1234`).
+const SHORT_SECRET: usize = 8;
+
+/// The warning for a non-empty value shorter than [`SHORT_SECRET`].
 fn short_secret_warning(name: &str, value: &str) -> Option<String> {
-    let short = !value.is_empty() && value.chars().count() < MIN_SECRET_PIECE;
+    let short = !value.is_empty() && value.chars().count() < SHORT_SECRET;
     short.then(|| {
         format!(
-            "secret '{name}' is shorter than {MIN_SECRET_PIECE} characters: every occurrence \
-             of it is redacted, even in unrelated text"
+            "secret '{name}' is shorter than {SHORT_SECRET} characters: \
+             short secrets may also redact unrelated text"
         )
     })
 }
