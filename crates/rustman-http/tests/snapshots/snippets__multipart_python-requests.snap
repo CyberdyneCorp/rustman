@@ -1,0 +1,19 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+import requests
+
+response = requests.put(
+    "https://api.example/users/42/avatar",
+    files=[
+        ("caption", (None, "It's me")),
+        ("meta", (None, "{\"v\":1}", "application/json")),
+        ("file", ("avatar.png", open("files/avatar.png", "rb"), "image/png")),
+    ],
+    headers={
+        "X-Trace": "t-1",
+    },
+)
+print(response.status_code)
+print(response.text)

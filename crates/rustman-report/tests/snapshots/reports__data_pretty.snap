@@ -1,0 +1,13 @@
+---
+source: crates/rustman-report/tests/reports.rs
+expression: pretty(&run)
+---
+iteration 1/2 · ana@example.com
+PASS  get-profile  GET 200  4 ms
+PASS  update  PUT 200  4 ms
+
+iteration 2/2 · bo@example.com
+PASS  get-profile  GET 200  4 ms
+FAIL  update  PUT 409  4 ms
+
+4 requests: 3 passed, 1 failed, 0 errored, 0 skipped (21 ms)

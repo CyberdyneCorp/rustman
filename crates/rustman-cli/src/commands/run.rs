@@ -4,10 +4,11 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use clap::Args;
-use rustman_core::run::{Filter, RunRecord, plan};
+use clap::{Args, ValueEnum};
+use rustman_core::data_rows::DataRows;
+use rustman_core::run::{DataRun, Filter, Plan, RunRecord, collection_data, plan, secret_columns};
 use rustman_core::{ConfigError, Workspace};
-use rustman_http::runner::{RunContext, Runner};
+use rustman_http::runner::{BailScope, RunContext, Runner};
 use rustman_report::Reporter;
 
 use super::exec::{SendFlags, cancel_on_ctrl_c, history_store, runtime, secret_store};
@@ -23,17 +24,34 @@ pub struct RunArgs {
     selection: EnvSelection,
     #[command(flatten)]
     flags: SendFlags,
-    /// Skip the remaining requests after the first failed or errored one
-    #[arg(long)]
-    bail: bool,
+    /// Skip the remaining requests after the first failed or errored one;
+    /// --bail=iteration skips only the rest of the failing iteration
+    #[arg(long, value_name = "SCOPE", value_enum, num_args = 0..=1,
+          require_equals = true, default_missing_value = "run")]
+    bail: Option<Bail>,
     /// Run only matching requests: tag:<name>, or a glob over request ids
     /// such as 'users/*' (repeatable; a request matching any runs)
     #[arg(long, value_name = "FILTER")]
     filter: Vec<String>,
-    /// Run the selected requests this many times
-    #[arg(long, value_name = "N", default_value_t = 1,
-          value_parser = clap::value_parser!(u32).range(1..))]
-    iterations: u32,
+    /// Run the selected requests this many times (default 1)
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
+    iterations: Option<u32>,
+    /// Run the selected requests once per row of a CSV or JSON file, with
+    /// the row's values as variables (default: the folder's
+    /// _collection.yaml data)
+    #[arg(long, value_name = "FILE")]
+    data: Option<PathBuf>,
+    /// Ignore the data file a _collection.yaml names
+    #[arg(long, conflicts_with = "data")]
+    no_data: bool,
+    /// Label each iteration with this column's value in reports (default:
+    /// row <n>)
+    #[arg(long, value_name = "COLUMN")]
+    data_label: Option<String>,
+    /// Data columns whose values are secrets and are redacted in every
+    /// output, besides those named like password, token, secret or api_key
+    #[arg(long, value_name = "A,B", value_delimiter = ',')]
+    secret_columns: Vec<String>,
     /// Run up to N folders at once; requests in one folder stay in order
     /// unless its _collection.yaml sets parallel: true
     #[arg(long, value_name = "N", default_value_t = 1,
@@ -59,10 +77,16 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
             ConfigError::Usage("no requests to run (check the paths and --filter)".into()).into(),
         );
     }
+    let data = data_run(args, &ws, &cwd, &scopes, &plan)?;
     let store = secret_store(&ws.root)?;
     let mut options = args.flags.options()?;
-    options.bail = args.bail;
-    options.iterations = args.iterations;
+    options.bail = args.bail.is_some();
+    options.bail_scope = match args.bail {
+        Some(Bail::Iteration) => BailScope::Iteration,
+        _ => BailScope::Run,
+    };
+    options.iterations = args.iterations.unwrap_or(1);
+    options.data = data;
     options.parallel = args.parallel as usize;
     options.history = history_store(args.flags.no_history, Some(&ws), &ws.settings);
     let cancel = options.cancel.clone();
@@ -84,6 +108,69 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
     print_warnings(&store.take_warnings());
     write_reports(&args.reporter, &record)?;
     Ok(run_code(&record.summary))
+}
+
+/// What `--bail` skips.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+enum Bail {
+    // Every remaining request of the run.
+    Run,
+    // The rest of the failing iteration; the next one runs.
+    Iteration,
+}
+
+/// The rows of a data-driven run: `--data`, else the data file a
+/// `_collection.yaml` of the run names (unless `--no-data`). Every problem
+/// is a usage error, found before anything is sent.
+fn data_run(
+    args: &RunArgs,
+    ws: &Workspace,
+    cwd: &Path,
+    scopes: &[PathBuf],
+    plan: &Plan<'_>,
+) -> Result<Option<DataRun>, ConfigError> {
+    let Some((path, shown)) = data_file(args, ws, cwd, scopes)? else {
+        if let Some(column) = &args.data_label {
+            return Err(usage(format!(
+                "--data-label {column}: there is no data file"
+            )));
+        }
+        return Ok(None);
+    };
+    if args.iterations.is_some() {
+        let message = if args.data.is_some() {
+            "--data and --iterations cannot be combined (iterations = row count)".to_owned()
+        } else {
+            format!("{shown} sets the iterations (one per row); pass --no-data to use --iterations")
+        };
+        return Err(usage(message));
+    }
+    let rows = DataRows::read(&path).map_err(|e| usage(format!("{shown}: {e}")))?;
+    let secret = secret_columns(plan, &args.secret_columns);
+    DataRun::new(rows, secret, args.data_label.clone())
+        .map(Some)
+        .map_err(usage)
+}
+
+/// The data file of the run and how messages name it.
+fn data_file(
+    args: &RunArgs,
+    ws: &Workspace,
+    cwd: &Path,
+    scopes: &[PathBuf],
+) -> Result<Option<(PathBuf, String)>, ConfigError> {
+    if args.no_data {
+        return Ok(None);
+    }
+    if let Some(path) = &args.data {
+        return Ok(Some((cwd.join(path), format!("--data {}", path.display()))));
+    }
+    let found = collection_data(ws, scopes).map_err(usage)?;
+    Ok(found.map(|d| (d.path, format!("{} data", d.collection_file))))
+}
+
+fn usage(message: String) -> ConfigError {
+    ConfigError::Usage(message)
 }
 
 /// The run paths relative to the workspace root. Every path must exist and

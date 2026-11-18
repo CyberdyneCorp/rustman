@@ -9,6 +9,10 @@
 //!   for `&`, `<` and `>` (Go's `encoding/json`, which also writes U+2028
 //!   and U+2029 as `\u2028` and `\u2029`), each with non-ASCII characters
 //!   as is or as `\uXXXX` in upper- or lowercase hex (Python, PHP);
+//! - JSON escapes applied twice, for a server that echoes a JSON body as a
+//!   string inside its own JSON (`\"` becomes `\\\"`), with non-ASCII
+//!   characters as is or as `\uXXXX` in upper- or lowercase hex (Python's
+//!   `json.dumps`, which escapes them by default);
 //! - Rust `Debug` escapes;
 //! - percent-encoding in upper- or lowercase hex: RFC 3986 with a space as
 //!   `%20` or `+` (form encoding), leaving `/` as is (Python's `quote`), or
@@ -19,7 +23,7 @@
 //!   (`&#47;`).
 
 /// The most forms one value can have.
-pub(super) const MAX_FORMS: usize = 26;
+pub(super) const MAX_FORMS: usize = 29;
 
 /// Values longer than this many bytes are matched as is only: their encoded
 /// forms would make the matcher take memory out of proportion (a 1 MiB
@@ -42,6 +46,10 @@ pub(super) fn encoded_forms(value: &str) -> Vec<String> {
     for form in json_forms(value) {
         push(form);
     }
+    let twice = json_escaped(&json_escaped(value));
+    push(ascii_json(&twice, true));
+    push(ascii_json(&twice, false));
+    push(twice);
     let debug = format!("{value:?}");
     push(debug[1..debug.len() - 1].to_owned());
     for upper in [true, false] {
@@ -62,11 +70,16 @@ pub(super) fn encoded_forms(value: &str) -> Vec<String> {
     forms
 }
 
+/// `value` as the inside of a JSON string, without the quotes.
+fn json_escaped(value: &str) -> String {
+    let quoted = serde_json::to_string(value).unwrap_or_default();
+    quoted[1..quoted.len() - 1].to_owned()
+}
+
 /// The JSON string escapes of `value`, without the quotes, in every
 /// combination of `\/`, Go's HTML-safe escapes and `\uXXXX` for non-ASCII.
 fn json_forms(value: &str) -> Vec<String> {
-    let quoted = serde_json::to_string(value).unwrap_or_default();
-    let json = &quoted[1..quoted.len() - 1];
+    let json = &json_escaped(value);
     let mut forms = Vec::with_capacity(12);
     for slash in [false, true] {
         for go in [false, true] {
@@ -186,8 +199,31 @@ mod tests {
         has("a&#47;b&#38;c&#60;d&#62;e&#39;f&#34;g&#32;h&#33;&#40;i&#41;&#42;é");
     }
 
+    /// A server that puts a JSON request body in a JSON string (Python's
+    /// `json.dumps(body_text)`) escapes the secret's escapes again.
+    #[test]
+    fn json_escaped_twice_is_matched() {
+        let forms = encoded_forms(r#"CANQ "x" \z"#);
+        let twice = r#"CANQ \\\"x\\\" \\\\z"#;
+        assert!(forms.iter().any(|f| f == twice), "{forms:#?}");
+    }
+
     /// `json.Marshal("tOk'&<v~*/é")` in Go 1.22 prints
     /// `"tOk'\u0026\u003cv~*/é"`: `'` stays as is.
+    /// Regression: a Python server echoing a UTF-8 JSON body inside its own
+    /// JSON (`json.dumps(body_text)`) escapes the value twice and writes `é`
+    /// as `\u00e9` (`ensure_ascii`); that form was missing.
+    #[test]
+    fn json_escaped_twice_with_ascii_escapes_is_matched() {
+        let forms = encoded_forms("QQ1\"é");
+        // json.dumps(json.dumps({"x": "QQ1\"é"}, ensure_ascii=False))
+        let echoed = r#""{\"x\": \"QQ1\\\"\u00e9\"}""#;
+        let lower = r#"QQ1\\\"\u00e9"#;
+        assert!(echoed.contains(lower));
+        assert!(forms.iter().any(|f| f == lower), "{forms:#?}");
+        assert!(forms.iter().any(|f| f == r#"QQ1\\\"\u00E9"#), "{forms:#?}");
+    }
+
     #[test]
     fn the_go_form_is_what_go_writes() {
         let forms = encoded_forms("tOk'&<v~*/é");

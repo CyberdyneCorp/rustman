@@ -1,0 +1,10 @@
+version: 1
+kind: http
+name: SigV4 profile auth
+url: https://api.example/items
+auth:
+  type: aws_sigv4
+  region: eu-west-1
+  service: execute-api
+  from: profile
+  profile: dev

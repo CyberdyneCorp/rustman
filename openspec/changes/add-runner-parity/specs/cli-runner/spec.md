@@ -15,7 +15,7 @@
 - **THEN** iteration 1 SHALL resolve `{{id}}` to `1` and `{{tags}}` to `["a"]`
 
 ### Requirement: Data file parsing
-Data files SHALL be read by the shared `data_rows` reader, which `load-testing` also uses. CSV SHALL follow RFC 4180 with a mandatory header row, a stripped UTF-8 BOM and string values. JSON SHALL be an array of objects; scalars SHALL become strings and nested values compact JSON text. Any other shape SHALL be a usage error.
+Data files SHALL be read by the shared `data_rows` reader, which `load-testing` also uses. CSV SHALL follow RFC 4180 with a mandatory header row, a stripped UTF-8 BOM and string values. JSON SHALL be an array of objects; scalars SHALL become strings (numbers as written) and nested values compact JSON text. Any other shape SHALL be a usage error.
 
 #### Scenario: Empty data file
 - **GIVEN** a CSV with a header row and no data rows
@@ -26,6 +26,16 @@ Data files SHALL be read by the shared `data_rows` reader, which `load-testing` 
 - **GIVEN** a CSV whose header has 2 columns and whose row 4 has 3 fields
 - **WHEN** a run uses it
 - **THEN** the run SHALL exit with code 2 and print `--data users.csv: row 4 has 3 fields, expected 2`
+
+#### Scenario: JSON numbers keep their text
+- **GIVEN** a JSON data file containing `[{"price": 1.10, "e": 1e2, "big": 12345678901234567890123}]`
+- **WHEN** a run uses it
+- **THEN** `{{price}}` SHALL resolve to `1.10`, `{{e}}` to `1e2` and `{{big}}` to `12345678901234567890123`
+
+#### Scenario: Text after a closing quote
+- **GIVEN** a CSV whose row 2 has the field `"a"b`
+- **WHEN** a run uses it
+- **THEN** the run SHALL exit with code 2 and print `--data users.csv: invalid CSV: text after the closing quote of a quoted field in row 2`
 
 #### Scenario: JSON object instead of array
 - **GIVEN** a JSON data file containing `{"id": 1}`
@@ -83,17 +93,18 @@ Columns named in `--secret-columns <a,b>` or `_collection.yaml` `secret_columns`
 - **THEN** the recorded request body SHALL contain `«redacted:password»` and not the value
 
 ### Requirement: Iteration labels in reports
-Each exchange SHALL carry `iteration: {index, total, label}`, where `index` is 1-based and `label` is the value of `--data-label <column>` or else `row <index>`. Pretty output SHALL group by iteration, and JUnit test case names SHALL end with ` [<label>]`. A secret label column SHALL be rejected with exit 2.
+In a data-driven run, each exchange SHALL carry `data_row: {index, total, label}`: `index` is 1-based and `label` is the `--data-label <column>` value, or `row <index>` when it is empty or absent. The v0.1 integer `iteration` SHALL keep its type and meaning. Pretty output SHALL group by iteration, and JUnit test case names SHALL end with ` [<label>]`. A secret label column SHALL be rejected with exit 2.
 
 #### Scenario: JUnit names per row
 - **GIVEN** a run with `--data users.csv --data-label email` and request `get-profile`
 - **WHEN** the JUnit reporter writes its file
 - **THEN** it SHALL contain test cases named `get-profile [ana@example.com]` and `get-profile [bo@example.com]`
 
-#### Scenario: Iteration in JSON report
+#### Scenario: Data row in JSON report
 - **WHEN** a data-driven run writes `rustman.report/v1`
-- **THEN** each exchange SHALL include `iteration.index`, `iteration.total` and `iteration.label`
-- **AND** a report from a run without `--data` SHALL NOT contain `iteration`
+- **THEN** each exchange SHALL include `data_row.index`, `data_row.total` and `data_row.label`
+- **AND** each exchange SHALL keep the integer `iteration`, equal to `data_row.index`
+- **AND** a report from a run without `--data` SHALL NOT contain `data_row` and SHALL be identical to the v0.1 report
 
 ### Requirement: Bail across iterations
 With `--data`, `--bail` SHALL stop the whole run after the first failed or errored request in any iteration, and SHALL report the remaining exchanges as `skipped (bail)`. `--bail=iteration` SHALL skip only the rest of the failing iteration, and SHALL continue with the next row.

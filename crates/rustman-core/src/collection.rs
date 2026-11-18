@@ -25,6 +25,12 @@ pub struct CollectionMeta {
     /// Run this folder's requests concurrently under `rustman run --parallel`
     /// instead of one after another.
     pub parallel: Option<bool>,
+    /// The default data file of `rustman run` for this folder, relative to
+    /// this file; it must stay inside the workspace.
+    pub data: Option<String>,
+    /// Data columns whose values are secrets, besides the ones named like
+    /// secrets.
+    pub secret_columns: Option<Vec<String>>,
 }
 
 /// A folder of requests. The workspace root is the top-level collection.

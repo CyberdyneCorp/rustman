@@ -22,6 +22,11 @@ http.workspace = true
 http-body-util.workspace = true
 p12-keystore.workspace = true
 ring.workspace = true
+aws-sigv4.workspace = true
+aws-credential-types.workspace = true
+jsonwebtoken.workspace = true
+md-5.workspace = true
+minijinja.workspace = true
 percent-encoding.workspace = true
 hyper = { workspace = true, features = ["client", "http1", "http2"] }
 hyper-util = { workspace = true, features = ["client-legacy", "http1", "http2", "tokio"] }
@@ -46,6 +51,7 @@ uuid.workspace = true
 
 [dev-dependencies]
 rustman-test-support.workspace = true
+insta.workspace = true
 async-compression = { workspace = true, features = ["tokio", "gzip", "brotli", "zstd", "zlib"] }
 peak_alloc.workspace = true
 proptest.workspace = true

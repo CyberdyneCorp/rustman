@@ -1,0 +1,8 @@
+version: 1
+kind: http
+name: Digest auth
+url: '{{base_url}}/me'
+auth:
+  type: digest
+  username: Mufasa
+  password: '{{password}}'

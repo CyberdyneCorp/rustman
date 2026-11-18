@@ -1,0 +1,9 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+http --ignore-stdin --follow '--raw={"name":"Ada Lovelace","admin":true,"teams":["core",7],"manager":null}' POST 'https://api.example/users?notify=yes' \
+  'Accept:application/json' \
+  'X-Request-Id:abc 123' \
+  'Authorization:Bearer «redacted:api_token»' \
+  'Content-Type:application/json'

@@ -1,0 +1,28 @@
+{% if auth_comment %}
+# {{ auth_comment }}
+{% endif %}
+{% if body.kind == "multipart" %}
+# multipart body: wget cannot send multipart/form-data; use curl or httpie
+{% endif %}
+wget --quiet --output-document=- --content-on-error \
+  --method={{ method | q }}
+{%- for h in headers %} \
+  --header {{ (h.name ~ ": " ~ h.value) | q }}
+{%- endfor %}
+{%- if body.kind == "text" %} \
+  --body-data {{ body.text | q }}
+{%- elif body.kind == "file" %} \
+  --body-file {{ body.path | q }}
+{%- endif %}
+{%- if digest %} \
+  --user {{ digest.username | q }} \
+  --password {{ digest.password | q }}
+{%- endif %}
+{%- if not follow_redirects %} \
+  --max-redirect=0
+{%- endif %}
+{%- if not verify_tls %} \
+  --no-check-certificate
+{%- endif %} \
+  {{ "-- " if url_is_option else "" }}{{ url | q }}
+

@@ -1,0 +1,12 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+wget --quiet --output-document=- --content-on-error \
+  --method=POST \
+  --header 'Accept: application/json' \
+  --header 'X-Request-Id: abc 123' \
+  --header 'Authorization: Bearer «redacted:api_token»' \
+  --header 'Content-Type: application/json' \
+  --body-data '{"name":"Ada Lovelace","admin":true,"teams":["core",7],"manager":null}' \
+  'https://api.example/users?notify=yes'

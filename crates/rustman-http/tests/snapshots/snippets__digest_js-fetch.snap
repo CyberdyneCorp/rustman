@@ -1,0 +1,10 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+// digest auth: answer the server's challenge with an HTTP Digest helper
+const response = await fetch("https://api.example/private", {
+  method: "GET",
+});
+console.log(response.status);
+console.log(await response.text());

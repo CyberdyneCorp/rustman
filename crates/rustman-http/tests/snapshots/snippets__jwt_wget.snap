@@ -1,0 +1,8 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+# jwt auth: sign a JWT and send it as a bearer token
+wget --quiet --output-document=- --content-on-error \
+  --method=GET \
+  'https://api.example/private'

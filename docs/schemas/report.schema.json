@@ -39,6 +39,7 @@
         "name": { "type": "string" },
         "file": { "type": "string" },
         "iteration": { "type": "integer", "minimum": 1 },
+        "data_row": { "$ref": "#/$defs/data_row" },
         "status": { "enum": ["passed", "failed", "errored", "skipped"] },
         "skip_reason": { "enum": ["bail", "interrupted", "unsupported_kind", null] },
         "error": { "type": ["string", "null"] },
@@ -47,6 +48,16 @@
         "captures": { "type": "array", "items": { "$ref": "#/$defs/capture" } },
         "warnings": { "type": "array", "items": { "type": "string" } },
         "duration_ms": { "$ref": "#/$defs/ms" }
+      }
+    },
+    "data_row": {
+      "type": "object",
+      "description": "The data row a data-driven (--data) run used; absent from every run without --data (--iterations included). Added in v0.2.",
+      "required": ["index", "total", "label"],
+      "properties": {
+        "index": { "type": "integer", "minimum": 1 },
+        "total": { "type": "integer", "minimum": 1 },
+        "label": { "type": "string", "description": "The --data-label column's value, else row <index>." }
       }
     },
     "header": {
@@ -91,7 +102,8 @@
             "tls_ms": { "$ref": "#/$defs/optional_ms" },
             "ttfb_ms": { "$ref": "#/$defs/ms" },
             "download_ms": { "$ref": "#/$defs/ms" },
-            "total_ms": { "$ref": "#/$defs/ms" }
+            "total_ms": { "$ref": "#/$defs/ms" },
+            "auth_ms": { "$ref": "#/$defs/ms" }
           }
         },
         "redirects": {

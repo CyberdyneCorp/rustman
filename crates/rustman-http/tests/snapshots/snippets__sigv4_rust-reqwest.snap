@@ -1,0 +1,17 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+// aws_sigv4 auth: sign with the AWS SDK signer
+// Cargo.toml: reqwest = { version = "0.12", features = ["blocking"] }
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = reqwest::blocking::Client::builder()
+        .build()?;
+    let response = client
+        .request(reqwest::Method::GET, "https://api.example/private")
+        .send()?;
+    println!("{}", response.status());
+    println!("{}", response.text()?);
+    Ok(())
+}

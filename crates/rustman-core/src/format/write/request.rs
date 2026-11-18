@@ -3,10 +3,11 @@
 use super::{MapBuilder, Node, render};
 use crate::collection::CollectionMeta;
 use crate::environment::Environment;
+use crate::model::signed_auth::DEFAULT_JWT_TTL_SECS;
 use crate::model::{
-    Assertion, Auth, Body, Capture, HeaderAssertion, HttpRequest, JsonAssertion, JsonContent,
-    NameValue, OAuth2, Part, PartSource, Request, RequestSettings, StatusExpectation, VarValue,
-    Variables,
+    ApiKeyLocation, Assertion, Auth, AwsCredentials, AwsSigV4, Body, Capture, HeaderAssertion,
+    HttpRequest, JsonAssertion, JsonContent, Jwt, NameValue, OAuth2, Part, PartSource, Request,
+    RequestSettings, StatusExpectation, VarValue, Variables,
 };
 
 /// The YAML text Rustman writes for a request file.
@@ -209,7 +210,63 @@ fn auth(a: &Auth) -> Node {
             .opt_str("in", location.map(|l| l.as_str()))
             .build(),
         Auth::OAuth2(o) => oauth2(typed("oauth2"), o),
+        Auth::Digest { username, password } => typed("digest")
+            .str("username", username)
+            .str("password", password)
+            .build(),
+        Auth::AwsSigV4(sigv4) => aws_sigv4(typed("aws_sigv4"), sigv4),
+        Auth::Jwt(jwt) => jwt_node(typed("jwt"), jwt),
     }
+}
+
+fn aws_sigv4(builder: MapBuilder, s: &AwsSigV4) -> Node {
+    let builder = builder.str("region", &s.region).str("service", &s.service);
+    let builder = match &s.credentials {
+        AwsCredentials::Fields {
+            access_key,
+            secret_key,
+            session_token,
+        } => builder
+            .str("access_key", access_key)
+            .str("secret_key", secret_key)
+            .opt_str("session_token", session_token.as_deref()),
+        AwsCredentials::Env => builder.str("from", "env"),
+        AwsCredentials::Profile(name) => builder.str("from", "profile").str("profile", name),
+    };
+    builder
+        .opt_plain("unsigned_payload", s.unsigned_payload.then_some(true))
+        .build()
+}
+
+/// `ttl` in the largest whole unit: `1h`, `10m` or `90s`.
+fn ttl_text(secs: u64) -> String {
+    match secs {
+        s if s % 3600 == 0 => format!("{}h", s / 3600),
+        s if s % 60 == 0 => format!("{}m", s / 60),
+        s => format!("{s}s"),
+    }
+}
+
+fn jwt_node(builder: MapBuilder, j: &Jwt) -> Node {
+    let object = |map: &serde_json::Map<String, serde_json::Value>| {
+        (!map.is_empty()).then(|| json(&serde_json::Value::Object(map.clone())))
+    };
+    let ttl = (j.ttl_secs != DEFAULT_JWT_TTL_SECS).then(|| ttl_text(j.ttl_secs));
+    let location = (j.location != ApiKeyLocation::Header).then(|| j.location.as_str());
+    builder
+        .str("algorithm", j.algorithm.as_str())
+        .opt_str("secret", j.secret.as_deref())
+        .opt_str("private_key", j.private_key.as_deref())
+        .opt_str(
+            "private_key_file",
+            j.private_key_file.as_deref().map(String::as_str),
+        )
+        .opt("claims", object(&j.claims))
+        .opt("header", object(&j.header))
+        .opt_str("ttl", ttl.as_deref())
+        .opt_str("in", location)
+        .opt_str("name", j.name.as_deref())
+        .build()
 }
 
 fn oauth2(builder: MapBuilder, o: &OAuth2) -> Node {

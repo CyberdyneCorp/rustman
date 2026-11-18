@@ -10,7 +10,9 @@ use crate::discovery::find_root;
 use crate::environment::{self, Environment};
 use crate::error::{ConfigError, LoadError};
 use crate::format::from_yaml;
-use crate::model::{Auth, KindRegistry, NameValue, REQUEST_FILE_SUFFIX, Request, Variables};
+use crate::model::{
+    Auth, KindRegistry, NameValue, REQUEST_FILE_SUFFIX, Request, Variables, signed_auth,
+};
 use crate::paths::{PathEscape, contain};
 use crate::settings::{HTTP_PATH_KEYS, HttpDefaults, SETTINGS_FILE, Settings};
 
@@ -346,7 +348,12 @@ impl Loader<'_> {
 
     fn load_meta(&mut self, rel: &Path) -> Option<CollectionMeta> {
         let text = self.read(rel)?;
-        from_yaml(rel, &text).map_err(|e| self.errors.push(e)).ok()
+        let meta: CollectionMeta = from_yaml(rel, &text)
+            .map_err(|e| self.errors.push(e))
+            .ok()?;
+        self.errors
+            .extend(jwt_key_error(self.root, rel, meta.auth.as_ref()));
+        Some(meta)
     }
 
     fn load_request(&mut self, rel: &Path) -> Option<RequestEntry> {
@@ -357,6 +364,10 @@ impl Loader<'_> {
             .map_err(|e| self.errors.push(e))
             .ok()?;
         self.check_request_paths(rel, &request);
+        if let Request::Http(http) = &request {
+            self.errors
+                .extend(jwt_key_error(self.root, rel, http.auth.as_ref()));
+        }
         Some(RequestEntry {
             path: rel.to_path_buf(),
             request,
@@ -388,6 +399,27 @@ fn request_path_errors(
             Some(LoadError::new(shown, path.position(), message))
         })
         .collect()
+}
+
+/// The error of a JWT `private_key_file` (relative to the workspace root)
+/// that leaves the workspace or holds the wrong kind of key for its
+/// algorithm. A path with `{{variables}}`, or a file that cannot be read
+/// yet, is checked when the request is sent.
+fn jwt_key_error(root: &Path, shown: &Path, auth: Option<&Auth>) -> Option<LoadError> {
+    let Some(Auth::Jwt(jwt)) = auth else {
+        return None;
+    };
+    let file = jwt.private_key_file.as_ref()?;
+    let error = |message: String| LoadError::new(shown, file.position(), message);
+    if file.contains("{{") {
+        return None;
+    }
+    let path = match contain(root, root, file) {
+        Ok(path) => path,
+        Err(e) => return Some(error(e.to_string())),
+    };
+    let pem = fs::read_to_string(path).ok()?;
+    signed_auth::jwt_key_error(jwt.algorithm, &pem).map(error)
 }
 
 /// Check a request about to be written to `file` (a new file, given as the

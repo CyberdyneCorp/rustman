@@ -1,0 +1,21 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+$BASE_URL = 'https://api.example'
+
+$params = @{
+    Uri = $BASE_URL + '/users?notify=yes'
+    Method = 'POST'
+    Headers = [ordered]@{
+        'Accept' = 'application/json'
+        'X-Request-Id' = 'abc 123'
+        'Authorization' = 'Bearer «redacted:api_token»'
+    }
+    ContentType = 'application/json'
+    Body = '{"name":"Ada Lovelace","admin":true,"teams":["core",7],"manager":null}'
+    SkipHttpErrorCheck = $true
+}
+$response = Invoke-WebRequest @params
+$response.StatusCode
+$response.Content

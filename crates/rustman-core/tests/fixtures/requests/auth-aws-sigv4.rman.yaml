@@ -1,0 +1,12 @@
+version: 1
+kind: http
+name: SigV4 auth
+url: https://bucket.s3.amazonaws.com/a.txt
+auth:
+  type: aws_sigv4
+  region: us-east-1
+  service: s3
+  access_key: '{{aws_key}}'
+  secret_key: '{{aws_secret}}'
+  session_token: '{{aws_token}}'
+  unsigned_payload: true

@@ -14,7 +14,6 @@ const SUITE: &str = "rustman";
 
 /// `run` as a JUnit XML document, ending in a newline.
 pub fn junit(run: &RunRecord) -> String {
-    let show_iteration = run.requests.iter().any(|r| r.iteration > 1);
     let mut suite = TestSuite::new(SUITE);
     suite.set_time(duration(run.summary.duration_ms));
     if let Some(env) = &run.environment {
@@ -24,7 +23,7 @@ pub fn junit(run: &RunRecord) -> String {
     if run.summary.interrupted {
         suite.add_property(Property::new("interrupted", "true"));
     }
-    suite.add_test_cases(run.requests.iter().map(|r| test_case(r, show_iteration)));
+    suite.add_test_cases(run.requests.iter().map(test_case));
     let mut report = Report::new(SUITE);
     report.set_time(duration(run.summary.duration_ms));
     report.add_test_suite(suite);
@@ -35,11 +34,11 @@ pub fn junit(run: &RunRecord) -> String {
     text
 }
 
-fn test_case(record: &RequestRecord, show_iteration: bool) -> TestCase {
-    let name = if show_iteration {
-        format!("{} [{}]", record.id, record.iteration)
-    } else {
-        record.id.clone()
+/// One test case, named `<id> [<iteration label>]` in an iterated run.
+fn test_case(record: &RequestRecord) -> TestCase {
+    let name = match record.iteration_label() {
+        Some(label) => format!("{} [{label}]", record.id),
+        None => record.id.clone(),
     };
     let mut case = TestCase::new(name, status(record));
     case.set_classname(record.file.as_str());

@@ -503,3 +503,94 @@ fn contains(haystack: &[u8], needle: &str) -> bool {
         .windows(needle.len())
         .any(|window| window == needle.as_bytes())
 }
+
+/// Runner parity exit criterion: a data-driven run end to end. A folder of
+/// an `init` workspace names its data file in `_collection.yaml`; each row
+/// signs up a user with the stored token, and the reports label every
+/// iteration. No artifact holds a secret column's value or the token.
+#[test]
+fn data_driven_run_end_to_end() {
+    const PASSWORDS: [&str; 2] = ["pw-d4t4-Ana-91", "pw-d4t4-Bo-27"];
+    let mut flow = flow();
+    write(
+        &flow.ws(),
+        "signup/_collection.yaml",
+        "data: users.csv\nsecret_columns: [pin]\n",
+    );
+    write(
+        &flow.ws(),
+        "signup/users.csv",
+        &format!(
+            "email,password,pin\r\nana@example.com,{},pin-d4t4-1\r\nbo@example.com,{},pin-d4t4-2\r\n",
+            PASSWORDS[0], PASSWORDS[1]
+        ),
+    );
+    write(
+        &flow.ws(),
+        "signup/1-create.rman.yaml",
+        "version: 1\nkind: http\nname: create\nmethod: POST\nurl: '{{base_url}}/echo'\n\
+         auth:\n  type: bearer\n  token: '{{api_token}}'\n\
+         body:\n  type: json\n  content:\n    email: '{{email}}'\n    password: '{{password}}'\n    pin: '{{pin}}'\n\
+         assertions:\n  - status: 200\n  - body:\n      contains: '{{email}}'\n\
+         captures:\n  - var: created\n    from: json\n    path: $.method\n",
+    );
+    write(
+        &flow.ws(),
+        "signup/2-check.rman.yaml",
+        "version: 1\nkind: http\nname: check\nurl: '{{base_url}}/echo?who={{email}}&via={{created}}'\n\
+         assertions:\n  - status: 200\n",
+    );
+    let run = flow.step(
+        &[
+            "run",
+            "signup",
+            "--env",
+            "e2e",
+            "--data-label",
+            "email",
+            "--reporter",
+            "pretty",
+            "--reporter",
+            "json:out/data.json",
+            "--reporter",
+            "junit:out/data.xml",
+        ],
+        None,
+        0,
+    );
+    let stdout = String::from_utf8_lossy(&run.stdout).into_owned();
+    assert!(
+        stdout.contains("iteration 2/2 · bo@example.com\nPASS  signup/1-create  POST 200"),
+        "{stdout}"
+    );
+    let report = valid_report(&fs::read(flow.ws().join("out/data.json")).unwrap());
+    let records = report["requests"].as_array().unwrap();
+    assert_eq!(records.len(), 4);
+    assert_eq!(records[3]["data_row"]["label"], "bo@example.com");
+    let body = records[0]["exchange"]["request"]["body"].as_str().unwrap();
+    assert!(body.contains("«redacted:password»"), "{body}");
+    assert!(body.contains("«redacted:pin»"), "{body}");
+    let junit = fs::read_to_string(flow.ws().join("out/data.xml")).unwrap();
+    assert!(
+        junit.contains("name=\"signup/2-check [bo@example.com]\""),
+        "{junit}"
+    );
+
+    let mut files = vec![
+        flow.ws().join("out/data.json"),
+        flow.ws().join("out/data.xml"),
+    ];
+    files.extend(history_files(&flow.ws()));
+    let mut artifacts: Vec<(String, Vec<u8>)> = files
+        .iter()
+        .map(|f| (f.display().to_string(), fs::read(f).unwrap()))
+        .collect();
+    let run = flow.output("run signup");
+    artifacts.push(("stdout".into(), run.stdout.clone()));
+    artifacts.push(("stderr".into(), run.stderr.clone()));
+    for (name, bytes) in artifacts {
+        for secret in [PASSWORDS[0], PASSWORDS[1], "d4t4", CANARY] {
+            assert!(!contains(&bytes, secret), "{name} holds {secret}");
+        }
+    }
+}

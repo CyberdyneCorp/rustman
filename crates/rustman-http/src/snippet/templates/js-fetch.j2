@@ -1,0 +1,50 @@
+{% if auth_comment %}
+// {{ auth_comment }}
+{% endif %}
+{% if body.kind == "file" or body.any_file %}
+import { openAsBlob } from "node:fs";
+
+{% endif %}
+{% for c in constants %}
+const {{ c.name }} = {{ c.value | lit }};
+{% endfor %}
+{% if constants %}
+
+{% endif %}
+{% if body.kind == "multipart" %}
+const form = new FormData();
+{% for p in body.parts %}
+{% if p.is_file %}
+form.append({{ p.name | lit }}, await openAsBlob({{ p.path | q }}, { type: {{ p.content_type | lit }} }), {{ p.filename | lit }});
+{% elif p.content_type %}
+form.append({{ p.name | lit }}, new Blob([{{ p.value | q }}], { type: {{ p.content_type | lit }} }));
+{% else %}
+form.append({{ p.name | lit }}, {{ p.value | q }});
+{% endif %}
+{% endfor %}
+
+{% endif %}
+const response = await fetch({{ url | q }}, {
+  method: {{ method | lit }},
+{% if headers %}
+  headers: {
+{% for h in headers %}
+    {{ h.name | lit }}: {{ h.value | hv }},
+{% endfor %}
+  },
+{% endif %}
+{% if body.kind == "text" and body.is_json and body.code %}
+  body: JSON.stringify({{ body.code }}),
+{% elif body.kind == "text" %}
+  body: {{ body.text | q }},
+{% elif body.kind == "file" %}
+  body: await openAsBlob({{ body.path | q }}),
+{% elif body.kind == "multipart" %}
+  body: form,
+{% endif %}
+{% if not follow_redirects %}
+  redirect: "manual",
+{% endif %}
+});
+console.log(response.status);
+console.log(await response.text());

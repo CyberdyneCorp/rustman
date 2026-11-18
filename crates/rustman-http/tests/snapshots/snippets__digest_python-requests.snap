@@ -1,0 +1,13 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+import requests
+from requests.auth import HTTPDigestAuth
+
+response = requests.get(
+    "https://api.example/private",
+    auth=HTTPDigestAuth("alice", "«redacted:password»"),
+)
+print(response.status_code)
+print(response.text)

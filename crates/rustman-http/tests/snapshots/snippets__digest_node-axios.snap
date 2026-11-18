@@ -1,0 +1,15 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+// digest auth: answer the server's challenge with an HTTP Digest helper
+import axios from "axios";
+
+const response = await axios.request({
+  method: "GET",
+  url: "https://api.example/private",
+  responseType: "text",
+  validateStatus: () => true,
+});
+console.log(response.status);
+console.log(response.data);

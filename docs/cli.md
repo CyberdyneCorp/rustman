@@ -27,6 +27,7 @@ This page covers sending and running requests, reporters, terminal behavior, log
 | `rustman export curl <request>` | Print a request as a curl command (redacted) | [Curl export](http.md#export) |
 | `rustman export postman <path>` | Write a collection folder or request file as a Postman Collection v2.1 (`-o <file>`) | [Exporting](import.md#exporting) |
 | `rustman export http <path>` | Write a collection folder or request file as a `.http` file (`-o <file>`) | [Exporting](import.md#exporting) |
+| `rustman export snippet --lang <lang> <request>` | Print a request as code for one of 11 languages and tools (redacted); `--list` lists them | [Code snippets](snippets.md) |
 | `rustman send` | Send one request and print the response | [below](#rustman-send) |
 | `rustman run` | Run the requests under files and folders and report the results | [below](#rustman-run) |
 | `rustman history list` | List past exchanges, newest first, with `--status`, `--method`, `--grep`, `--since`, `--limit` and `--json` | [History](history.md#listing-and-searching) |
@@ -103,7 +104,8 @@ rustman send DELETE '{{base_url}}/users/42?key={{api_token}}' --env dev
 
 ```text
 rustman run [<PATH>...] [--env <name>] [--var k=v]... [--timeout <duration>] [--insecure]
-            [--bail] [--filter <tag:name | glob>]... [--iterations <n>] [--parallel <n>]
+            [--bail[=iteration]] [--filter <tag:name | glob>]... [--iterations <n>] [--parallel <n>]
+            [--data <file> | --no-data] [--data-label <column>] [--secret-columns <a,b>]
             [--reporter <format>[:<path>]]...
 ```
 
@@ -116,9 +118,12 @@ Runs every request file under the given files and folders (default: the current 
 | `--timeout <duration>` | The total timeout of every request, replacing `timeout_ms`: `500ms`, `5s`, `2m`, or a number of milliseconds. Also on `send`. |
 | `--insecure`, `-k` | No TLS certificate verification; exchanges are flagged `insecure: true`. Also on `send`. |
 | `--no-history` | Do not record the exchanges in [history](history.md). Also on `send`. |
-| `--bail` | After the first failed or errored request, the requests not started yet are reported as `skipped (bail)`. |
+| `--bail` | After the first failed or errored request, the requests not started yet are reported as `skipped (bail)`. `--bail=iteration` skips only the rest of the failing iteration and goes on with the next one. |
 | `--filter <value>` | Keep only matching requests (repeatable; a request matching any filter runs). `tag:<name>` matches the request's `tags`; anything else is a glob over the request id or file path, where `*` and `?` stay within one folder and `**` crosses folders: `users/*`, `**/login`. |
-| `--iterations <n>` | Run the selected requests `n` times (default 1). Captures carry over between iterations. |
+| `--iterations <n>` | Run the selected requests `n` times (default 1). Captures carry over between iterations. Cannot be combined with `--data`. |
+| `--data <file>` | Run the selected requests once per row of a CSV or JSON file, with the row's values as variables; see [data-driven runs](data-runs.md). `--no-data` ignores the data file a `_collection.yaml` names. |
+| `--data-label <column>` | Label each iteration of a data-driven run with this column's value (default `row <n>`). |
+| `--secret-columns <a,b>` | Data columns whose values are secrets, redacted in every output. |
 | `--parallel <n>` | Run up to `n` folders at once (default 1). |
 | `--reporter <format>[:<path>]` | `pretty`, `json`, `junit` or `tap`, written to stdout or to `<path>` (repeatable; default `pretty` on stdout). At most one reporter may write to stdout. A file is replaced atomically, a symlink is followed, and a device such as `/dev/stdout` is written in place. |
 
@@ -155,6 +160,8 @@ SKIP  users/delete  skipped (bail)
 ```
 
 `json` writes a `rustman.report/v1` document with `"kind": "run"`, described by the JSON Schema in [`schemas/report.schema.json`](schemas/report.schema.json). It holds every request (with its redacted exchange, timings, assertion results and capture results) and `summary.total`, `summary.passed`, `summary.failed`, `summary.errored`, `summary.skipped`, `summary.duration_ms` and `summary.interrupted`. A request is `passed` when every assertion passed and every required capture matched, `failed` when an assertion failed or could not be evaluated or a required capture matched nothing, `errored` when no response arrived (unresolved variables, network, TLS, timeout, auth) and `skipped` with a `skip_reason`: `bail`, `interrupted`, or `unsupported_kind` for request kinds this build cannot send. Report files are replaced atomically.
+
+A data-driven or repeated run (`--data`, or `--iterations` above 1) groups the pretty report under one `iteration <i>/<n>` line per iteration, adds ` [<label>]` to JUnit test case names and TAP descriptions. Every JSON request has the 1-based integer `iteration`; with `--data` only, it also gets a `data_row` object (`index`, `total`, `label`); see [iteration labels](data-runs.md#iteration-labels).
 
 `junit` writes JUnit XML for CI systems: one `<testsuite name="rustman">` with one `<testcase>` per request (named by its id, with `classname` set to its file). A failed request gets a `<failure>`, an errored one an `<error>` and a skipped one `<skipped>`; their `message` is the first reason, and the element text lists them all:
 

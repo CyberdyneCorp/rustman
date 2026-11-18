@@ -1,0 +1,18 @@
+---
+source: crates/rustman-report/tests/reports.rs
+expression: junit(&run)
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="rustman" tests="4" skipped="0" failures="1" errors="0" time="0.021">
+    <testsuite name="rustman" tests="4" skipped="0" errors="0" failures="1" time="0.021">
+        <properties>
+            <property name="started_at" value="2026-11-17T09:30:00.123Z"/>
+        </properties>
+        <testcase name="get-profile [ana@example.com]" classname="get-profile.rman.yaml" assertions="0" time="0.000"/>
+        <testcase name="update [ana@example.com]" classname="update.rman.yaml" assertions="0" time="0.000"/>
+        <testcase name="get-profile [bo@example.com]" classname="get-profile.rman.yaml" assertions="0" time="0.000"/>
+        <testcase name="update [bo@example.com]" classname="update.rman.yaml" assertions="0" time="0.000">
+            <failure></failure>
+        </testcase>
+    </testsuite>
+</testsuites>

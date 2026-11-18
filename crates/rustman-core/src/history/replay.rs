@@ -13,10 +13,13 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 use super::template::{Templater, Withheld};
-use crate::model::{ApiKeyLocation, Auth, OAuth2, OAuth2Grant, RequestSettings};
+use crate::model::{
+    ApiKeyLocation, Auth, AwsCredentials, AwsSigV4, Jwt, JwtAlgorithm, OAuth2, OAuth2Grant,
+    RequestSettings,
+};
 use crate::redact::{Redactor, sensitive_header};
 use crate::secret::Secret;
 use crate::vars::{
@@ -86,6 +89,38 @@ pub enum ReplayAuth {
         client_id: String,
         client_secret: Option<String>,
         scopes: Option<Vec<String>>,
+    },
+    Digest {
+        username: String,
+        password: String,
+    },
+    #[serde(rename = "aws_sigv4")]
+    AwsSigV4 {
+        region: String,
+        service: String,
+        /// `None` for credentials from the environment or a profile.
+        access_key: Option<String>,
+        secret_key: Option<String>,
+        session_token: Option<String>,
+        /// The profile of `from: profile`; `None` with `from: env`.
+        profile: Option<String>,
+        #[serde(default)]
+        from_env: bool,
+        #[serde(default)]
+        unsigned_payload: bool,
+    },
+    Jwt {
+        algorithm: JwtAlgorithm,
+        secret: Option<String>,
+        private_key: Option<String>,
+        private_key_file: Option<String>,
+        #[serde(default)]
+        claims: Map<String, Value>,
+        #[serde(default)]
+        header: Map<String, Value>,
+        ttl_secs: u64,
+        location: ApiKeyLocation,
+        name: Option<String>,
     },
 }
 
@@ -314,6 +349,67 @@ impl Builder<'_> {
                 location: *location,
             },
             Auth::OAuth2(oauth2) => self.oauth2(oauth2),
+            Auth::Digest { username, password } => ReplayAuth::Digest {
+                username: self.t.text(username),
+                password: self.credential("the digest password", password, &[]),
+            },
+            Auth::AwsSigV4(sigv4) => self.aws_sigv4(sigv4),
+            Auth::Jwt(jwt) => self.jwt(jwt),
+        }
+    }
+
+    fn aws_sigv4(&mut self, s: &AwsSigV4) -> ReplayAuth {
+        let (mut access_key, mut secret_key, mut session_token) = (None, None, None);
+        let (mut profile, mut from_env) = (None, false);
+        match &s.credentials {
+            AwsCredentials::Fields {
+                access_key: key,
+                secret_key: secret,
+                session_token: token,
+            } => {
+                access_key = Some(self.t.text(key));
+                secret_key = Some(self.credential("the AWS secret key", secret, &[]));
+                session_token = token
+                    .as_deref()
+                    .map(|t| self.credential("the AWS session token", t, &[]));
+            }
+            AwsCredentials::Env => from_env = true,
+            AwsCredentials::Profile(name) => profile = Some(self.t.text(name)),
+        }
+        ReplayAuth::AwsSigV4 {
+            region: self.t.text(&s.region),
+            service: self.t.text(&s.service),
+            access_key,
+            secret_key,
+            session_token,
+            profile,
+            from_env,
+            unsigned_payload: s.unsigned_payload,
+        }
+    }
+
+    fn jwt(&mut self, j: &Jwt) -> ReplayAuth {
+        let object = |b: &Self, map: &Map<String, Value>| match b.json(&Value::Object(map.clone()))
+        {
+            Value::Object(map) => map,
+            _ => Map::new(),
+        };
+        ReplayAuth::Jwt {
+            algorithm: j.algorithm,
+            secret: j
+                .secret
+                .as_deref()
+                .map(|s| self.credential("the JWT secret", s, &[])),
+            private_key: j
+                .private_key
+                .as_deref()
+                .map(|k| self.credential("the JWT private key", k, &[])),
+            private_key_file: j.private_key_file.as_ref().map(|f| self.t.text(f)),
+            claims: object(self, &j.claims),
+            header: object(self, &j.header),
+            ttl_secs: j.ttl_secs,
+            location: j.location,
+            name: j.name.as_deref().map(|n| self.t.text(n)),
         }
     }
 
@@ -439,6 +535,78 @@ impl ReplayAuth {
                 client_secret: client_secret.as_deref().map(|s| text(i, s)),
                 scopes: scopes.clone(),
             }),
+            Self::Digest { username, password } => Auth::Digest {
+                username: text(i, username),
+                password: text(i, password),
+            },
+            Self::AwsSigV4 { .. } => Auth::AwsSigV4(Box::new(self.aws_sigv4(i))),
+            Self::Jwt { .. } => Auth::Jwt(Box::new(self.jwt(i))),
+        }
+    }
+
+    fn aws_sigv4(&self, i: &mut Interpolator<'_, '_>) -> AwsSigV4 {
+        let Self::AwsSigV4 {
+            region,
+            service,
+            access_key,
+            secret_key,
+            session_token,
+            profile,
+            from_env,
+            unsigned_payload,
+        } = self
+        else {
+            unreachable!("called on aws_sigv4 auth only");
+        };
+        let credentials = match (profile, from_env) {
+            (Some(name), _) => AwsCredentials::Profile(text(i, name)),
+            (None, true) => AwsCredentials::Env,
+            (None, false) => AwsCredentials::Fields {
+                access_key: text(i, access_key.as_deref().unwrap_or_default()),
+                secret_key: text(i, secret_key.as_deref().unwrap_or_default()),
+                session_token: session_token.as_deref().map(|t| text(i, t)),
+            },
+        };
+        AwsSigV4 {
+            region: text(i, region),
+            service: text(i, service),
+            credentials,
+            unsigned_payload: *unsigned_payload,
+        }
+    }
+
+    fn jwt(&self, i: &mut Interpolator<'_, '_>) -> Jwt {
+        let Self::Jwt {
+            algorithm,
+            secret,
+            private_key,
+            private_key_file,
+            claims,
+            header,
+            ttl_secs,
+            location,
+            name,
+        } = self
+        else {
+            unreachable!("called on jwt auth only");
+        };
+        let object = |i: &mut Interpolator<'_, '_>, map: &Map<String, Value>| match json(
+            i,
+            &Value::Object(map.clone()),
+        ) {
+            Value::Object(map) => map,
+            _ => Map::new(),
+        };
+        Jwt {
+            algorithm: *algorithm,
+            secret: secret.as_deref().map(|s| text(i, s)),
+            private_key: private_key.as_deref().map(|k| text(i, k)),
+            private_key_file: private_key_file.as_deref().map(|f| text(i, f).into()),
+            claims: object(i, claims),
+            header: object(i, header),
+            ttl_secs: *ttl_secs,
+            location: *location,
+            name: name.as_deref().map(|n| text(i, n)),
         }
     }
 }

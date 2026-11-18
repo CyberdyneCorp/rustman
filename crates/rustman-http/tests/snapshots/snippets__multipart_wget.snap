@@ -1,0 +1,9 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+# multipart body: wget cannot send multipart/form-data; use curl or httpie
+wget --quiet --output-document=- --content-on-error \
+  --method=PUT \
+  --header 'X-Trace: t-1' \
+  'https://api.example/users/42/avatar'

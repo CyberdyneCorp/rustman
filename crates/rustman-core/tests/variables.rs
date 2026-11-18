@@ -590,3 +590,40 @@ settings:
         assert!(pending_connection(&listener));
     }
 }
+
+mod placeholders {
+    use super::*;
+    use rustman_core::vars::{PlaceholderVar, resolve_placeholders};
+
+    #[test]
+    fn variables_stay_as_markers_and_secrets_are_never_read() {
+        let f = Fixture::new("");
+        f.write(
+            "environments/prod.yaml",
+            "variables:\n  base_url: https://api.example\nsecrets: [api_token]\n",
+        );
+        f.write(
+            "r.rman.yaml",
+            "version: 1\nkind: http\nname: r\nurl: '{{base_url}}/users/{{id}}'\nheaders:\n  - name: Authorization\n    value: 'Bearer {{api_token}}'\n  - name: X-Base\n    value: '{{base_url}}'\n",
+        );
+        let ws = f.load();
+        let request = &ws.find_by_name("r")[0];
+        let env = ws.active_environment(Some("prod"), None).unwrap();
+        let resolver = Resolver::for_request(&ws.settings, request, env, &Store);
+        let (resolved, vars) = resolve_placeholders(request, &resolver).unwrap();
+        assert_eq!(resolved.url.text, "{{base_url}}/users/{{id}}");
+        assert_eq!(
+            resolved.headers[0].value.text,
+            "Bearer «redacted:api_token»"
+        );
+        assert!(resolved.secrets.is_empty());
+        let var = |name: &str, value: &str| PlaceholderVar {
+            name: name.into(),
+            value: value.into(),
+        };
+        assert_eq!(
+            vars,
+            [var("base_url", "https://api.example"), var("id", "{{id}}")]
+        );
+    }
+}

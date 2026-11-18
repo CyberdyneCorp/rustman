@@ -1,0 +1,23 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+import axios from "axios";
+
+const BASE_URL = "https://api.example";
+
+const response = await axios.request({
+  method: "POST",
+  url: BASE_URL + "/users?notify=yes",
+  headers: {
+    "Accept": "application/json",
+    "X-Request-Id": "abc 123",
+    "Authorization": "Bearer «redacted:api_token»",
+    "Content-Type": "application/json",
+  },
+  data: {"name": "Ada Lovelace", "admin": true, "teams": ["core", 7], "manager": null},
+  responseType: "text",
+  validateStatus: () => true,
+});
+console.log(response.status);
+console.log(response.data);

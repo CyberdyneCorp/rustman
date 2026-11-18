@@ -1,4 +1,5 @@
-//! `rustman export curl <request>`: print a request as a curl command, with
+//! `rustman export curl <request>` and `rustman export snippet --lang
+//! <lang> <request>`: print a request as a curl command or as code, with
 //! secrets redacted unless `--show-secrets`; `rustman export postman|http
 //! <path>`: a collection folder or request file as a Postman v2.1
 //! collection or a `.http` file, with secrets as `{{name}}` placeholders.
@@ -7,10 +8,11 @@ use std::path::{Path, PathBuf};
 
 use clap::{Args, Subcommand};
 use rustman_core::secrets::BACKEND_VAR;
-use rustman_core::vars::{Resolver, resolve_request};
-use rustman_core::{ConfigError, SecretBackend, SecretStore};
+use rustman_core::vars::{Resolver, resolve_placeholders, resolve_request};
+use rustman_core::{ConfigError, RequestRef, SecretBackend, SecretStore};
 use rustman_core::{Environment, Redactor, Workspace};
-use rustman_http::export_curl;
+use rustman_http::snippet::http_entry;
+use rustman_http::{Lang, SnippetOptions, export_curl, snippet};
 use rustman_import::ImportError;
 use rustman_import::export::{Target, export};
 
@@ -31,6 +33,8 @@ enum ExportCommand {
     Postman(FileArgs),
     /// Write a collection folder or request file as a .http file
     Http(FileArgs),
+    /// Print a request as code for another language or tool
+    Snippet(SnippetArgs),
 }
 
 #[derive(Debug, Args)]
@@ -56,11 +60,33 @@ struct CurlArgs {
     selection: EnvSelection,
 }
 
+#[derive(Debug, Args)]
+struct SnippetArgs {
+    /// The request: a request file, its id (path without .rman.yaml) or its name
+    #[arg(required_unless_present = "list")]
+    request: Option<String>,
+    /// The language (see --list); `fetch`, `python` and `rust` are aliases
+    #[arg(long, value_name = "LANG", required_unless_present = "list")]
+    lang: Option<String>,
+    /// List the supported languages and exit
+    #[arg(long, exclusive = true)]
+    list: bool,
+    /// Print secret values instead of «redacted:<name>» placeholders
+    #[arg(long, conflicts_with = "placeholders")]
+    show_secrets: bool,
+    /// Keep variables unresolved: {{name}} in shell tools, constants in code
+    #[arg(long)]
+    placeholders: bool,
+    #[command(flatten)]
+    selection: EnvSelection,
+}
+
 pub fn run(args: &ExportArgs) -> Result<(), CliError> {
     match &args.command {
         ExportCommand::Curl(a) => curl(a),
         ExportCommand::Postman(a) => file(a, Target::Postman),
         ExportCommand::Http(a) => file(a, Target::Http),
+        ExportCommand::Snippet(a) => export_snippet(a),
     }
 }
 
@@ -126,18 +152,63 @@ fn redactor(ws: &Workspace, env: Option<&Environment>) -> Result<Redactor, Confi
     Ok(redactor)
 }
 
+
+fn secret_store(ws: &Workspace) -> Result<SecretStore, CliError> {
+    let backend = SecretBackend::from_env_value(std::env::var(BACKEND_VAR).ok().as_deref())
+        .map_err(ConfigError::from)?;
+    Ok(SecretStore::open(&ws.root, backend))
+}
+
 fn curl(args: &CurlArgs) -> Result<(), CliError> {
     let ws = args.selection.workspace()?;
     let env = args.selection.environment(&ws)?;
     let target = ws.find_request(&args.request, &current_dir()?)?;
-    let backend = SecretBackend::from_env_value(std::env::var(BACKEND_VAR).ok().as_deref())
-        .map_err(ConfigError::from)?;
-    let store = SecretStore::open(&ws.root, backend);
+    let store = secret_store(&ws)?;
     let resolver = Resolver::for_request(&ws.settings, &target, env, &store);
     let resolved = resolve_request(&target, &resolver);
     print_warnings(&store.take_warnings());
     let exported = export_curl(&resolved?, args.show_secrets);
     print_warnings(&exported.warnings);
     println!("{}", exported.command);
+    Ok(())
+}
+
+fn export_snippet(args: &SnippetArgs) -> Result<(), CliError> {
+    if args.list {
+        for lang in Lang::ALL {
+            println!("{lang}");
+        }
+        return Ok(());
+    }
+    let (Some(request), Some(lang)) = (&args.request, &args.lang) else {
+        unreachable!("clap requires both without --list");
+    };
+    let lang = Lang::parse(lang)?;
+    let ws = args.selection.workspace()?;
+    let env = args.selection.environment(&ws)?;
+    let found = ws.find_request(request, &current_dir()?)?;
+    let converted = http_entry(&found)?;
+    let target = match &converted {
+        Some(entry) => RequestRef { entry, ..found },
+        None => found,
+    };
+    let store = secret_store(&ws)?;
+    let resolver = Resolver::for_request(&ws.settings, &target, env, &store);
+    let mut options = SnippetOptions {
+        show_secrets: args.show_secrets,
+        placeholders: None,
+        root: Some(&ws.root),
+    };
+    let (resolved, vars) = if args.placeholders {
+        let (resolved, vars) = resolve_placeholders(&target, &resolver)?;
+        (resolved, Some(vars))
+    } else {
+        (resolve_request(&target, &resolver)?, None)
+    };
+    print_warnings(&store.take_warnings());
+    options.placeholders = vars.as_deref();
+    let snippet = snippet(&resolved, lang, &options);
+    print_warnings(&snippet.warnings);
+    println!("{}", snippet.code);
     Ok(())
 }

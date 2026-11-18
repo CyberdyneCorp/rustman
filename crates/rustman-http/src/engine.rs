@@ -3,27 +3,29 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex, PoisonError};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use bytes::Bytes;
 use http::header::{COOKIE, PROXY_AUTHORIZATION};
 use http::{HeaderMap, Request, StatusCode};
 use http_body_util::Full;
-use rustman_core::model::RequestSettings;
+use rustman_core::model::{Auth, RequestSettings};
 use rustman_core::settings::{Defaults, Settings};
 use rustman_core::vars::ResolvedRequest;
 use rustman_core::{Redactor, Secret};
 
 use crate::body::{BODIES_DIR, BodyOptions};
 use crate::cookies::{self, CookieJar};
+use crate::digest::NonceCache;
 use crate::dns::Dns;
 use crate::error::RequestError;
 use crate::exchange::{Exchange, HttpVersion};
 use crate::proxy::{ProxyKind, ProxySettings};
 use crate::redirect::{self, RedirectHop};
+use crate::sigv4::Signer;
 use crate::tls::TlsSettings;
 use crate::transport::{PhaseProbe, Received, Transport, TransportKey};
-use crate::{auth, tunnel, wire};
+use crate::{auth, jwt, tunnel, wire};
 
 /// The connect timeout when neither the request nor the caller sets one.
 pub const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -140,6 +142,8 @@ impl SendOptions {
 pub struct HttpEngine {
     dns: Arc<Dns>,
     transports: Mutex<HashMap<TransportKey, Arc<Transport>>>,
+    /// Digest nonces, reused by later requests to the same host.
+    pub(crate) nonces: NonceCache,
 }
 
 impl HttpEngine {
@@ -180,14 +184,29 @@ impl HttpEngine {
     }
 
     /// The request as it leaves the process (before any hop), with the
-    /// warnings building it produced. Unredacted.
+    /// warnings building it produced and the SigV4 signer of its hops.
+    /// `token` is the OAuth2 access token or the JWT; without one, a JWT
+    /// is signed here. Unredacted.
     pub(crate) async fn prepare(
         request: &ResolvedRequest,
         token: Option<&Secret<String>>,
     ) -> Result<Prepared, RequestError> {
         let (mut outgoing, warnings) = wire::build(request).await?;
+        let signed;
+        let token = match (&request.auth, token) {
+            (Some(Auth::Jwt(config)), None) => {
+                signed = Secret::new(jwt::SECRET_NAME, jwt::sign(config, jwt::now())?);
+                Some(&signed)
+            }
+            (_, token) => token,
+        };
         auth::apply(&mut outgoing, request.auth.as_ref(), token)?;
-        Ok(Prepared { outgoing, warnings })
+        let signer = Signer::for_auth(request.auth.as_ref())?;
+        Ok(Prepared {
+            outgoing,
+            warnings,
+            signer,
+        })
     }
 
     /// Send a prepared request and follow its redirects within the total
@@ -207,6 +226,7 @@ impl HttpEngine {
             options,
             credentials: auth::credentials(request.auth.as_ref()),
             secrets: Redactor::for_request(request),
+            signer: prepared.signer.as_ref(),
             probe: &probe,
             gate,
         };
@@ -225,6 +245,12 @@ impl HttpEngine {
         let redactor = Redactor::for_request(request);
         let mut all = prepared.warnings;
         all.append(&mut exchange.warnings);
+        all.extend(
+            prepared
+                .signer
+                .as_ref()
+                .and_then(|s| s.skew_hint(&exchange)),
+        );
         exchange.warnings = all.iter().map(|w| redactor.text(w).into_owned()).collect();
         Ok(exchange)
     }
@@ -248,6 +274,8 @@ impl HttpEngine {
 pub(crate) struct Prepared {
     pub outgoing: Request<Full<Bytes>>,
     pub warnings: Vec<String>,
+    /// Signs every hop (`aws_sigv4`).
+    pub signer: Option<Signer>,
 }
 
 /// Decides, for a governed sender, whether each redirect hop may be sent,
@@ -267,7 +295,7 @@ pub(crate) trait Gate: Sync {
 }
 
 /// No gate: requests sent with `rustman send` and `rustman run`.
-struct Ungated;
+pub(crate) struct Ungated;
 
 impl Gate for Ungated {
     type Error = RequestError;
@@ -288,6 +316,7 @@ struct Hops<'a, G> {
     /// Finds the request's secrets in the headers and body of a redirect
     /// that leaves the origin.
     secrets: Redactor,
+    signer: Option<&'a Signer>,
     probe: &'a PhaseProbe,
     gate: &'a G,
 }
@@ -300,9 +329,16 @@ impl<G: Gate> Hops<'_, G> {
         let mut redirects = Vec::new();
         let mut warnings = Vec::new();
         let mut credentials = Redactor::new();
+        // SigV4 signs each hop for its own URL, but only while the redirects
+        // stay on the request's origin: once one leaves it, no later hop is
+        // signed, as `Authorization` is dropped for every other auth.
+        let origin = request.uri().clone();
+        let mut signing = self.signer.is_some();
         loop {
             let id = uuid::Uuid::new_v4().to_string();
-            let received = self.send(&request, &id, &mut credentials).await?;
+            signing &= redirect::same_origin(&origin, request.uri());
+            let signer = self.signer.filter(|_| signing);
+            let received = self.send(&request, &id, signer, &mut credentials).await?;
             let head = &received.head;
             self.gate.after_hop(head.status, &head.headers);
             let next = if options.follow_redirects {
@@ -334,16 +370,21 @@ impl<G: Gate> Hops<'_, G> {
         }
     }
 
-    /// Send one hop, with the jar's cookies, and store the cookies it sets.
+    /// Send one hop, with the jar's cookies and signed by `signer`, and
+    /// store the cookies it sets.
     /// The sensitive header values sent and received go to `credentials`.
     async fn send(
         &self,
         request: &Request<Full<Bytes>>,
         id: &str,
+        signer: Option<&Signer>,
         credentials: &mut Redactor,
     ) -> Result<Received, RequestError> {
         let options = self.options;
-        let wire = on_the_wire(request, options);
+        let mut wire = on_the_wire(request, options);
+        if let Some(signer) = signer {
+            signer.sign(&mut wire, SystemTime::now())?;
+        }
         add_credentials(credentials, wire.headers());
         let received = self
             .transport

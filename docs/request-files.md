@@ -91,7 +91,7 @@ The `kind: http` fields, in the order Rustman writes them:
 | `query` | An ordered list of `name`/`value` pairs. Names may repeat. |
 | `headers` | An ordered list of `name`/`value` pairs. |
 | `body` | One of the body types below. |
-| `auth` | `none`, `basic`, `bearer`, `api_key` or `oauth2`. |
+| `auth` | `none`, `basic`, `bearer`, `api_key`, `oauth2`, `digest`, `aws_sigv4` or `jwt`. |
 | `settings` | Per-request overrides for timeouts, redirects, TLS and transport. |
 
 Header and query order is kept when the request is sent:
@@ -270,6 +270,7 @@ The other types:
 - `{type: bearer, token}` sends `Authorization: Bearer <token>`.
 - `{type: api_key, name, value, in}` sends the key as a header (`in: header`, the default) or a query parameter (`in: query`).
 - `{type: oauth2, grant, token_url, client_id, ...}` with `grant: client_credentials` or `grant: authorization_code` (which also needs `auth_url`). Optional: `client_secret`, `scopes`.
+- `{type: digest, username, password}`, `{type: aws_sigv4, region, service, ...}` and `{type: jwt, algorithm, ...}` compute their credentials for every request; see [Signature auth](auth.md).
 - `{type: none}` sends no auth, even when the collection defines some.
 
 Auth never replaces an explicit `Authorization` header.
@@ -364,7 +365,7 @@ Every folder under the workspace root is a collection, except `environments/`, f
 
 Requests run in file-name order unless the folder has a `_collection.yaml` with `order:`. Entries named there (request file names without `.rman.yaml`, or sub-folder names) run first, in that order, and the rest follow by file name. An `order:` entry that matches nothing produces a warning.
 
-A `_collection.yaml` may also set `name`, `description`, `parallel: true` (under `rustman run --parallel <n>`, the folder's requests run concurrently instead of one after another; see [the CLI reference](cli.md#rustman-run)), and `headers`, `auth` and `variables` that the requests inside inherit. A request's own value wins. A header set closer to the request replaces every header with the same name (case-insensitive) set further up.
+A `_collection.yaml` may also set `name`, `description`, `parallel: true` (under `rustman run --parallel <n>`, the folder's requests run concurrently instead of one after another; see [the CLI reference](cli.md#rustman-run)), `data` and `secret_columns` (the folder's default [data file](data-runs.md) for `rustman run`, and its secret columns), and `headers`, `auth` and `variables` that the requests inside inherit. A request's own value wins. A header set closer to the request replaces every header with the same name (case-insensitive) set further up.
 
 ```yaml
 # users/_collection.yaml

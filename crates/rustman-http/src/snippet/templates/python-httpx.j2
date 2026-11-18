@@ -1,0 +1,52 @@
+{% if auth_comment %}
+# {{ auth_comment }}
+{% endif %}
+import httpx
+{% if constants %}
+
+{% for c in constants %}
+{{ c.name }} = {{ c.value | lit }}
+{% endfor %}
+{% endif %}
+
+response = httpx.request(
+    {{ method | lit }},
+    {{ url | q }},
+{% if body.kind == "text" and body.is_json and body.code %}
+    json={{ body.code }},
+{% elif body.kind == "text" %}
+    content={{ body.text | q }},
+{% elif body.kind == "file" %}
+    content=open({{ body.path | q }}, "rb").read(),
+{% elif body.kind == "multipart" %}
+    files=[
+{% for p in body.parts %}
+{% if p.is_file %}
+        ({{ p.name | lit }}, ({{ p.filename | lit }}, open({{ p.path | q }}, "rb"), {{ p.content_type | lit }})),
+{% elif p.content_type %}
+        ({{ p.name | lit }}, (None, {{ p.value | q }}, {{ p.content_type | lit }})),
+{% else %}
+        ({{ p.name | lit }}, (None, {{ p.value | q }})),
+{% endif %}
+{% endfor %}
+    ],
+{% endif %}
+{% if headers %}
+    headers={
+{% for h in headers %}
+        {{ h.name | lit }}: {{ h.value | hv }},
+{% endfor %}
+    },
+{% endif %}
+{% if digest %}
+    auth=httpx.DigestAuth({{ digest.username | q }}, {{ digest.password | q }}),
+{% endif %}
+{% if follow_redirects %}
+    follow_redirects=True,
+{% endif %}
+{% if not verify_tls %}
+    verify=False,
+{% endif %}
+)
+print(response.status_code)
+print(response.text)

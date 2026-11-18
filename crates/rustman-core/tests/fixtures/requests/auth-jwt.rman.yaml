@@ -1,0 +1,17 @@
+version: 1
+kind: http
+name: JWT auth
+url: '{{base_url}}/me'
+auth:
+  type: jwt
+  algorithm: RS256
+  private_key_file: keys/rsa.pem
+  claims:
+    sub: '{{user_id}}'
+    scope: read
+    admin: false
+  header:
+    kid: key-1
+  ttl: '10m'
+  in: query
+  name: access_token

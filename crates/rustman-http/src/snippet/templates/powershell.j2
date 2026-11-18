@@ -1,0 +1,48 @@
+{% if auth_comment %}
+# {{ auth_comment }}
+{% endif %}
+{% for c in constants %}
+${{ c.name }} = {{ c.value | lit }}
+{% endfor %}
+{% if constants %}
+
+{% endif %}
+$params = @{
+    Uri = {{ url | q }}
+    Method = {{ method | lit }}
+{% if headers | rejectattr("is_content_type") | list %}
+    Headers = [ordered]@{
+{% for h in headers if not h.is_content_type %}
+        {{ h.name | lit }} = {{ h.value | q }}
+{% endfor %}
+    }
+{% endif %}
+{% if content_type and body.kind != "none" %}
+    ContentType = {{ content_type | q }}
+{% endif %}
+{% if body.kind == "text" %}
+    Body = {{ body.text | q }}
+{% elif body.kind == "file" %}
+    InFile = {{ body.path | q }}
+{% elif body.kind == "multipart" %}
+    Form = [ordered]@{
+{% for p in body.parts %}
+{% if p.is_file %}
+        {{ p.name | lit }} = Get-Item -LiteralPath {{ p.path | q }}
+{% else %}
+        {{ p.name | lit }} = {{ p.value | q }}
+{% endif %}
+{% endfor %}
+    }
+{% endif %}
+{% if not follow_redirects %}
+    MaximumRedirection = 0
+{% endif %}
+{% if not verify_tls %}
+    SkipCertificateCheck = $true
+{% endif %}
+    SkipHttpErrorCheck = $true
+}
+$response = Invoke-WebRequest @params
+$response.StatusCode
+$response.Content

@@ -1,0 +1,24 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+// Cargo.toml: reqwest = { version = "0.12", features = ["blocking", "multipart"] }
+use reqwest::blocking::multipart::{Form, Part};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = reqwest::blocking::Client::builder()
+        .build()?;
+    let form = Form::new()
+        .text("caption", "It's me")
+        .part("meta", Part::text("{\"v\":1}").mime_str("application/json")?)
+        .part("file", Part::file("files/avatar.png")?.mime_str("image/png")?)
+        ;
+    let response = client
+        .request(reqwest::Method::PUT, "https://api.example/users/42/avatar")
+        .header("X-Trace", "t-1")
+        .multipart(form)
+        .send()?;
+    println!("{}", response.status());
+    println!("{}", response.text()?);
+    Ok(())
+}

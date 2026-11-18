@@ -170,6 +170,11 @@ fn iterations_repeat_the_run_and_vars_override() {
     assert_eq!(requests.len(), 2);
     assert_eq!(requests[0]["iteration"], 1);
     assert_eq!(requests[1]["iteration"], 2);
+    // rustman.report/v1: only `--data` runs carry `data_row`.
+    assert!(
+        requests.iter().all(|r| r.get("data_row").is_none()),
+        "{report:#}"
+    );
     assert_eq!(report["summary"]["passed"], 2);
 }
 

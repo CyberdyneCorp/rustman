@@ -19,6 +19,7 @@
 - [ ] 3.2 Implement `ramping-vus` stages with graceful ramp-down (max 30s). Verify: a test samples active VUs at stage boundaries within ±1 VU tolerance.
 - [ ] 3.3 Implement `constant-arrival-rate` with a VU pool, `dropped` accounting and scheduled-time latency. Verify: a slow server test asserts the dropped count, and a stall test asserts the corrected p99 includes the stall.
 - [ ] 3.4 Implement CSV/JSON data feeding with `sequential`/`per-vu`/`random` modes and `stop`/`recycle` exhaustion. Verify: unit tests per mode.
+  Note (add-runner-parity 1.2): read data files with the shared `rustman_core::data_rows` reader (`DataRows::read`, `DataRows::parse`), not a bench-specific parser, so `--data users.csv` means the same in `run` and `bench`; the bench data-feeding tests then run against it.
 - [ ] 3.5 Document executors, open versus closed models and data feeding in `docs/bench.md`. Verify: docs build.
 
 ## 4. Metrics and thresholds

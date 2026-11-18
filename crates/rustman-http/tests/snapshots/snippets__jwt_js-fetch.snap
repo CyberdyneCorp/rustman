@@ -1,0 +1,10 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+// jwt auth: sign a JWT and send it as a bearer token
+const response = await fetch("https://api.example/private", {
+  method: "GET",
+});
+console.log(response.status);
+console.log(await response.text());

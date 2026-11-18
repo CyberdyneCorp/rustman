@@ -1,0 +1,40 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+package main
+
+import (
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+)
+
+func main() {
+	const BASE_URL = "https://api.example"
+
+	body := strings.NewReader("{\"name\":\"Ada Lovelace\",\"admin\":true,\"teams\":[\"core\",7],\"manager\":null}")
+
+	req, err := http.NewRequest("POST", BASE_URL + "/users?notify=yes", body)
+	if err != nil {
+		panic(err)
+	}
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("X-Request-Id", "abc 123")
+	req.Header.Add("Authorization", "Bearer «redacted:api_token»")
+	req.Header.Add("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(resp.Status)
+	fmt.Println(string(data))
+}

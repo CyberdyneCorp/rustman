@@ -1,0 +1,5 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+curl 'https://api.example/users?notify=yes' -H 'Authorization: «redacted:api_token»' -H 'Accept: application/json' -H 'X-Request-Id: abc 123' -H 'Content-Type: application/json' --data-raw '{"name":"Ada Lovelace","admin":true,"teams":["core",7],"manager":null}' -L

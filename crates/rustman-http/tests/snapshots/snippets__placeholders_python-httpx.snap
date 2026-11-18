@@ -1,0 +1,22 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+import httpx
+
+BASE_URL = "https://api.example"
+
+response = httpx.request(
+    "POST",
+    BASE_URL + "/users?notify=yes",
+    json={"name": "Ada Lovelace", "admin": True, "teams": ["core", 7], "manager": None},
+    headers={
+        "Accept": "application/json",
+        "X-Request-Id": "abc 123",
+        "Authorization": "Bearer «redacted:api_token»",
+        "Content-Type": "application/json",
+    },
+    follow_redirects=True,
+)
+print(response.status_code)
+print(response.text)

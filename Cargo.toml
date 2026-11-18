@@ -24,7 +24,7 @@ serde = { version = "1", features = ["derive"] }
 # Pinned per design D4; only used behind rustman_core::format.
 serde-saphyr = { version = "=2.1.1", default-features = false, features = ["deserialize"] }
 # preserve_order keeps JSON body keys in file order (round trip, D4).
-serde_json = { version = "1", features = ["preserve_order"] }
+serde_json = { version = "1", features = ["preserve_order", "raw_value"] }
 thiserror = "2"
 toml = "1"
 # Redactor (design D7): one linear pass over large bodies for every secret form.
@@ -126,6 +126,17 @@ governor = { version = "0.10.4", default-features = false, features = ["std"] }
 async-lock = "3.5"
 futures-timer = "3.0.3"
 httpdate = "1.0.3"
+
+# Data rows (runner parity D1): RFC 4180 CSV for `rustman run --data`.
+csv = "1.4"
+# Signature auth (runner parity D4-D6): the AWS SDK's SigV4 signer without its
+# runtime, JWT signing on ring, and MD5 for Digest (SHA-256 comes from ring).
+aws-sigv4 = { version = "1.6.6", default-features = false, features = ["sign-http", "http1"] }
+aws-credential-types = { version = "1", default-features = false }
+jsonwebtoken = { version = "9.3.1", default-features = false, features = ["use_pem"] }
+md-5 = { version = "0.11", default-features = false }
+# Snippet export (runner parity D7): one sandboxed template per language.
+minijinja = { version = "3.1", default-features = false, features = ["builtins", "serde"] }
 
 assert_cmd = "2"
 predicates = "3"

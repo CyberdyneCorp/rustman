@@ -97,5 +97,6 @@ pub fn timings_record(timings: &Timings) -> TimingsRecord {
         ttfb_ms: millis(timings.ttfb),
         download_ms: millis(timings.download),
         total_ms: millis(timings.total),
+        auth_ms: timings.auth.map(millis),
     }
 }

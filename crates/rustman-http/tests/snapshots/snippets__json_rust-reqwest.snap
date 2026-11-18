@@ -1,0 +1,21 @@
+---
+source: crates/rustman-http/tests/snippets.rs
+expression: snippet.code
+---
+// Cargo.toml: reqwest = { version = "0.12", features = ["blocking"] }
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = reqwest::blocking::Client::builder()
+        .build()?;
+    let response = client
+        .request(reqwest::Method::POST, "https://api.example/users?notify=yes")
+        .header("Accept", "application/json")
+        .header("X-Request-Id", "abc 123")
+        .header("Authorization", "Bearer «redacted:api_token»")
+        .header("Content-Type", "application/json")
+        .body("{\"name\":\"Ada Lovelace\",\"admin\":true,\"teams\":[\"core\",7],\"manager\":null}")
+        .send()?;
+    println!("{}", response.status());
+    println!("{}", response.text()?);
+    Ok(())
+}

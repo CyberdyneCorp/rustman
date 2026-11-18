@@ -26,7 +26,7 @@ A timeout fails the request with `timeout after <n> ms (<phase>)`, where the pha
 
 ### Redirects
 
-Redirects are followed by default, up to `max_redirects` (10) hops, and every hop is recorded in the exchange. A `301`, `302` or `303` turns a non-`GET`/`HEAD` request into a `GET` without a body; `307` and `308` keep the method and body. Credentials are dropped when a hop goes to another origin (scheme, host or port): `Authorization`, `Proxy-Authorization`, an explicit `Cookie` header (the cookie jar still sends the cookies that match the new host) and the `api_key` header or query parameter. Any other header whose value carries a secret (such as `X-Api-Key: '{{token}}'`), and a `307`/`308` body that carries one (such as a form with a `client_secret`), are dropped too, so a secret never follows a redirect to another server; the hop is still sent, without them, and the exchange gets the warning `cross-origin redirect to <origin>: dropped header x-api-key, the body, which carry a secret`. A secret is found the way output is redacted: a secret variable's value, or a literal credential in `Authorization`, `Cookie` and the like, in any of its encoded forms. Same-origin hops keep everything. With `follow_redirects: false` the 3xx response is returned as is. Too many hops fail with `too many redirects (<max>)`.
+Redirects are followed by default, up to `max_redirects` (10) hops, and every hop is recorded in the exchange. A `301`, `302` or `303` turns a non-`GET`/`HEAD` request into a `GET` without a body; `307` and `308` keep the method and body. Credentials are dropped when a hop goes to another origin (scheme, host or port): `Authorization`, `Proxy-Authorization`, an explicit `Cookie` header (the cookie jar still sends the cookies that match the new host) and the `api_key` header or query parameter. Any other header whose value carries a secret (such as `X-Api-Key: '{{token}}'`), and a `307`/`308` body that carries one (such as a form with a `client_secret`), are dropped too, so a secret never follows a redirect to another server; the hop is still sent, without them, and the exchange gets the warning `cross-origin redirect to <origin>: dropped header x-api-key, the body, which carry a secret`. A secret is found the way output is redacted: a secret variable's value, or a literal credential in `Authorization`, `Cookie` and the like, in any of its encoded forms. An `aws_sigv4` request is signed again on each same-origin hop and not at all once a hop leaves the origin (see [SigV4](auth.md#aws-sigv4)). Same-origin hops keep everything. With `follow_redirects: false` the 3xx response is returned as is. Too many hops fail with `too many redirects (<max>)`.
 
 ```yaml
 # http/no-redirects.rman.yaml
@@ -120,6 +120,7 @@ Auth is applied after variables are filled in, and never replaces an explicit `A
 | `{type: api_key, name, value, in: header}` | the header `<name>: <value>` (`in` defaults to `header`) |
 | `{type: api_key, name, value, in: query}` | the query parameter `<name>=<value>` |
 | `{type: oauth2, ...}` | `Authorization: Bearer <access token>` |
+| `{type: digest, ...}`, `{type: aws_sigv4, ...}`, `{type: jwt, ...}` | credentials computed per request; see [Signature auth](auth.md) |
 
 When a Basic username or password holds a secret, the encoded credential is redacted too, so a server that echoes the `Authorization` header back cannot leak it.
 
@@ -186,6 +187,7 @@ Each exchange records, in milliseconds with microsecond precision:
 | `ttfb` | connection ready (request start on a reused connection) → first response byte |
 | `download` | first response byte → last body byte |
 | `total` | the whole exchange; at least the sum of the phases |
+| `auth` | a Digest challenge round trip answered before the final one (absent otherwise); `total` includes it |
 
 Phases that did not happen are `null`, never `0`: `tls` on plain HTTP, `dns` for an IP address, and `dns`, `connect` and `tls` on a reused connection.
 
@@ -276,7 +278,7 @@ $ rustman export curl http/no-redirects
 curl 'https://app.example.com/login'
 ```
 
-Exporting and importing back gives the same method, URL, headers and body. An OAuth2 token is not part of the export (a warning says so), since it only exists once the request runs.
+Exporting and importing back gives the same method, URL, headers and body. An OAuth2 token is not part of the export (a warning says so), since it only exists once the request runs. For other languages and tools, see [Code snippets](snippets.md).
 
 ## Errors and warnings
 

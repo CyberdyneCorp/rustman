@@ -101,7 +101,7 @@ pub fn cache_key(request: &RequestRef<'_>) -> String {
 
 impl HttpEngine {
     /// Send `request`, first acquiring an access token when its auth is
-    /// `oauth2`. A cached token that gets a `401` is replaced and the request
+    /// `oauth2` (or signing it: `jwt`, `digest`, `aws_sigv4`). A cached token that gets a `401` is replaced and the request
     /// sent once more. Token values are added to `request.secrets`, so every
     /// sink redacts them.
     pub async fn send_authorized(
@@ -110,6 +110,9 @@ impl HttpEngine {
         options: &SendOptions,
         context: &OAuth2Context<'_>,
     ) -> Result<Exchange, RequestError> {
+        if let Some(result) = self.send_signed(request, options, context.env).await {
+            return result;
+        }
         let Some(Auth::OAuth2(config)) = request.auth.clone() else {
             return self.send(request, options).await;
         };
