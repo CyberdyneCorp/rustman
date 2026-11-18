@@ -14,6 +14,7 @@
 //! them, and in their Rust `Debug`-escaped form, which `Debug` output of any
 //! value holding a secret (a JSON body, auth fields) uses (see [`forms`]).
 
+mod decode;
 mod forms;
 mod layer;
 mod runs;
@@ -237,10 +238,12 @@ impl Redactor {
     /// Whether `text` holds a known secret value in any form, or any piece
     /// of one at least [`MIN_SECRET_PIECE`] characters long (a capture that
     /// matched part of an echoed secret, straddled one or kept the end of a
-    /// masked one).
+    /// masked one), as is or once percent-, JSON- or HTML-decoded.
     pub fn reveals_secret(&self, text: &str) -> bool {
-        let piece = self.layers.iter().any(|l| l.has_piece_in(text));
-        piece || self.finds_secret(text)
+        let has_piece = |t: &str| self.layers.iter().any(|l| l.has_piece_in(t));
+        has_piece(text)
+            || self.finds_secret(text)
+            || decode::variants(text).iter().any(|t| has_piece(t))
     }
 
     /// `input` with every known secret value replaced.
@@ -296,6 +299,9 @@ impl Redactor {
                 result => result?,
             };
             stream.pending.extend_from_slice(&chunk[..read]);
+            if read > 0 && stream.pending.len() < stream.wait_for {
+                continue;
+            }
             writer.write_all(&stream.flush(self, read == 0))?;
             if read == 0 {
                 return Ok(());
@@ -391,6 +397,10 @@ struct Stream {
     /// continues that run instead of starting a new one.
     covered: usize,
     shown: Vec<Arc<str>>,
+    /// While a run is held back, how many pending bytes to read before
+    /// scanning again: doubling each time, so a run held up to
+    /// [`HOLD_LIMIT`] is scanned O(log) times, not once per read.
+    wait_for: usize,
 }
 
 impl Stream {
@@ -415,6 +425,7 @@ impl Stream {
         let mut out = Vec::with_capacity(keep);
         let mut copied = self.covered;
         let mut stop = None;
+        self.wait_for = 0;
         for run in redactor.runs(&self.pending, &[]) {
             if run.range.end <= copied {
                 continue;
@@ -422,6 +433,9 @@ impl Stream {
             let continues = run.range.start < self.covered;
             let open = run.range.end > keep;
             if !continues && (run.range.start >= keep || (open && len < HOLD_LIMIT)) {
+                if open && run.range.start == 0 {
+                    self.wait_for = (len * 2).min(HOLD_LIMIT);
+                }
                 stop = Some(Stop::Before(run.range.start));
                 break;
             }
@@ -867,6 +881,40 @@ mod tests {
         let mut out = Vec::new();
         Redactor::new().copy(&b"plain"[..], &mut out).unwrap();
         assert_eq!(out, b"plain");
+    }
+
+    #[test]
+    fn encoded_pieces_of_a_secret_reveal_it() {
+        let r = Redactor::new()
+            .with(&Secret::new("path", "a/b/c/d/e/f/g".to_owned()))
+            .with(&Secret::new("quoted", "q\"r\"s\"t".to_owned()))
+            .with(&Secret::new("spaced", "y z w v u".to_owned()))
+            .with(&Secret::new("html", "t&en<ok".to_owned()));
+        for piece in [
+            "%2Fc%2Fd%2Fe%2F",
+            r#"q\"r\"s\""#,
+            "y+z+w+v",
+            "&amp;en&lt;ok",
+        ] {
+            assert!(r.reveals_secret(piece), "{piece}");
+        }
+        assert!(!r.reveals_secret("%2Fx%2Fy%2F"));
+        let long = "x/".repeat(4200);
+        let r = Redactor::new().with(&Secret::new("long", long));
+        assert!(r.reveals_secret(&"x%2F".repeat(10)));
+    }
+
+    #[test]
+    fn a_merged_layer_keeps_one_entry_per_name() {
+        let mut r = Redactor::new().with(&Secret::new("one", "first-value".to_owned()));
+        let shared = r.clone();
+        r.add(&Secret::new("one", "second-value".to_owned()));
+        r.merge(&shared);
+        r.add(&Secret::new("one", "third-value".to_owned()));
+        assert_eq!(r.secret_names(), ["one"]);
+        for layer in &r.layers {
+            assert!(layer.names().len() <= 1, "{:?}", layer.names());
+        }
     }
 
     #[test]

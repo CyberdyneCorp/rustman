@@ -132,3 +132,27 @@ fn self_overlapping_secrets_across_chunks_are_redacted_whole() {
         }
     }
 }
+
+/// A run held back while it grows (a periodic body matching everywhere)
+/// is not scanned again on every read: copying costs a small multiple of
+/// one `bytes()` pass, not one pass per 64 KiB read.
+#[test]
+fn a_held_run_is_not_rescanned_on_every_read() {
+    let mut nested = Redactor::new();
+    for i in 1..=10 {
+        nested.add(&Secret::new(format!("a{i}"), "a".repeat(i * 8)));
+    }
+    let body = vec![b'a'; 1_000_000];
+    let started = Instant::now();
+    let whole = nested.bytes(&body).into_owned();
+    let once = started.elapsed();
+    let started = Instant::now();
+    let mut copied = Vec::new();
+    nested.copy(&body[..], &mut copied).unwrap();
+    let streamed = started.elapsed();
+    assert_eq!(copied, whole);
+    assert!(
+        streamed < once * 4 + Duration::from_secs(2),
+        "{streamed:?} vs {once:?}"
+    );
+}

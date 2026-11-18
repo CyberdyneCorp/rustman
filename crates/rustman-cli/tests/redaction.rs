@@ -527,3 +527,43 @@ fn a_nested_secret_in_a_spilled_body_is_printed_redacted_whole() {
         assert!(has(&out, "«redacted:dsn» «redacted:pw»"), "pad {pad}");
     }
 }
+
+/// A secret over 8 KiB is redacted only as is, but a capture of its
+/// percent-encoded echo is still recognized: decoded, it holds pieces of
+/// the secret. It is not persisted, and a later request that uses it has
+/// it redacted in history.
+#[test]
+fn a_capture_of_an_encoded_long_secret_is_tainted() {
+    let server = Server::http();
+    let long = "x y".repeat(3000);
+    let ws = secret_workspace(&server, &[("big", long.as_str())]);
+    let echo = "query:\n  - name: k\n    value: '{{big}}'\n\
+                captures:\n  - var: echoed\n    from: json\n    path: $.path\n    persist: true\n";
+    write(
+        ws.path(),
+        "flow/1-echo.rman.yaml",
+        &request("echo", "{{base_url}}/echo", echo),
+    );
+    write(
+        ws.path(),
+        "flow/2-use.rman.yaml",
+        &request("use", "{{base_url}}/status/204?e={{echoed}}", ""),
+    );
+    let report = stdout_of(
+        ws.path(),
+        &["run", "flow", "--env", "dev", "--reporter", "json"],
+    );
+    let report: serde_json::Value = serde_json::from_slice(&report).unwrap();
+    let path = report["requests"][0]["exchange"]["response"]["body"]
+        .as_str()
+        .unwrap();
+    // Only the capture, now a secret, recognizes the encoded echo.
+    assert!(path.contains("\"path\":\"«redacted:echoed»\""), "{path}");
+    let state = fs::read_to_string(ws.path().join(".rustman/state/dev.yaml")).unwrap_or_default();
+    assert!(!state.contains("x%20y"), "persisted: {state}");
+    let history = fs::read_dir(ws.path().join(".rustman/history")).unwrap();
+    for entry in history {
+        let text = fs::read_to_string(entry.unwrap().path()).unwrap();
+        assert!(!text.contains("x%20yx"), "history holds the encoded secret");
+    }
+}
