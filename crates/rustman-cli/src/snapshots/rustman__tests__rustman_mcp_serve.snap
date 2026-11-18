@@ -1,0 +1,34 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Serve the workspace to AI agents over MCP (stdio by default)
+
+Usage: rustman mcp serve [OPTIONS]
+
+Options:
+      --http [<ADDR>]
+          Serve Streamable HTTP at /mcp instead of stdio, on ADDR (default 127.0.0.1:8765)
+
+      --allow-remote
+          Allow --http on a non-loopback address
+
+      --token-file <FILE>
+          Read the HTTP bearer token from FILE (default: generate one and print it on stderr)
+
+      --env <NAME>
+          Environment (default: RUSTMAN_ENV, then default_environment)
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

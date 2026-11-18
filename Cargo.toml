@@ -16,6 +16,7 @@ rustman-report = { path = "crates/rustman-report", version = "0.1.0" }
 rustman-import = { path = "crates/rustman-import", version = "0.1.0" }
 rustman-explore = { path = "crates/rustman-explore", version = "0.1.0" }
 rustman-graphql = { path = "crates/rustman-graphql", version = "0.1.0" }
+rustman-mcp = { path = "crates/rustman-mcp", version = "0.1.0" }
 # Test servers shared by the integration tests; never published.
 rustman-test-support = { path = "crates/rustman-test-support" }
 rustman-tui = { path = "crates/rustman-tui", version = "0.1.0" }
@@ -165,6 +166,13 @@ hmac = "0.13"
 sha1 = { version = "0.11", default-features = false }
 sha2 = { version = "0.11", default-features = false }
 subtle = { version = "2.6", default-features = false }
+# MCP (agent-mcp-interface design D1, ROADMAP decision 0.3): the official
+# SDK, pinned to one minor for the server and the later client side of
+# rustman-mcp. Hand-rolled JSON-RPC and community crates are rejected.
+# axum mounts the Streamable HTTP service behind the token and Origin checks
+# (design D2).
+rmcp = { version = "~3.10", default-features = false }
+axum = { version = "0.8", default-features = false, features = ["tokio", "http1"] }
 
 assert_cmd = "2"
 predicates = "3"

@@ -13,13 +13,12 @@ use std::hash::{BuildHasher, RandomState};
 use std::path::PathBuf;
 
 use clap::{Args, Subcommand};
-use rustman_core::safety::{
-    EnvironmentInfo, Limits, Origin, Permission, PolicyOptions, SafetyPolicy,
-};
+use rustman_core::safety::{Limits, Origin, SafetyPolicy};
 use rustman_core::settings::Settings as WorkspaceSettings;
 use rustman_core::{ConfigError, Environment, Workspace};
-use rustman_explore::explore::plan::{DEFAULT_FUZZ_CASES, Family, PlanOptions};
+use rustman_explore::explore::plan::{DEFAULT_FUZZ_CASES, Family};
 use rustman_explore::explore::session::Settings;
+use rustman_explore::explore::setup::{self, plan_options};
 
 use super::{EnvSelection, current_dir};
 use crate::exit::CliError;
@@ -196,56 +195,10 @@ fn policy(
     workspace: &WorkspaceSettings,
     environment: Option<&Environment>,
 ) -> Result<SafetyPolicy, CliError> {
-    let allow_hosts = settings
-        .allow_hosts
-        .iter()
-        .map(|h| Origin::parse(h).map_err(ConfigError::Usage))
-        .collect::<Result<Vec<_>, _>>()?;
-    let options = PolicyOptions {
-        target,
-        permission: Permission::from_flags(settings.allow_mutations, settings.allow_destructive),
-        allow_hosts: &allow_hosts,
-        production: settings.production.as_deref(),
-        environment: environment.map(EnvironmentInfo::from).unwrap_or_default(),
-    };
-    Ok(SafetyPolicy::new(&workspace.safety, options)?)
-}
-
-/// The planner's options for `settings`.
-fn plan_options<'a>(
-    settings: &Settings,
-    policy: &'a SafetyPolicy,
-    workspace: &WorkspaceSettings,
-    environment: Option<&Environment>,
-    identity_b: bool,
-) -> PlanOptions<'a> {
-    PlanOptions {
-        families: settings.probes.iter().copied().collect(),
-        operations: settings.operations.clone(),
-        seed: settings.seed,
-        fuzz_cases: settings.fuzz_cases,
-        identity_b,
-        known: known_variables(workspace, environment),
-        policy,
-    }
-}
-
-/// Variables that have a value: the environment's (secrets included) and
-/// `rustman.toml [variables]`.
-fn known_variables(
-    settings: &WorkspaceSettings,
-    environment: Option<&Environment>,
-) -> BTreeSet<String> {
-    let mut known: BTreeSet<String> = settings
-        .variables
-        .iter()
-        .map(|(n, _)| n.to_owned())
-        .collect();
-    if let Some(env) = environment {
-        known.extend(env.variables.iter().map(|(n, _)| n.to_owned()));
-        known.extend(env.secrets.iter().cloned());
-    }
-    known
+    setup::policy(target, settings, workspace, environment).map_err(|e| match e {
+        setup::PolicySetupError::InvalidHost(message) => ConfigError::Usage(message).into(),
+        setup::PolicySetupError::Policy(e) => e.into(),
+    })
 }
 
 /// A seed from the standard library's per-process random hasher keys.

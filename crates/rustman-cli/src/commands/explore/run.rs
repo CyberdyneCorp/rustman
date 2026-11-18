@@ -4,7 +4,7 @@
 
 use std::io::Write;
 use std::num::NonZeroU32;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use clap::Args;
@@ -20,9 +20,8 @@ use rustman_explore::explore::journal::{self, requests_sent};
 use rustman_explore::explore::plan::{self, Disposition, Plan};
 use rustman_explore::explore::report::ExplorationReport;
 use rustman_explore::explore::rules::Severity;
-use rustman_explore::explore::session::{
-    Phase, Progress, RunState, Session, State, new_id, unix_ms,
-};
+use rustman_explore::explore::session::{Progress, RunState, Session};
+use rustman_explore::explore::setup::{self, NewExploration};
 use rustman_explore::store::sha256;
 use rustman_explore::{ApiModel, ImportOptions, Imported, import};
 use rustman_http::{GovernedSender, SendOptions};
@@ -129,24 +128,15 @@ pub fn run_command(args: &RunArgs) -> Result<u8, CliError> {
     );
     let planned = plan::plan(model, &graph, &options);
     progress_line(&plan_summary(&planned));
-    let now = rustman_core::run::now_rfc3339();
-    let state = State {
-        id: new_id(&now),
-        phase: Phase::Plan,
-        state: RunState::Running,
-        started_at: now.clone(),
-        started_unix_ms: unix_ms(),
-        updated_at: now,
-        executed_ms: 0,
-        spec: spec_location(&flags.spec),
-        document_sha256: sha256(&imported.text),
-        target: flags.target.clone(),
-        environment: environment.map(|e| e.name.clone()),
+    let state = setup::new_state(NewExploration {
+        spec: &flags.spec,
+        imported: &imported,
+        target: &flags.target,
+        environment,
         identity_b: flags.identity_b.clone(),
         settings,
-        progress: Progress::default(),
         graph,
-    };
+    });
     let session = Session::create(&root, state, &planned)?;
     progress_line(&format!(
         "exploration {} started ({} ms to discover and plan)",
@@ -201,7 +191,7 @@ pub fn resume_command(args: &ResumeArgs) -> Result<u8, CliError> {
         path: session.journal_path(),
         source: e,
     })?;
-    let limits = remaining(&session.state, requests_sent(&entries));
+    let limits = setup::remaining(&session.state, requests_sent(&entries));
     progress_line(&format!(
         "resuming exploration {}: {} of {} probes left",
         state.id,
@@ -317,28 +307,6 @@ fn load(
         eprintln!("warning: {warning}");
     }
     Ok(imported)
-}
-
-/// `spec` as a resume finds it again: a file as an absolute path.
-fn spec_location(spec: &str) -> String {
-    let path = PathBuf::from(spec);
-    if spec.contains("://") || !path.is_file() {
-        return spec.to_owned();
-    }
-    dunce::canonicalize(&path).map_or_else(|_| spec.to_owned(), |p| p.display().to_string())
-}
-
-/// The budgets of `state` minus what earlier runs used.
-fn remaining(state: &State, sent: u64) -> Limits {
-    let settings = &state.settings;
-    let total = Duration::from_millis(settings.max_duration_ms);
-    let used = Duration::from_millis(state.executed_ms);
-    Limits {
-        rate: NonZeroU32::new(settings.rate).unwrap_or(NonZeroU32::MIN),
-        concurrency: NonZeroU32::new(settings.concurrency).unwrap_or(NonZeroU32::MIN),
-        max_probes: settings.max_probes.saturating_sub(sent),
-        max_duration: total.saturating_sub(used),
-    }
 }
 
 fn workspace_settings(workspace: Option<&Workspace>) -> WorkspaceSettings {

@@ -11,6 +11,7 @@ pub mod graphql;
 pub mod history;
 pub mod import;
 pub mod init;
+pub mod mcp;
 pub mod report;
 pub mod run;
 pub mod secret;

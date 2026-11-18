@@ -13,6 +13,10 @@
 //! secrets the whole run has seen so far, not only the request's own: a
 //! secret of one request can reach a later one through a capture, and a
 //! captured value holding a secret becomes a secret itself.
+//!
+//! With [`RunOptions::gate`] set (the agent interface), every resolved
+//! request is handed to the [`SendGate`] instead of the engine, which
+//! decides whether it may be sent and sends it under a safety policy.
 
 mod execute;
 mod graphql;
@@ -25,7 +29,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
-use futures_util::future::join_all;
+use futures_util::future::{BoxFuture, join_all};
 use rustman_core::captures::{PersistedState, RunCaptures};
 use rustman_core::history::HistoryStore;
 use rustman_core::model::Variables;
@@ -40,6 +44,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::HttpEngine;
 use crate::cookies::CookieJar;
+use crate::engine::SendOptions;
 use crate::error::RequestError;
 use crate::exchange::Exchange;
 use crate::timing::millis;
@@ -103,6 +108,22 @@ pub struct RunOptions<'a> {
     /// Sends `kind: graphql` requests; without one they are skipped as an
     /// unsupported kind.
     pub graphql: Option<&'a dyn GraphqlExecutor>,
+    /// Sends every request instead of the engine; `None` for the CLI and
+    /// the TUI.
+    pub gate: Option<&'a dyn SendGate>,
+}
+
+/// Admits and sends the requests of a run: the agent interface checks each
+/// one against the agent permissions, asks the human when needed and sends
+/// it through a `GovernedSender`. OAuth2 tokens are not acquired on this
+/// path.
+pub trait SendGate: Send + Sync {
+    /// Send `request`, or refuse it with [`RequestError::Blocked`].
+    fn send<'a>(
+        &'a self,
+        request: &'a ResolvedRequest,
+        options: &'a SendOptions,
+    ) -> BoxFuture<'a, Result<Exchange, RequestError>>;
 }
 
 impl Default for RunOptions<'_> {
@@ -121,6 +142,7 @@ impl Default for RunOptions<'_> {
             history: None,
             ad_hoc: false,
             graphql: None,
+            gate: None,
         }
     }
 }

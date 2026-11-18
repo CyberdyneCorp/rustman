@@ -45,10 +45,11 @@ This page covers sending and running requests, reporters, terminal behavior, log
 | `rustman history show <id>` | Print one exchange in full (redacted) | [History](history.md#listing-and-searching) |
 | `rustman history replay <id>` | Send an exchange's request again, with secrets read from the store now | [History](history.md#replay) |
 | `rustman history clear` | Delete every recorded exchange | [History](history.md#retention) |
+| `rustman mcp serve` | Serve the workspace to AI agents over MCP: stdio by default, or Streamable HTTP with `--http [<addr>]`, `--allow-remote` and `--token-file` | [Agents (MCP)](agent.md) |
 | `rustman completions <shell>` | Print a shell completion script | [below](#completions) |
 | `rustman webhook listen` | Capture inbound webhooks on a local port, answer with mocks, check signatures and print the event log; `--host`, `--port`, `--allow-remote`, `--max-body`, `--max-captures`, `--jsonl`, `--env`, `--workspace` | [Webhook inspector](webhooks.md) |
 
-The command groups `rustman env`, `rustman secret`, `rustman cookies`, `rustman auth`, `rustman import`, `rustman export`, `rustman explore`, `rustman report`, `rustman graphql`, `rustman history` and `rustman webhook` only hold the commands above: on their own they print their subcommands and exit with 2. `rustman import` also takes a source file or folder directly (`rustman import export.json`), which is the same as `rustman import auto export.json`.
+The command groups `rustman env`, `rustman secret`, `rustman cookies`, `rustman auth`, `rustman import`, `rustman export`, `rustman explore`, `rustman report`, `rustman graphql`, `rustman history`, `rustman mcp` and `rustman webhook` only hold the commands above: on their own they print their subcommands and exit with 2. `rustman import` also takes a source file or folder directly (`rustman import export.json`), which is the same as `rustman import auto export.json`.
 
 `rustman --help` and `rustman <command> --help` document every flag; `rustman --version` prints `rustman <version>`, such as `rustman 0.1.0`.
 

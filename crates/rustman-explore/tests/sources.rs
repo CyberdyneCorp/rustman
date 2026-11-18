@@ -91,3 +91,51 @@ async fn a_missing_file_is_reported() {
         "{err}"
     );
 }
+
+fn governed(target: &str) -> std::sync::Arc<rustman_http::GovernedSender> {
+    use rustman_core::safety::{Governor, Limits, PolicyOptions, SafetyPolicy, SafetySettings};
+    let settings = SafetySettings::default();
+    let options = PolicyOptions {
+        target,
+        permission: Default::default(),
+        allow_hosts: &[],
+        production: None,
+        environment: Default::default(),
+    };
+    let policy = SafetyPolicy::new(&settings, options).unwrap();
+    let governor = Governor::new(Limits::from_settings(&settings));
+    std::sync::Arc::new(rustman_http::GovernedSender::new(policy, governor))
+}
+
+fn through(sender: std::sync::Arc<rustman_http::GovernedSender>) -> ImportOptions {
+    ImportOptions {
+        fetch: FetchOptions {
+            sender: Some(sender),
+            ..FetchOptions::default()
+        },
+        ..ImportOptions::default()
+    }
+}
+
+#[tokio::test]
+async fn a_governed_fetch_reads_an_allowed_url() {
+    let server = TestServer::http().await;
+    let url = server.url("/openapi/petstore.yaml");
+    let imported = import(&url, &through(governed(&url))).await.unwrap();
+    assert_eq!(imported.model.title, "URL Petstore");
+}
+
+#[tokio::test]
+async fn a_governed_fetch_never_follows_a_redirect_off_the_policy() {
+    let allowed = TestServer::http().await;
+    let elsewhere = rustman_test_support::BadApi::start().await;
+    let to = elsewhere.url("/openapi.json");
+    let url = allowed.url(&format!("/redirect/302?to={to}"));
+    let err = import(&url, &through(governed(&url))).await.unwrap_err();
+    assert!(matches!(err, ImportError::Blocked { .. }), "{err:?}");
+    assert!(
+        err.to_string().contains("blocked: host not allowed"),
+        "{err}"
+    );
+    assert!(elsewhere.hits().is_empty(), "{:?}", elsewhere.hits().len());
+}

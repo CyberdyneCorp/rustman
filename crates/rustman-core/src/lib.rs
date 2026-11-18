@@ -3,6 +3,7 @@
 //!
 //! This crate has no network, terminal or CLI dependencies.
 
+pub mod agent;
 pub mod assertions;
 pub mod captures;
 pub mod collection;
