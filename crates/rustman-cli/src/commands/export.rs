@@ -152,7 +152,6 @@ fn redactor(ws: &Workspace, env: Option<&Environment>) -> Result<Redactor, Confi
     Ok(redactor)
 }
 
-
 fn secret_store(ws: &Workspace) -> Result<SecretStore, CliError> {
     let backend = SecretBackend::from_env_value(std::env::var(BACKEND_VAR).ok().as_deref())
         .map_err(ConfigError::from)?;

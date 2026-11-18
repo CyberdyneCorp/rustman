@@ -152,6 +152,10 @@ pub enum ImportedAuth {
         location: ApiKeyIn,
     },
     Oauth2(ImportedOAuth2),
+    /// A Rustman auth type the target format has no equivalent for
+    /// (`digest`, `aws_sigv4`, `jwt`); writers emit explicit "no auth" and a
+    /// note, so the request never inherits a parent's credential instead.
+    Unsupported(String),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -403,7 +407,7 @@ impl<T: VisitStrings> VisitStrings for Option<T> {
 impl VisitStrings for ImportedAuth {
     fn visit_strings(&mut self, f: &mut dyn FnMut(&mut String)) {
         match self {
-            Self::None => {}
+            Self::None | Self::Unsupported(_) => {}
             Self::Basic { username, password } => {
                 f(username);
                 f(password);

@@ -108,6 +108,11 @@ impl Writer {
         set(&mut request, "body", r.body.as_ref().map(body));
         request["url"] = url(r);
         set(&mut request, "auth", r.auth.as_ref().map(auth));
+        if let Some(ImportedAuth::Unsupported(kind)) = &r.auth {
+            let message = format!("{kind} auth exported as noauth (no Postman equivalent)");
+            self.notes
+                .push(Note::new(NoteKind::Unsupported, message, &r.location));
+        }
         set(
             &mut request,
             "description",
@@ -261,7 +266,9 @@ fn part(p: &ImportedPart) -> Value {
 /// A Postman auth object with `[{key, value, type}]` parameters.
 fn auth(a: &ImportedAuth) -> Value {
     let (kind, params): (&str, Vec<(&str, String)>) = match a {
-        ImportedAuth::None => return json!({ "type": "noauth" }),
+        // No Postman equivalent: explicit noauth, so Postman never falls
+        // back to a parent's credential; the request writer notes the loss.
+        ImportedAuth::None | ImportedAuth::Unsupported(_) => return json!({ "type": "noauth" }),
         ImportedAuth::Basic { username, password } => (
             "basic",
             vec![

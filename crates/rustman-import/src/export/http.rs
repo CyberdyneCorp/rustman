@@ -143,6 +143,10 @@ impl Writer {
             Some(ImportedAuth::Oauth2(_)) => {
                 return self.note("oauth2 auth not exported (no .http equivalent)", at);
             }
+            Some(ImportedAuth::Unsupported(kind)) => {
+                let message = format!("{kind} auth not exported (no .http equivalent)");
+                return self.note(&message, at);
+            }
         };
         if !has(headers, &header.name) {
             headers.push(header);

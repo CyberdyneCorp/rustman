@@ -370,5 +370,8 @@ pub(crate) fn auth(a: &Auth) -> ImportedAuth {
             client_secret: o.client_secret.clone(),
             scopes: o.scopes.clone().unwrap_or_default(),
         }),
+        Auth::Digest { .. } => ImportedAuth::Unsupported("digest".to_owned()),
+        Auth::AwsSigV4(_) => ImportedAuth::Unsupported("aws_sigv4".to_owned()),
+        Auth::Jwt(_) => ImportedAuth::Unsupported("jwt".to_owned()),
     }
 }

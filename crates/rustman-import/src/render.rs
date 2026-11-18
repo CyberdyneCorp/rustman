@@ -86,6 +86,8 @@ pub fn collection_file(
         auth: folder.auth.as_ref().map(auth),
         variables: variables(&folder.variables),
         parallel: None,
+        data: None,
+        secret_columns: None,
     };
     let comments = comment_block(&folder.scripts, target.redactor);
     Ok(format!("{comments}{}", collection_to_yaml(&meta)))
@@ -202,7 +204,7 @@ fn escapes(src: &str, depth: usize) -> bool {
 
 fn auth(a: &ImportedAuth) -> Auth {
     match a {
-        ImportedAuth::None => Auth::None,
+        ImportedAuth::None | ImportedAuth::Unsupported(_) => Auth::None,
         ImportedAuth::Basic { username, password } => Auth::Basic {
             username: username.clone(),
             password: password.clone(),
