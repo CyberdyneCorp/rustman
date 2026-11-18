@@ -7,8 +7,8 @@ and the requirements stay in `openspec/changes/<id>/`. Change ids below are the 
 ## Where we are
 
 - **Specified:** 26 OpenSpec changes, 643 requirements, ~990 scenarios, ~645 implementation tasks.
-- **Implemented:** Phase 0, and v0.1 PRs 1–3: Cargo workspace and CI (#1); workspace, environments, secrets and redaction (#2); the HTTP engine with TLS, redirects, proxies, cookies, auth and curl import/export (#3).
-- **In progress:** v0.1 PR 4 (assertions, `send`/`run`, reporters, history, e2e). Next: PR 5 (safety policy).
+- **Done:** Phase 0 and **v0.1 — Headless core**: Cargo workspace and CI (#1); workspace, environments, secrets and redaction (#2); the HTTP engine (#3); assertions, `send`/`run`, reporters and history (#47); the safety policy and governed sender (#48). `bootstrap-core-engine` is archived, and its living specs are in `openspec/specs/`.
+- **In progress:** v0.2. The TUI shell (`add-terminal-ui` groups 1–3, #49) is under review. The rest is tracked in issues under the [v0.2 milestone](https://github.com/CyberdyneCorp/rustman/milestone/2) and the [roadmap tracking issue](https://github.com/CyberdyneCorp/rustman/issues/46).
 - **CI:** fmt, clippy, tests on Linux/macOS/Windows, `cargo deny`, and `openspec validate --all --strict`.
 
 The order in `openspec/ROADMAP.md` follows the order the specs were written in. This roadmap reorders the work by
