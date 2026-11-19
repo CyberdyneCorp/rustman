@@ -4106,6 +4106,8 @@ dependencies = [
  "rustman-report",
  "rustman-test-support",
  "rustman-tui",
+ "rustman-viz-client",
+ "rustman-viz-protocol",
  "rustman-webhook",
  "serde",
  "serde_json",
@@ -4505,6 +4507,7 @@ dependencies = [
  "rustman-mock",
  "rustman-realtime",
  "rustman-test-support",
+ "rustman-viz-client",
  "rustman-viz-protocol",
  "rustman-webhook",
  "serde",
@@ -4520,6 +4523,15 @@ dependencies = [
  "tokio-util",
  "toml",
  "vt100",
+]
+
+[[package]]
+name = "rustman-viz-client"
+version = "0.1.0"
+dependencies = [
+ "rustman-viz-protocol",
+ "tempfile",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

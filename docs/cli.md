@@ -64,6 +64,7 @@ This page covers sending and running requests, reporters, terminal behavior, log
 | `rustman snapshot list [path]` | List snapshot files with their request, name and state (`ok`, `orphaned`, `unreferenced name`); `--json` | [Snapshots](snapshots.md#listing-and-pruning) |
 | `rustman snapshot prune [path]` | Delete snapshot files no request uses anymore; `--yes`, `--dry-run` | [Snapshots](snapshots.md#listing-and-pruning) |
 | `rustman webhook listen` | Capture inbound webhooks on a local port, answer with mocks, check signatures and print the event log; `--host`, `--port`, `--allow-remote`, `--max-body`, `--max-captures`, `--jsonl`, `--env`, `--workspace` | [Webhook inspector](webhooks.md) |
+| `rustman viz <report.json>` | Open a run or exploration report in the graphical viz companion `rustman-viz`; `--view graph` opens the API graph of an exploration | [below](#viz-companion) |
 | `rustman mock serve <openapi>` | Serve an OpenAPI document as a local mock server until Ctrl+C; `--host`, `--port`, `--allow-remote`, `--allow-remote-refs`, `--seed`, `--no-prefer`, `--no-validate`, `--enforce-security`, `--stateful`, `--env`, `--workspace`, `--cors`, `--no-cors`, `--jsonl`, `--history`, `--proxy-unmatched`, `--record` | [Mock server](mock.md) |
 
 The command groups `rustman env`, `rustman secret`, `rustman cookies`, `rustman auth`, `rustman import`, `rustman export`, `rustman explore`, `rustman report`, `rustman graphql`, `rustman rpc`, `rustman grpc`, `rustman ws`, `rustman sse`, `rustman history`, `rustman mcp`, `rustman mcp-client`, `rustman mock`, `rustman snapshot` and `rustman webhook` only hold the commands above: on their own they print their subcommands and exit with 2. `rustman import` also takes a source file or folder directly (`rustman import export.json`), which is the same as `rustman import auto export.json`.
@@ -139,7 +140,7 @@ rustman run [<PATH>...] [--env <name>] [--var k=v]... [--timeout <duration>] [--
             [--data <file> | --no-data] [--data-label <column>] [--secret-columns <a,b>]
             [--reporter <format>[:<path>]]... [--report <format>[=<path>]]...
             [--max-events <n>] [--duration <duration>] [-u | --update-snapshots] [--ci]
-            [--trust]
+            [--trust] [--viz]
 ```
 
 Runs every request file (`kind: http`, [`kind: graphql`](graphql.md#in-rustman-run) and [`kind: mcp`](mcp-client.md#request-files)) under the given files and folders (default: the current folder), in collection order: file-name order, or the folder's `_collection.yaml` `order:` (see [collections](request-files.md)). Paths must exist and lie inside the workspace. Values captured by one request are available to every later request of the run.
@@ -165,6 +166,7 @@ Runs every request file (`kind: http`, [`kind: graphql`](graphql.md#in-rustman-r
 | `--update-snapshots`, `-u` | Overwrite [snapshots](snapshots.md) that differ from the response and report them `updated`; matching files are left untouched. |
 | `--ci` | CI mode: never write snapshots, and fail a request whose snapshot is missing. Also on when the `CI` environment variable is `true` or `1`. Combined with `--update-snapshots` it is a usage error (exit code 2): `--update-snapshots cannot be used in CI mode`. |
 | `--trust` | Spawn the workspace's [stdio MCP servers](mcp-client.md#workspace-trust) that are not trusted yet, and record the approvals; without it, `kind: mcp` requests to an untrusted server error. |
+| `--viz` | Show the run live in the [viz companion](#viz-companion). Without one, the run continues without visuals and its exit code is unchanged. |
 
 A filter or path that selects no request fails with `error: no requests to run (check the paths and --filter)` (exit code 2).
 
@@ -232,6 +234,40 @@ not ok 2 - users/create
 Every reporter writes from the same redacted records: secret values and sensitive headers appear as `«redacted:<name>»` in all of them.
 
 Runs with [`snapshot` assertions](snapshots.md#in-reports) add a summary line such as `1 snapshot recorded, 1 snapshot failed` to `pretty`, a `snapshot` object to each snapshot assertion and `summary.snapshots` to `json`, the diff to the JUnit failure message, and `#` comments to `tap`.
+
+## Viz companion
+
+`rustman-viz` is an optional graphical companion that draws runs, explorations and large responses as charts, tables and graphs. It is a separate program: `rustman` builds, installs and runs without it, and never needs a GPU. `rustman` talks to it over the [viz protocol](viz-protocol.md).
+
+```text
+rustman viz <REPORT> [--view dashboard|graph]
+rustman run [<PATH>...] --viz
+rustman explore run --spec <file|url> --target <url> --viz
+rustman explore resume <id> --viz
+```
+
+- `rustman viz <REPORT>` opens a saved JSON report (from `rustman run --reporter json:<file>` or `rustman explore run`) in the run or exploration dashboard, chosen from the report's `kind`. `--view graph` opens the API graph of an exploration report instead. A file that is not a Rustman report exits with 2: `error: notes.txt is not a Rustman report`.
+- `--viz` opens the matching dashboard and streams progress to it as requests or probes finish. The data is redacted before it is sent: secrets appear as `«redacted:name»`, and the companion has no way to reveal them.
+
+`rustman` finds the companion in this order:
+
+1. `RUSTMAN_VIZ`, the path of the executable. When it is set but does not name an executable file, `rustman` reports that path and looks nowhere else.
+2. `rustman-viz` (`rustman-viz.exe` on Windows) on `PATH`.
+3. `rustman-viz` next to the running `rustman` executable.
+
+The first match is started once with `--protocol-check` to confirm that it speaks `rustman-viz/1`. Its stderr is appended to `.rustman/viz.log` in the workspace.
+
+When the companion cannot be used, `--viz` prints the reason as a warning and the command carries on. Its exit code depends only on the run or exploration. `rustman viz` prints the same reasons as an error and exits with 2. Either way, the message suggests an HTML report instead.
+
+| Condition | Message |
+|-----------|---------|
+| Not found | `Viz companion not found; continuing without visuals (...)` |
+| Another protocol version | `Viz companion speaks rustman-viz/2, rustman needs rustman-viz/1; upgrade rustman-viz` |
+| No graphics (no Vulkan loader, or MoltenVK missing on macOS) | `Graphics unavailable (Vulkan); continuing without visuals` |
+| Exits or crashes during a run | `Viz companion exited; continuing without visuals` |
+| Stops reading for 5 seconds | `Viz companion stopped reading for 5 s; detached from it, continuing without visuals` |
+
+Sending to the companion never slows a run down. When it falls behind, progress updates are dropped, but findings and the final summary are always kept. After 5 seconds of back-pressure, `rustman` stops sending to it.
 
 ## Exit codes
 

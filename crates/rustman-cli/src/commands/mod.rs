@@ -24,6 +24,7 @@ pub mod send;
 pub(crate) mod session;
 pub mod snapshot;
 pub mod tui;
+pub mod viz;
 pub mod webhook;
 
 use std::path::{Path, PathBuf};

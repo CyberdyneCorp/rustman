@@ -34,7 +34,7 @@ Opening a view, and loading a saved report (`kind` is `run` or `exploration`; `v
 {"type":"load_report","path":"reports/run-2026-11-17.json","kind":"run"}
 ```
 
-A run as it happens. `outcome` is `passed`, `failed`, `errored` (a transport error, with its category in `error` and no `status`), `cancelled` or `skipped`. A run ends `completed` or `aborted`:
+A run as it happens. `outcome` is `passed`, `failed`, `errored` (no response: `error` says why, redacted, and there is no `status`), `cancelled` or `skipped`. A run ends `completed` or `aborted`:
 
 ```json
 {"type":"run_started","started_at":"2026-11-17T10:00:00Z","environment":"staging","total":200}

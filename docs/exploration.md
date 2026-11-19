@@ -51,6 +51,7 @@ Probe requests are templates: a path parameter whose value is in the active envi
 | `--max-probes <n>` | Probe budget: at most this many requests (default 2000) |
 | `--max-duration <duration>` | Time budget: `90s`, `15m`, or milliseconds (default `15m`) |
 | `--fail-on <severity>` | Exit 1 when a finding is at or above it: `critical`, `high` (default), `medium`, `low` or `info` |
+| `--viz` | Show the exploration live in the [viz companion](cli.md#viz-companion): probes, findings and coverage as they come. Without one it continues without visuals, with the same exit code. Also on `explore resume`. |
 
 ```text
 $ rustman explore run --spec api.yaml --target https://staging.example.com --env staging --allow-mutations

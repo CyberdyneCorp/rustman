@@ -52,6 +52,8 @@
 
 The first hit is spawned with `--protocol-check` (it prints its supported versions and exits) before real use. The result is cached per session.
 
+The producer side (discovery, the probe, the handshake and the live stream) lives in `crates/rustman-viz-client`, which both `rustman-cli` and `rustman-tui` use. It depends only on the protocol crate. Callers redact before sending. The live stream writes from its own thread through a bounded queue of 1,024 lines. When the queue is full, progress messages are dropped and `finding` and `*_finished` are kept. After 5 s of back-pressure the producer detaches.
+
 ### D4. FFI containment and the adapter layer
 - All `unsafe` calls into `raven` live in `crates/rustman-viz/src/raven_adapter/`. The rest of the crate talks to a safe internal trait (`Surface`, `ChartHandle`, `TableHandle`, `GraphHandle`).
 - Inside the adapter: `#![deny(unsafe_op_in_unsafe_fn)]`, a `// SAFETY:` comment on every block, a handle type that frees its widget in `Drop`, and all Raven calls on the thread that called `Rinit`.

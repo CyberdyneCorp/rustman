@@ -24,6 +24,7 @@ rustman-realtime = { path = "crates/rustman-realtime", version = "0.1.0" }
 rustman-test-support = { path = "crates/rustman-test-support" }
 rustman-tui = { path = "crates/rustman-tui", version = "0.1.0" }
 rustman-viz-protocol = { path = "crates/rustman-viz-protocol", version = "0.1.0" }
+rustman-viz-client = { path = "crates/rustman-viz-client", version = "0.1.0" }
 rustman-webhook = { path = "crates/rustman-webhook", version = "0.1.0" }
 rustman-mock = { path = "crates/rustman-mock", version = "0.1.0" }
 

@@ -7,11 +7,11 @@ use std::time::{Duration, Instant};
 
 use tokio_util::sync::CancellationToken;
 
-use super::exec::Executor;
+use super::exec::{Executor, Outcome};
 use super::journal::{self, Journal};
 use super::plan::Plan;
 use super::report::{ExplorationReport, build};
-use super::runner::{DRAIN, RunOptions, execute};
+use super::runner::{DRAIN, ProbeObserver, RunOptions, execute};
 use super::session::{Phase, Progress, REPORT_FILE, RunState, Session, SessionError};
 use crate::openapi::model::ApiModel;
 
@@ -27,6 +27,8 @@ pub struct Drive<'a> {
     pub cancel: CancellationToken,
     /// Called with the progress and the execution time so far.
     pub progress: &'a mut dyn FnMut(&Progress, Duration),
+    /// Called with each probe's outcome and duration as it finishes.
+    pub probe: Option<&'a mut ProbeObserver<'a>>,
 }
 
 /// How the exploration ended.
@@ -73,6 +75,11 @@ pub async fn drive(
         cancel: drive.cancel,
         drain: DRAIN,
         progress: &mut on_progress,
+        // Shortened to this call: the trait object behind `&mut` keeps
+        // its own lifetime otherwise.
+        probe: drive
+            .probe
+            .map(|p| &mut *p as &mut dyn FnMut(&Outcome, Duration)),
     };
     let result = execute(executor, drive.plan, &mut journal, entries, options).await;
     let executed = result.map_err(io)?;

@@ -83,6 +83,8 @@ enum Command {
     Ws(commands::realtime::WsArgs),
     /// Listen to Server-Sent Events streams and print their events
     Sse(commands::realtime::SseArgs),
+    /// Open a run or exploration report in the graphical viz companion (rustman-viz)
+    Viz(commands::viz::VizArgs),
 }
 
 fn main() -> ExitCode {
@@ -141,6 +143,7 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
         Command::Mock(args) => commands::mock::run(&args),
         Command::Ws(args) => commands::realtime::run_ws(&args),
         Command::Sse(args) => commands::realtime::run_sse(&args),
+        Command::Viz(args) => commands::viz::run(&args),
     }
 }
 

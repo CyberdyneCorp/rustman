@@ -18,6 +18,7 @@ rustman-mcp.workspace = true
 rustman-grpc.workspace = true
 rustman-import.workspace = true
 rustman-viz-protocol.workspace = true
+rustman-viz-client.workspace = true
 rustman-webhook.workspace = true
 rustman-mock.workspace = true
 ratatui.workspace = true

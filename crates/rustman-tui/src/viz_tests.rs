@@ -18,13 +18,14 @@ use crate::workbench_tests::press;
 
 const ACK: &str = r#"{"type":"hello_ack","protocol":"rustman-viz/1","viewer":"stub-viz 0.1","views":["response_inspector"]}"#;
 
-/// A stub companion that answers `hello` with `reply`, appends every line
+/// A stub companion that speaks `rustman-viz/1` to `--protocol-check`,
+/// answers `hello` with `reply`, appends every line
 /// it reads to `<script>.log` and exits with `code`.
 fn stub(dir: &Path, reply: &str, code: u8) -> PathBuf {
     if cfg!(windows) {
         let script = dir.join("stub-viz.cmd");
         let text = format!(
-            "@echo off\r\nset /p hello=\r\n>\"%~f0.log\" echo %hello%\r\necho {reply}\r\n\
+            "@echo off\r\nif \"%~1\"==\"--protocol-check\" (echo rustman-viz/1& exit /b 0)\r\nset /p hello=\r\n>\"%~f0.log\" echo %hello%\r\necho {reply}\r\n\
              more >>\"%~f0.log\"\r\nexit /b {code}\r\n"
         );
         fs::write(&script, text).unwrap();
@@ -32,7 +33,7 @@ fn stub(dir: &Path, reply: &str, code: u8) -> PathBuf {
     }
     let script = dir.join("stub-viz");
     let text = format!(
-        "#!/bin/sh\nIFS= read -r hello\nprintf '%s\\n' \"$hello\" > \"$0.log\"\n\
+        "#!/bin/sh\n[ \"$1\" = --protocol-check ] && {{ echo rustman-viz/1; exit 0; }}\nIFS= read -r hello\nprintf '%s\\n' \"$hello\" > \"$0.log\"\n\
          printf '%s\\n' '{reply}'\ncat >> \"$0.log\"\nexit {code}\n"
     );
     fs::write(&script, text).unwrap();

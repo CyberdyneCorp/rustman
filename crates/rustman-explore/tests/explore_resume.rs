@@ -150,6 +150,7 @@ async fn run(
         concurrency: 1,
         cancel,
         progress: &mut progress,
+        probe: None,
     };
     drive(session, &executor, options).await.unwrap()
 }

@@ -9,12 +9,12 @@
 
 ## 2. Producer side in rustman
 
-- [ ] 2.1 Implement discovery (`RUSTMAN_VIZ` → `PATH` → sibling) with `--protocol-check` probing and a per-session cache; verify with tests using temp dirs and a stub companion script, including the invalid-override no-fallback case.
-- [ ] 2.2 Implement the spawn and handshake client with non-blocking writes, a bounded queue that coalesces progress while preserving findings and final events, and detach after 5 s of back-pressure; verify with a stub companion that stops reading, asserting the run finishes and the warning is shown.
-- [ ] 2.3 Redact secrets before serialization using the `environments` redaction API; verify with a test that a known secret value never appears in the captured protocol stream.
-- [ ] 2.4 Add `--viz` to `rustman run` and `rustman explore`, emitting events from the runner and exploration event streams; verify the exit code is unchanged when the companion is absent or crashes (stub that exits mid-stream).
-- [ ] 2.5 Add `rustman viz <REPORT> [--view graph]` with report type detection and exit code 2 for unrecognised files; verify with fixture reports and a non-report file.
-- [ ] 2.6 Fallback messaging (not found, protocol mismatch, `vulkan_unavailable`) with the HTML report offer from `test-reports`; verify each message with stub companions that return each condition.
+- [x] 2.1 Implement discovery (`RUSTMAN_VIZ` → `PATH` → sibling) with `--protocol-check` probing and a per-session cache; verify with tests using temp dirs and a stub companion script, including the invalid-override no-fallback case. (Discovery and the cached `--protocol-check` probe are in `crates/rustman-viz-client`, shared by the CLI and the TUI.)
+- [x] 2.2 Implement the spawn and handshake client with non-blocking writes, a bounded queue that coalesces progress while preserving findings and final events, and detach after 5 s of back-pressure; verify with a stub companion that stops reading, asserting the run finishes and the warning is shown. (`rustman_viz_client::Stream`: 1,024 queued lines; when full, `exchange_completed`/`probe_completed` are dropped and `finding`/`*_finished` are kept; tests `a_full_queue_drops_progress_but_keeps_findings` and `a_companion_that_stops_reading_is_detached_without_blocking`.)
+- [x] 2.3 Redact secrets before serialization using the `environments` redaction API; verify with a test that a known secret value never appears in the captured protocol stream. (Run records are redacted by the runner and their URL and error again with every secret of the run so far; exploration outcomes are sent as journaled, already redacted. `tests/viz.rs` checks a canary secret and the explorer's bearer token never reach the stub.)
+- [x] 2.4 Add `--viz` to `rustman run` and `rustman explore`, emitting events from the runner and exploration event streams; verify the exit code is unchanged when the companion is absent or crashes (stub that exits mid-stream). (The runner and the explorer gained per-result observers, `RunOptions::observer` and `Drive::probe`; `--viz` is also on `explore resume`.)
+- [x] 2.5 Add `rustman viz <REPORT> [--view graph]` with report type detection and exit code 2 for unrecognised files; verify with fixture reports and a non-report file.
+- [x] 2.6 Fallback messaging (not found, protocol mismatch, `vulkan_unavailable`) with the HTML report offer from `test-reports`; verify each message with stub companions that return each condition. (`rustman viz` exits 2 when the companion cannot be used, after the reason and a `rustman report render ... --format html` hint.)
 
 ## 3. Companion scaffolding and FFI adapter
 

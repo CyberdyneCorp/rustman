@@ -346,7 +346,7 @@ The listener accepts any method on any path and stores bodies byte for byte. You
 
 ### 9. See it visually when the terminal isn't enough
 
-_Planned (side track): the companion and the `--viz` flags are not built yet. Available today: the [viz protocol](docs/viz-protocol.md) and the TUI's `v` key, which hands an exchange to a companion when one is installed, and `H`, which exports the exchange as a self-contained HTML report._
+_In progress (side track): the `rustman-viz` companion app is not built yet. Available today on the Rustman side: the [viz protocol](docs/viz-protocol.md); `--viz` on `run`, `explore run` and `explore resume`; `rustman viz <report>`; and the TUI's `v` key. Each streams to a companion when one is installed, and otherwise says why and continues (see [Viz companion](docs/cli.md#viz-companion)). `H` exports the exchange as a self-contained HTML report._
 
 With the optional **`rustman-viz`** companion, built on the [Raven](https://github.com/oscar-soirey/Raven) GUI library, run and exploration results open as native dashboards:
 
@@ -661,7 +661,8 @@ graph TD
 | `rustman-webhook` | Webhook inspector, built on hyper |
 | `rustman-tui` | Terminal UI |
 | `rustman-cli` | The `rustman` binary |
-| `rustman-viz-protocol` | Serde types of the `rustman-viz/1` protocol between the TUI and the companion |
+| `rustman-viz-protocol` | Serde types of the `rustman-viz/1` protocol between the CLI or TUI and the companion |
+| `rustman-viz-client` | Producer side of the viz protocol: companion discovery, protocol check, handshake and non-blocking live streaming |
 | `rustman-jsonrpc` | Generic JSON-RPC 2.0 client over HTTP and WebSocket |
 | `rustman-grpc` | gRPC client using tonic, reflection and protox |
 | `rustman-import` | Postman, Insomnia, Bruno, HAR and `.http` import and export |

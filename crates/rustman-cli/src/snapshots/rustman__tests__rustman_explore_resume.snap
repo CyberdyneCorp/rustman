@@ -14,6 +14,9 @@ Options:
       --workspace <DIR>
           Workspace directory (default: search from the current directory upwards, else the current directory)
 
+      --viz
+          Show the rest of the exploration live in the graphical viz companion (rustman-viz)
+
       --color <WHEN>
           Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
           
