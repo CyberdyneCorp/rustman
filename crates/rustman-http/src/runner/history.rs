@@ -41,9 +41,13 @@ impl Runner<'_> {
             .as_ref()
             .and_then(|e| e.spill.as_deref())
             .and_then(|path| store.spill_name(path));
+        let sent_request = match &sent.grpc {
+            Some(grpc) => grpc.sent(redactor),
+            None => SentRequest::new(resolved, redactor),
+        };
         let entry = Entry::new(NewEntry {
             record: &sent.record,
-            sent: SentRequest::new(resolved, redactor),
+            sent: sent_request,
             request: request.as_deref(),
             environment: self.ctx.environment.map(|e| e.name.as_str()),
             spill,
@@ -95,11 +99,13 @@ impl Runner<'_> {
 }
 
 /// Whether `rustman history replay` can re-send what `record` sent: not a
-/// GraphQL subscription, whose handshake or stream is not a plain exchange.
+/// GraphQL subscription, whose handshake or stream is not a plain exchange,
+/// nor a gRPC call.
 fn replayable(record: &RequestRecord) -> bool {
     let graphql = record.graphql.as_ref();
     let jsonrpc = record.jsonrpc.as_ref();
-    graphql.is_none_or(|graphql| graphql.transport == "http")
+    record.grpc.is_none()
+        && graphql.is_none_or(|graphql| graphql.transport == "http")
         && jsonrpc.is_none_or(|jsonrpc| jsonrpc.transport == "http")
 }
 
@@ -114,12 +120,7 @@ fn replayed(mut record: RequestRecord, resolved: &ResolvedRequest, exchange: Exc
         .collect();
     record.exchange = Some(exchange_record(resolved, &exchange, &redactor));
     Sent {
-        record,
         exchange: Some(exchange),
-        resolved: None,
-        discard: None,
-        redactor: Redactor::new(),
-        snapshots: Vec::new(),
-        mcp_sent: None,
+        ..Sent::from_record(record)
     }
 }

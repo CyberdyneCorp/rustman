@@ -207,7 +207,7 @@ fn snapshot_files(root: &Path) -> BTreeMap<String, String> {
     files
 }
 
-const TOOLS: [&str; 15] = [
+const TOOLS: [&str; 18] = [
     "list_requests",
     "get_request",
     "list_environments",
@@ -224,6 +224,10 @@ const TOOLS: [&str; 15] = [
     "search_history",
     // jsonrpc-requests: registered with the protocol tools.
     "rpc_call",
+    // grpc-requests: registered with the `grpc` feature (the default).
+    "grpc_list",
+    "grpc_describe",
+    "grpc_call",
 ];
 
 #[tokio::test(flavor = "multi_thread")]
@@ -874,6 +878,14 @@ async fn every_tool_error_uses_a_catalogued_code() {
         (
             "rpc_call",
             json!({"endpoint": "http://127.0.0.1:9", "method": "m"}),
+        ),
+        ("grpc_list", json!({})),
+        ("grpc_list", json!({"target": "grpc://blocked.example:1"})),
+        ("grpc_describe", json!({"path": "missing", "symbol": "a.B"})),
+        ("grpc_call", json!({"path": "missing"})),
+        (
+            "grpc_call",
+            json!({"target": "grpc://blocked.example:1", "method": "a.B/C"}),
         ),
     ];
     let mut tools_seen: Vec<&str> = Vec::new();

@@ -251,6 +251,11 @@ pub struct RequestRecord {
     /// request; absent for every other kind.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mcp: Option<McpRecord>,
+    /// The exchange of a gRPC call (`protocol: grpc`): status, headers,
+    /// trailers, messages, timeline and timings, or the error that stopped
+    /// it; absent for every other kind. Redacted like every other field.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grpc: Option<serde_json::Value>,
 }
 
 impl RequestRecord {
@@ -274,6 +279,7 @@ impl RequestRecord {
             graphql: None,
             jsonrpc: None,
             mcp: None,
+            grpc: None,
         }
     }
 

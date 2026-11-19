@@ -87,6 +87,9 @@ pub enum CliError {
     /// message may quote the server, so control characters are escaped.
     #[error("{}", rustman_mcp::client::output::printable(&.0.to_string()))]
     Mcp(#[from] McpError),
+    /// A gRPC schema, target or call that failed (redacted).
+    #[error(transparent)]
+    Grpc(#[from] rustman_grpc::GrpcError),
 }
 
 impl From<RequestSnippetError> for CliError {
@@ -107,6 +110,7 @@ impl CliError {
             Self::Policy(err) if err.is_refusal() => SAFETY,
             Self::Graphql(err) => graphql_code(err),
             Self::Mcp(err) => mcp_code(err),
+            Self::Grpc(err) => u8::try_from(err.exit_code()).unwrap_or(REQUEST),
             Self::Curl(_)
             | Self::History(_)
             | Self::Import(_)

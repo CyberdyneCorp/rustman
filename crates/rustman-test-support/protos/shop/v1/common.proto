@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package shop.v1;
+
+// Shared types, imported by catalog.proto: reflection clients must fetch
+// this file as a dependency.
+
+enum Category {
+  CATEGORY_UNSPECIFIED = 0;
+  BOOKS = 1;
+  GAMES = 2;
+}
+
+message Money {
+  string currency_code = 1;
+  int64 units = 2;
+  int32 nanos = 3;
+}

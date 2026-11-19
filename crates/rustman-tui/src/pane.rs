@@ -18,6 +18,7 @@ use rustman_core::model::Request;
 use crate::config::UiOptions;
 use crate::focus::Focus;
 use crate::graphql_pane::{GraphqlEditor, GraphqlPane};
+use crate::grpc_pane::{GrpcEditor, GrpcPane};
 use crate::http_pane::HttpPane;
 use crate::jsonrpc_pane::{JsonrpcEditor, JsonrpcPane};
 use crate::keymap::{Chord, Keymap};
@@ -88,6 +89,13 @@ pub trait PaneEditor: fmt::Debug + Send {
     fn jsonrpc_mut(&mut self) -> Option<&mut JsonrpcEditor> {
         None
     }
+    /// The gRPC editor, for its schema, method browser and streams.
+    fn grpc(&self) -> Option<&GrpcEditor> {
+        None
+    }
+    fn grpc_mut(&mut self) -> Option<&mut GrpcEditor> {
+        None
+    }
 }
 
 /// A pane registered for one request kind.
@@ -103,10 +111,10 @@ pub struct Registry {
 }
 
 impl Registry {
-    /// The panes shipped here: `http`, `graphql` and `jsonrpc`.
+    /// The panes shipped here: `http`, `graphql`, `jsonrpc` and `grpc`.
     pub fn builtin() -> Self {
         Self {
-            panes: vec![&HttpPane, &GraphqlPane, &JsonrpcPane],
+            panes: vec![&HttpPane, &GraphqlPane, &JsonrpcPane, &GrpcPane],
         }
     }
 
@@ -225,7 +233,7 @@ mod tests {
     #[test]
     fn http_has_a_pane_and_unknown_kinds_open_read_only() {
         let registry = Registry::builtin();
-        assert_eq!(registry.kinds(), ["http", "graphql", "jsonrpc"]);
+        assert_eq!(registry.kinds(), ["http", "graphql", "jsonrpc", "grpc"]);
         let http = load("version: 1\nkind: http\nname: A\nurl: http://x/\n");
         let editor = registry.open(&http);
         assert_eq!(editor.kind(), "http");
@@ -235,11 +243,11 @@ mod tests {
             ["Params", "Headers", "Body", "Auth", "Assertions"]
         );
 
-        let text = "version: 1\nkind: grpc\nname: Hello\nservice: Greeter\n";
+        let text = "version: 1\nkind: soap\nname: Hello\nservice: Greeter\n";
         let mut editor = registry.open(&load(text));
         assert_eq!(
             editor.notice().as_deref(),
-            Some("No editor for kind \"grpc\"")
+            Some("No editor for kind \"soap\"")
         );
         assert_eq!(editor.method(), None);
         assert_eq!(editor.request().unwrap(), load(text), "never changed");

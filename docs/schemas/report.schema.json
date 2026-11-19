@@ -177,6 +177,9 @@
         "jsonrpc": {
           "$ref": "#/$defs/jsonrpc"
         },
+        "grpc": {
+          "$ref": "#/$defs/grpc"
+        },
         "assertions": {
           "type": "array",
           "items": {
@@ -336,6 +339,86 @@
         },
         "elapsed_ms": {
           "$ref": "#/$defs/ms"
+        }
+      }
+    },
+    "grpc": {
+      "type": "object",
+      "description": "The gRPC side of a kind: grpc request (protocol grpc): the call type and transport, the final status with decoded details, response headers and trailers (binary values in base64), every received message, the message timeline of streaming calls and timings; or, when the call ended without a status, the error and its kind (config or request). Absent from every other request. Added in v0.5.",
+      "required": [
+        "protocol",
+        "target",
+        "method"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "grpc"
+        },
+        "target": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "description": "package.Service/Method"
+        },
+        "call_type": {
+          "enum": [
+            "unary",
+            "server_streaming",
+            "client_streaming",
+            "bidi"
+          ]
+        },
+        "transport": {
+          "enum": [
+            "grpc",
+            "grpc-web"
+          ]
+        },
+        "status": {
+          "type": "object",
+          "required": [
+            "code",
+            "name",
+            "message",
+            "details"
+          ]
+        },
+        "headers": {
+          "type": "array"
+        },
+        "trailers": {
+          "type": "array"
+        },
+        "messages": {
+          "type": "array"
+        },
+        "timeline": {
+          "type": "array"
+        },
+        "timings": {
+          "type": "object"
+        },
+        "stopped": {
+          "type": "object"
+        },
+        "error": {
+          "type": "object",
+          "required": [
+            "kind",
+            "message"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "config",
+                "request"
+              ]
+            },
+            "message": {
+              "type": "string"
+            }
+          }
         }
       }
     },
@@ -545,6 +628,8 @@
             "error_code",
             "data",
             "rpc_error",
+            "grpc_status",
+            "metadata",
             "snapshot"
           ]
         },

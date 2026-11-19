@@ -5,6 +5,7 @@ use std::io::Read;
 use std::path::Path;
 
 use rustman_core::Redactor;
+use rustman_core::captures::CaptureResult;
 use rustman_core::run::{
     ExchangeRecord, HeaderRecord, RedirectRecord, ResponseRecord, SentRequest, TimingsRecord,
 };
@@ -88,6 +89,13 @@ fn read_prefix(path: &Path, len: usize) -> Option<Vec<u8>> {
     Some(window)
 }
 
+/// Redact the failure message of every capture.
+pub fn redact_capture_messages(captures: &mut [CaptureResult], redactor: &Redactor) {
+    for message in captures.iter_mut().filter_map(|c| c.message.as_mut()) {
+        *message = redactor.text(message).into_owned();
+    }
+}
+
 /// Milliseconds with microsecond precision, as in [`Timings`]' JSON form.
 pub fn timings_record(timings: &Timings) -> TimingsRecord {
     TimingsRecord {
@@ -98,5 +106,32 @@ pub fn timings_record(timings: &Timings) -> TimingsRecord {
         download_ms: millis(timings.download),
         total_ms: millis(timings.total),
         auth_ms: timings.auth.map(millis),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rustman_core::captures::CaptureOutcome;
+
+    use super::*;
+
+    #[test]
+    fn capture_messages_are_redacted() {
+        let mut redactor = Redactor::new();
+        redactor.add_value("token", "s3cr3t-canary");
+        let capture = |message: Option<&str>| CaptureResult {
+            var: "id".into(),
+            outcome: CaptureOutcome::NoMatch,
+            message: message.map(str::to_owned),
+            required: false,
+            persisted: false,
+            secret: false,
+        };
+        let mut captures = [capture(Some("no match in s3cr3t-canary")), capture(None)];
+        redact_capture_messages(&mut captures, &redactor);
+        let first = captures[0].message.as_deref().unwrap();
+        assert!(!first.contains("s3cr3t-canary"), "{first}");
+        assert!(first.contains("redacted"), "{first}");
+        assert!(captures[1].message.is_none());
     }
 }

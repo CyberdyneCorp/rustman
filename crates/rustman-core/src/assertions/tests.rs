@@ -24,6 +24,22 @@ fn response(status: u16, body: &str) -> ResponseView<'static> {
         binary: false,
         ttfb: Duration::from_millis(120),
         total: Duration::from_millis(350),
+        grpc: None,
+    }
+}
+
+/// A gRPC exchange that ended with `code`: header `x-served-by`, trailer
+/// `x-trace`, and `body` as its JSONPath document.
+fn grpc_response(code: i32, body: &str) -> ResponseView<'static> {
+    ResponseView {
+        headers: vec![("x-served-by".into(), "catalog".into())],
+        body: Cow::Owned(body.as_bytes().to_vec()),
+        grpc: Some(GrpcView {
+            code,
+            name: crate::model::grpc_code_name(code).to_owned(),
+            trailers: vec![("x-trace".into(), "t-1".into())],
+        }),
+        ..response(200, body)
     }
 }
 
@@ -539,6 +555,61 @@ fn rpc_error_forms_are_checked_at_load() {
     )
     .unwrap_err();
     assert!(err.to_string().contains("code"), "{err}");
+}
+
+/// Spec "Status assertion failure".
+#[test]
+fn grpc_status_assertions() {
+    let ok = grpc_response(0, "{}");
+    assert_eq!(shown("- grpc_status: OK\n", &ok), "pass: grpc_status OK");
+    assert_eq!(shown("- grpc_status: 0\n", &ok), "pass: grpc_status OK");
+    let missing = grpc_response(5, "{}");
+    assert_eq!(
+        shown("- grpc_status: OK\n", &missing),
+        "grpc_status: expected OK, got NOT_FOUND (5)"
+    );
+    assert_eq!(
+        shown("- grpc_status: not_found\n", &missing),
+        "pass: grpc_status NOT_FOUND"
+    );
+    assert_eq!(
+        shown("- grpc_status: OK\n", &response(200, "")),
+        "error: grpc_status: not a gRPC response"
+    );
+}
+
+#[test]
+fn metadata_assertions_read_headers_and_trailers() {
+    let r = grpc_response(0, "{}");
+    assert_eq!(
+        shown("- metadata: {name: x-served-by, equals: catalog}\n", &r),
+        "pass: metadata x-served-by equals \"catalog\""
+    );
+    assert!(run("- metadata: {name: X-Trace, exists: true}\n", &r)[0].passed());
+    assert_eq!(
+        shown("- metadata: {name: x-nope, exists: true}\n", &r),
+        "metadata x-nope: expected to exist, got nothing"
+    );
+    assert_eq!(
+        shown(
+            "- metadata: {name: x-request-id, exists: true}\n",
+            &response(200, "")
+        ),
+        "error: metadata: not a gRPC response"
+    );
+}
+
+/// Spec "Assertion over streamed messages": a stream's document is
+/// `{"messages": [...]}`.
+#[test]
+fn json_assertions_over_streamed_messages() {
+    let r = grpc_response(
+        0,
+        r#"{"messages":[{"id":"p-1"},{"id":"p-2"},{"id":"p-3"}]}"#,
+    );
+    assert!(run("- json: {path: $.messages, length: 3}\n", &r)[0].passed());
+    assert!(run("- json: {path: '$.messages[1].id', equals: p-2}\n", &r)[0].passed());
+    assert!(!run("- json: {path: $.messages, length: 2}\n", &r)[0].passed());
 }
 
 mod mcp {

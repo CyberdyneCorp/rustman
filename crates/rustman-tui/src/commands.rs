@@ -14,7 +14,8 @@ use crate::status::VimMode;
 use crate::toast::Severity;
 use crate::tree::{self, Filter};
 use crate::{
-    copy_as, graphql, import_dialog, jsonrpc, reveal, review, send, viewer_keys, viz, workbench,
+    copy_as, graphql, grpc, import_dialog, jsonrpc, reveal, review, send, viewer_keys, viz,
+    workbench,
 };
 
 /// Handle a key while the shell is showing.
@@ -279,8 +280,12 @@ pub fn run(state: &mut State, action: ActionId) -> Vec<Effect> {
             return crate::mcp::toggle_pane(state);
         }
         ActionId::ReportHtml => return crate::response::html::start(state),
+        ActionId::GraphqlRefreshSchema if grpc::is_active(state) => return grpc::refresh(state),
         ActionId::GraphqlRefreshSchema => return graphql::refresh(state),
         ActionId::GraphqlSubscriptionStart => return graphql::start_subscription(state),
+        ActionId::GraphqlSubscriptionStop if grpc::is_active(state) => {
+            grpc::half_close(state);
+        }
         ActionId::GraphqlSubscriptionStop => {
             graphql::stop_subscription(state);
         }
@@ -305,6 +310,8 @@ pub fn run(state: &mut State, action: ActionId) -> Vec<Effect> {
 /// Sending, cancelling and the response viewer's actions.
 fn request_action(state: &mut State, action: ActionId) -> Option<Vec<Effect>> {
     match action {
+        // While a gRPC bidi call runs, the key sends the Message tab on it.
+        ActionId::RequestSend if grpc::send_typed(state) => Some(Vec::new()),
         ActionId::RequestSend => Some(send::start(state)),
         ActionId::RequestCancel => {
             if !send::cancel(state) {

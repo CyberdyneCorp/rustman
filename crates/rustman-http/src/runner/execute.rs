@@ -10,9 +10,12 @@ use rustman_core::captures::{self, CaptureReport, Persistence, RunCaptures};
 use rustman_core::data_rows::RowSource;
 use rustman_core::model::{Assertion, Auth, Capture, Request};
 use rustman_core::redact::remember_for_logs;
+use rustman_core::run::redact_value;
 use rustman_core::run::{RequestRecord, RequestStatus, SkipReason};
 use rustman_core::secret::Secret;
-use rustman_core::vars::{Layer, ResolvedRequest, Resolver, VariablesSource, resolve_request};
+use rustman_core::vars::{
+    Layer, ResolvedGrpc, ResolvedRequest, Resolver, VariablesSource, resolve_request,
+};
 use rustman_core::workspace::RequestRef;
 
 use super::{LoginMode, Runner, Sent};
@@ -22,35 +25,41 @@ use crate::exchange::Exchange;
 use crate::oauth2::{Login, OAuth2Context, cache_key};
 use crate::timing::millis;
 
-use super::record::exchange_record;
+use super::record::{exchange_record, redact_capture_messages};
 
 impl Sent {
     pub(super) fn skipped(record: RequestRecord, reason: SkipReason) -> Self {
-        Self {
-            record: record.skipped(reason),
-            exchange: None,
-            resolved: None,
-            discard: None,
-            redactor: Redactor::new(),
-            snapshots: Vec::new(),
-            mcp_sent: None,
-        }
+        Self::from_record(record.skipped(reason))
     }
 
     pub(super) fn errored(record: RequestRecord, message: String) -> Self {
-        Self {
-            record: record.errored(message),
-            exchange: None,
-            resolved: None,
-            discard: None,
-            redactor: Redactor::new(),
-            snapshots: Vec::new(),
-            mcp_sent: None,
-        }
+        Self::from_record(record.errored(message))
     }
 
     pub(super) fn with_resolved(mut self, resolved: ResolvedRequest) -> Self {
         self.resolved = Some(resolved);
+        self
+    }
+
+    /// A result with `record` and nothing else.
+    pub(super) fn from_record(record: RequestRecord) -> Self {
+        Self {
+            record,
+            exchange: None,
+            resolved: None,
+            discard: None,
+            redactor: Redactor::new(),
+            snapshots: Vec::new(),
+            mcp_sent: None,
+            grpc: None,
+        }
+    }
+
+    /// The result of the grpc request `resolved`: history records the
+    /// call it made.
+    pub(super) fn with_grpc(mut self, resolved: ResolvedGrpc) -> Self {
+        self.resolved = Some(resolved.request.clone());
+        self.grpc = Some(Box::new(resolved));
         self
     }
 }
@@ -83,6 +92,9 @@ impl Runner<'_> {
         }
         if let Some(mcp) = sent.record.mcp.take() {
             sent.record.mcp = Some(mcp.redacted(&redactor));
+        }
+        if let Some(grpc) = sent.record.grpc.take() {
+            sent.record.grpc = Some(redact_value(&grpc, &redactor));
         }
         sent.redactor = redactor.clone();
         self.record_mcp_history(&mut sent, &redactor, file.clone());
@@ -124,6 +136,9 @@ impl Runner<'_> {
                     .await;
             }
             Request::Mcp(mcp) => return self.execute_mcp(request, mcp, record, iteration).await,
+            Request::Grpc(grpc) => {
+                return self.execute_grpc(request, grpc, record, iteration).await;
+            }
             Request::Opaque(_) => return Sent::skipped(record, SkipReason::UnsupportedKind),
         };
         let captured = self.lock_captures().clone();
@@ -282,20 +297,12 @@ impl Runner<'_> {
         record.warnings = warnings.map(|w| redactor.text(w).into_owned()).collect();
         record.warnings.extend(snapshots.warnings);
         record.captures = report.results;
-        for capture in &mut record.captures {
-            if let Some(message) = &mut capture.message {
-                *message = redactor.text(message).into_owned();
-            }
-        }
+        redact_capture_messages(&mut record.captures, &redactor);
         record.exchange = Some(exchange_record(checked.resolved, &exchange, &redactor));
         Sent {
-            record,
             exchange: Some(exchange),
-            resolved: None,
-            discard: None,
-            redactor: Redactor::new(),
             snapshots: snapshots.reviews,
-            mcp_sent: None,
+            ..Sent::from_record(record)
         }
     }
 
@@ -358,9 +365,12 @@ impl Runner<'_> {
     }
 
     /// The redactor for everything recorded about `sent`: the run's secrets,
-    /// plus the request's own credentials and those of its exchange.
+    /// plus the request's own credentials, those of its exchange and those
+    /// its kind found (`sent.redactor`, such as gRPC response metadata).
     pub(super) fn sink_redactor(&self, sent: &Sent) -> Redactor {
-        self.request_redactor(sent.resolved.as_ref(), sent.exchange.as_ref())
+        let mut redactor = self.request_redactor(sent.resolved.as_ref(), sent.exchange.as_ref());
+        redactor.merge(&sent.redactor);
+        redactor
     }
 
     /// The run's redactor (shared, not copied) plus what `request` and the

@@ -14,8 +14,8 @@ use std::sync::{Mutex, PoisonError};
 use rustman_core::model::Request;
 use rustman_core::secret::Secret;
 use rustman_core::vars::{
-    Layer, Lookup, Resolver, SecretLookup, VarSource, resolve_graphql, resolve_jsonrpc,
-    resolve_mcp, resolve_request,
+    Layer, Lookup, Resolver, SecretLookup, VarSource, resolve_graphql, resolve_grpc,
+    resolve_jsonrpc, resolve_mcp, resolve_request,
 };
 use rustman_core::workspace::RequestRef;
 
@@ -41,6 +41,7 @@ impl Runner<'_> {
                 Request::Graphql(_) => drop(resolve_graphql(request, &resolver)),
                 Request::Jsonrpc(_) => drop(resolve_jsonrpc(request, &resolver)),
                 Request::Mcp(_) => drop(resolve_mcp(request, &resolver)),
+                Request::Grpc(_) => drop(resolve_grpc(request, &resolver)),
                 _ => drop(resolve_request(request, &resolver)),
             }
         }

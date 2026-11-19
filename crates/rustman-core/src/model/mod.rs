@@ -6,6 +6,7 @@ pub mod body;
 pub mod capture;
 pub mod common;
 pub mod graphql;
+pub mod grpc;
 pub mod http;
 pub mod jsonrpc;
 pub mod kind;
@@ -14,8 +15,9 @@ pub mod signed_auth;
 pub mod snapshot;
 
 pub use assertion::{
-    Assertion, BodyAssertion, CountExpectation, CountOp, HeaderAssertion, JsonAssertion,
-    LatencyAssertion, RpcErrorExpectation, SchemaAssertion, StatusExpectation,
+    Assertion, BodyAssertion, CountExpectation, CountOp, GrpcStatusExpectation, HeaderAssertion,
+    JsonAssertion, LatencyAssertion, MetadataAssertion, RpcErrorExpectation, SchemaAssertion,
+    StatusExpectation,
 };
 pub use auth::{ApiKeyLocation, Auth, OAuth2, OAuth2Grant};
 pub use body::{Body, JsonContent, Part, PartSource};
@@ -24,6 +26,11 @@ pub use common::{Checked, NameValue, Validate, VarValue, Variables};
 pub use graphql::{
     DEFAULT_DURATION, DEFAULT_MAX_EVENTS, DOCUMENT_SOURCE_ERROR, DocumentSource, GRAPHQL_ACCEPT,
     GraphqlMethod, GraphqlRequest, GraphqlTransport, WsProtocol, graphql_as_http,
+};
+pub use grpc::{
+    BOTH_MESSAGES_ERROR, DEFAULT_STREAM_DURATION_MS, DEFAULT_STREAM_MESSAGES, GRPC_CODE_NAMES,
+    GrpcRequest, GrpcSchema, GrpcTls, GrpcTransport, NO_MESSAGE_ERROR, StreamLimits,
+    grpc_code_name, parse_grpc_code,
 };
 pub use http::{HttpRequest, Method, RequestSettings};
 pub use jsonrpc::{

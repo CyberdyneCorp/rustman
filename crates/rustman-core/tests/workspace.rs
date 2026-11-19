@@ -231,7 +231,7 @@ fn invalid_files_are_all_reported() {
     assert_eq!(errs.len(), 2, "{errs:?}");
     assert_eq!(
         errs[0],
-        "a.rman.yaml:2: unknown request kind 'soap' (expected one of: http, graphql, jsonrpc, mcp)"
+        "a.rman.yaml:2: unknown request kind 'soap' (expected one of: http, graphql, jsonrpc, grpc, mcp)"
     );
     assert!(errs[1].starts_with(&format!(
         "{}:1: unknown field `nme`",

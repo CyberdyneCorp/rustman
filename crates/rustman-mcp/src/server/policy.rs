@@ -29,7 +29,9 @@ pub fn check_method(permission: Permission, method: &str) -> Result<(), ToolErro
 }
 
 /// The origins agents may reach: `[agent].allowed_hosts`, or else every
-/// `http(s)` origin among the active environment's variable values.
+/// `http(s)` origin among the active environment's variable values. A
+/// `grpc://` or `grpcs://` value counts as the `http` or `https` origin it
+/// is reached over.
 pub fn allowlist(agent: &AgentSettings, environment: Option<&Environment>) -> Vec<Origin> {
     if !agent.allowed_hosts.is_empty() {
         return agent.allowed_hosts.clone();
@@ -40,13 +42,24 @@ pub fn allowlist(agent: &AgentSettings, environment: Option<&Environment>) -> Ve
         let VarValue::String(text) = value else {
             continue;
         };
-        if let Ok(origin) = Origin::of(text)
+        if let Ok(origin) = Origin::of(&http_form(text))
             && !origins.contains(&origin)
         {
             origins.push(origin);
         }
     }
     origins
+}
+
+/// `text` with a `grpc` or `grpcs` scheme read as `http` or `https`.
+fn http_form(text: &str) -> String {
+    if let Some(rest) = text.strip_prefix("grpcs://") {
+        format!("https://{rest}")
+    } else if let Some(rest) = text.strip_prefix("grpc://") {
+        format!("http://{rest}")
+    } else {
+        text.to_owned()
+    }
 }
 
 /// The limits of a session: the `[safety]` rate and concurrency, shared by
@@ -85,7 +98,7 @@ pub fn session_sender(
     ))
 }
 
-/// The sender of the `rpc_call` tool: the session's allowlist and
+/// The sender of the `rpc_call` and gRPC tools: the session's allowlist and
 /// production rule, and the governor of `session` (one rate and
 /// concurrency limit for every request of the session), but every
 /// JSON-RPC call is a `POST`, so the method rule is
@@ -186,6 +199,8 @@ mod tests {
                 ("base_url", "http://127.0.0.1:8080/api"),
                 ("auth_url", "https://auth.example.com"),
                 ("same", "http://127.0.0.1:8080/other"),
+                ("grpc_host", "grpc://127.0.0.1:50051"),
+                ("grpcs_host", "grpcs://grpc.example.com:443"),
                 ("name", "alice"),
             ],
             false,
@@ -196,7 +211,12 @@ mod tests {
             .collect();
         assert_eq!(
             hosts,
-            ["http://127.0.0.1:8080", "https://auth.example.com:443"]
+            [
+                "http://127.0.0.1:8080",
+                "https://auth.example.com:443",
+                "http://127.0.0.1:50051",
+                "https://grpc.example.com:443"
+            ]
         );
         let configured = AgentSettings {
             allowed_hosts: vec![Origin::parse("http://localhost:9000").unwrap()],

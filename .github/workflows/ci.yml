@@ -66,6 +66,10 @@ jobs:
           sudo apt-get install -y zsh fish
           echo "RUSTMAN_REQUIRE_SHELLS=1" >> "$GITHUB_ENV"
       - run: cargo test --workspace --locked
+      # add-grpc-client task 6.3: an agent server built without gRPC
+      # registers none of the gRPC tools.
+      - name: Agent tools without gRPC
+        run: cargo test -p rustman-mcp --no-default-features --locked --lib tools::tests
       # add-terminal-ui task 9.1 (also part of the run above; repeated here
       # so the job shows the TUI smoke result per OS). The real TUI runs in
       # a pty (ConPTY on Windows); the same flow also runs through the real

@@ -198,6 +198,8 @@ impl<'a> RequestRef<'a> {
             Request::Http(http) => http.headers.as_deref(),
             Request::Graphql(graphql) => graphql.headers.as_deref(),
             Request::Jsonrpc(jsonrpc) => jsonrpc.headers.as_deref(),
+            // gRPC metadata is not merged with inherited HTTP headers.
+            Request::Grpc(_) => return Vec::new(),
             Request::Mcp(_) | Request::Opaque(_) => None,
         };
         let mut merged: Vec<NameValue> = Vec::new();
@@ -216,7 +218,7 @@ impl<'a> RequestRef<'a> {
             Request::Http(http) => http.auth.as_ref(),
             Request::Graphql(graphql) => graphql.auth.as_ref(),
             Request::Jsonrpc(jsonrpc) => jsonrpc.auth.as_ref(),
-            Request::Mcp(_) | Request::Opaque(_) => None,
+            Request::Grpc(_) | Request::Mcp(_) | Request::Opaque(_) => None,
         };
         own.or_else(|| {
             self.ancestors
@@ -397,6 +399,7 @@ fn request_path_errors(
         Request::Http(http) => http.file_paths(),
         Request::Graphql(graphql) => graphql.file_paths(),
         Request::Jsonrpc(jsonrpc) => jsonrpc.file_paths(),
+        Request::Grpc(grpc) => grpc.file_paths(),
         Request::Mcp(_) | Request::Opaque(_) => return Vec::new(),
     };
     paths

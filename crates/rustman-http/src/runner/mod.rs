@@ -20,6 +20,7 @@
 
 mod execute;
 mod graphql;
+mod grpc;
 mod history;
 mod jsonrpc;
 mod mcp;
@@ -41,7 +42,7 @@ use rustman_core::run::{
 };
 use rustman_core::settings::Settings;
 use rustman_core::snapshot::{SnapshotMode, SnapshotReview};
-use rustman_core::vars::ResolvedRequest;
+use rustman_core::vars::{ResolvedGrpc, ResolvedRequest};
 use rustman_core::{Environment, Redactor, SecretStore};
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
@@ -54,6 +55,10 @@ use crate::exchange::Exchange;
 use crate::timing::millis;
 
 pub use graphql::{GraphqlCall, GraphqlExecutor, GraphqlFuture, GraphqlOutcome};
+pub use grpc::{
+    GRPC_CONFIG_ERROR, GRPC_REQUEST_ERROR, GrpcCall, GrpcExecutor, GrpcFailure, GrpcFuture,
+    GrpcOutcome,
+};
 pub use jsonrpc::{JsonrpcCall, JsonrpcCallCheck, JsonrpcExecutor, JsonrpcFuture, JsonrpcOutcome};
 pub use mcp::{McpCall, McpExecutor, McpFuture, McpOutcome};
 pub use record::{exchange_record, timings_record};
@@ -117,6 +122,9 @@ pub struct RunOptions<'a> {
     /// Sends `kind: jsonrpc` requests; without one they are skipped as an
     /// unsupported kind.
     pub jsonrpc: Option<&'a dyn JsonrpcExecutor>,
+    /// Sends `kind: grpc` requests; without one they are skipped as an
+    /// unsupported kind.
+    pub grpc: Option<&'a dyn GrpcExecutor>,
     /// How `snapshot` assertions treat their files: record, update
     /// (`--update-snapshots`) or CI (`--ci`, `CI=true`).
     pub snapshots: SnapshotMode,
@@ -159,6 +167,7 @@ impl Default for RunOptions<'_> {
             graphql: None,
             jsonrpc: None,
             mcp: None,
+            grpc: None,
             gate: None,
             snapshots: SnapshotMode::Record,
         }
@@ -192,6 +201,9 @@ pub struct Sent {
     pub snapshots: Vec<SnapshotReview>,
     /// What an mcp request sent, until its history entry is written.
     mcp_sent: Option<rustman_core::run::SentRequest>,
+    /// The resolved grpc request, whose history entry records the call
+    /// (`GRPC <target>/<method>`) instead of an HTTP request.
+    grpc: Option<Box<ResolvedGrpc>>,
 }
 
 impl Sent {

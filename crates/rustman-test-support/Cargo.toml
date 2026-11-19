@@ -34,3 +34,18 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread", "io-util", 
 tokio-rustls.workspace = true
 futures-util = { workspace = true, features = ["sink"] }
 tokio-tungstenite.workspace = true
+# In-process gRPC servers (add-grpc-client): reflection v1/v1alpha and
+# health, over a descriptor pool compiled from `protos/` with protox.
+tonic = { workspace = true, optional = true, features = ["server", "router", "codegen", "tls-ring"] }
+tonic-prost = { workspace = true, optional = true }
+tonic-web = { workspace = true, optional = true }
+tower-service = { workspace = true, optional = true }
+tonic-reflection = { workspace = true, optional = true, features = ["server"] }
+tonic-health = { workspace = true, optional = true }
+prost = { workspace = true, optional = true }
+prost-types = { workspace = true, optional = true }
+protox = { workspace = true, optional = true }
+tokio-stream = { workspace = true, optional = true, features = ["net"] }
+
+[features]
+grpc = ["dep:tonic", "dep:tonic-prost", "dep:tonic-web", "dep:tower-service", "dep:tonic-reflection", "dep:tonic-health", "dep:prost", "dep:prost-types", "dep:protox", "dep:tokio-stream"]

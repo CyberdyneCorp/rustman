@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package shop.v1;
+
+import "google/protobuf/timestamp.proto";
+import "shop/v1/common.proto";
+
+// The test service: one method per call type. The two reads are marked
+// free of side effects, so agents may call them without confirmation.
+service Catalog {
+  rpc GetProduct(GetProductRequest) returns (Product) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc ListProducts(ListProductsRequest) returns (stream Product) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc UploadProducts(stream Product) returns (UploadSummary);
+  rpc Chat(stream ChatMessage) returns (stream ChatMessage);
+}
+
+message GetProductRequest {
+  string id = 1;
+}
+
+message ListProductsRequest {
+  int32 page_size = 1;
+  Category category = 2;
+}
+
+message Product {
+  string id = 1;
+  string name = 2;
+  Money price = 3;
+  repeated string tags = 4;
+  Category category = 5;
+  map<string, int32> stock_by_store = 6;
+  oneof availability {
+    int32 in_stock = 7;
+    google.protobuf.Timestamp restock_at = 8;
+  }
+  google.protobuf.Timestamp created_at = 9;
+  Dimensions dimensions = 10;
+  int64 views = 11;
+  bytes thumbnail = 12;
+  bool active = 13;
+  double rating = 14;
+  repeated Variant variants = 15;
+}
+
+message Variant {
+  string sku = 1;
+  Money price = 2;
+}
+
+// Nested four levels deep, to show where templates stop expanding.
+message Dimensions {
+  Measure width = 1;
+
+  message Measure {
+    double value = 1;
+    Detail detail = 2;
+
+    message Detail {
+      string unit = 1;
+      Note note = 2;
+
+      message Note {
+        string text = 1;
+      }
+    }
+  }
+}
+
+message UploadSummary {
+  int32 count = 1;
+}
+
+message ChatMessage {
+  string text = 1;
+}

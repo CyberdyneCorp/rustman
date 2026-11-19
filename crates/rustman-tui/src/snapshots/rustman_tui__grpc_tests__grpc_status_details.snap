@@ -1,0 +1,34 @@
+---
+source: crates/rustman-tui/src/grpc_tests.rs
+expression: status
+---
+┌ Sidebar ─────────────────┐┌ invalid ───────────────────────────────────────────────────────┐┌ › Response ────────────────────────────────────────────────────┐
+│ ▾ grpc                   ││ GRPC     {{grpc_host}}                                         ││ ✖ INVALID_ARGUMENT (3) · 12 ms · 0/1 passed                    │
+│   GRPC   chat            ││ Method  Message  Metadata  Assertions                          ││  Messages  Status  Timeline  Assertions                        │
+│   GRPC   get             ││ Schema: 5 methods by reflection (Ctrl+G refreshes)             ││ unary shop.v1.Catalog/GetProduct · INVALID_ARGUMENT (3)        │
+│   GRPC   invalid         ││ Method  shop.v1.Catalog/GetProduct (unary)                     ││ ✖ INVALID_ARGUMENT (3)  invalid product id                     │
+│                          ││ Up/Down select · Enter picks the method                        ││ Details                                                        │
+│                          ││   grpc.reflection.v1.ServerReflection/ServerReflectionInfo  (bi││   google.rpc.BadRequest                                        │
+│                          ││ * shop.v1.Catalog/GetProduct  (unary)                          ││     field violation: id: must start with p-                    │
+│                          ││   shop.v1.Catalog/ListProducts  (server streaming)             ││ Headers (0)                                                    │
+│                          ││   shop.v1.Catalog/UploadProducts  (client streaming)           ││ Trailers (1)                                                   │
+│                          ││   shop.v1.Catalog/Chat  (bidi)                                 ││   content-type: application/grpc                               │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+│                          ││                                                                ││                                                                │
+└──────────────────────────┘└────────────────────────────────────────────────────────────────┘└────────────────────────────────────────────────────────────────┘
+ demo │ env: local │ TLS verified │ 0 in flight                                                                                                     Ctrl+Q quit

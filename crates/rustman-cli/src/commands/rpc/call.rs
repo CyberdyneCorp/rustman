@@ -82,7 +82,7 @@ pub fn run(args: &CallArgs) -> Result<u8, CliError> {
             let message = "a request file already defines its call: drop METHOD, PARAMS_JSON and the call flags";
             return Err(ConfigError::Usage(message.to_owned()).into());
         }
-        let target = session.find(&args.target)?;
+        let target = session.find(&args.target, &super::JSONRPC)?;
         session.send(&args.common, mode, false, &[target])?
     };
     let record = &sent[0].record;

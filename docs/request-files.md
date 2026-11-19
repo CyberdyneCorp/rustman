@@ -59,7 +59,7 @@ Every request file has these fields, in this order:
 | Field | Required | Meaning |
 |-------|----------|---------|
 | `version` | yes | Always `1`. |
-| `kind` | yes | The request kind: `http`, `graphql`, `jsonrpc` or `mcp`. |
+| `kind` | yes | The request kind: `http`, `graphql`, `jsonrpc`, `grpc` or `mcp`. |
 | `name` | yes | The name shown in reports and used by `rustman send <name>`. |
 | `description` | no | Free text. |
 | `tags` | no | A list of strings. |
@@ -67,7 +67,7 @@ Every request file has these fields, in this order:
 | `assertions` | no | Checks on the response (see [assertions.md](assertions.md)). |
 | `captures` | no | Values extracted from the response for later requests. |
 
-`graphql` files have their own fields (see [GraphQL requests](#graphql-requests)); their `variables` are GraphQL variables sent with the operation, not a layer of Rustman variables. `jsonrpc` files have their own fields too (see [JSON-RPC requests](#json-rpc-requests)); `rustman run` skips them with `request kind 'jsonrpc' is not supported by this build` until runner support lands. `mcp` files are parsed and listed. `rustman run` reports both kinds as skipped with `request kind '<kind>' is not supported by this build` until runner support for them lands.
+`graphql` files have their own fields (see [GraphQL requests](#graphql-requests)); their `variables` are GraphQL variables sent with the operation, not a layer of Rustman variables. `jsonrpc`, `mcp` and `grpc` files have their own fields too (see their sections below), and `rustman run` runs them alongside `http` and `graphql` requests. A kind this build does not know is reported as skipped with `request kind '<kind>' is not supported by this build`.
 
 ## HTTP requests
 
@@ -464,6 +464,78 @@ assertions:
   - json: {path: $.events, length: 3}
 ```
 
+## gRPC requests
+
+A `kind: grpc` file makes one gRPC call to a `target` (`host:port`, `grpc://host:port` for plaintext HTTP/2, or `grpcs://host:port` for TLS; `{{variables}}` work). Message types come from server reflection unless `schema` names local `.proto` files or a descriptor set. [grpc.md](grpc.md) describes schemas, encoding, streaming, deadlines, TLS, gRPC-Web, status details and the `rustman grpc` commands.
+
+| Field | Meaning |
+|---|---|
+| `method` | The fully qualified method, `package.Service/Method`. |
+| `message` | The request message of a unary or server-streaming call, in the proto3 JSON mapping. `{{variables}}` are interpolated in string values. |
+| `messages` | The request messages of a client-streaming or bidi call, sent in order before half-close. Exactly one of `message` or `messages` is allowed. |
+| `metadata` | An ordered list of `{name, value}` pairs sent as request headers; names ending in `-bin` take base64. |
+| `deadline_ms` | The call deadline (default: `[defaults] timeout_ms`, else 30000). |
+| `tls` | `enabled`, `insecure`, `ca_bundle`, `client_cert`, `client_key`, `client_pkcs12`, `client_pkcs12_password`. |
+| `transport` | `grpc` (default) or `grpc-web`. |
+| `schema` | `protos` with `import_paths`, or `descriptor_set`; paths are relative to the request file. |
+| `stream` | `max_messages` (default 100) and `duration_ms` (default 30000): when `rustman run` stops a response stream. |
+| `variables`, `assertions`, `captures` | As for `kind: http`, plus the `grpc_status` and `metadata` assertions and `from: metadata` captures. Without assertions a call expects `grpc_status: OK`. |
+
+A unary call with a token in its metadata:
+
+```yaml
+# grpc/get-product.rman.yaml
+version: 1
+kind: grpc
+name: Get product
+target: '{{grpc_host}}'
+method: shop.v1.Catalog/GetProduct
+message:
+  id: p-1
+metadata:
+  - name: authorization
+    value: 'Bearer {{token}}'
+deadline_ms: 5000
+assertions:
+  - grpc_status: OK
+  - json: {path: $.id, equals: p-1}
+captures:
+  - {var: product_name, from: json, path: $.name}
+```
+
+A server-streaming call compiled from local `.proto` files, stopped after 3 messages, and a client-streaming upload:
+
+```yaml
+# grpc/list-products.rman.yaml
+version: 1
+kind: grpc
+name: List products
+target: grpc://localhost:50051
+method: shop.v1.Catalog/ListProducts
+message: {pageSize: 10}
+schema:
+  protos: [protos/shop/v1/catalog.proto]
+  import_paths: [protos]
+stream:
+  max_messages: 3
+assertions:
+  - json: {path: $.messages, length: 3}
+```
+
+```yaml
+# grpc/upload-products.rman.yaml
+version: 1
+kind: grpc
+name: Upload products
+target: grpc://localhost:50051
+method: shop.v1.Catalog/UploadProducts
+messages:
+  - {id: p-1, name: Mug}
+  - {id: p-2, name: Plate}
+assertions:
+  - json: {path: $.count, equals: 2}
+```
+
 ## Collections
 
 Every folder under the workspace root is a collection, except `environments/`, folders whose name starts with `.` or `_` (such as `.rustman/`, `__snapshots__/` or `_removed/`), and folders with no request file at any depth (such as `mocks/`). Symlinked folders are not followed.
@@ -508,7 +580,7 @@ Paths containing `{{variables}}` are checked after the variables are resolved, b
 Load errors name the file and line, and Rustman reports every broken file at once:
 
 ```text
-legacy/soap.rman.yaml:2: unknown request kind 'soap' (expected one of: http, graphql, jsonrpc, mcp)
+legacy/soap.rman.yaml:2: unknown request kind 'soap' (expected one of: http, graphql, jsonrpc, grpc, mcp)
 users/list.rman.yaml:5: unknown field `header`, expected one of version, kind, name, description, tags, method, url, query, headers, body, auth, settings, variables, assertions, captures
 ```
 

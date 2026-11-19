@@ -12,6 +12,7 @@ use std::time::Instant;
 use rustman_core::format::write::request_to_yaml;
 use rustman_core::model::Request;
 use rustman_core::run::RequestRecord;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio_util::sync::CancellationToken;
 
 use crate::http_pane::HttpEditor;
@@ -58,7 +59,15 @@ pub struct InFlight {
     pub stop: CancellationToken,
     /// The events of a GraphQL subscription, as they arrive.
     pub live: LiveEvents,
+    /// Messages typed while a gRPC bidi call runs; dropping it half-closes
+    /// the stream.
+    pub outbound: Option<UnboundedSender<serde_json::Value>>,
+    /// The other end of `outbound`, taken by the send job.
+    pub typed: Typed,
 }
+
+/// The receiving end of the messages typed during a gRPC bidi call.
+pub type Typed = Arc<Mutex<Option<UnboundedReceiver<serde_json::Value>>>>;
 
 /// One event a subscription pushed, redacted, while it runs.
 #[derive(Debug, Clone, PartialEq)]
@@ -175,12 +184,15 @@ impl Tab {
         self.sends += 1;
         let seq = self.sends;
         let token = CancellationToken::new();
+        let (outbound, typed) = unbounded_channel();
         self.in_flight = Some(InFlight {
             seq,
             started: now,
             token: token.clone(),
             stop: CancellationToken::new(),
             live: LiveEvents::default(),
+            outbound: Some(outbound),
+            typed: Arc::new(Mutex::new(Some(typed))),
         });
         (seq, token)
     }

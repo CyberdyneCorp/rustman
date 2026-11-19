@@ -92,6 +92,7 @@ fn viewer_other(state: &mut State, action: ActionId) -> Option<()> {
         ActionId::ResponseNextTab
         | ActionId::ResponsePrevTab
         | ActionId::ResponseRaw
+        | ActionId::ResponseDirection
         | ActionId::ResponseFilter
         | ActionId::ResponseSearch
         | ActionId::SearchNext
@@ -105,6 +106,9 @@ fn viewer_other(state: &mut State, action: ActionId) -> Option<()> {
         ActionId::ResponseNextTab => viewer.step_tab(true),
         ActionId::ResponsePrevTab => viewer.step_tab(false),
         ActionId::ResponseRaw => viewer.toggle_raw(),
+        ActionId::ResponseDirection => {
+            viewer.cycle_direction();
+        }
         ActionId::ResponseFilter => open_box(viewer, BoxKind::Filter),
         ActionId::ResponseSearch => open_box(viewer, BoxKind::Search),
         ActionId::SearchNext => viewer.search_step(true),

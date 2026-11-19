@@ -1,0 +1,15 @@
+// The `google.rpc.Status` message carried by the `grpc-status-details-bin`
+// trailer. Names and field numbers follow googleapis `google/rpc/status.proto`
+// (Apache License 2.0); comments are trimmed.
+
+syntax = "proto3";
+
+package google.rpc;
+
+import "google/protobuf/any.proto";
+
+message Status {
+  int32 code = 1;
+  string message = 2;
+  repeated google.protobuf.Any details = 3;
+}

@@ -1,0 +1,8 @@
+---
+source: crates/rustman-grpc/tests/templates.rs
+expression: pretty(&template(&message))
+---
+{
+  "pageSize": 0,
+  "category": "CATEGORY_UNSPECIFIED"
+}

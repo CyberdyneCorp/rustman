@@ -22,6 +22,7 @@ rustman-http.workspace = true
 rustman-explore.workspace = true
 rustman-report.workspace = true
 rustman-jsonrpc.workspace = true
+rustman-grpc = { workspace = true, optional = true }
 rmcp = { workspace = true, features = ["server", "client", "elicitation", "transport-io", "transport-async-rw", "transport-streamable-http-server", "transport-streamable-http-client"] }
 axum.workspace = true
 base64.workspace = true
@@ -46,8 +47,13 @@ url.workspace = true
 # Kill a stdio server's whole process group (safe `killpg`).
 rustix.workspace = true
 
+[features]
+default = ["grpc"]
+# The gRPC agent tools (add-grpc-client "Agent tools").
+grpc = ["dep:rustman-grpc"]
+
 [dev-dependencies]
-rustman-test-support.workspace = true
+rustman-test-support = { workspace = true, features = ["grpc"] }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "io-util", "time", "test-util"] }
 hyper = { workspace = true, features = ["client", "http1"] }

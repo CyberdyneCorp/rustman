@@ -299,6 +299,12 @@ pub enum Action {
         refresh: bool,
         result: Result<Box<SchemaLoaded>, String>,
     },
+    /// A gRPC tab's schema was loaded (or refreshed).
+    GrpcSchema {
+        tab: TabId,
+        refresh: bool,
+        result: Result<Box<crate::grpc_pane::LoadedSchema>, String>,
+    },
     /// A "Copy as…" snippet was made.
     SnippetMade {
         lang: rustman_http::Lang,
@@ -400,6 +406,8 @@ pub enum Effect {
     Mcp(Box<mcp::Job>),
     /// Load (or refresh) a GraphQL tab's schema.
     GraphqlSchema(Box<SchemaJob>),
+    /// Load (or refresh) a gRPC tab's schema.
+    GrpcSchema(Box<crate::grpc::SchemaJob>),
     /// Make a "Copy as…" snippet.
     Snippet(Box<crate::copy_as::SnippetJob>),
     /// Run an import or its dry run.
@@ -478,6 +486,7 @@ impl State {
 pub fn update(state: &mut State, action: Action) -> Vec<Effect> {
     let mut effects = dispatch(state, action);
     effects.extend(graphql::pending_loads(state));
+    effects.extend(crate::grpc::pending_loads(state));
     crate::jsonrpc::pending_catalogs(state);
     workbench::ask_conflict(state);
     state.status.tls_insecure = tls_insecure(state);
@@ -578,6 +587,14 @@ fn on_workbench(state: &mut State, action: Action) -> Vec<Effect> {
             result,
         } => {
             graphql::on_loaded(state, tab, refresh, result);
+            Vec::new()
+        }
+        Action::GrpcSchema {
+            tab,
+            refresh,
+            result,
+        } => {
+            crate::grpc::on_loaded(state, tab, refresh, result);
             Vec::new()
         }
         Action::SnippetMade { lang, result } => {

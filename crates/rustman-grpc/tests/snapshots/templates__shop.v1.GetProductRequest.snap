@@ -1,0 +1,7 @@
+---
+source: crates/rustman-grpc/tests/templates.rs
+expression: pretty(&template(&message))
+---
+{
+  "id": ""
+}

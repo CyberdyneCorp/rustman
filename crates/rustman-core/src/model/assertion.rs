@@ -33,6 +33,12 @@ pub enum Assertion {
     /// `rpc_error: {code, message_contains}` or `rpc_error: none`: how a
     /// JSON-RPC call ended (add-jsonrpc-client).
     RpcError(RpcErrorExpectation),
+    /// `grpc_status: NOT_FOUND` or `grpc_status: 5`: the final status of a
+    /// gRPC call (add-grpc-client).
+    GrpcStatus(GrpcStatusExpectation),
+    /// `metadata: {name, equals | contains | matches | exists}`: a gRPC
+    /// response header or trailer.
+    Metadata(Checked<MetadataAssertion>),
     /// `snapshot` or `snapshot: {...}`: compare with a stored snapshot.
     Snapshot(Box<Checked<SnapshotAssertion>>),
     /// `is_error: true`: an MCP tool result with `isError` (`false`: without).
@@ -66,6 +72,8 @@ enum AssertionKey {
     ErrorCode,
     Data,
     RpcError,
+    GrpcStatus,
+    Metadata,
     Snapshot,
     IsError,
     ContentTextContains,
@@ -121,6 +129,8 @@ impl<'de> Visitor<'de> for AssertionVisitor {
             AssertionKey::ErrorCode => Assertion::ErrorCode(map.next_value()?),
             AssertionKey::Data => Assertion::Data(map.next_value()?),
             AssertionKey::RpcError => Assertion::RpcError(map.next_value()?),
+            AssertionKey::GrpcStatus => Assertion::GrpcStatus(map.next_value()?),
+            AssertionKey::Metadata => Assertion::Metadata(map.next_value()?),
             AssertionKey::Snapshot => Assertion::Snapshot(map.next_value()?),
             AssertionKey::IsError => Assertion::IsError(map.next_value()?),
             AssertionKey::ContentTextContains => Assertion::ContentTextContains(map.next_value()?),
@@ -153,6 +163,8 @@ impl AssertionKey {
             Self::ErrorCode => "error_code",
             Self::Data => "data",
             Self::RpcError => "rpc_error",
+            Self::GrpcStatus => "grpc_status",
+            Self::Metadata => "metadata",
             Self::Snapshot => "snapshot",
             Self::IsError => "is_error",
             Self::ContentTextContains => "content_text_contains",
@@ -244,6 +256,28 @@ impl Validate for HeaderAssertion {
                 ("exists", given(self.exists.is_some())),
             ],
         )
+    }
+}
+
+/// `metadata: {name, equals | contains | matches | exists}`: a header
+/// assertion over the metadata (headers and trailers) of a gRPC call.
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(transparent)]
+pub struct MetadataAssertion(pub HeaderAssertion);
+
+impl std::ops::Deref for MetadataAssertion {
+    type Target = HeaderAssertion;
+
+    fn deref(&self) -> &HeaderAssertion {
+        &self.0
+    }
+}
+
+impl Validate for MetadataAssertion {
+    fn validate(&self) -> Result<(), String> {
+        self.0
+            .validate()
+            .map_err(|e| e.replacen("header assertion", "metadata assertion", 1))
     }
 }
 
@@ -518,6 +552,62 @@ impl<'de> Visitor<'de> for RpcErrorVisitor {
     }
 }
 
+/// `grpc_status: OK`, `grpc_status: not_found` or `grpc_status: 5`: the
+/// expected gRPC status code.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GrpcStatusExpectation {
+    pub code: i32,
+}
+
+impl GrpcStatusExpectation {
+    /// `OK`: what a gRPC request without assertions expects.
+    pub const OK: Self = Self { code: 0 };
+
+    /// The canonical name of the expected code, such as `NOT_FOUND`.
+    pub fn name(self) -> &'static str {
+        super::grpc::grpc_code_name(self.code)
+    }
+}
+
+impl<'de> Deserialize<'de> for GrpcStatusExpectation {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(GrpcStatusVisitor)
+    }
+}
+
+struct GrpcStatusVisitor;
+
+fn grpc_code<E: de::Error>(code: Option<i32>, shown: &str) -> Result<GrpcStatusExpectation, E> {
+    let valid = super::grpc::GRPC_CODE_NAMES.len();
+    code.filter(|c| usize::try_from(*c).is_ok_and(|c| c < valid))
+        .map(|code| GrpcStatusExpectation { code })
+        .ok_or_else(|| {
+            E::custom(format!(
+                "invalid grpc_status '{shown}' (expected a code name such as NOT_FOUND or a number 0-16)"
+            ))
+        })
+}
+
+impl Visitor<'_> for GrpcStatusVisitor {
+    type Value = GrpcStatusExpectation;
+
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("a gRPC status code name such as NOT_FOUND, or a number 0-16")
+    }
+
+    fn visit_u64<E: de::Error>(self, v: u64) -> Result<Self::Value, E> {
+        grpc_code(i32::try_from(v).ok(), &v.to_string())
+    }
+
+    fn visit_i64<E: de::Error>(self, v: i64) -> Result<Self::Value, E> {
+        grpc_code(i32::try_from(v).ok(), &v.to_string())
+    }
+
+    fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+        grpc_code(super::grpc::parse_grpc_code(v), v)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -583,6 +673,31 @@ mod tests {
         assert_eq!(all[8], count(CountOp::Gte, 1));
         assert_eq!(all[10], Assertion::ErrorCode("FORBIDDEN".into()));
         assert!(matches!(&all[11], Assertion::Data(d) if d.path == "$.user.name"));
+    }
+
+    #[test]
+    fn grpc_assertions_load() {
+        let all = list(
+            "- grpc_status: OK\n- grpc_status: not_found\n- grpc_status: 4\n- metadata: {name: x-served-by, equals: catalog}\n",
+        )
+        .unwrap();
+        let code = |code| Assertion::GrpcStatus(GrpcStatusExpectation { code });
+        assert_eq!(all[..3], [code(0), code(5), code(4)]);
+        assert_eq!(GrpcStatusExpectation { code: 5 }.name(), "NOT_FOUND");
+        assert!(matches!(&all[3], Assertion::Metadata(m) if m.name == "x-served-by"));
+        let err = list("- grpc_status: NOPE\n").unwrap_err();
+        assert!(
+            err.message.starts_with("invalid grpc_status 'NOPE'"),
+            "{err}"
+        );
+        assert!(list("- grpc_status: 17\n").is_err());
+        assert!(list("- grpc_status: -1\n").is_err());
+        let err = list("- metadata: {name: x}\n").unwrap_err();
+        assert!(
+            err.message
+                .starts_with("metadata assertion needs exactly one of"),
+            "{err}"
+        );
     }
 
     #[test]

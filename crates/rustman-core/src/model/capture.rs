@@ -1,4 +1,4 @@
-//! Captures: `{var, from: json|header|status|body_regex|cookie, ...}`.
+//! Captures: `{var, from: json|header|status|body_regex|cookie|metadata, ...}`.
 
 use serde::Deserialize;
 
@@ -12,6 +12,8 @@ pub enum CaptureSource {
     Status,
     BodyRegex,
     Cookie,
+    /// A gRPC response header or trailer (add-grpc-client).
+    Metadata,
 }
 
 impl CaptureSource {
@@ -22,13 +24,14 @@ impl CaptureSource {
             Self::Status => "status",
             Self::BodyRegex => "body_regex",
             Self::Cookie => "cookie",
+            Self::Metadata => "metadata",
         }
     }
 
     fn fields(self) -> (&'static [&'static str], &'static [&'static str]) {
         match self {
             Self::Json => (&["path"], &[]),
-            Self::Header | Self::Cookie => (&["name"], &[]),
+            Self::Header | Self::Cookie | Self::Metadata => (&["name"], &[]),
             Self::Status => (&[], &[]),
             Self::BodyRegex => (&["pattern"], &["group"]),
         }
@@ -42,7 +45,8 @@ pub struct Capture {
     pub from: CaptureSource,
     /// JSONPath, for `from: json`.
     pub path: Option<String>,
-    /// Header or cookie name, for `from: header` and `from: cookie`.
+    /// Header, cookie or metadata name, for `from: header`, `from: cookie`
+    /// and `from: metadata`.
     pub name: Option<String>,
     /// Regular expression, for `from: body_regex`.
     pub pattern: Option<String>,
@@ -83,6 +87,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(ok.len(), 4);
+        let metadata = captures("- {var: served, from: metadata, name: x-served-by}\n").unwrap();
+        assert_eq!(metadata[0].from, CaptureSource::Metadata);
+        let err = captures("- {var: t, from: metadata}\n").unwrap_err();
+        assert_eq!(err.message, "capture from 'metadata' requires 'name'");
         let err = captures("- {var: t, from: json}\n").unwrap_err();
         assert_eq!(err.message, "capture from 'json' requires 'path'");
         let err = captures("- {var: t, from: status, name: x}\n").unwrap_err();

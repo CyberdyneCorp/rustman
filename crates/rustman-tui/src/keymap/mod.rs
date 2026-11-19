@@ -157,6 +157,7 @@ pub const DEFAULT: &[Builtin] = &[
     (Context::Response, "zR", ActionId::JsonExpandAll),
     (Context::Response, "y", ActionId::JsonCopy),
     (Context::Response, "r", ActionId::ResponseRaw),
+    (Context::Response, "d", ActionId::ResponseDirection),
     (Context::Response, "f", ActionId::ResponseFilter),
     (Context::Response, "/", ActionId::ResponseSearch),
     (Context::Response, "n", ActionId::SearchNext),

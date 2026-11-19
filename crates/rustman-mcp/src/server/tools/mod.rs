@@ -6,6 +6,8 @@
 
 mod execute;
 mod explore;
+#[cfg(feature = "grpc")]
+pub mod grpc;
 mod history;
 pub mod reference;
 pub(crate) mod reports;
@@ -188,15 +190,64 @@ pub fn catalog() -> Vec<Tool> {
 }
 
 /// Tools of optional protocol capabilities: `rpc_call` with
-/// `jsonrpc-requests`. `graphql_introspect` and `graphql_query`
-/// (`graphql-requests`) and `list_webhook_captures` (`webhook-inspector`)
-/// are not registered by this build yet.
+/// `jsonrpc-requests`, and `grpc_list`, `grpc_describe` and `grpc_call`
+/// with `grpc-requests` (the `grpc` feature). `graphql_introspect` and
+/// `graphql_query` (`graphql-requests`) and `list_webhook_captures`
+/// (`webhook-inspector`) are not registered by this build yet.
 fn protocol_tools() -> Vec<Tool> {
-    vec![tool::<rpc::RpcCallArgs, rpc::RpcCallResult>(
+    let mut tools = vec![tool::<rpc::RpcCallArgs, rpc::RpcCallResult>(
         rpc::NAME,
         "Send one JSON-RPC call (endpoint, method, params) or a saved jsonrpc request through the safety policy. Only methods matching [jsonrpc] agent_read_only_methods are sent; subscriptions are refused.",
         Effect::Sends,
-    )]
+    )];
+    tools.extend(grpc_tools());
+    tools
+}
+
+/// The gRPC tools, in a build with the `grpc` feature.
+#[cfg(feature = "grpc")]
+fn grpc_tools() -> Vec<Tool> {
+    vec![
+        tool::<grpc::GrpcListArgs, grpc::GrpcServices>(
+            grpc::LIST_TOOL,
+            "List the services and methods (with call types) of a gRPC target or saved grpc request, by reflection or its schema, through the safety policy's allowlist.",
+            Effect::ReadOnly,
+        ),
+        tool::<grpc::GrpcDescribeArgs, grpc::GrpcDescription>(
+            grpc::DESCRIBE_TOOL,
+            "Describe a gRPC service, method (with a request message template) or message of a target or saved grpc request.",
+            Effect::ReadOnly,
+        ),
+        tool::<grpc::GrpcCallArgs, grpc::GrpcCallResult>(
+            grpc::CALL_TOOL,
+            "Call a unary or server-streaming gRPC method (target, method, message, metadata) or a saved grpc request through the safety policy. Returns the redacted status, metadata and messages; streams stop at 100 messages or 30 s.",
+            Effect::Sends,
+        ),
+    ]
+}
+
+#[cfg(not(feature = "grpc"))]
+fn grpc_tools() -> Vec<Tool> {
+    Vec::new()
+}
+
+/// Run a gRPC tool; `None` when `name` is not one of this build.
+async fn call_grpc(name: &str, call: &Call) -> Option<Result<ToolOutput, ToolError>> {
+    #[cfg(feature = "grpc")]
+    {
+        let result = match name {
+            grpc::LIST_TOOL => grpc::grpc_list(call).await,
+            grpc::DESCRIBE_TOOL => grpc::grpc_describe(call).await,
+            grpc::CALL_TOOL => grpc::grpc_call(call).await,
+            _ => return None,
+        };
+        Some(result)
+    }
+    #[cfg(not(feature = "grpc"))]
+    {
+        let _ = (name, call);
+        None
+    }
 }
 
 /// Whether `name` is a registered tool.
@@ -222,10 +273,12 @@ pub async fn call(name: &str, call: &Call) -> Result<ToolOutput, ToolError> {
         "list_findings" => reports::list_findings(call),
         "search_history" => history::search_history(call),
         rpc::NAME => rpc::rpc_call(call).await,
-        _ => Err(ToolError::new(
-            ErrorCode::NotFound,
-            format!("no tool '{name}'"),
-        )),
+        _ => call_grpc(name, call).await.unwrap_or_else(|| {
+            Err(ToolError::new(
+                ErrorCode::NotFound,
+                format!("no tool '{name}'"),
+            ))
+        }),
     }
 }
 
@@ -240,6 +293,30 @@ mod tests {
             annotations.read_only_hint.unwrap(),
             annotations.destructive_hint.unwrap(),
         )
+    }
+
+    const GRPC_TOOLS: [&str; 3] = ["grpc_list", "grpc_describe", "grpc_call"];
+
+    #[cfg(feature = "grpc")]
+    #[test]
+    fn the_grpc_tools_are_registered_with_the_grpc_feature() {
+        for name in GRPC_TOOLS {
+            assert!(exists(name), "{name}");
+        }
+        assert_eq!(hints("grpc_list"), (true, false));
+        assert_eq!(hints("grpc_describe"), (true, false));
+        assert_eq!(hints("grpc_call"), (false, true));
+    }
+
+    /// `cargo test -p rustman-mcp --no-default-features --lib` (run in CI):
+    /// a build without gRPC registers none of its tools.
+    #[cfg(not(feature = "grpc"))]
+    #[test]
+    fn the_grpc_tools_are_absent_without_the_grpc_feature() {
+        for name in GRPC_TOOLS {
+            assert!(!exists(name), "{name}");
+        }
+        assert!(grpc_tools().is_empty());
     }
 
     #[test]

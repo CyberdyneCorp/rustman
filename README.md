@@ -382,15 +382,18 @@ rustman snapshot prune --yes
 ### 14. gRPC, WebSocket, SSE and message brokers
 
 ```bash
-rustman grpc list localhost:50051                    # via server reflection or .proto files (no protoc needed)
-rustman grpc call get-product.rman.yaml
+rustman grpc list grpc://localhost:50051             # via server reflection or .proto files (no protoc needed)
+rustman grpc describe grpc://localhost:50051 shop.v1.Catalog/ListProducts   # call type, types, request template
+rustman grpc call grpc/get-product.rman.yaml
+rustman grpc call --target grpc://localhost:50051 --method shop.v1.Catalog/ListProducts --data '{}' --json
+rustman grpc health grpc://localhost:50051 --service shop.v1.Catalog          # exit 0 SERVING, 1 NOT_SERVING
 rustman ws connect wss://echo.example.com --json
 rustman sse listen https://api.example.com/events --json --max-messages 3
 rustman import asyncapi asyncapi.yaml
 rustman kafka consume --brokers localhost:9092 --topic orders --offset earliest --max-messages 5 --json
 ```
 
-- **gRPC:** all four call types, decoded `google.rpc.Status` error details, deadlines, and a health-check helper.
+- **gRPC (available now):** `kind: grpc` request files with no generated code: schemas from server reflection (v1, v1alpha fallback, cached for offline browsing), `.proto` files compiled in-process or descriptor sets; all four call types with a message timeline, deadlines, binary metadata, TLS/mTLS/h2c and gRPC-Web, decoded `google.rpc.Status` details, `grpc_status` and `metadata` assertions, `kind: grpc` in `rustman run` alongside HTTP, and a health-check helper. See [`docs/grpc.md`](docs/grpc.md).
 - **WebSocket and SSE:** scripted send / wait-for / assert steps, and SSE resume with `Last-Event-ID`.
 - **Kafka, MQTT and AMQP:** pure-Rust clients. Consuming has no side effects by default, producing counts as a mutation under the safety policy, and payloads are validated against AsyncAPI schemas.
 

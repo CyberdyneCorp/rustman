@@ -75,6 +75,10 @@ pub struct RunRequest {
     /// `kind: jsonrpc` request; absent from every other request.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub jsonrpc: Option<JsonrpcRecord>,
+    /// The gRPC exchange (`protocol: grpc`) of a `kind: grpc` request;
+    /// absent from every other request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grpc: Option<serde_json::Value>,
     pub assertions: Vec<Assertion>,
     pub captures: Vec<Capture>,
     pub warnings: Vec<String>,
@@ -265,6 +269,7 @@ fn request(r: &RequestRecord) -> RunRequest {
         error: r.error.clone(),
         exchange: r.exchange.as_ref().map(exchange),
         jsonrpc: r.jsonrpc.clone(),
+        grpc: r.grpc.clone(),
         assertions: r.assertions.iter().map(assertion).collect(),
         captures: r.captures.iter().map(capture).collect(),
         warnings: r.warnings.clone(),

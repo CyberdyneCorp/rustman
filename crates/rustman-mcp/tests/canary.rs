@@ -21,6 +21,7 @@ use rustman_core::{SecretStore, Workspace};
 use rustman_mcp::server::Sessions;
 use rustman_test_support::TestServer;
 use rustman_test_support::bad_api::{self, BadApi};
+use rustman_test_support::grpc::{GrpcServer, Reflection};
 use serde_json::{Value, json};
 
 const CANARY: &str = "canary-3f9e1b7d52c04a68";
@@ -92,7 +93,7 @@ fn write(root: &Path, rel: &str, text: &str) {
 /// A workspace whose `local` environment reaches `server` and `api` and
 /// holds the canary as the secret `api_token`. `users/leak` has the
 /// canary's value pasted into a tracked file.
-fn workspace(server: &TestServer, api: &BadApi) -> tempfile::TempDir {
+fn workspace(server: &TestServer, api: &BadApi, grpc: &GrpcServer) -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     write(
         dir.path(),
@@ -100,9 +101,10 @@ fn workspace(server: &TestServer, api: &BadApi) -> tempfile::TempDir {
         "[workspace]\nname = \"t\"\nversion = 1\n\n[safety]\nrate = 1000\nconcurrency = 4\n\n[jsonrpc]\nagent_read_only_methods = [\"echo\"]\n",
     );
     let env = format!(
-        "variables:\n  base_url: {}\n  api_url: {}\nsecrets:\n  - api_token\n",
+        "variables:\n  base_url: {}\n  api_url: {}\n  grpc_host: '{}'\nsecrets:\n  - api_token\n",
         server.url(""),
-        api.url("")
+        api.url(""),
+        grpc.target()
     );
     write(dir.path(), "environments/local.yaml", &env);
     write(dir.path(), ".gitignore", ".rustman/\n");
@@ -116,6 +118,11 @@ fn workspace(server: &TestServer, api: &BadApi) -> tempfile::TempDir {
         base64::Engine::encode(&base64::engine::general_purpose::STANDARD, CANARY)
     );
     write(dir.path(), "users/leak.rman.yaml", &leak);
+    write(
+        dir.path(),
+        "grpc/get.rman.yaml",
+        "version: 1\nkind: grpc\nname: Get\ntarget: '{{grpc_host}}'\nmethod: shop.v1.Catalog/GetProduct\nmessage: {id: '{{api_token}}'}\nmetadata:\n  - name: authorization\n    value: 'Bearer {{api_token}}'\n",
+    );
     write(dir.path(), "api/openapi.yaml", bad_api::OPENAPI);
     dir
 }
@@ -210,6 +217,45 @@ fn body_ref(result: &CallToolResult) -> Option<String> {
     structured["body"]["body_ref"].as_str().map(str::to_owned)
 }
 
+/// The gRPC tools: a call whose response echoes the canary, a saved
+/// request carrying it in metadata, blocked targets and symbols naming it.
+async fn call_grpc_tools(client: &Client, out: &mut Outputs) -> Vec<String> {
+    let blocked = format!("grpc://blocked-{CANARY}.example:1");
+    let calls = [
+        (
+            "grpc_call",
+            json!({"target": "{{grpc_host}}", "method": "shop.v1.Catalog/GetProduct",
+                   "message": {"id": "{{api_token}}"},
+                   "metadata": {"authorization": "Bearer {{api_token}}"}}),
+        ),
+        ("grpc_call", json!({"path": "grpc/get"})),
+        (
+            "grpc_call",
+            json!({"target": blocked, "method": "shop.v1.Catalog/GetProduct"}),
+        ),
+        (
+            "grpc_call",
+            json!({"target": "{{grpc_host}}", "method": format!("shop.v1.Catalog/{CANARY}")}),
+        ),
+        ("grpc_list", json!({"target": "{{grpc_host}}"})),
+        ("grpc_list", json!({"target": blocked})),
+        (
+            "grpc_describe",
+            json!({"path": "grpc/get", "symbol": "shop.v1.Product"}),
+        ),
+        (
+            "grpc_describe",
+            json!({"target": "{{grpc_host}}", "symbol": CANARY}),
+        ),
+    ];
+    let mut called = Vec::new();
+    for (tool, args) in calls {
+        out.add(tool, &call(client, tool, args).await);
+        called.push(tool.to_owned());
+    }
+    called
+}
+
 /// One call per catalogued tool (more for some), each with the canary in
 /// its reach.
 async fn call_every_tool(
@@ -244,6 +290,7 @@ async fn call_every_tool(
         out.add("rpc_call", &call(client, "rpc_call", args).await);
     }
     called.push("rpc_call".to_owned());
+    called.extend(call_grpc_tools(client, out).await);
     let simple = [
         ("list_requests", json!({})),
         ("list_requests", json!({"text": CANARY})),
@@ -346,7 +393,8 @@ async fn get_every_prompt(client: &Client, out: &mut Outputs) {
 async fn the_canary_never_reaches_the_client() {
     let server = TestServer::http().await;
     let api = BadApi::start().await;
-    let ws = workspace(&server, &api);
+    let grpc = GrpcServer::start(Reflection::V1).await;
+    let ws = workspace(&server, &api, &grpc);
     let agent = Agent::default();
     let seen = agent.seen.clone();
     let client = connect(ws.path(), agent).await;
@@ -404,7 +452,8 @@ async fn literal_credentials_in_request_files_never_reach_the_client() {
     const AD_HOC: &str = "adhoc-key-4411";
     let server = TestServer::http().await;
     let api = BadApi::start().await;
-    let ws = workspace(&server, &api);
+    let grpc = GrpcServer::start(Reflection::None).await;
+    let ws = workspace(&server, &api, &grpc);
     let lit = format!(
         "version: 1\nkind: http\nname: Lit\nmethod: GET\nurl: \"{{{{base_url}}}}/echo\"\nheaders:\n  - name: Authorization\n    value: \"Bearer {BEARER}\"\n  - name: X-Api-Key\n    value: \"{API_KEY}\"\n"
     );

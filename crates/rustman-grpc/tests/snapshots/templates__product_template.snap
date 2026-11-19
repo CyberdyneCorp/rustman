@@ -1,0 +1,45 @@
+---
+source: crates/rustman-grpc/tests/templates.rs
+expression: pretty(&value)
+---
+{
+  "id": "",
+  "name": "",
+  "price": {
+    "currencyCode": "",
+    "units": "0",
+    "nanos": 0
+  },
+  "tags": [
+    ""
+  ],
+  "category": "CATEGORY_UNSPECIFIED",
+  "stockByStore": {
+    "": 0
+  },
+  "inStock": 0,
+  "createdAt": "1970-01-01T00:00:00Z",
+  "dimensions": {
+    "width": {
+      "value": 0.0,
+      "detail": {
+        "unit": "",
+        "note": {}
+      }
+    }
+  },
+  "views": "0",
+  "thumbnail": "",
+  "active": false,
+  "rating": 0.0,
+  "variants": [
+    {
+      "sku": "",
+      "price": {
+        "currencyCode": "",
+        "units": "0",
+        "nanos": 0
+      }
+    }
+  ]
+}
