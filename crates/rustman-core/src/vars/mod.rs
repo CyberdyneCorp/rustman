@@ -7,6 +7,7 @@ pub mod grpc;
 pub mod jsonrpc;
 pub mod mcp;
 pub mod placeholders;
+pub mod realtime;
 pub mod request;
 pub mod resolver;
 pub mod source;
@@ -18,6 +19,10 @@ pub use grpc::{GRPC_SENT_METHOD, ResolvedGrpc, ResolvedSchema, resolve_grpc};
 pub use jsonrpc::{ResolvedCall, ResolvedJsonrpc, resolve_jsonrpc};
 pub use mcp::{ResolvedMcp, resolve_mcp};
 pub use placeholders::{PlaceholderVar, resolve_placeholders};
+pub use realtime::{
+    ResolvedBinary, ResolvedFrame, ResolvedRealtime, ResolvedSse, ResolvedStep, ResolvedWs,
+    resolve_realtime,
+};
 pub use request::{
     ResolvedBody, ResolvedFile, ResolvedPair, ResolvedPart, ResolvedPartSource, ResolvedRequest,
     TlsFiles, resolve_auth, resolve_request,

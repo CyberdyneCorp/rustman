@@ -18,6 +18,8 @@ pub mod oauth;
 pub mod openapi;
 pub mod proxy;
 pub mod raw;
+pub mod realtime_sse;
+pub mod realtime_ws;
 pub mod routes;
 pub mod server;
 
@@ -34,4 +36,6 @@ pub use jsonrpc::{JsonrpcHttpServer, JsonrpcWsServer, RpcReply, RpcWsSession, Ws
 pub use mcp_http::McpHttpServer;
 pub use oauth::OAuthServer;
 pub use proxy::TestProxy;
+pub use realtime_sse::{RealtimeSseServer, SseChunk, SseReply, SseTail};
+pub use realtime_ws::{RealtimeWsServer, RecordedWs, WsAction, WsBehavior};
 pub use server::{TestServer, Tls};

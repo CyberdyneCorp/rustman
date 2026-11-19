@@ -51,11 +51,11 @@ impl WsConnection {
     /// finish within the connect timeout. Errors are redacted.
     pub async fn open(http: &ResolvedRequest, options: &SendOptions) -> Result<Self, JsonrpcError> {
         let limit = options.connect_timeout;
-        let opened = open_websocket(http, options, None, limit)
+        let opened = open_websocket(http, options, None, limit, options.body.max_in_memory)
             .await
             .map_err(|e| match e {
                 WebSocketError::Transport(e) => JsonrpcError::Transport(e),
-                WebSocketError::Handshake(message) => JsonrpcError::WebSocket(message),
+                WebSocketError::Handshake(failure) => JsonrpcError::WebSocket(failure.message),
                 WebSocketError::TimedOut(after) => JsonrpcError::Transport(RequestError::Timeout {
                     after,
                     phase: Phase::Connect,

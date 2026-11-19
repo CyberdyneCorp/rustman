@@ -52,6 +52,11 @@ pub mod mcp;
 pub mod mock_server;
 pub mod palette;
 pub mod pane;
+pub mod realtime;
+pub mod realtime_pane;
+#[cfg(test)]
+mod realtime_tests;
+mod realtime_view;
 pub mod response;
 pub mod reveal;
 pub mod review;

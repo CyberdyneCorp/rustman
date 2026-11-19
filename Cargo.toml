@@ -19,6 +19,7 @@ rustman-graphql = { path = "crates/rustman-graphql", version = "0.1.0" }
 rustman-jsonrpc = { path = "crates/rustman-jsonrpc", version = "0.1.0" }
 rustman-grpc = { path = "crates/rustman-grpc", version = "0.1.0" }
 rustman-mcp = { path = "crates/rustman-mcp", version = "0.1.0" }
+rustman-realtime = { path = "crates/rustman-realtime", version = "0.1.0" }
 # Test servers shared by the integration tests; never published.
 rustman-test-support = { path = "crates/rustman-test-support" }
 rustman-tui = { path = "crates/rustman-tui", version = "0.1.0" }

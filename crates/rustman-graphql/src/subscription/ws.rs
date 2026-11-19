@@ -79,11 +79,12 @@ async fn open(
 ) -> Result<(WebSocket, Response, ResolvedRequest), GraphqlError> {
     let limit = options.within(started, send_options.connect_timeout);
     let offer = Some(offered(preferred));
-    let opened = open_websocket(&target.http, send_options, offer, limit)
+    let max = send_options.body.max_in_memory;
+    let opened = open_websocket(&target.http, send_options, offer, limit, max)
         .await
         .map_err(|e| match e {
             WebSocketError::Transport(e) => GraphqlError::Transport(e),
-            WebSocketError::Handshake(message) => GraphqlError::Subscription(message),
+            WebSocketError::Handshake(failure) => GraphqlError::Subscription(failure.message),
             WebSocketError::TimedOut(limit) => GraphqlError::Subscription(format!(
                 "WebSocket handshake timed out after {} ms",
                 limit.as_millis()

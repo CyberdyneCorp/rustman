@@ -89,6 +89,8 @@ fn load(
             | Request::Jsonrpc(_)
             | Request::Mcp(_)
             | Request::Grpc(_)
+            | Request::Ws(_)
+            | Request::Sse(_)
             | Request::Opaque(_),
         ) => None,
         Err(e) => {

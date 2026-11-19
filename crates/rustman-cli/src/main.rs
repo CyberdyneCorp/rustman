@@ -79,6 +79,10 @@ enum Command {
     Snapshot(commands::snapshot::SnapshotArgs),
     /// Serve an OpenAPI document as a local mock server
     Mock(commands::mock::MockArgs),
+    /// Open WebSocket sessions: send frames and print received messages
+    Ws(commands::realtime::WsArgs),
+    /// Listen to Server-Sent Events streams and print their events
+    Sse(commands::realtime::SseArgs),
 }
 
 fn main() -> ExitCode {
@@ -135,6 +139,8 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
         Command::Webhook(args) => commands::webhook::run(&args),
         Command::Snapshot(args) => commands::snapshot::run(&args),
         Command::Mock(args) => commands::mock::run(&args),
+        Command::Ws(args) => commands::realtime::run_ws(&args),
+        Command::Sse(args) => commands::realtime::run_sse(&args),
     }
 }
 

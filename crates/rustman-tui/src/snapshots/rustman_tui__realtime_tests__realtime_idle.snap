@@ -1,0 +1,28 @@
+---
+source: crates/rustman-tui/src/realtime_tests.rs
+expression: screen
+---
+┌ echo ────────────────────────────────────────────────────────────────────────────────────────────┐
+│ WS       {{ws}}                                                                                  │
+│ Timeline  Compose  Headers  Steps  Assertions                                                    │
+│ Not connected · 0 of 0 entries · Ctrl+R connects                                                 │
+│ Filter  dir: all  type: all  text:   d t / c                                                     │
+│ No messages yet. Ctrl+R connects.                                                                │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│ {{ws}} = ws://127.0.0.1:9/feed · environment                                                     │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌ Response ────────────────────────────────────────────────────────────────────────────────────────┐
+│ No response yet · press Ctrl+Enter to send                                                       │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ demo │ env: local │ TLS verified │ 0 in flight                                         Ctrl+Q quit

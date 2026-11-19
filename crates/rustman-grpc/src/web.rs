@@ -224,10 +224,29 @@ pub(crate) async fn send(
     let mut state = Collected::default();
     let run = exchange(call, &request, &http, body, options, &recorder, &mut state);
     let status = match tokio::time::timeout(options.deadline, run).await {
-        Ok(result) => result?,
+        Ok(result) => past_deadline(result?, &state, options.deadline, recorder.elapsed()),
         Err(_) => deadline_status(options.deadline),
     };
     Ok(call.finish(state, status, &recorder, ConnectTimings::default()))
+}
+
+/// `status`, which the call ended with after `elapsed`; `DEADLINE_EXCEEDED`
+/// when it is a `CANCELLED` the server sent once the deadline had passed.
+/// A server enforcing `grpc-timeout` (tonic's does) answers `CANCELLED`
+/// when it expires, and when that answer is ready as our own timer fires,
+/// the answer wins the race; it is the same expired deadline, as for
+/// native gRPC calls. A `CANCELLED` of our own stream bounds is kept.
+fn past_deadline(
+    status: GrpcStatus,
+    state: &Collected,
+    deadline: Duration,
+    elapsed: Duration,
+) -> GrpcStatus {
+    let expired = status.code == CANCELLED && state.stopped.is_none() && elapsed >= deadline;
+    if expired {
+        return deadline_status(deadline);
+    }
+    status
 }
 
 async fn exchange(
@@ -551,6 +570,30 @@ mod tests {
         reader.push(&[COMPRESSED_FLAG, 0, 0, 0, 2, 1, 2]);
         assert_eq!(reader.next_frame(), Ok(Some(Frame::Compressed)));
         assert!(!reader.has_leftover());
+    }
+
+    /// The server's `CANCELLED` for an expired `grpc-timeout` can arrive
+    /// as our own deadline fires; either way the status is
+    /// `DEADLINE_EXCEEDED`.
+    #[test]
+    fn a_cancelled_answer_past_the_deadline_is_deadline_exceeded() {
+        let deadline = Duration::from_millis(200);
+        let cancelled = || GrpcStatus::new(CANCELLED, "Timeout expired");
+        let late = past_deadline(cancelled(), &Collected::default(), deadline, deadline);
+        assert_eq!(late.label(), "DEADLINE_EXCEEDED (4)");
+        assert_eq!(late.message, "deadline of 200 ms exceeded");
+        let early = Duration::from_millis(150);
+        let before = past_deadline(cancelled(), &Collected::default(), deadline, early);
+        assert_eq!(before.label(), "CANCELLED (1)", "before the deadline");
+        let bounded = Collected {
+            stopped: Some(crate::exchange::StreamStop::MaxMessages(3)),
+            ..Collected::default()
+        };
+        let stopped = past_deadline(cancelled(), &bounded, deadline, deadline);
+        assert_eq!(stopped.label(), "CANCELLED (1)", "our own stream bound");
+        let failed = GrpcStatus::new(INTERNAL, "boom");
+        let other = past_deadline(failed, &Collected::default(), deadline, deadline);
+        assert_eq!(other.label(), "INTERNAL (13)");
     }
 
     #[test]

@@ -207,7 +207,7 @@ fn snapshot_files(root: &Path) -> BTreeMap<String, String> {
     files
 }
 
-const TOOLS: [&str; 18] = [
+const TOOLS: [&str; 19] = [
     "list_requests",
     "get_request",
     "list_environments",
@@ -224,6 +224,8 @@ const TOOLS: [&str; 18] = [
     "search_history",
     // jsonrpc-requests: registered with the protocol tools.
     "rpc_call",
+    // realtime-sessions: registered with the protocol tools.
+    "realtime_listen",
     // grpc-requests: registered with the `grpc` feature (the default).
     "grpc_list",
     "grpc_describe",
@@ -878,6 +880,11 @@ async fn every_tool_error_uses_a_catalogued_code() {
         (
             "rpc_call",
             json!({"endpoint": "http://127.0.0.1:9", "method": "m"}),
+        ),
+        ("realtime_listen", json!({"path": "missing"})),
+        (
+            "realtime_listen",
+            json!({"url": "ws://127.0.0.1:9/feed", "frames": ["hi"]}),
         ),
         ("grpc_list", json!({})),
         ("grpc_list", json!({"target": "grpc://blocked.example:1"})),

@@ -24,6 +24,7 @@ mod grpc;
 mod history;
 mod jsonrpc;
 mod mcp;
+mod realtime;
 mod record;
 mod seed;
 mod snapshots;
@@ -61,6 +62,7 @@ pub use grpc::{
 };
 pub use jsonrpc::{JsonrpcCall, JsonrpcCallCheck, JsonrpcExecutor, JsonrpcFuture, JsonrpcOutcome};
 pub use mcp::{McpCall, McpExecutor, McpFuture, McpOutcome};
+pub use realtime::{RealtimeCall, RealtimeExecutor, RealtimeFuture, RealtimeOutcome};
 pub use record::{exchange_record, timings_record};
 
 /// Where requests run: the workspace (or, for an ad-hoc request outside
@@ -131,6 +133,9 @@ pub struct RunOptions<'a> {
     /// Sends `kind: mcp` requests, one session per server for the run;
     /// without one they are skipped as an unsupported kind.
     pub mcp: Option<&'a dyn McpExecutor>,
+    /// Runs `kind: ws` and `kind: sse` sessions; without one they are
+    /// skipped as an unsupported kind.
+    pub realtime: Option<&'a dyn RealtimeExecutor>,
     /// Sends every request instead of the engine; `None` for the CLI and
     /// the TUI.
     pub gate: Option<&'a dyn SendGate>,
@@ -168,6 +173,7 @@ impl Default for RunOptions<'_> {
             jsonrpc: None,
             mcp: None,
             grpc: None,
+            realtime: None,
             gate: None,
             snapshots: SnapshotMode::Record,
         }

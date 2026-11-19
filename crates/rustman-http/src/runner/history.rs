@@ -99,14 +99,15 @@ impl Runner<'_> {
 }
 
 /// Whether `rustman history replay` can re-send what `record` sent: not a
-/// GraphQL subscription, whose handshake or stream is not a plain exchange,
-/// nor a gRPC call.
+/// GraphQL subscription or a realtime session, whose handshake or stream
+/// is not a plain exchange, nor a gRPC call.
 fn replayable(record: &RequestRecord) -> bool {
     let graphql = record.graphql.as_ref();
     let jsonrpc = record.jsonrpc.as_ref();
     record.grpc.is_none()
         && graphql.is_none_or(|graphql| graphql.transport == "http")
         && jsonrpc.is_none_or(|jsonrpc| jsonrpc.transport == "http")
+        && record.realtime.is_none()
 }
 
 fn replayed(mut record: RequestRecord, resolved: &ResolvedRequest, exchange: Exchange) -> Sent {

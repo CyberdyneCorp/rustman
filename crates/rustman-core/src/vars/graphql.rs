@@ -119,7 +119,7 @@ pub(super) fn object(i: &mut Interpolator<'_, '_>, map: &Map<String, Value>) -> 
 }
 
 /// `value` with every string interpolated; keys and other scalars are kept.
-fn string_values(i: &mut Interpolator<'_, '_>, value: &Value) -> Value {
+pub(super) fn string_values(i: &mut Interpolator<'_, '_>, value: &Value) -> Value {
     match value {
         Value::String(text) => Value::String(i.text(text).text),
         Value::Array(items) => Value::Array(items.iter().map(|v| string_values(i, v)).collect()),

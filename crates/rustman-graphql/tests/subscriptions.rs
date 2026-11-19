@@ -341,6 +341,19 @@ async fn sse_records_each_next_event_until_complete() {
 }
 
 #[tokio::test]
+async fn sse_complete_without_a_data_line_ends_the_subscription() {
+    let server = GraphqlSseServer::start(SseScript {
+        events: 2,
+        end: SseEnd::CompleteWithoutData,
+    })
+    .await;
+    let f = Fixture::new(&server.url(""), "transport: sse\n");
+    let sub = headless(&f).await.unwrap();
+    assert_eq!(numbers(&sub), [1, 2]);
+    assert_eq!(sub.ended, Ended::Complete);
+}
+
+#[tokio::test]
 async fn headless_ws_subscriptions_stop_at_ten_of_fifty_events() {
     let server = GraphqlWsServer::start(WsScript::Modern {
         events: 50,

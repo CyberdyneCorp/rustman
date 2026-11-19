@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use super::graphql::GraphqlRecord;
 use super::jsonrpc::JsonrpcRecord;
 use super::mcp::McpRecord;
+use super::realtime::RealtimeRecord;
 use crate::assertions::AssertionResult;
 use crate::captures::CaptureResult;
 use crate::model::{ApiKeyLocation, Auth};
@@ -256,6 +257,10 @@ pub struct RequestRecord {
     /// it; absent for every other kind. Redacted like every other field.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grpc: Option<serde_json::Value>,
+    /// The handshake, timeline and end of a WebSocket or SSE session;
+    /// absent for every other kind.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub realtime: Option<RealtimeRecord>,
 }
 
 impl RequestRecord {
@@ -280,6 +285,7 @@ impl RequestRecord {
             jsonrpc: None,
             mcp: None,
             grpc: None,
+            realtime: None,
         }
     }
 

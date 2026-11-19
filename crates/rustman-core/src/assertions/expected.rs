@@ -14,6 +14,16 @@ pub(crate) struct Expected {
     pub templated: bool,
 }
 
+impl Expected {
+    /// `value` used as written.
+    pub fn literal(value: &Value) -> Self {
+        Self {
+            value: value.clone(),
+            templated: false,
+        }
+    }
+}
+
 /// Interpolates expected values and remembers the secrets used, so they are
 /// redacted from every message.
 pub(crate) struct Interp<'r, 'a> {

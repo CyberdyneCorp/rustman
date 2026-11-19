@@ -160,9 +160,9 @@ fn focused_request(state: &State) -> Result<Request, (Severity, String)> {
             Severity::Warn,
             format!("No snippet export for kind '{}'", opaque.kind),
         )),
-        Request::Mcp(_) => Err((
+        Request::Mcp(_) | Request::Ws(_) | Request::Sse(_) => Err((
             Severity::Warn,
-            "No snippet export for kind 'mcp'".to_owned(),
+            format!("No snippet export for kind '{}'", request.kind()),
         )),
         _ => Ok(request),
     }

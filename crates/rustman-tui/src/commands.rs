@@ -242,7 +242,9 @@ pub fn run(state: &mut State, action: ActionId) -> Vec<Effect> {
     // (spec: Cancel in-flight request).
     if action == ActionId::Escape
         && state.overlay.is_none()
-        && (jsonrpc::stop_subscription(state) || send::cancel(state))
+        && (crate::realtime::close(state)
+            || jsonrpc::stop_subscription(state)
+            || send::cancel(state))
     {
         return Vec::new();
     }

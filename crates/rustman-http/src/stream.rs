@@ -40,6 +40,8 @@ pub struct StreamedResponse {
     /// credentials), to merge into the request's redactor.
     pub credentials: Redactor,
     body: Incoming,
+    /// The request's secrets and [`Self::credentials`]: what body errors
+    /// are redacted with.
     redactor: Redactor,
 }
 
@@ -127,6 +129,8 @@ impl HttpEngine {
                 .await?;
         }
         let (head, body) = response.into_parts();
+        let mut body_redactor = redactor.clone();
+        body_redactor.merge(&credentials);
         Ok(StreamedResponse {
             url,
             http_version: HttpVersion::from_http(head.version),
@@ -141,7 +145,7 @@ impl HttpEngine {
                 .collect(),
             credentials,
             body,
-            redactor: redactor.clone(),
+            redactor: body_redactor,
         })
     }
 }
@@ -164,4 +168,58 @@ pub async fn request_head(
     };
     head.await
         .map_err(|e: RequestError| e.redacted(&Redactor::for_request(request)))
+}
+
+#[cfg(test)]
+mod tests {
+    use rustman_core::model::RequestSettings;
+    use rustman_core::vars::{Resolved, ResolvedBody, ResolvedPair, TlsFiles};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    use super::*;
+
+    fn request(url: &str) -> ResolvedRequest {
+        ResolvedRequest {
+            method: "GET".into(),
+            url: Resolved::literal(url),
+            query: Vec::new(),
+            headers: vec![ResolvedPair {
+                name: Resolved::literal("Authorization"),
+                value: Resolved::literal("Bearer REQTOKEN9f2"),
+            }],
+            body: ResolvedBody::None,
+            auth: None,
+            settings: RequestSettings::default(),
+            tls: TlsFiles::default(),
+            secrets: Vec::new(),
+        }
+    }
+
+    /// Body errors are redacted with the response's credentials too, as
+    /// every other protocol's are.
+    #[tokio::test]
+    async fn body_errors_are_redacted_with_the_response_credentials() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut head = [0; 1024];
+            let _ = socket.read(&mut head).await.unwrap();
+            let response = "HTTP/1.1 200 OK\r\nSet-Cookie: sid=COOKIE7xq4z\r\n\
+                            Content-Type: text/event-stream\r\nContent-Length: 0\r\n\r\n";
+            socket.write_all(response.as_bytes()).await.unwrap();
+        });
+        let engine = HttpEngine::new();
+        let request = request(&format!("http://{addr}/events"));
+        let response = engine
+            .open_stream(&request, &SendOptions::default())
+            .await
+            .unwrap();
+        server.await.unwrap();
+        let shown = response
+            .redactor
+            .text("got sid=COOKIE7xq4z with REQTOKEN9f2");
+        assert!(!shown.contains("COOKIE7xq4z"), "{shown}");
+        assert!(!shown.contains("REQTOKEN9f2"), "{shown}");
+    }
 }

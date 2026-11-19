@@ -290,6 +290,8 @@ async fn call_every_tool(
         out.add("rpc_call", &call(client, "rpc_call", args).await);
     }
     called.push("rpc_call".to_owned());
+    call_realtime_listen(client, out).await;
+    called.push("realtime_listen".to_owned());
     called.extend(call_grpc_tools(client, out).await);
     let simple = [
         ("list_requests", json!({})),
@@ -373,6 +375,23 @@ async fn read_every_resource(client: &Client, extra: &[String], out: &mut Output
         out.add(uri, &read.map_err(|e| e.to_string()));
     }
     uris.len()
+}
+
+/// `realtime_listen` with the secret in the URL, a pasted literal, frames
+/// and a request path.
+async fn call_realtime_listen(client: &Client, out: &mut Outputs) {
+    let calls = [
+        json!({"url": "{{base_url}}/echo?k={{api_token}}"}),
+        json!({"url": format!("{{{{base_url}}}}/echo?k={CANARY}")}),
+        json!({"url": "{{base_url}}/echo", "frames": [format!("x {CANARY}")]}),
+        json!({"path": CANARY}),
+    ];
+    for args in calls {
+        out.add(
+            "realtime_listen",
+            &call(client, "realtime_listen", args).await,
+        );
+    }
 }
 
 async fn get_every_prompt(client: &Client, out: &mut Outputs) {

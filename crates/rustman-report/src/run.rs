@@ -6,8 +6,8 @@
 use rustman_core::assertions::{AssertionResult, Outcome};
 use rustman_core::captures::{CaptureOutcome, CaptureResult};
 use rustman_core::run::{
-    DataRowRecord, ExchangeRecord, HeaderRecord, JsonrpcRecord, RequestRecord, RequestStatus,
-    RunRecord, SentRequest, SkipReason, Summary,
+    DataRowRecord, ExchangeRecord, HeaderRecord, JsonrpcRecord, RealtimeRecord, RequestRecord,
+    RequestStatus, RunRecord, SentRequest, SkipReason, Summary,
 };
 use rustman_core::snapshot::{SnapshotCounts, SnapshotResult};
 use serde::{Deserialize, Serialize};
@@ -79,6 +79,10 @@ pub struct RunRequest {
     /// absent from every other request.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub grpc: Option<serde_json::Value>,
+    /// The handshake, timeline and end of a `kind: ws` or `kind: sse`
+    /// session; absent from every other request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub realtime: Option<RealtimeRecord>,
     pub assertions: Vec<Assertion>,
     pub captures: Vec<Capture>,
     pub warnings: Vec<String>,
@@ -270,6 +274,7 @@ fn request(r: &RequestRecord) -> RunRequest {
         exchange: r.exchange.as_ref().map(exchange),
         jsonrpc: r.jsonrpc.clone(),
         grpc: r.grpc.clone(),
+        realtime: r.realtime.clone(),
         assertions: r.assertions.iter().map(assertion).collect(),
         captures: r.captures.iter().map(capture).collect(),
         warnings: r.warnings.clone(),

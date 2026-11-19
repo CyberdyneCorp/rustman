@@ -407,6 +407,18 @@ pub(crate) fn add_credentials(credentials: &mut Redactor, headers: &http::Header
     }
 }
 
+/// `headers` as name and value pairs, in order; values that are not UTF-8
+/// are read lossily.
+pub fn header_pairs(headers: &HeaderMap) -> Vec<(String, String)> {
+    headers
+        .iter()
+        .map(|(name, value)| {
+            let value = String::from_utf8_lossy(value.as_bytes()).into_owned();
+            (name.as_str().to_owned(), value)
+        })
+        .collect()
+}
+
 /// Remove the spill file of a redirect hop's body, which nothing refers to.
 fn discard_spill(received: &Received) {
     if let Some(path) = &received.body.spill {

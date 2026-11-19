@@ -536,6 +536,113 @@ assertions:
   - json: {path: $.count, equals: 2}
 ```
 
+## WebSocket and SSE requests
+
+A `kind: ws` file opens a WebSocket session and a `kind: sse` file listens to a Server-Sent Events stream. Both record a message timeline, end on their own under `rustman run`, and take assertions and captures over the messages they received. [realtime.md](realtime.md) describes sessions, the timeline, reconnects and the history record.
+
+`kind: ws` fields:
+
+| Field | Meaning |
+|---|---|
+| `url` | A `ws://` or `wss://` URL; `{{variables}}` work. Any other scheme fails to load with `ws: url must use ws:// or wss://`. |
+| `headers`, `auth`, `variables`, `assertions`, `captures` | As for `kind: http`. Headers and auth go into the opening handshake. |
+| `subprotocols` | An ordered list offered in `Sec-WebSocket-Protocol`; the server picks one. |
+| `steps` | A scripted sequence, run in order (see below). |
+| `limits` | `max_messages` (default 50), `duration_ms` (default 30000), `max_message_bytes` (default 16777216, 16 MiB) and `max_timeline` (default 10000). |
+| `tls` | `verify`, `ca_bundle`, `client_cert`, `client_key`, `client_pkcs12` and `client_pkcs12_password`, as the `kind: http` settings of the same names (`verify` is `verify_tls`). |
+
+`kind: sse` fields:
+
+| Field | Meaning |
+|---|---|
+| `url` | An `http://` or `https://` URL; any other scheme fails to load with `sse: url must use http:// or https://`. |
+| `method` | `GET` (default) or another method, such as `POST` for LLM token streams. |
+| `body` | A body of any `kind: http` type, for POST streams. |
+| `headers`, `auth`, `variables`, `assertions`, `captures`, `limits`, `tls` | As for `kind: ws`. `Accept: text/event-stream` is sent unless the file sets `Accept`. |
+| `last_event_id` | Sent as `Last-Event-ID` on the first connection. |
+| `reconnect` | `max_attempts` (default 5; `0` disables reconnecting). |
+
+The headless bounds are named `limits.max_messages` and `limits.duration_ms`, next to the other limits of a session. GraphQL and JSON-RPC subscriptions keep their own top-level `max_events` and `max_duration_ms`.
+
+A WebSocket step is a map with exactly one key:
+
+| Step | Meaning |
+|---|---|
+| `send: {text: <string>}` | A text frame. |
+| `send: {json: <value>}` | A YAML or JSON value sent compactly as a text frame: `{op: subscribe}` sends `{"op":"subscribe"}`. |
+| `send: {binary: <base64>}` or `send: {binary: {file: <path>}}` | A binary frame from base64 text, or from a file relative to the request file. |
+| `send: {ping: <base64>}` | A ping carrying that data; its pong is recorded with the round-trip time. |
+| `wait_for: {json: {path, equals \| matches \| exists}, timeout_ms}` or `wait_for: {regex: <pattern>, timeout_ms}` | Wait for a message received after the step starts that matches, up to `timeout_ms` (default 5000). A timeout fails the session with `ws: wait_for timed out after <n> ms (<matcher>)`. |
+| `sleep: <ms>` | Wait, recording what arrives. |
+| `close: {code, reason}` | Close (code default 1000) and wait up to 2000 ms for the server's close. |
+
+`{{variables}}` are interpolated in the string values of steps: texts, the strings of JSON frames, base64 data, file paths, `wait_for` paths, patterns and expected values, and close reasons.
+
+A subscription driven by steps, checked on its first message:
+
+```yaml
+# feeds/ticker.rman.yaml
+version: 1
+kind: ws
+name: Ticker
+url: wss://{{feed_host}}/v2/feed?token={{api_token}}
+subprotocols:
+  - v2.feed
+  - v1.feed
+steps:
+  - send: {json: {op: subscribe, channel: ticker}}
+  - wait_for: {json: {path: $.type, equals: snapshot}, timeout_ms: 3000}
+limits: {max_messages: 20, duration_ms: 10000}
+assertions:
+  - messages: {count_gte: 3}
+  - json: {path: '$.messages[0].type', equals: snapshot}
+captures:
+  - {var: last_price, from: json, path: '$.messages[1].price'}
+```
+
+A request and response over a socket, then a close:
+
+```yaml
+# feeds/ping.rman.yaml
+version: 1
+kind: ws
+name: Ping
+url: ws://localhost:8080/rpc
+steps:
+  - send: {json: {id: 1, op: ping}}
+  - wait_for: {json: {path: $.id, equals: 1}}
+  - send: {binary: {file: ./fixtures/blob.bin}}
+  - sleep: 100
+  - close: {code: 1000, reason: done}
+assertions:
+  - close_code: 1000
+```
+
+An LLM token stream over a POST, resumed after a drop:
+
+```yaml
+# llm/chat-stream.rman.yaml
+version: 1
+kind: sse
+name: Chat stream
+method: POST
+url: https://{{llm_host}}/v1/chat/completions
+auth:
+  type: bearer
+  token: '{{llm_token}}'
+body:
+  type: json
+  content:
+    stream: true
+    messages:
+      - {role: user, content: Hello}
+reconnect: {max_attempts: 2}
+limits: {max_messages: 200, duration_ms: 60000}
+assertions:
+  - messages: {count_gte: 1}
+  - latency: {ttfb_lt: 5000}
+```
+
 ## Collections
 
 Every folder under the workspace root is a collection, except `environments/`, folders whose name starts with `.` or `_` (such as `.rustman/`, `__snapshots__/` or `_removed/`), and folders with no request file at any depth (such as `mocks/`). Symlinked folders are not followed.
@@ -580,7 +687,7 @@ Paths containing `{{variables}}` are checked after the variables are resolved, b
 Load errors name the file and line, and Rustman reports every broken file at once:
 
 ```text
-legacy/soap.rman.yaml:2: unknown request kind 'soap' (expected one of: http, graphql, jsonrpc, grpc, mcp)
+legacy/soap.rman.yaml:2: unknown request kind 'soap' (expected one of: http, graphql, jsonrpc, grpc, mcp, ws, sse)
 users/list.rman.yaml:5: unknown field `header`, expected one of version, kind, name, description, tags, method, url, query, headers, body, auth, settings, variables, assertions, captures
 ```
 

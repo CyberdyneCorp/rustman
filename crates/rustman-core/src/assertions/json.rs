@@ -71,7 +71,7 @@ pub(super) fn evaluate_at(
     let verdict = match (&operand, &actual) {
         (Operand::Exists(want), _) => Ok(exists(*want, actual.is_some())),
         (_, None) => Ok(Verdict::new(false, expected_shown(op, &operand))),
-        (_, Some(actual)) => compare(op, &operand, actual, interp),
+        (_, Some(actual)) => compare(op, &operand, actual, Some(interp)),
     };
     match verdict {
         Ok(v) => {
@@ -99,19 +99,42 @@ fn exists(want: bool, found: bool) -> Verdict {
     Verdict::new(want == found, expected.to_owned())
 }
 
+/// Whether `json` holds for `document`, with its operands used as written
+/// (already interpolated): the `wait_for` matcher of realtime sessions.
+pub(super) fn holds(json: &JsonAssertion, document: &Value) -> Result<bool, String> {
+    let (op, operand) = operator(json);
+    let path = JsonPath::parse(&json.path)
+        .map_err(|e| format!("json {}: invalid JSONPath: {e}", json.path))?;
+    let actual = select(&path, document);
+    let verdict = match (&operand, &actual) {
+        (Operand::Exists(want), _) => exists(*want, actual.is_some()),
+        (_, None) => return Ok(false),
+        (_, Some(actual)) => compare(op, &operand, actual, None)?,
+    };
+    Ok(verdict.ok)
+}
+
+/// Compare with the operand interpolated by `interp`, or as written when
+/// there is none.
 fn compare(
     op: &str,
     operand: &Operand<'_>,
     actual: &Value,
-    interp: &mut Interp<'_, '_>,
+    interp: Option<&mut Interp<'_, '_>>,
 ) -> Result<Verdict, String> {
     match operand {
         Operand::Value(raw) => {
-            let expected = interp.value(raw)?;
+            let expected = match interp {
+                Some(interp) => interp.value(raw)?,
+                None => Expected::literal(raw),
+            };
             compare_value(op, actual, &expected)
         }
         Operand::Pattern(raw) => {
-            let pattern = interp.text(raw)?;
+            let pattern = match interp {
+                Some(interp) => interp.text(raw)?,
+                None => (*raw).to_owned(),
+            };
             let re = regex(&pattern)?;
             let ok = value::text(actual).is_some_and(|t| re.is_match(&t));
             Ok(Verdict::new(ok, format!("to match /{pattern}/")))

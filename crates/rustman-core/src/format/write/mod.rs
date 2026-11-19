@@ -5,9 +5,11 @@
 //! with 2-space indentation, block style, a trailing newline and the quoting
 //! rules in [`scalar`].
 
+mod realtime;
 mod request;
 mod scalar;
 
+pub use realtime::{sse_to_yaml, ws_to_yaml};
 pub use request::{
     assertions_to_yaml, auth_node, collection_to_yaml, environment_to_yaml, graphql_to_yaml,
     json_node, mcp_to_yaml, name_values_node, request_to_yaml,

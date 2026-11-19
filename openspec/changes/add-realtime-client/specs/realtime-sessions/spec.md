@@ -103,6 +103,19 @@ The system SHALL parse the event stream per the WHATWG HTML specification: `even
 - **WHEN** the SSE session starts
 - **THEN** it SHALL fail with `sse: unexpected content type application/json`
 
+### Requirement: SSE field limits and last event id
+An `id` SHALL become the last event id only when its event is dispatched, never while the event is still being read. An `event` or `id` value longer than 4 KiB SHALL be ignored, as if the line were absent.
+
+#### Scenario: Oversized event type or id
+- **GIVEN** the stream `id: 7\n\n` followed by an event whose `event` and `id` values are each 5000 bytes long, with `data: a`
+- **WHEN** it is parsed
+- **THEN** the event SHALL be recorded with type `message`, id `7` and data `a`
+
+#### Scenario: Id of an unfinished event
+- **GIVEN** a stream that delivered event id `41`, then sent `id: 42\ndata: x\n` and dropped before the blank line
+- **WHEN** the client reconnects
+- **THEN** the reconnect request SHALL carry `Last-Event-ID: 41`
+
 ### Requirement: SSE reconnect and resume
 When the stream ends or the connection drops, the client SHALL reconnect after the last `retry` value (default 3000 ms), sending `Last-Event-ID` with the last received id, up to `reconnect.max_attempts` (default 5, `0` disables). `last_event_id` in the file SHALL set the initial header. A `204 No Content` response SHALL stop reconnecting.
 
@@ -123,6 +136,14 @@ Every session SHALL record a timeline entry per frame or event: direction (`sent
 - **GIVEN** a timeline of 20 sent and 80 received messages
 - **WHEN** the user filters to `received` and the text `trade`
 - **THEN** only received entries whose payload contains `trade` SHALL be shown
+
+### Requirement: Timeline memory budget
+The timeline SHALL count the bytes of payloads, types and ids against a memory budget of 256 MiB, dropping the oldest entries past it and always keeping the newest.
+
+#### Scenario: Long event types and ids
+- **GIVEN** SSE events whose types and ids are much larger than their data
+- **WHEN** they fill the budget
+- **THEN** the oldest entries SHALL be dropped and counted in `dropped_entries`
 
 ### Requirement: Headless bounds
 Under `rustman run`, a session SHALL end when its steps finish and then after `limits.max_messages` (default 50) received messages or `limits.duration_ms` (default 30000), whichever comes first, closing with code 1000. Interactive sessions SHALL stay open until the user closes them.
@@ -154,7 +175,7 @@ The `assertions` capability SHALL apply to realtime exchanges with `json` and `b
 - **THEN** the failure SHALL read `close_code: expected 1000, got 1011` and the run SHALL exit with code 1
 
 ### Requirement: History recording
-Each session SHALL be recorded in `request-history` as one exchange with protocol `ws` or `sse`, including handshake details, the timeline (subject to `max_timeline`), close or end reason, and redaction per the `environments` contract.
+Each session SHALL be recorded in `request-history` as one exchange with protocol `ws` or `sse`, including handshake details, the timeline (subject to `max_timeline`), close or end reason, and redaction per the `environments` contract. Recorded payloads SHALL be cut to 64 KiB and types and ids to 1 KiB after redaction, marking the entry `truncated: true`.
 
 #### Scenario: Token redacted
 - **GIVEN** a session whose URL query carries `?token={{api_token}}` (a secret)
@@ -162,7 +183,7 @@ Each session SHALL be recorded in `request-history` as one exchange with protoco
 - **THEN** history SHALL store the URL with `«redacted:api_token»`
 
 ### Requirement: CLI commands
-`rustman ws connect <url|request-file>` SHALL run a session, read lines from stdin as text frames when stdin is not a TTY, and print received messages. `rustman sse listen <url|request-file>` SHALL print events. Both SHALL accept `--json` (one JSON object per timeline entry), `--max-messages`, `--duration` and `--header`, and use `cli-runner` exit codes.
+`rustman ws connect <url|request-file>` SHALL run a session, read lines from stdin as text frames when stdin is not a TTY, and print received messages. `rustman sse listen <url|request-file>` SHALL print events. Both SHALL accept `--json` (one JSON object per received message or event), `--max-messages`, `--duration` and `--header`, and use `cli-runner` exit codes.
 
 #### Scenario: Pipe to jq
 - **WHEN** the user runs `rustman sse listen https://api.example.com/events --json --max-messages 3`
@@ -172,6 +193,19 @@ Each session SHALL be recorded in `request-history` as one exchange with protoco
 - **GIVEN** stdin piped with two lines `a` and `b`
 - **WHEN** the user runs `rustman ws connect wss://echo.example.com --json`
 - **THEN** two text frames SHALL be sent and their echoes printed as JSON lines
+
+### Requirement: CLI output and stdin flow
+Without `--json`, each received message SHALL be printed as received followed by a newline, so a payload holding newlines spans several lines; with `--json`, each message SHALL be one line. Stdin SHALL be read through a bounded queue of 64 frames, so that a fast input waits for the session instead of being buffered without limit.
+
+#### Scenario: Multi-line event
+- **GIVEN** an SSE event with data `line1\nline2`
+- **WHEN** `rustman sse listen` prints it without `--json`
+- **THEN** stdout SHALL show `line1` and `line2` on two lines, and with `--json` one line whose `data` is `"line1\nline2"`
+
+#### Scenario: Large piped input
+- **GIVEN** stdin piped from a file of 100000 lines
+- **WHEN** `rustman ws connect` runs
+- **THEN** at most 64 lines SHALL wait to be sent at any time
 
 ### Requirement: Agent tools
 When the build includes `agent-mcp-interface`, a `realtime_listen` tool SHALL be registered that opens a ws or sse session, optionally sends initial frames, and returns the collected messages after at most 100 messages or 60 s. It SHALL pass the safety policy's host allowlist, and sending frames SHALL count as a mutation under `[agent].allow_mutations`.

@@ -167,6 +167,9 @@
       "grpc": {
         "$ref": "#/$defs/grpc"
       },
+      "realtime": {
+        "$ref": "#/$defs/realtime"
+      },
       "assertions": {
         "type": "array",
         "items": {
@@ -409,6 +412,126 @@
       }
     }
   },
+  "realtime": {
+    "type": "object",
+    "description": "The realtime side of a kind: ws or kind: sse request: the handshake, the message timeline (at most max_timeline entries, payloads above 64 KiB cut to a preview), how many entries were dropped and how the session ended. Absent from every other request. Added in v0.6.",
+    "required": [
+      "protocol",
+      "timeline",
+      "dropped_entries",
+      "received",
+      "elapsed_ms"
+    ],
+    "properties": {
+      "protocol": {
+        "enum": [
+          "ws",
+          "sse"
+        ]
+      },
+      "handshake": {
+        "type": "object",
+        "required": [
+          "status",
+          "headers"
+        ],
+        "properties": {
+          "status": {
+            "type": "integer"
+          },
+          "headers": {
+            "$ref": "#/$defs/headers"
+          },
+          "subprotocol": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string",
+            "description": "The body of a refused upgrade (at most 64 KiB)."
+          }
+        }
+      },
+      "timeline": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "dir",
+            "t_ms",
+            "size",
+            "type",
+            "payload"
+          ],
+          "properties": {
+            "dir": {
+              "enum": [
+                "sent",
+                "received",
+                "system"
+              ]
+            },
+            "t_ms": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "The full payload size in bytes."
+            },
+            "type": {
+              "type": "string",
+              "description": "text, binary, json, ping, pong, close, a system note (connect, reconnect, error) or the SSE event type; at most 1 KiB."
+            },
+            "payload": {
+              "type": "string",
+              "description": "Text, or binary data in base64; at most 64 KiB."
+            },
+            "truncated": {
+              "type": "boolean",
+              "description": "The payload was cut to 64 KiB, or the type or id to 1 KiB."
+            },
+            "id": {
+              "type": "string",
+              "description": "The SSE event id; at most 1 KiB."
+            },
+            "rtt_ms": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "dropped_entries": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "received": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "end": {
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "close_code": {
+            "type": "integer"
+          },
+          "close_reason": {
+            "type": "string"
+          }
+        }
+      },
+      "elapsed_ms": {
+        "$ref": "#/$defs/ms"
+      }
+    }
+  },
   "data_row": {
     "type": "object",
     "description": "The data row a data-driven (--data) run used; absent from every run without --data (--iterations included). Added in v0.2.",
@@ -617,7 +740,9 @@
           "rpc_error",
           "grpc_status",
           "metadata",
-          "snapshot"
+          "snapshot",
+          "messages",
+          "close_code"
         ]
       },
       "outcome": {

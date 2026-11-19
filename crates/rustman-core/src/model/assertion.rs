@@ -54,6 +54,11 @@ pub enum Assertion {
     OutputSchema(bool),
     /// `tool_exists: name`: an MCP `tools/list` result has the tool.
     ToolExists(String),
+    /// `messages: {count_gte | count_lte | count_eq}`: how many messages a
+    /// realtime session received.
+    Messages(Checked<MessagesAssertion>),
+    /// `close_code: 1000`: the close code of a WebSocket session.
+    CloseCode(u16),
 }
 
 /// The key naming an assertion's type.
@@ -80,6 +85,8 @@ enum AssertionKey {
     Structured,
     OutputSchema,
     ToolExists,
+    Messages,
+    CloseCode,
 }
 
 impl<'de> Deserialize<'de> for Assertion {
@@ -137,6 +144,8 @@ impl<'de> Visitor<'de> for AssertionVisitor {
             AssertionKey::Structured => Assertion::Structured(map.next_value()?),
             AssertionKey::OutputSchema => Assertion::OutputSchema(map.next_value()?),
             AssertionKey::ToolExists => Assertion::ToolExists(map.next_value()?),
+            AssertionKey::Messages => Assertion::Messages(map.next_value()?),
+            AssertionKey::CloseCode => Assertion::CloseCode(map.next_value()?),
         };
         if let Some(extra) = map.next_key::<String>()? {
             return Err(de::Error::custom(format!(
@@ -171,6 +180,8 @@ impl AssertionKey {
             Self::Structured => "structured",
             Self::OutputSchema => "output_schema",
             Self::ToolExists => "tool_exists",
+            Self::Messages => "messages",
+            Self::CloseCode => "close_code",
         }
     }
 }
@@ -379,6 +390,46 @@ impl Validate for LatencyAssertion {
             return Err("latency assertion needs total_lt or ttfb_lt".to_owned());
         }
         Ok(())
+    }
+}
+
+/// `messages: {count_gte | count_lte | count_eq}` with one bound.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MessagesAssertion {
+    pub count_gte: Option<u64>,
+    pub count_lte: Option<u64>,
+    pub count_eq: Option<u64>,
+}
+
+impl MessagesAssertion {
+    /// The bound as a comparison.
+    pub fn expectation(&self) -> CountExpectation {
+        let bounds = [
+            (CountOp::Gte, self.count_gte),
+            (CountOp::Lte, self.count_lte),
+            (CountOp::Equals, self.count_eq),
+        ];
+        bounds
+            .into_iter()
+            .find_map(|(op, value)| value.map(|value| CountExpectation { op, value }))
+            .unwrap_or(CountExpectation {
+                op: CountOp::Gte,
+                value: 0,
+            })
+    }
+}
+
+impl Validate for MessagesAssertion {
+    fn validate(&self) -> Result<(), String> {
+        exactly_one(
+            "messages assertion",
+            &[
+                ("count_gte", given(self.count_gte.is_some())),
+                ("count_lte", given(self.count_lte.is_some())),
+                ("count_eq", given(self.count_eq.is_some())),
+            ],
+        )
     }
 }
 

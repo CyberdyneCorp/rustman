@@ -14,6 +14,8 @@ use super::grpc::GrpcRequest;
 use super::http::HttpRequest;
 use super::jsonrpc::JsonrpcRequest;
 use super::mcp::McpRequest;
+use super::sse::SseRequest;
+use super::ws::WsRequest;
 use crate::error::{LoadError, Position};
 use crate::format::{Located, from_yaml};
 
@@ -31,6 +33,8 @@ pub enum Request {
     Jsonrpc(Box<JsonrpcRequest>),
     Mcp(Box<McpRequest>),
     Grpc(Box<GrpcRequest>),
+    Ws(Box<WsRequest>),
+    Sse(Box<SseRequest>),
     /// A registered kind this build can list but not execute.
     Opaque(OpaqueRequest),
 }
@@ -43,6 +47,8 @@ impl Request {
             Self::Jsonrpc(r) => &r.kind,
             Self::Mcp(r) => &r.kind,
             Self::Grpc(r) => &r.kind,
+            Self::Ws(r) => &r.kind,
+            Self::Sse(r) => &r.kind,
             Self::Opaque(r) => &r.kind,
         }
     }
@@ -54,6 +60,8 @@ impl Request {
             Self::Jsonrpc(r) => &r.name,
             Self::Mcp(r) => &r.name,
             Self::Grpc(r) => &r.name,
+            Self::Ws(r) => &r.name,
+            Self::Sse(r) => &r.name,
             Self::Opaque(r) => &r.name,
         }
     }
@@ -65,6 +73,8 @@ impl Request {
             Self::Jsonrpc(r) => r.description.as_deref(),
             Self::Mcp(r) => r.description.as_deref(),
             Self::Grpc(r) => r.description.as_deref(),
+            Self::Ws(r) => r.description.as_deref(),
+            Self::Sse(r) => r.description.as_deref(),
             Self::Opaque(r) => r.description.as_deref(),
         }
     }
@@ -76,6 +86,8 @@ impl Request {
             Self::Jsonrpc(r) => &r.tags,
             Self::Mcp(r) => &r.tags,
             Self::Grpc(r) => &r.tags,
+            Self::Ws(r) => &r.tags,
+            Self::Sse(r) => &r.tags,
             Self::Opaque(r) => &r.tags,
         };
         tags.as_deref().unwrap_or_default()
@@ -90,6 +102,8 @@ impl Request {
             Self::Jsonrpc(r) => r.variables.as_ref(),
             Self::Mcp(r) => r.variables.as_ref(),
             Self::Grpc(r) => r.variables.as_ref(),
+            Self::Ws(r) => r.variables.as_ref(),
+            Self::Sse(r) => r.variables.as_ref(),
             Self::Opaque(r) => r.variables.as_ref(),
         }
     }
@@ -102,6 +116,8 @@ impl Request {
             Self::Jsonrpc(r) => &r.kind,
             Self::Mcp(r) => &r.kind,
             Self::Grpc(r) => &r.kind,
+            Self::Ws(r) => &r.kind,
+            Self::Sse(r) => &r.kind,
             Self::Opaque(r) => &r.kind,
         };
         Some(format!(
@@ -131,7 +147,8 @@ pub struct KindRegistry {
 }
 
 impl Default for KindRegistry {
-    /// The built-in kinds: `http`, `graphql`, `jsonrpc`, `grpc` and `mcp`.
+    /// The built-in kinds: `http`, `graphql`, `jsonrpc`, `grpc`, `mcp`,
+    /// `ws` and `sse`.
     fn default() -> Self {
         Self {
             kinds: vec![
@@ -140,6 +157,8 @@ impl Default for KindRegistry {
                 ("jsonrpc", load_jsonrpc),
                 ("grpc", load_grpc),
                 ("mcp", load_mcp),
+                ("ws", load_ws),
+                ("sse", load_sse),
             ],
             fallback: None,
         }
@@ -277,6 +296,16 @@ fn load_mcp(file: &Path, text: &str) -> Result<Request, LoadError> {
 fn load_grpc(file: &Path, text: &str) -> Result<Request, LoadError> {
     let request = GrpcRequest::parse(file, text)?;
     Ok(Request::Grpc(Box::new(request)))
+}
+
+fn load_ws(file: &Path, text: &str) -> Result<Request, LoadError> {
+    let request = WsRequest::parse(file, text)?;
+    Ok(Request::Ws(Box::new(request)))
+}
+
+fn load_sse(file: &Path, text: &str) -> Result<Request, LoadError> {
+    let request = SseRequest::parse(file, text)?;
+    Ok(Request::Sse(Box::new(request)))
 }
 
 #[derive(Deserialize)]

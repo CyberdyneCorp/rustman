@@ -4102,6 +4102,7 @@ dependencies = [
  "rustman-jsonrpc",
  "rustman-mcp",
  "rustman-mock",
+ "rustman-realtime",
  "rustman-report",
  "rustman-test-support",
  "rustman-tui",
@@ -4348,6 +4349,7 @@ dependencies = [
  "rustman-grpc",
  "rustman-http",
  "rustman-jsonrpc",
+ "rustman-realtime",
  "rustman-report",
  "rustman-test-support",
  "schemars",
@@ -4400,6 +4402,26 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "rustman-realtime"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "bytes",
+ "futures-util",
+ "http",
+ "rustman-core",
+ "rustman-http",
+ "rustman-test-support",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-tungstenite",
+ "tokio-util",
 ]
 
 [[package]]
@@ -4481,6 +4503,7 @@ dependencies = [
  "rustman-jsonrpc",
  "rustman-mcp",
  "rustman-mock",
+ "rustman-realtime",
  "rustman-test-support",
  "rustman-viz-protocol",
  "rustman-webhook",

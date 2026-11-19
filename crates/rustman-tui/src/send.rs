@@ -13,7 +13,7 @@
 use std::fmt;
 use std::fs::File;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use rustman_core::captures::{self, RunCaptures};
 use rustman_core::collection::{Collection, Entry, RequestEntry};
@@ -33,11 +33,13 @@ use rustman_http::runner::{RunContext, RunOptions, Runner, Sent};
 use rustman_jsonrpc::JsonrpcRunner;
 use rustman_mcp::client::oauth::OAuthOptions;
 use rustman_mcp::client::{ConnectOptions, McpRunner};
+use rustman_realtime::RealtimeRunner;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio_util::sync::CancellationToken;
 
 use crate::app::{Action, Effect, Overlay, State};
 use crate::dialogs::Confirm;
+use crate::realtime::LiveLink;
 use crate::response::graphql::GraphqlView;
 use crate::response::grpc::GrpcView;
 use crate::response::jsonrpc::RpcView;
@@ -75,6 +77,8 @@ pub struct SendJob {
     pub snapshots: SnapshotMode,
     /// Messages typed while a gRPC bidi call runs.
     pub typed: Typed,
+    /// A realtime tab's session: where its entries go and its frames.
+    pub realtime: Option<LiveLink>,
 }
 
 impl fmt::Debug for SendJob {
@@ -105,6 +109,10 @@ pub fn start(state: &mut State) -> Vec<Effect> {
 /// Send the current tab's request; `validate: false` skips the GraphQL
 /// document check (the user chose "Send anyway").
 pub fn start_with(state: &mut State, validate: bool) -> Vec<Effect> {
+    if crate::realtime::is_connected(state) {
+        crate::realtime::send_frame(state);
+        return Vec::new();
+    }
     let workspace = workbench::workspace(state).cloned().map(Box::new);
     let environment = state.status.environment.clone();
     let now = state.now;
@@ -125,6 +133,7 @@ pub fn start_with(state: &mut State, validate: bool) -> Vec<Effect> {
         return Vec::new();
     }
     let (seq, cancel) = tab.start(now);
+    let realtime = tab.editor.realtime_mut().map(|e| e.live.connect());
     let flight = tab.in_flight.as_ref().expect("just started");
     let job = SendJob {
         tab: tab.id,
@@ -140,6 +149,7 @@ pub fn start_with(state: &mut State, validate: bool) -> Vec<Effect> {
         live: Arc::clone(&flight.live),
         snapshots: state.snapshot_mode,
         typed: Arc::clone(&flight.typed),
+        realtime,
     };
     state.status.in_flight = state.tabs.in_flight();
     vec![Effect::Send(Box::new(job))]
@@ -378,6 +388,13 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         unbounded: true,
         ..GrpcRunner::default()
     };
+    let (rt_feed, rt_entries) = unbounded_channel();
+    let realtime = RealtimeRunner {
+        interactive: Some(job.stop.clone()),
+        feed: Some(rt_feed),
+        commands: Mutex::new(job.realtime.as_ref().and_then(LiveLink::take_commands)),
+        ..RealtimeRunner::default()
+    };
     let options = RunOptions {
         cancel: job.cancel.clone(),
         history: place.history(),
@@ -386,6 +403,7 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         jsonrpc: Some(&jsonrpc),
         mcp: Some(&mcp),
         grpc: Some(&grpc),
+        realtime: Some(&realtime),
         snapshots: job.snapshots,
         ..RunOptions::default()
     };
@@ -407,6 +425,9 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
             unreachable!("the feed outlives the send")
         }
         () = crate::grpc::collect(grpc_entries, &job.live) => {
+            unreachable!("the feed outlives the send")
+        }
+        () = crate::realtime::collect(rt_entries, job.realtime.as_ref().map(|l| &l.log)) => {
             unreachable!("the feed outlives the send")
         }
     };
@@ -631,6 +652,7 @@ mod tests {
             live: LiveEvents::default(),
             snapshots: SnapshotMode::Record,
             typed: Typed::default(),
+            realtime: None,
         };
         let mut other = job.clone();
         assert_eq!(job, other);

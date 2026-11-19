@@ -23,6 +23,7 @@ rustman-explore.workspace = true
 rustman-report.workspace = true
 rustman-jsonrpc.workspace = true
 rustman-grpc = { workspace = true, optional = true }
+rustman-realtime.workspace = true
 rmcp = { workspace = true, features = ["server", "client", "elicitation", "transport-io", "transport-async-rw", "transport-streamable-http-server", "transport-streamable-http-client"] }
 axum.workspace = true
 base64.workspace = true

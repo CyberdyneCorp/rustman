@@ -1,0 +1,6 @@
+target
+corpus
+artifacts
+coverage
+# Resolved fresh by each fuzz run; the workspace lock pins rustman-http.
+Cargo.lock
