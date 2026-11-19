@@ -70,7 +70,7 @@ pub fn remote_warning(addr: SocketAddr) -> String {
 }
 
 /// The reason shown after `cannot bind <addr>:`, without OS error numbers.
-fn bind_reason(err: &io::Error) -> String {
+pub fn bind_reason(err: &io::Error) -> String {
     match err.kind() {
         io::ErrorKind::AddrInUse => "address in use".to_owned(),
         io::ErrorKind::AddrNotAvailable => "address not available".to_owned(),

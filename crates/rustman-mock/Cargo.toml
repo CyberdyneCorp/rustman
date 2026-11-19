@@ -1,0 +1,51 @@
+[package]
+name = "rustman-mock"
+description = "OpenAPI mock server for Rustman: routing, responses, validation, overrides, faults and stateful mode"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+rustman-core.workspace = true
+rustman-explore.workspace = true
+rustman-webhook.workspace = true
+rustman-http.workspace = true
+rustman-import.workspace = true
+arc-swap.workspace = true
+dunce.workspace = true
+notify.workspace = true
+time = { workspace = true, features = ["formatting"] }
+base64.workspace = true
+bytes.workspace = true
+globset.workspace = true
+http.workspace = true
+http-body.workspace = true
+http-body-util.workspace = true
+hyper = { workspace = true, features = ["server", "http1", "http2"] }
+hyper-util = { workspace = true, features = ["server", "server-auto", "tokio", "http1", "http2"] }
+jsonschema.workspace = true
+percent-encoding.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_json_path.workspace = true
+subtle.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["net", "time", "rt", "sync", "macros"] }
+tokio-util = { workspace = true, features = ["rt"] }
+toml.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+rustman-test-support.workspace = true
+hyper = { workspace = true, features = ["client", "http1", "http2"] }
+hyper-util = { workspace = true, features = ["client-legacy", "tokio", "http1", "http2"] }
+insta.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "io-util", "test-util"] }
+tracing-subscriber.workspace = true

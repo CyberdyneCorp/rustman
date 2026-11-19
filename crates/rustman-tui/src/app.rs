@@ -83,6 +83,8 @@ pub struct State {
     pub webhook: WebhookPane,
     /// How sends treat snapshot files: CI mode (`CI=true`) never writes.
     pub snapshot_mode: SnapshotMode,
+    /// The mock server pane and its server.
+    pub mock: crate::mock_server::MockPane,
 }
 
 /// Modals drawn over the shell.
@@ -284,6 +286,8 @@ pub enum Action {
     ReportWritten(Result<PathBuf, String>),
     /// A webhook listener event or a webhook job finished.
     Webhook(Box<webhook::Msg>),
+    /// A mock server event or a mock pane job finished.
+    Mock(Box<crate::mock_server::Msg>),
     /// A GraphQL tab's schema was loaded (or refreshed).
     GraphqlSchema {
         tab: TabId,
@@ -385,6 +389,8 @@ pub enum Effect {
     WriteReport(Box<ReportJob>),
     /// Webhook pane work: settings, the listener, mocks, save and replay.
     Webhook(Box<webhook::Job>),
+    /// Mock pane work: settings and the server.
+    Mock(Box<crate::mock_server::Job>),
     /// Load (or refresh) a GraphQL tab's schema.
     GraphqlSchema(Box<SchemaJob>),
     /// Make a "Copy as…" snippet.
@@ -434,6 +440,7 @@ impl State {
             viz: viz::Discovery::default(),
             webhook: WebhookPane::default(),
             snapshot_mode: SnapshotMode::Record,
+            mock: crate::mock_server::MockPane::default(),
         }
     }
 
@@ -554,6 +561,7 @@ fn on_workbench(state: &mut State, action: Action) -> Vec<Effect> {
             Vec::new()
         }
         Action::Webhook(msg) => webhook::on_msg(state, *msg),
+        Action::Mock(msg) => crate::mock_server::on_msg(state, *msg),
         Action::GraphqlSchema {
             tab,
             refresh,

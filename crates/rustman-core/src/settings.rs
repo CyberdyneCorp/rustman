@@ -50,6 +50,24 @@ const KNOWN_KEYS: &[(&str, &[&str])] = &[
     ("explore", &["producers", "disabled_rules"]),
     // Read by rustman-webhook (add-webhook-inspector).
     ("webhook", &["host", "port", "verifiers"]),
+    // Read by rustman-mock (add-openapi-mock-server).
+    (
+        "mock",
+        &[
+            "host",
+            "port",
+            "seed",
+            "max_body_bytes",
+            "max_headers",
+            "max_header_bytes",
+            "dir",
+            "delay_ms",
+            "jitter_ms",
+            "max_items",
+            "max_store_bytes",
+            "security",
+        ],
+    ),
     ("graphql", &["endpoints"]),
     (
         "agent",
@@ -462,6 +480,13 @@ base_url = "http://localhost"
                 "rustman.toml: unknown key 'workspace.colour' ignored",
             ]
         );
+    }
+
+    #[test]
+    fn mock_keys_are_known() {
+        let text = "[workspace]\nname = \"a\"\nversion = 1\n[mock]\nport = 4011\nseed = 7\nmax_body_bytes = 10\ndir = \"stubs\"\ndelay_ms = 5\njitter_ms = 1\nmax_items = 9\nmax_store_bytes = 99\n[mock.security]\nbearer = \"{{t}}\"\n";
+        let (_, warnings) = parse(text).unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
     }
 
     #[test]

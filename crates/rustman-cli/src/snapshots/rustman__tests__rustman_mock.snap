@@ -1,0 +1,23 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Serve an OpenAPI document as a local mock server
+
+Usage: rustman mock [OPTIONS] <COMMAND>
+
+Commands:
+  serve  Serve an OpenAPI document as a mock server until Ctrl+C
+  help   Print this message or the help of the given subcommand(s)
+
+Options:
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

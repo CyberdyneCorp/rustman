@@ -99,7 +99,7 @@ impl VerifierSpec {
 }
 
 /// The variable name of a secret written as `{{name}}`.
-fn secret_name(text: &str) -> Result<String, String> {
+pub fn secret_name(text: &str) -> Result<String, String> {
     let refuse = || {
         "secret must be a {{variable}} reference (keep the key in an environment secret, \
          not in rustman.toml)"
@@ -113,7 +113,7 @@ fn secret_name(text: &str) -> Result<String, String> {
 }
 
 /// The value of `name` from `resolver`.
-fn resolve_secret(resolver: &Resolver<'_>, name: &str) -> Result<Secret<String>, String> {
+pub fn resolve_secret(resolver: &Resolver<'_>, name: &str) -> Result<Secret<String>, String> {
     match resolver.lookup(name) {
         Some(Lookup::Secret(secret)) => Ok(secret),
         Some(Lookup::Value(value)) => Ok(Secret::new(name, value)),

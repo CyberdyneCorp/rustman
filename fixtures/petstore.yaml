@@ -1,0 +1,187 @@
+openapi: 3.0.3
+info:
+  title: Swagger Petstore
+  version: 1.0.0
+  description: A sample API that uses a petstore as an example.
+servers:
+  - url: https://petstore.example.com/v1
+    description: Production
+tags:
+  - name: pets
+    description: Everything about your pets
+  - name: store
+security:
+  - bearerAuth: []
+paths:
+  /pets:
+    get:
+      summary: List all pets
+      operationId: listPets
+      tags: [pets]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - name: X-Request-Id
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A paged array of pets
+          headers:
+            x-next:
+              description: A link to the next page
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pets'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      summary: Create a pet
+      operationId: createPet
+      tags: [pets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewPet'
+            example:
+              name: Rex
+              age: 3
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+  /pets/{petId}:
+    parameters:
+      - name: petId
+        in: path
+        required: true
+        description: The id of the pet
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+          exclusiveMinimum: true
+    get:
+      summary: Info for a specific pet
+      operationId: showPetById
+      tags: [pets]
+      responses:
+        '200':
+          description: Expected response to a valid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+              examples:
+                rex:
+                  $ref: '#/components/examples/Rex'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deletePet
+      tags: [pets]
+      security: []
+      responses:
+        '204':
+          description: Deleted
+  /store/inventory:
+    get:
+      operationId: getInventory
+      tags: [store]
+      security:
+        - apiKey: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: integer
+                  nullable: true
+components:
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      description: How many items to return at one time (max 100)
+      required: false
+      schema:
+        type: integer
+        maximum: 100
+        exclusiveMaximum: false
+  examples:
+    Rex:
+      value:
+        id: 1
+        name: Rex
+        tag: null
+  responses:
+    Error:
+      description: unexpected error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    NewPet:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        age:
+          type: integer
+          minimum: 0
+        tag:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [available, sold]
+          nullable: true
+    Pet:
+      allOf:
+        - $ref: '#/components/schemas/NewPet'
+        - type: object
+          required: [id]
+          properties:
+            id:
+              type: integer
+              format: int64
+    Pets:
+      type: array
+      maxItems: 100
+      items:
+        $ref: '#/components/schemas/Pet'
+    Owner:
+      $ref: '#/components/schemas/Pet'
+      nullable: true
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKey:
+      type: apiKey
+      name: X-API-Key
+      in: header

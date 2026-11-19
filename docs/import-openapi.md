@@ -111,7 +111,7 @@ The synthesizer follows `$ref`s and builds a value that validates against the sc
 
 - objects get their `required` properties (every property that is not `readOnly` when nothing is required); `allOf` members are merged, and `oneOf`/`anyOf` take the first branch that is not `null`;
 - `const`, then the first non-null `enum` value, then a nested `example`/`default` win over anything synthesized;
-- strings follow their `format` (`date-time` → `2024-01-01T00:00:00Z`, `email` → `user@example.com`, `uuid`, `uri`, `ipv4`, ...; otherwise `string`), padded with `x` to `minLength` and cut to `maxLength`;
+- strings follow their `format` (`date-time` → `2024-01-01T00:00:00Z`, `email` → `user@example.com`, `uuid`, `uri`, `ipv4`, ...; otherwise `string`), padded with `x` to `minLength` (at most 4096 characters) and cut to `maxLength`;
 - integers and numbers start at 0 and move inside `minimum`/`maximum`, `exclusiveMinimum`/`exclusiveMaximum` and onto `multipleOf`; booleans are `true`;
 - arrays get one item (raised to `minItems`, lowered to `maxItems`);
 - objects and arrays stop at a nesting depth of 3: deeper ones are empty, so a circular schema (a `Node` whose `children` are `Node`s) gives `{children: [{children: []}]}`.

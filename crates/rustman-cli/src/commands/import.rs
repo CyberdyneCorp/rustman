@@ -280,7 +280,7 @@ fn source(
 
 /// `into`, relative to the workspace root with `/` separators; it must be
 /// inside the workspace.
-fn destination(root: &Path, into: &Path) -> Result<String, CliError> {
+pub(crate) fn destination(root: &Path, into: &Path) -> Result<String, CliError> {
     let io = |source| ConfigError::Io {
         path: root.to_path_buf(),
         source,

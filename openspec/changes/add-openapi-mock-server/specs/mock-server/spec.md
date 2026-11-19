@@ -55,7 +55,7 @@ Every error the mock generates itself (404, 405, validation, security, faults wi
 - **THEN** the body SHALL be problem+json with `status: 404` and `title: "No matching operation"`
 
 ### Requirement: Response selection order
-For a matched operation, the response SHALL be chosen in this order: a matching hand-written override; the `Prefer` header; the lowest documented `2xx` (or `default` if no 2xx exists). Within the chosen status and the negotiated media type, the body SHALL come from the first named example, else the schema `example`, else schema synthesis.
+For a matched operation, the response SHALL be chosen in this order: a matching hand-written override; with `--stateful`, the stateful store for an operation on a resource (so `Prefer` does not apply to it); the `Prefer` header; the lowest documented `2xx` (or `default` if no 2xx exists). Within the chosen status and the negotiated media type, the body SHALL come from the first named example, else the schema `example`, else schema synthesis.
 
 #### Scenario: Default success response
 - **GIVEN** `GET /pets/{id}` documents `200` with examples `cat` and `dog`
@@ -178,7 +178,7 @@ With `--stateful`, resources inferred by the `api-exploration` dependency discov
 - **THEN** the response SHALL be `404`
 
 ### Requirement: Stateful reset and limits
-`POST /__rustman/reset` SHALL clear the stateful store and return `204`. Paths under `/__rustman/` SHALL be reserved and never routed to the document. The store SHALL hold at most 10000 items per resource (configurable); creating more SHALL return `507` problem+json.
+`POST /__rustman/reset` SHALL clear the stateful store and return `204`. Paths under `/__rustman/` SHALL be reserved and never routed to the document. The store SHALL hold at most 10000 items per resource and at most 64 MiB of JSON in all (both configurable); a write past either limit SHALL return `507` problem+json.
 
 #### Scenario: Reset
 - **GIVEN** a store with 5 users
@@ -210,6 +210,11 @@ Each request SHALL produce a log entry with time, method, path, matched operatio
 #### Scenario: Authorization redacted
 - **WHEN** a client sends `Authorization: Bearer abc`
 - **THEN** the log entry SHALL show `«redacted:Authorization»`
+
+#### Scenario: API key redacted
+- **GIVEN** the document declares an `apiKey` scheme in the `X-Api-Key` header
+- **WHEN** a client sends `X-Api-Key: canary-apikey-123456` and the query `?api_key=qcanary99`
+- **THEN** the log entry and history entry SHALL show `«redacted:x-api-key»` and `api_key=«redacted:api_key»` and neither value
 
 ### Requirement: History integration
 With `--history`, each served exchange SHALL be appended to `request-history` under the `mock` source, after redaction, subject to the normal retention limits.

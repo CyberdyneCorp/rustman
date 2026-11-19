@@ -224,6 +224,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "arc-swap"
+version = "1.9.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84a22b5d51209f6de83d37a0b33d320acb8da88823e42a94c075140708f032a5"
+dependencies = [
+ "rustversion",
+]
+
+[[package]]
 name = "ariadne"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3920,6 +3929,7 @@ dependencies = [
  "rustman-http",
  "rustman-import",
  "rustman-mcp",
+ "rustman-mock",
  "rustman-report",
  "rustman-test-support",
  "rustman-tui",
@@ -4117,6 +4127,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustman-mock"
+version = "0.1.0"
+dependencies = [
+ "arc-swap",
+ "base64 0.23.1",
+ "bytes",
+ "dunce",
+ "globset",
+ "http",
+ "http-body",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "insta",
+ "jsonschema",
+ "notify",
+ "percent-encoding",
+ "rustman-core",
+ "rustman-explore",
+ "rustman-http",
+ "rustman-import",
+ "rustman-test-support",
+ "rustman-webhook",
+ "serde",
+ "serde_json",
+ "serde_json_path",
+ "subtle",
+ "tempfile",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "tokio-util",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "rustman-report"
 version = "0.1.0"
 dependencies = [
@@ -4180,6 +4228,7 @@ dependencies = [
  "rustman-graphql",
  "rustman-http",
  "rustman-import",
+ "rustman-mock",
  "rustman-test-support",
  "rustman-viz-protocol",
  "rustman-webhook",

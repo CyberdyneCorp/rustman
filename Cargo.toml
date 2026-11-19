@@ -22,6 +22,7 @@ rustman-test-support = { path = "crates/rustman-test-support" }
 rustman-tui = { path = "crates/rustman-tui", version = "0.1.0" }
 rustman-viz-protocol = { path = "crates/rustman-viz-protocol", version = "0.1.0" }
 rustman-webhook = { path = "crates/rustman-webhook", version = "0.1.0" }
+rustman-mock = { path = "crates/rustman-mock", version = "0.1.0" }
 
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
@@ -196,6 +197,10 @@ nucleo-matcher = { version = "0.3.1", default-features = false, features = ["uni
 # FSEvents and ReadDirectoryChangesW without native libraries. Polling every
 # file from the UI loop is rejected (I/O on the render loop).
 notify = { version = "8.2", default-features = false, features = ["macos_fsevent"] }
+# Mock server hot reload (add-openapi-mock-server design D2): the loaded
+# document is swapped atomically while requests in flight keep the old one.
+# `RwLock<MockState>` is rejected: readers would block during a rebuild.
+arc-swap = { version = "1.7", default-features = false }
 # Response viewer (add-terminal-ui design D6; JSONPath filters reuse
 # `serde_json_path` above). Highlighting of non-JSON bodies with the bundled Sublime syntaxes, matched
 # by pure-Rust `fancy-regex` (the default `onig` needs a C library build).

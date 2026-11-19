@@ -29,6 +29,8 @@ pub enum Decision {
     LoadFromDisk(TabId),
     /// Start the webhook listener on a network-reachable address.
     WebhookStart,
+    /// Start the mock server on a network-reachable address.
+    MockStart,
     /// Send the tab's GraphQL request without checking its document.
     SendUnvalidated(TabId),
     Cancel,
@@ -118,6 +120,17 @@ impl Confirm {
         }
     }
 
+    /// Start the mock server on an address reachable from the network
+    /// (spec: Loopback by default). Cancel is preselected.
+    pub fn mock_remote(warning: &str) -> Self {
+        Self {
+            title: " Mock server ".into(),
+            message: format!("Start anyway? {warning}."),
+            choices: vec![("Start", Decision::MockStart), ("Cancel", Decision::Cancel)],
+            selected: 1,
+        }
+    }
+
     /// The GraphQL document has errors: send it anyway? Cancel is
     /// preselected (spec: Pre-send validation).
     pub fn invalid_graphql(id: TabId, error: &str) -> Self {
@@ -200,6 +213,8 @@ pub enum Purpose {
     SaveBody { tab: TabId },
     /// A webhook pane prompt (replay or save a capture).
     Webhook(crate::webhook::Prompt),
+    /// A mock server pane prompt (the document to serve).
+    Mock(crate::mock_server::Prompt),
 }
 
 /// A one-line text prompt.
