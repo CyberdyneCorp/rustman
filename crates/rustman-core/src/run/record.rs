@@ -6,6 +6,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use super::graphql::GraphqlRecord;
+use super::jsonrpc::JsonrpcRecord;
 use crate::assertions::AssertionResult;
 use crate::captures::CaptureResult;
 use crate::model::{ApiKeyLocation, Auth};
@@ -241,6 +242,10 @@ pub struct RequestRecord {
     /// absent for every other kind.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub graphql: Option<GraphqlRecord>,
+    /// The envelopes, attempts and events of a JSON-RPC request; absent
+    /// for every other kind.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jsonrpc: Option<JsonrpcRecord>,
 }
 
 impl RequestRecord {
@@ -262,6 +267,7 @@ impl RequestRecord {
             warnings: Vec::new(),
             duration_ms: 0.0,
             graphql: None,
+            jsonrpc: None,
         }
     }
 

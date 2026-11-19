@@ -173,8 +173,9 @@ impl Reader<'_> {
         let mut request = match &entry.request {
             Request::Http(r) => self.http(r, &at),
             Request::Graphql(_) => self.graphql(&text, &entry.path)?,
-            Request::Opaque(o) => {
-                let message = format!("request kind '{}' not exported", o.kind);
+            Request::Jsonrpc(_) | Request::Opaque(_) => {
+                let kind = entry.request.kind();
+                let message = format!("request kind '{kind}' not exported");
                 self.notes
                     .push(Note::new(NoteKind::Unsupported, message, &at));
                 return Ok(None);

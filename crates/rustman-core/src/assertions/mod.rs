@@ -12,6 +12,7 @@ mod expected;
 mod graphql;
 mod header;
 mod json;
+mod jsonrpc;
 mod response;
 mod schema;
 mod shown;
@@ -53,8 +54,8 @@ pub enum Outcome {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct AssertionResult {
     /// The assertion type: `status`, `header`, `json`, `schema`, `body`,
-    /// `latency`, or a GraphQL check (`no_errors`, `errors_count`,
-    /// `error_message_contains`, `error_code`, `data`).
+    /// `latency`, a GraphQL check (`no_errors`, `errors_count`,
+    /// `error_message_contains`, `error_code`, `data`) or `rpc_error`.
     pub kind: &'static str,
     pub outcome: Outcome,
     /// A short description of the check, such as `json $.id equals 42`.
@@ -103,7 +104,11 @@ pub fn needs_body(assertions: &[Assertion]) -> bool {
     assertions.iter().any(|a| {
         matches!(
             a,
-            Assertion::Json(_) | Assertion::Schema(_) | Assertion::Body(_) | Assertion::Snapshot(_)
+            Assertion::Json(_)
+                | Assertion::Schema(_)
+                | Assertion::Body(_)
+                | Assertion::RpcError(_)
+                | Assertion::Snapshot(_)
         ) || graphql::reads_result(a)
     })
 }
@@ -138,6 +143,7 @@ fn evaluate_one(
         Assertion::Schema(schema) => schema::evaluate(schema, response, ctx.request),
         Assertion::Body(body) => body::evaluate(body, view, interp),
         Assertion::Latency(latency) => status::latency(latency, view),
+        Assertion::RpcError(expected) => jsonrpc::evaluate(expected, response, interp),
         Assertion::Snapshot(snapshot) => {
             Check::new("snapshot", format!("snapshot {}", snapshot.name()))
                 .error(SNAPSHOT_NEEDS_RUNNER)

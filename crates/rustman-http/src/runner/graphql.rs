@@ -148,7 +148,7 @@ impl Runner<'_> {
 
 /// Await `future`; once `cancel` fires, give it `grace` more to finish.
 /// `None` when it did not.
-async fn until_cancelled<T>(
+pub(super) async fn until_cancelled<T>(
     future: impl Future<Output = T>,
     cancel: &CancellationToken,
     grace: Duration,

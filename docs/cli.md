@@ -41,6 +41,9 @@ This page covers sending and running requests, reporters, terminal behavior, log
 | `rustman run` | Run the requests under files and folders and report the results | [below](#rustman-run) |
 | `rustman graphql introspect <endpoint\|request>` | Fetch a GraphQL schema by introspection and cache it in `.rustman/graphql/schemas/`; `--out <file>` also writes it as SDL | [GraphQL](graphql.md#rustman-graphql-introspect) |
 | `rustman graphql query <request>` / `--endpoint <url> --query <text>` | Validate, send and print a GraphQL operation or subscription; `--no-validate`, `--json`, `--max-events`, `--duration` | [GraphQL](graphql.md#rustman-graphql-query) |
+| `rustman rpc call <endpoint\|request> [method] [params-json]` | Send one JSON-RPC call (or a `kind: jsonrpc` request) and print its result or error object; `--header`, `--id`, `--notify`, `--subscribe` / `--unsubscribe`, `--raw`, `--json`, `--no-validate` | [JSON-RPC](jsonrpc.md#rustman-rpc-call) |
+| `rustman rpc batch <endpoint> <file\|->` | Send calls from a JSON array, a YAML list or JSON lines as batches of 100 and print the results in input order | [JSON-RPC](jsonrpc.md#rustman-rpc-batch) |
+| `rustman rpc discover <endpoint>` | Fetch an OpenRPC document with `rpc.discover` and cache it in `.rustman/cache/openrpc/` | [JSON-RPC](jsonrpc.md#openrpc-catalogs) |
 | `rustman history list` | List past exchanges, newest first, with `--status`, `--method`, `--grep`, `--since`, `--limit` and `--json` | [History](history.md#listing-and-searching) |
 | `rustman history show <id>` | Print one exchange in full (redacted) | [History](history.md#listing-and-searching) |
 | `rustman history replay <id>` | Send an exchange's request again, with secrets read from the store now | [History](history.md#replay) |
@@ -52,7 +55,7 @@ This page covers sending and running requests, reporters, terminal behavior, log
 | `rustman webhook listen` | Capture inbound webhooks on a local port, answer with mocks, check signatures and print the event log; `--host`, `--port`, `--allow-remote`, `--max-body`, `--max-captures`, `--jsonl`, `--env`, `--workspace` | [Webhook inspector](webhooks.md) |
 | `rustman mock serve <openapi>` | Serve an OpenAPI document as a local mock server until Ctrl+C; `--host`, `--port`, `--allow-remote`, `--allow-remote-refs`, `--seed`, `--no-prefer`, `--no-validate`, `--enforce-security`, `--stateful`, `--env`, `--workspace`, `--cors`, `--no-cors`, `--jsonl`, `--history`, `--proxy-unmatched`, `--record` | [Mock server](mock.md) |
 
-The command groups `rustman env`, `rustman secret`, `rustman cookies`, `rustman auth`, `rustman import`, `rustman export`, `rustman explore`, `rustman report`, `rustman graphql`, `rustman history`, `rustman mcp`, `rustman mock`, `rustman snapshot` and `rustman webhook` only hold the commands above: on their own they print their subcommands and exit with 2. `rustman import` also takes a source file or folder directly (`rustman import export.json`), which is the same as `rustman import auto export.json`.
+The command groups `rustman env`, `rustman secret`, `rustman cookies`, `rustman auth`, `rustman import`, `rustman export`, `rustman explore`, `rustman report`, `rustman graphql`, `rustman rpc`, `rustman history`, `rustman mcp`, `rustman mock`, `rustman snapshot` and `rustman webhook` only hold the commands above: on their own they print their subcommands and exit with 2. `rustman import` also takes a source file or folder directly (`rustman import export.json`), which is the same as `rustman import auto export.json`.
 
 `rustman --help` and `rustman <command> --help` document every flag; `rustman --version` prints `rustman <version>`, such as `rustman 0.1.0`.
 
@@ -145,8 +148,8 @@ Runs every request file (`kind: http` and [`kind: graphql`](graphql.md#in-rustma
 | `--parallel <n>` | Run up to `n` folders at once (default 1). |
 | `--reporter <format>[:<path>]` | `pretty`, `json`, `junit` or `tap`, written to stdout or to `<path>` (repeatable; default `pretty` on stdout). At most one reporter may write to stdout. A file is replaced atomically, a symlink is followed, and a device such as `/dev/stdout` is written in place. |
 | `--report <format>[=<path>]` | Also render the canonical report as `json`, `junit`, `markdown`, `html` or `sarif` (repeatable), to `<path>` or stdout; see [Reports](reports.md). With a `--report` on stdout and no `--reporter`, the `pretty` report is not printed. At most one reporter or report may write to stdout. |
-| `--max-events <n>` | GraphQL subscriptions stop after `n` events, replacing each request's `max_events` (default 10). |
-| `--duration <duration>` | GraphQL subscriptions stop after this long, replacing each request's `duration` (default `30s`). |
+| `--max-events <n>` | GraphQL and JSON-RPC subscriptions stop after `n` events, replacing each request's `max_events` (default 10). |
+| `--duration <duration>` | GraphQL and JSON-RPC subscriptions stop after this long, replacing each request's `duration` or `max_duration_ms` (default `30s`). |
 | `--update-snapshots`, `-u` | Overwrite [snapshots](snapshots.md) that differ from the response and report them `updated`; matching files are left untouched. |
 | `--ci` | CI mode: never write snapshots, and fail a request whose snapshot is missing. Also on when the `CI` environment variable is `true` or `1`. Combined with `--update-snapshots` it is a usage error (exit code 2): `--update-snapshots cannot be used in CI mode`. |
 
@@ -184,7 +187,7 @@ SKIP  users/delete  skipped (bail)
 
 `json` writes a `rustman.report/v1` document with `"kind": "run"`, described by the JSON Schema in [`schemas/report.schema.json`](schemas/report.schema.json). It holds every request (with its redacted exchange, timings, assertion results and capture results) and `summary.total`, `summary.passed`, `summary.failed`, `summary.errored`, `summary.skipped`, `summary.duration_ms` and `summary.interrupted`. A request is `passed` when every assertion passed and every required capture matched, `failed` when an assertion failed or could not be evaluated or a required capture matched nothing, `errored` when no response arrived (unresolved variables, network, TLS, timeout, auth) and `skipped` with a `skip_reason`: `bail`, `interrupted`, or `unsupported_kind` for request kinds this build cannot send. Report files are replaced atomically.
 
-A data-driven or repeated run (`--data`, or `--iterations` above 1) groups the pretty report under one `iteration <i>/<n>` line per iteration, adds ` [<label>]` to JUnit test case names and TAP descriptions. Every JSON request has the 1-based integer `iteration`; with `--data` only, it also gets a `data_row` object (`index`, `total`, `label`); see [iteration labels](data-runs.md#iteration-labels).
+A data-driven or repeated run (`--data`, or `--iterations` above 1) groups the pretty report under one `iteration <i>/<n>` line per iteration, adds ` [<label>]` to JUnit test case names and TAP descriptions. Every JSON request has the 1-based integer `iteration`; with `--data` only, it also gets a `data_row` object (`index`, `total`, `label`); see [iteration labels](data-runs.md#iteration-labels). A `kind: jsonrpc` request also gets a `jsonrpc` object with its envelopes, attempts and subscription events; see [JSON-RPC in `rustman run`](jsonrpc.md#in-rustman-run).
 
 `junit` writes JUnit XML for CI systems: one `<testsuite name="rustman">` with one `<testcase>` per request (named by its id, with `classname` set to its file). A failed request gets a `<failure>`, an errored one an `<error>` and a skipped one `<skipped>`; their `message` is the first reason, and the element text lists them all:
 
@@ -231,6 +234,8 @@ Runs with [`snapshot` assertions](snapshots.md#in-reports) add a summary line su
 `rustman import` has its own: 0 when the import completed (even with unsupported features, unless `--fail-on-unsupported`), 1 with `--fail-on-unsupported` when a feature was unsupported, dropped or unmapped, and 2 for an unreadable, invalid, oversized or undetectable source (see [Importing collections](import.md#exit-codes)). `rustman import openapi` exits 0 on success, 3 when fetching the document failed, and 2 otherwise.
 
 `rustman graphql query` exits 0 when the result has no errors, 1 when `errors` is not empty (or an assertion of the request failed), and 3 when no response came back or the document failed validation; `rustman graphql introspect` exits 3 when the server could not be reached or refused introspection (see [GraphQL](graphql.md#cli-commands)).
+
+`rustman rpc call` and `rpc batch` exit 0 when every call returned a result, 1 when one returned a JSON-RPC error (printed on stdout) or an assertion failed, 2 when the OpenRPC catalog refuses a call, 3 when no usable answer came back, and 4 when a method guard refuses a call; `rustman rpc discover` exits 1 when the endpoint does not support `rpc.discover` (see [JSON-RPC](jsonrpc.md#exit-codes)).
 
 `rustman explore run` and `explore resume` exit 1 when a finding is at or above `--fail-on` (default `high`) instead of on failed requests, and 0 otherwise; see [Exploration](exploration.md#exit-codes). `rustman report diff` exits 1 when a new finding is at or above `--fail-on` (default `high`), and `report render` and `report diff` exit 2 on a report with an unknown major schema version; see [Reports](reports.md).
 

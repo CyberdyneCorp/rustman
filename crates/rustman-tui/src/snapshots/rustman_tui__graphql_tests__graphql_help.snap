@@ -19,7 +19,7 @@ expression: screen
 │             │ Request editor                                                       │             │
 │             │   Ctrl+E                   Edit in external editor                   │             │
 │             │   Alt+M                    Change body mode or auth type             │             │
-│             │   Ctrl+Space               Show GraphQL completions                  │             │
+│             │   Ctrl+Space               Show completions                          │             │
 │             │                                                                      │             │
 │             │ Global                                                               │             │
 │             │   Ctrl+Enter, Ctrl+R       Send request                              │             │

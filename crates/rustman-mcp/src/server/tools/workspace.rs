@@ -113,6 +113,7 @@ fn summary(request: &RequestRef<'_>) -> RequestSummary {
             Some(http.url.clone()),
         ),
         Request::Graphql(graphql) => (None, Some(graphql.endpoint.clone())),
+        Request::Jsonrpc(jsonrpc) => (None, Some(jsonrpc.endpoint.clone())),
         Request::Opaque(_) => (None, None),
     };
     RequestSummary {

@@ -1,0 +1,35 @@
+[package]
+name = "rustman-jsonrpc"
+description = "JSON-RPC 2.0 client for Rustman: request model, envelopes, HTTP and WebSocket transports, batches and subscriptions"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+rustman-core.workspace = true
+rustman-http.workspace = true
+futures-util = { workspace = true, features = ["sink"] }
+http.workspace = true
+jsonschema.workspace = true
+ring.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_json_path.workspace = true
+strsim.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "sync", "time"] }
+tokio-tungstenite.workspace = true
+tokio-util.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+httpdate.workspace = true
+rustman-test-support.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

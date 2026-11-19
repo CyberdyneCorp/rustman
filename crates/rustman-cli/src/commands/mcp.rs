@@ -60,6 +60,10 @@ fn serve(args: &ServeArgs) -> Result<u8, CliError> {
         .transpose()
         .map_err(|e| ConfigError::Usage(e.to_string()))?;
     let workspace = args.selection.workspace()?;
+    // An unknown `@preset` in `[jsonrpc] agent_read_only_methods` stops the
+    // server before any client connects (exit code 2).
+    rustman_mcp::server::tools::rpc::read_only_policy(&workspace)
+        .map_err(|e| ConfigError::Usage(e.to_string()))?;
     let environment = args.selection.environment(&workspace)?.cloned();
     let secrets = secret_store(&workspace.root)?;
     let sessions = Sessions::new(workspace, secrets, environment);

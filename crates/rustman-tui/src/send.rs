@@ -29,12 +29,14 @@ use rustman_core::{Redactor, Workspace};
 use rustman_graphql::{GraphqlRunner, Interactive, SubscriptionEvent};
 use rustman_http::Exchange;
 use rustman_http::runner::{RunContext, RunOptions, Runner, Sent};
+use rustman_jsonrpc::JsonrpcRunner;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio_util::sync::CancellationToken;
 
 use crate::app::{Action, Effect, Overlay, State};
 use crate::dialogs::Confirm;
 use crate::response::graphql::GraphqlView;
+use crate::response::jsonrpc::RpcView;
 use crate::response::timing::SPARK_POINTS;
 use crate::response::{Captured, RawBody, Received, Source};
 use crate::review::Reviews;
@@ -350,11 +352,20 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         }),
         ..GraphqlRunner::default()
     };
+    let (rpc_feed, rpc_events) = unbounded_channel();
+    let jsonrpc = JsonrpcRunner {
+        interactive: Some(rustman_jsonrpc::Interactive {
+            stop: job.stop.clone(),
+            feed: Some(rpc_feed),
+        }),
+        ..JsonrpcRunner::default()
+    };
     let options = RunOptions {
         cancel: job.cancel.clone(),
         history: place.history(),
         ad_hoc,
         graphql: Some(&graphql),
+        jsonrpc: Some(&jsonrpc),
         snapshots: job.snapshots,
         ..RunOptions::default()
     };
@@ -372,7 +383,11 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
     let mut sent = tokio::select! {
         sent = runner.send(target, 1) => sent,
         () = collect(events, &job.live) => unreachable!("the feed outlives the send"),
+        () = crate::jsonrpc::collect(rpc_events, &job.live) => {
+            unreachable!("the feed outlives the send")
+        }
     };
+    jsonrpc.close().await;
     if let Err(e) = runner.finish() {
         sent.record.warnings.push(e.to_string());
     }
@@ -388,6 +403,11 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
     let mut received = prepare(sent, http);
     received.snapshots = Reviews::new(reviews, job.snapshots);
     received.graphql = graphql_view(&received);
+    received.jsonrpc = received
+        .record
+        .jsonrpc
+        .as_ref()
+        .map(|record| Box::new(RpcView::new(record)));
     if !ad_hoc && let Some(store) = place.history() {
         received.history = latencies(&store, &received.record.file);
     }

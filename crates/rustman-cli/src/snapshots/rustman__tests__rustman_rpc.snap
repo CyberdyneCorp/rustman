@@ -1,0 +1,33 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Send JSON-RPC calls and batches, and fetch OpenRPC catalogs
+
+Usage: rustman rpc [OPTIONS] <COMMAND>
+
+Commands:
+  call      Send one JSON-RPC call (an endpoint with a method, or a request file) and print its result or error object
+  batch     Send calls from a JSON array, a YAML list or JSON lines as one batch (100 calls per batch) and print the results in input order
+  discover  Fetch an endpoint's OpenRPC document with rpc.discover and cache it
+  help      Print this message or the help of the given subcommand(s)
+
+Options:
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help
+
+Examples:
+  rustman rpc call http://127.0.0.1:8332 getblockcount --header "Authorization: Basic {{btc_auth}}"
+  rustman rpc call {{rpc_url}} eth_getBalance '["0xabc...", "latest"]'
+  rustman rpc call wss://node.example eth_subscribe '["newHeads"]' --subscribe eth_subscription --unsubscribe eth_unsubscribe
+  rustman rpc call requests/chain/head.rman.yaml
+  printf '{"method":"eth_chainId"}\n' | rustman rpc batch {{rpc_url}} -
+  rustman rpc discover {{rpc_url}}

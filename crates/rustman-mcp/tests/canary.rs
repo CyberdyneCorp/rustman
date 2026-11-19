@@ -97,7 +97,7 @@ fn workspace(server: &TestServer, api: &BadApi) -> tempfile::TempDir {
     write(
         dir.path(),
         "rustman.toml",
-        "[workspace]\nname = \"t\"\nversion = 1\n\n[safety]\nrate = 1000\nconcurrency = 4\n",
+        "[workspace]\nname = \"t\"\nversion = 1\n\n[safety]\nrate = 1000\nconcurrency = 4\n\n[jsonrpc]\nagent_read_only_methods = [\"echo\"]\n",
     );
     let env = format!(
         "variables:\n  base_url: {}\n  api_url: {}\nsecrets:\n  - api_token\n",
@@ -235,6 +235,15 @@ async fn call_every_tool(
         out.add("send_request", &result);
     }
     called.push("send_request".to_owned());
+    let rpc = [
+        json!({"endpoint": "{{base_url}}/mirror", "method": "echo", "params": ["{{api_token}}"]}),
+        json!({"endpoint": format!("https://blocked.example/{CANARY}"), "method": "echo"}),
+        json!({"endpoint": "{{base_url}}/echo", "method": format!("m{CANARY}")}),
+    ];
+    for args in rpc {
+        out.add("rpc_call", &call(client, "rpc_call", args).await);
+    }
+    called.push("rpc_call".to_owned());
     let simple = [
         ("list_requests", json!({})),
         ("list_requests", json!({"text": CANARY})),

@@ -25,7 +25,7 @@ use std::io::{self, Read, Write};
 use std::sync::{Arc, OnceLock, PoisonError, RwLock, Weak};
 
 use base64::Engine as _;
-use base64::engine::general_purpose::STANDARD;
+use base64::engine::general_purpose::{STANDARD, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD};
 
 use crate::model::{Auth, AwsCredentials};
 use crate::secret::{Secret, placeholder};
@@ -186,9 +186,18 @@ impl Redactor {
         self
     }
 
-    /// Redact every occurrence of `secret`'s value. Empty values are ignored.
+    /// Redact every occurrence of `secret`'s value, and of the forms a
+    /// server echoing it inside a token or an error message may write
+    /// ([`echo_forms`]). Empty values are ignored.
     pub fn add(&mut self, secret: &Secret<String>) {
-        self.add_value(secret.name(), secret.expose());
+        let value = secret.expose();
+        self.add_value(secret.name(), value);
+        if value.is_empty() {
+            return;
+        }
+        for form in echo_forms(value) {
+            self.add_value(secret.name(), &form);
+        }
     }
 
     /// Redact every occurrence of `value` as `«redacted:<name>»`. Used for
@@ -649,6 +658,22 @@ fn is_credential(value: &str) -> bool {
     !marker && value.chars().count() >= MIN_HEADER_CREDENTIAL
 }
 
+/// The forms of a secret `value` an echo may carry besides those every
+/// value is matched in (`redact/forms.rs`): base64 (standard and
+/// URL-safe, padded or not), for a secret echoed inside a token, and hex
+/// in lower and upper case, for a secret echoed as bytes (JSON-RPC nodes
+/// write data as hex).
+fn echo_forms(value: &str) -> Vec<String> {
+    let mut forms: Vec<String> = [&STANDARD, &STANDARD_NO_PAD, &URL_SAFE, &URL_SAFE_NO_PAD]
+        .iter()
+        .map(|engine| engine.encode(value))
+        .collect();
+    let hex: String = value.bytes().map(|b| format!("{b:02x}")).collect();
+    forms.push(hex.to_uppercase());
+    forms.push(hex);
+    forms
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -741,6 +766,36 @@ mod tests {
         assert_eq!(r.text(r#"{"pw":"a b\"/&é"}"#), r#"{"pw":"«redacted:pw»"}"#);
         assert_eq!(r.text("q=a%20b%22%2F%26%C3%A9"), "q=«redacted:pw»");
         assert_eq!(r.text("q=a+b%22%2F%26%C3%A9"), "q=«redacted:pw»");
+    }
+
+    #[test]
+    fn base64_echoes_of_a_secret_are_replaced() {
+        // Regression: a JSON-RPC error message echoing a secret in base64.
+        let r = Redactor::new().with(&Secret::new("api_key", "CANARY-s3cr3t/+=x".to_owned()));
+        let standard = STANDARD.encode("CANARY-s3cr3t/+=x");
+        assert_eq!(standard, "Q0FOQVJZLXMzY3IzdC8rPXg=");
+        assert_eq!(
+            r.text(&format!("bad key b64={standard}")),
+            "bad key b64=«redacted:api_key»"
+        );
+        let url_safe = URL_SAFE_NO_PAD.encode("CANARY-s3cr3t/+=x");
+        assert_eq!(r.text(&url_safe), "«redacted:api_key»");
+    }
+
+    #[test]
+    fn hex_echoes_of_a_secret_are_replaced() {
+        // Regression: an error message echoing the secret as hex kept it.
+        let r = Redactor::new().with(&Secret::new("api_key", "CANARY-s3cr3t/+=x".to_owned()));
+        for echo in [
+            "43414e4152592d7333637233742f2b3d78",
+            "43414E4152592D7333637233742F2B3D78",
+        ] {
+            assert_eq!(
+                r.text(&format!("hex=0x{echo}.")),
+                "hex=0x«redacted:api_key».",
+                "{echo}"
+            );
+        }
     }
 
     #[test]
@@ -893,7 +948,8 @@ mod tests {
             }
         }
         assert_eq!(r.bytes_prefix(b"AAsimpleCANARY", 1), b"A");
-        assert_eq!(r.longest(), "simpleCANARY".len());
+        // The longest value is the secret's hex form.
+        assert_eq!(r.longest(), "simpleCANARY".len() * 2);
     }
 
     #[test]
@@ -1036,6 +1092,13 @@ mod tests {
     /// A data run remembers its many secrets once, then each request's
     /// redactor (the run's plus a few values): only the new values are read,
     /// so remembering stays linear in the run's secrets, not quadratic.
+    /// How many values a secret adds: itself and its distinct echo forms.
+    fn values_of(secret: &str) -> usize {
+        let mut values = std::collections::BTreeSet::from([secret.to_owned()]);
+        values.extend(echo_forms(secret));
+        values.len()
+    }
+
     #[test]
     fn logs_read_each_shared_layer_once() {
         let mut run = Redactor::new();
@@ -1043,11 +1106,15 @@ mod tests {
             run.add(&Secret::new("password", format!("pw-row-{i:05}")));
         }
         let mut logs = LogSecrets::default();
-        assert_eq!(logs.remember(&run), 1000);
+        let values: usize = (0..1000)
+            .map(|i| values_of(&format!("pw-row-{i:05}")))
+            .sum();
+        assert_eq!(logs.remember(&run), values);
         for i in 0..50 {
             let mut request = run.clone();
-            request.add(&Secret::new("api_token", format!("tok-req-{i:05}")));
-            assert_eq!(logs.remember(&request), 1, "request {i}");
+            let token = format!("tok-req-{i:05}");
+            request.add(&Secret::new("api_token", token.clone()));
+            assert_eq!(logs.remember(&request), values_of(&token), "request {i}");
         }
         assert_eq!(logs.remember(&run), 0);
         let text = logs.redactor.text("pw-row-00999 tok-req-00049");

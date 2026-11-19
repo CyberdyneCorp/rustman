@@ -242,7 +242,7 @@ impl<C: Confirm> SendGate for AgentGate<'_, C> {
     }
 }
 
-fn overrides(vars: Option<&BTreeMap<String, String>>) -> Result<Variables, ToolError> {
+pub(super) fn overrides(vars: Option<&BTreeMap<String, String>>) -> Result<Variables, ToolError> {
     let pairs: Vec<String> = vars
         .into_iter()
         .flatten()
@@ -277,7 +277,7 @@ fn ad_hoc_entry(args: &SendRequestArgs, url: &str) -> Result<RequestEntry, ToolE
     })
 }
 
-fn history(ctx: &AgentContext) -> Option<HistoryStore> {
+pub(super) fn history(ctx: &AgentContext) -> Option<HistoryStore> {
     let ws = ctx.workspace();
     ws.settings
         .history
@@ -365,7 +365,7 @@ async fn send_here(call: &Call) -> Result<ToolOutput, ToolError> {
     output(&result, line)
 }
 
-fn outcome(status: RequestStatus) -> &'static str {
+pub(super) fn outcome(status: RequestStatus) -> &'static str {
     match status {
         RequestStatus::Passed => "passed",
         RequestStatus::Failed => "failed",

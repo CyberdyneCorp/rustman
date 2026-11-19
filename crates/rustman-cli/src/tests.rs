@@ -97,3 +97,19 @@ fn a_command_is_documented_only_by_its_own_name() {
     ));
     assert!(!documents("`rustman sendx`", "rustman send", &[]));
 }
+
+/// The completion script offers `rpc` and its subcommands with their flags.
+#[test]
+fn completion_snapshot_covers_rpc() {
+    let mut script = Vec::new();
+    let shell = clap_complete::Shell::Zsh;
+    clap_complete::generate(shell, &mut Cli::command(), "rustman", &mut script);
+    let script = String::from_utf8(script).unwrap();
+    let start = script
+        .find("(rpc)")
+        .expect("the zsh script completes `rustman rpc`");
+    let end = script[start..]
+        .find("\n(completions)")
+        .map_or(script.len(), |n| start + n);
+    insta::assert_snapshot!("completions_zsh_rpc", &script[start..end]);
+}

@@ -37,7 +37,7 @@ The system SHALL register `kind: jsonrpc` in the `workspace` request-kind regist
 - **THEN** loading SHALL fail with `<path>:<line>: params must be a list or a map`
 
 ### Requirement: Request id strategy
-When `id` is omitted, the system SHALL assign sequential integer ids starting at 1 per connection. An explicit `id` (string or integer) SHALL be sent unchanged. A response whose `id` doesn't match the request SHALL produce the error `response id <x> does not match request id <y>`.
+When `id` is omitted, the system SHALL assign sequential integer ids starting at 1 per connection. An explicit `id` (string or integer) SHALL be sent unchanged, and assigned ids SHALL skip the explicit ids of the same request. Two calls of one batch with the same explicit id SHALL be a load error (`duplicate id <id> in batch`). A response whose `id` doesn't match the request SHALL produce the error `response id <x> does not match request id <y>`.
 
 #### Scenario: Explicit string id
 - **GIVEN** `id: "req-7"`
@@ -76,6 +76,18 @@ For HTTP endpoints, a non-2xx status whose body isn't a valid JSON-RPC response 
 #### Scenario: Gateway error
 - **GIVEN** an endpoint returning `502` with an HTML body
 - **THEN** the exchange SHALL be an error `HTTP 502` and `rustman run` SHALL exit 3
+
+### Requirement: Response size limit
+An HTTP response body or a WebSocket message larger than `[http] max_body_bytes` SHALL be refused without being parsed or stored in full: the exchange error SHALL be `HTTP: the response body is larger than the <n> byte limit (max_body_bytes)` or `WebSocket: a message is larger than the <n> byte limit (max_body_bytes)` (exit-code class 3). The refused exchange SHALL NOT be retried, and history SHALL record the error without the body.
+
+#### Scenario: Oversized HTTP answer
+- **GIVEN** `[http] max_body_bytes = 4096` and an endpoint answering with a 64 KiB JSON-RPC body
+- **WHEN** the call is sent
+- **THEN** the exchange SHALL be an error `HTTP: the response body is larger than the 4096 byte limit (max_body_bytes)`, `rustman rpc call` SHALL exit 3, and the history entry SHALL NOT contain the body
+
+#### Scenario: Oversized WebSocket message
+- **GIVEN** `[http] max_body_bytes = 4096` and a WebSocket endpoint answering with a 64 KiB message
+- **THEN** the exchange SHALL be an error `WebSocket: a message is larger than the 4096 byte limit (max_body_bytes)`
 
 ### Requirement: rpc_error assertion
 The `assertions` list SHALL accept `rpc_error: {code: <int>}`, optionally with `message_contains: <text>`. It SHALL pass when the call failed with that code (and message substring), and SHALL fail with `rpc_error: expected code <c>, got result` or `got code <d>` otherwise. `rpc_error: none` SHALL assert success.
@@ -123,11 +135,15 @@ Batch responses SHALL be matched to calls by `id`, independent of order. Each ca
 - **THEN** every call SHALL fail with that error, shown once with the note `server rejected the batch`
 
 ### Requirement: WebSocket transport
-For `ws` and `wss` endpoints, the system SHALL open one WebSocket connection, send the envelope as a text frame and match the response by id, ignoring unrelated frames. The connection SHALL close when the exchange ends. Within one `rustman run`, files with the same endpoint and headers SHALL reuse one connection.
+For `ws` and `wss` endpoints, the system SHALL open one WebSocket connection, send the envelope as a text frame and match the response by id, ignoring unrelated frames. Outside `rustman run`, the connection SHALL close when the exchange ends. Within one `rustman run`, files with the same endpoint, handshake headers, TLS settings and proxy SHALL reuse one connection; files that differ in any of them SHALL NOT.
 
 #### Scenario: Unrelated frame ignored
 - **GIVEN** a server that sends a subscription notification before the response to id 1
 - **THEN** the call SHALL complete with the response to id 1
+
+#### Scenario: Connections with different TLS settings
+- **GIVEN** two files in one run for the same `wss` endpoint and headers, one with `verify_tls: false`
+- **THEN** they SHALL use two connections
 
 ### Requirement: Subscriptions
 A file MAY define `subscription: {subscribe, unsubscribe, notification}` method names over a WebSocket endpoint. The system SHALL call `subscribe` with `params`, take the result as the subscription id, collect `notification` messages carrying that id, then call `unsubscribe` with the id when the subscription ends.

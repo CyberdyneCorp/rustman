@@ -113,6 +113,15 @@ The schema is the request's `schema_file`, the `schema_file` of its endpoint in 
 
 Sending a document with errors asks first: **Send anyway** sends it without the check, **Cancel** (the default) does not send. A query or mutation shows its result in the response viewer's `Data`, `Errors` and `Extensions` tabs. Each of these tabs starts with a summary line: the operation, the result (`ok`, `partial`, `errors`), the subscription protocol (`graphql-transport-ws`, `legacy subscriptions-transport-ws` or `sse`) and the APQ outcome, when there are any (`subscription OnMessage · ok · legacy subscriptions-transport-ws`). `Alt+S` (**Start GraphQL subscription**, or `Ctrl+Enter`) starts a `transport: ws` or `sse` subscription; it runs until the server completes it or you stop it, with no `max_events` or `duration` limit. While it runs, the response viewer counts the events and lists the newest (`⠋ Subscribed: 3 events · 2.4 s`). `Alt+X` (**Stop GraphQL subscription**) stops it and keeps what arrived: the `Events` tab lists every event with its time since the start and why it ended (`Ended: stopped, 3 events`). `Esc` cancels it instead, like any request.
 
+### The JSON-RPC editor
+
+A `kind: jsonrpc` request (see [JSON-RPC](jsonrpc.md#in-the-tui)) opens in its own editor. The first row shows `RPC` (or `SUB` for a subscription) and the endpoint. The editor tabs are `Call`, `Batch`, `Headers`, `Auth` and `Assertions` (`1`–`5` with the tab bar focused).
+
+- **Call** starts with where method completions come from (`Catalog: 42 methods`, from `[jsonrpc.catalogs]` or the `rustman rpc discover` cache; the endpoint is resolved in the active environment, without reading secrets), then the one-line **Method** field and the **Params** as JSON (an array or an object). Typing in the method field opens a popup of the catalog methods starting with what is typed, each with its param names (`eth_getBalance(address, block?)`, `?` marking optional ones); `Ctrl+Space` opens it too. `↑`/`↓` choose, `Enter` or `Tab` takes one, `Esc` closes it. `Enter` or `↓` moves from the method to the params, `↑` on the first params row moves back. Params that do not parse are reported on the last line. A batch file shows its calls in the **Batch** tab instead.
+- **Batch**, **Headers**, **Auth** and **Assertions** are those parts of the file as YAML, the same syntax as in the file. YAML that does not parse, or a file that no longer loads (for example a method left empty), cannot be saved or sent: the error says why.
+
+An edited request is saved with its members in schema order; an unedited one keeps its file text. `Ctrl+R` sends it; the response viewer shows `Result` (each call's result exactly as received, hex included), `Error` (code, message and `data`, and `server rejected the batch` when one error answered a whole batch) and `Events`, then the usual `Body`, `Headers`, `Timing` and `Assertions`. A subscription runs until you stop it: the viewer counts the events and lists the newest live (`⠋ Subscribed: 3 events · 2.4 s  (Esc unsubscribes)`). `Esc` sends the `unsubscribe` call and stops it, keeping what arrived (`Ended: stopped, 3 events`); a second `Esc` cancels outright. A method guard that refuses the method stops the send with its message.
+
 ### Variables
 
 Every `{{variable}}` in the URL, params, headers, auth and body is highlighted: in the accent colour when it resolves, in the error colour (and underlined, so it shows without colour) when no layer defines it. When the cursor is on a variable (in the URL, a text body, or the selected table row) a line at the bottom of the editor shows its value and the layer it comes from, e.g. `{{base_url}} = http://localhost:8080 · environment`, or `{{base_url}} is not defined in any layer`. Variables are looked up with the request's own precedence (request, collection, active environment, `rustman.toml`). Secrets are never read for this and show masked, `{{token}} = •••••••• · secret (environment)`, unless you [reveal secrets](#environments-and-secrets).
@@ -348,7 +357,7 @@ The table below is generated from the action registry; a test fails if it drifts
 | Reveal secrets | `secrets.reveal` | `Alt+R` |  |
 | Edit in external editor | `editor.external` | `Ctrl+E` (editor) |  |
 | Change body mode or auth type | `editor.mode` | `Alt+M` (editor) |  |
-| Show GraphQL completions | `editor.complete` | `Ctrl+Space` (editor) |  |
+| Show completions | `editor.complete` | `Ctrl+Space` (editor) |  |
 | Open in viz companion | `viz.open` | `v` (response) |  |
 | Show notification log | `notifications.show` |  |  |
 | Move up | `list.up` | `Up` (sidebar, response) | `k` (sidebar, response) |

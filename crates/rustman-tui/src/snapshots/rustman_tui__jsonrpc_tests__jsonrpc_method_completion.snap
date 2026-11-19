@@ -1,0 +1,28 @@
+---
+source: crates/rustman-tui/src/jsonrpc_tests.rs
+expression: screen
+---
+┌ head ● ──────────────────────────────────────────────────────────────────────────────────────────┐
+│ RPC      {{http}}                                                                                │
+│ Call  Batch  Headers  Auth  Assertions                                                           │
+│ Catalog: 4 methods (Ctrl+Space completes the method)                                             │
+│ Method  eth_get                                                                                  │
+│ Params ( eth_getBalance(address, block?)                                                         │
+│ [        eth_getCode(address)                                                                    │
+│   "{{api_key}}"                                                                                  │
+│ ]                                                                                                │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌ Response ────────────────────────────────────────────────────────────────────────────────────────┐
+│ No response yet · press Ctrl+Enter to send                                                       │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ demo │ env: local │ TLS verified │ 0 in flight                                         Ctrl+Q quit

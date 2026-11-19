@@ -174,6 +174,9 @@
             }
           ]
         },
+        "jsonrpc": {
+          "$ref": "#/$defs/jsonrpc"
+        },
         "assertions": {
           "type": "array",
           "items": {
@@ -193,6 +196,145 @@
           }
         },
         "duration_ms": {
+          "$ref": "#/$defs/ms"
+        }
+      }
+    },
+    "jsonrpc": {
+      "type": "object",
+      "description": "The JSON-RPC side of a kind: jsonrpc request: the envelopes sent and received per call, every HTTP attempt, and a subscription's events (the first 1000). Absent from every other request. Added in v0.5.",
+      "required": [
+        "transport",
+        "batch",
+        "calls",
+        "elapsed_ms"
+      ],
+      "properties": {
+        "transport": {
+          "enum": [
+            "http",
+            "ws"
+          ]
+        },
+        "batch": {
+          "type": "boolean"
+        },
+        "calls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "method",
+              "id",
+              "request",
+              "response",
+              "outcome"
+            ],
+            "properties": {
+              "method": {
+                "type": "string"
+              },
+              "id": {
+                "description": "The id sent; null for a notification."
+              },
+              "request": {
+                "type": "object",
+                "description": "The envelope sent."
+              },
+              "response": {
+                "description": "The envelope that answered this call, or null."
+              },
+              "outcome": {
+                "enum": [
+                  "result",
+                  "error",
+                  "notification",
+                  "failed"
+                ]
+              },
+              "failure": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "attempts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "status",
+              "error",
+              "elapsed_ms"
+            ],
+            "properties": {
+              "status": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "error": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "elapsed_ms": {
+                "$ref": "#/$defs/ms"
+              },
+              "retry_in_ms": {
+                "$ref": "#/$defs/ms"
+              }
+            }
+          }
+        },
+        "subscription": {
+          "type": "object",
+          "required": [
+            "subscription_id",
+            "event_count",
+            "events",
+            "ended",
+            "unsubscribed",
+            "elapsed_ms"
+          ],
+          "properties": {
+            "subscription_id": {},
+            "event_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "events": {
+              "type": "array",
+              "maxItems": 1000
+            },
+            "ended": {
+              "enum": [
+                "max_events",
+                "duration",
+                "stopped",
+                "closed"
+              ]
+            },
+            "unsubscribed": {
+              "type": "boolean"
+            },
+            "elapsed_ms": {
+              "$ref": "#/$defs/ms"
+            }
+          }
+        },
+        "note": {
+          "type": "string"
+        },
+        "refusal": {
+          "enum": [
+            "validation",
+            "guard"
+          ]
+        },
+        "elapsed_ms": {
           "$ref": "#/$defs/ms"
         }
       }
@@ -402,6 +544,7 @@
             "error_message_contains",
             "error_code",
             "data",
+            "rpc_error",
             "snapshot"
           ]
         },

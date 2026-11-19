@@ -34,6 +34,11 @@ pub mod import_dialog;
 #[cfg(test)]
 mod import_dialog_tests;
 mod input;
+pub mod jsonrpc;
+pub mod jsonrpc_pane;
+#[cfg(test)]
+mod jsonrpc_tests;
+mod jsonrpc_view;
 pub mod keymap;
 pub mod kv;
 pub mod launch;

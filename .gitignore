@@ -3,3 +3,6 @@
 .DS_Store
 # Rustman per-user state (history, secrets, audit, caches) — never commit
 .rustman/
+
+# insta writes pending snapshots next to the accepted ones
+*.snap.new

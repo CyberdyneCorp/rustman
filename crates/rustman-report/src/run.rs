@@ -6,8 +6,8 @@
 use rustman_core::assertions::{AssertionResult, Outcome};
 use rustman_core::captures::{CaptureOutcome, CaptureResult};
 use rustman_core::run::{
-    DataRowRecord, ExchangeRecord, HeaderRecord, RequestRecord, RequestStatus, RunRecord,
-    SentRequest, SkipReason, Summary,
+    DataRowRecord, ExchangeRecord, HeaderRecord, JsonrpcRecord, RequestRecord, RequestStatus,
+    RunRecord, SentRequest, SkipReason, Summary,
 };
 use rustman_core::snapshot::{SnapshotCounts, SnapshotResult};
 use serde::{Deserialize, Serialize};
@@ -71,6 +71,10 @@ pub struct RunRequest {
     pub skip_reason: Option<String>,
     pub error: Option<String>,
     pub exchange: Option<Exchange>,
+    /// The JSON-RPC envelopes, attempts and subscription events of a
+    /// `kind: jsonrpc` request; absent from every other request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jsonrpc: Option<JsonrpcRecord>,
     pub assertions: Vec<Assertion>,
     pub captures: Vec<Capture>,
     pub warnings: Vec<String>,
@@ -260,6 +264,7 @@ fn request(r: &RequestRecord) -> RunRequest {
         skip_reason: r.skip_reason.map(skip_reason),
         error: r.error.clone(),
         exchange: r.exchange.as_ref().map(exchange),
+        jsonrpc: r.jsonrpc.clone(),
         assertions: r.assertions.iter().map(assertion).collect(),
         captures: r.captures.iter().map(capture).collect(),
         warnings: r.warnings.clone(),

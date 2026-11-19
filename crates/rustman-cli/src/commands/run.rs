@@ -7,17 +7,20 @@ use std::time::Duration;
 
 use clap::{Args, ValueEnum};
 use rustman_core::data_rows::DataRows;
-use rustman_core::run::{DataRun, Filter, Plan, RunRecord, collection_data, plan, secret_columns};
+use rustman_core::run::{
+    DataRun, Filter, Plan, RpcRefusal, RunRecord, collection_data, plan, secret_columns,
+};
 use rustman_core::{ConfigError, Workspace};
 use rustman_graphql::GraphqlRunner;
 use rustman_http::runner::{BailScope, RunContext, Runner};
+use rustman_jsonrpc::JsonrpcRunner;
 use rustman_report::{Report, ReportTarget, Reporter, RunReport};
 
 use super::exec::{
     SendFlags, cancel_on_ctrl_c, history_store, parse_duration, runtime, secret_store,
 };
 use super::{EnvSelection, current_dir, print_warnings};
-use crate::exit::{CliError, run_code};
+use crate::exit::{CliError, REQUEST, SAFETY, run_code};
 
 #[derive(Debug, Args)]
 pub struct RunArgs {
@@ -70,12 +73,12 @@ pub struct RunArgs {
     /// written to a file or stdout, as in html=out/report.html (repeatable)
     #[arg(long = "report", value_name = "FORMAT[=PATH]")]
     report: Vec<ReportTarget>,
-    /// GraphQL subscriptions stop after N events (default: each request's
-    /// max_events, else 10)
+    /// GraphQL and JSON-RPC subscriptions stop after N events (default:
+    /// each request's max_events, else 10)
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
     max_events: Option<u32>,
-    /// GraphQL subscriptions stop after this long (default: each request's
-    /// duration, else 30s)
+    /// GraphQL and JSON-RPC subscriptions stop after this long (default:
+    /// each request's duration or max_duration_ms, else 30s)
     #[arg(long, value_name = "DURATION", value_parser = parse_duration)]
     duration: Option<Duration>,
 }
@@ -113,6 +116,12 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
         ..GraphqlRunner::default()
     };
     options.graphql = Some(&graphql);
+    let jsonrpc = JsonrpcRunner {
+        max_events: args.max_events,
+        max_duration: args.duration,
+        ..JsonrpcRunner::default()
+    };
+    options.jsonrpc = Some(&jsonrpc);
     let cancel = options.cancel.clone();
     let ctx = RunContext {
         root: &ws.root,
@@ -124,14 +133,32 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
     let runner = Runner::new(ctx, options)?;
     let record = runtime()?.block_on(async {
         cancel_on_ctrl_c(&cancel);
-        runner.run(&plan).await
+        let record = runner.run(&plan).await;
+        jsonrpc.close().await;
+        record
     });
     if let Err(e) = runner.finish() {
         print_warnings(&[e.to_string()]);
     }
     print_warnings(&store.take_warnings());
     write_reports(&args.reporter, &args.report, &record)?;
-    Ok(run_code(&record.summary))
+    Ok(exit_code(&record))
+}
+
+/// The run's exit code; a run whose errors include a call a method guard
+/// refused exits 4, like `rustman rpc`.
+fn exit_code(record: &RunRecord) -> u8 {
+    let code = run_code(&record.summary);
+    let guarded = record.requests.iter().any(|r| {
+        r.jsonrpc
+            .as_ref()
+            .is_some_and(|j| j.refusal == Some(RpcRefusal::Guard))
+    });
+    if code == REQUEST && guarded {
+        SAFETY
+    } else {
+        code
+    }
 }
 
 /// What `--bail` skips.

@@ -152,7 +152,7 @@ pub const REGISTRY: [ActionDef; 71] = [
     def(
         ActionId::EditorComplete,
         "editor.complete",
-        "Show GraphQL completions",
+        "Show completions",
     ),
     def(ActionId::VizOpen, "viz.open", "Open in viz companion"),
     def(

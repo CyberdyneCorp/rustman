@@ -8,7 +8,7 @@ use crate::model::{
     ApiKeyLocation, Assertion, Auth, AwsCredentials, AwsSigV4, Body, Capture, CountExpectation,
     CountOp, GraphqlMethod, GraphqlRequest, GraphqlTransport, HeaderAssertion, HttpRequest,
     JsonAssertion, JsonContent, Jwt, NameValue, OAuth2, Part, PartSource, Request, RequestSettings,
-    SnapshotAssertion, StatusExpectation, VarValue, Variables, WsProtocol,
+    RpcErrorExpectation, SnapshotAssertion, StatusExpectation, VarValue, Variables, WsProtocol,
 };
 
 /// The YAML text Rustman writes for a request file.
@@ -18,6 +18,7 @@ pub fn request_to_yaml(request: &Request) -> String {
     match request {
         Request::Http(http) => render(&http_node(http)),
         Request::Graphql(graphql) => graphql.source.clone(),
+        Request::Jsonrpc(jsonrpc) => jsonrpc.source.clone(),
         Request::Opaque(opaque) => opaque.source.clone(),
     }
 }
@@ -441,8 +442,22 @@ fn assertion(a: &Assertion) -> Node {
         Assertion::ErrorMessageContains(text) => ("error_message_contains", Node::str(text)),
         Assertion::ErrorCode(code) => ("error_code", Node::str(code)),
         Assertion::Data(j) => ("data", json_assertion(j)),
+        Assertion::RpcError(e) => ("rpc_error", rpc_error_node(e)),
     };
     Node::Map(vec![(key.to_owned(), node)])
+}
+
+fn rpc_error_node(expected: &RpcErrorExpectation) -> Node {
+    match expected {
+        RpcErrorExpectation::None => Node::str("none"),
+        RpcErrorExpectation::Code {
+            code,
+            message_contains,
+        } => MapBuilder::new()
+            .opt_plain("code", Some(code))
+            .opt_str("message_contains", message_contains.as_deref())
+            .build(),
+    }
 }
 
 fn snapshot_node(s: &SnapshotAssertion) -> Node {

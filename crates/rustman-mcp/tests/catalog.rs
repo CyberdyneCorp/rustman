@@ -207,7 +207,7 @@ fn snapshot_files(root: &Path) -> BTreeMap<String, String> {
     files
 }
 
-const TOOLS: [&str; 14] = [
+const TOOLS: [&str; 15] = [
     "list_requests",
     "get_request",
     "list_environments",
@@ -222,6 +222,8 @@ const TOOLS: [&str; 14] = [
     "get_report",
     "list_findings",
     "search_history",
+    // jsonrpc-requests: registered with the protocol tools.
+    "rpc_call",
 ];
 
 #[tokio::test(flavor = "multi_thread")]
@@ -868,6 +870,11 @@ async fn every_tool_error_uses_a_catalogued_code() {
         ("get_report", json!({})),
         ("list_findings", json!({"exploration_id": "exp-missing"})),
         ("search_history", json!({"status": "teapot"})),
+        ("rpc_call", json!({"path": "missing"})),
+        (
+            "rpc_call",
+            json!({"endpoint": "http://127.0.0.1:9", "method": "m"}),
+        ),
     ];
     let mut tools_seen: Vec<&str> = Vec::new();
     for (tool, args) in bad_calls {

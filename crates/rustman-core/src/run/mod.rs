@@ -8,6 +8,7 @@
 mod data;
 mod filter;
 mod graphql;
+mod jsonrpc;
 mod plan;
 mod record;
 
@@ -15,6 +16,10 @@ pub use data::{CollectionData, DataRun, collection_data, secret_columns};
 pub use filter::{Filter, glob_matches};
 pub use graphql::{
     EventRecord, GraphqlRecord, MAX_RECORDED_EVENTS, SubscriptionRecord, redact_value,
+};
+pub use jsonrpc::{
+    JsonrpcRecord, MAX_RPC_EVENTS, RpcAttemptRecord, RpcCallRecord, RpcRefusal,
+    RpcSubscriptionRecord,
 };
 pub use plan::{Plan, plan};
 pub use record::{

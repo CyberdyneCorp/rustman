@@ -132,13 +132,13 @@ fn reserved_kinds_load_and_report_unsupported() {
 #[test]
 fn registry_accepts_new_kinds() {
     let mut registry = KindRegistry::default();
-    registry.register("jsonrpc", rustman_core::model::kind::load_opaque);
-    assert_eq!(registry.names(), ["http", "graphql", "mcp", "jsonrpc"]);
-    let text = "version: 1\nkind: jsonrpc\nname: Block number\n";
+    registry.register("grpc", rustman_core::model::kind::load_opaque);
     assert_eq!(
-        registry.load(Path::new("j"), text).unwrap().kind(),
-        "jsonrpc"
+        registry.names(),
+        ["http", "graphql", "jsonrpc", "mcp", "grpc"]
     );
+    let text = "version: 1\nkind: grpc\nname: Say hello\n";
+    assert_eq!(registry.load(Path::new("g"), text).unwrap().kind(), "grpc");
 }
 
 #[test]
@@ -185,7 +185,7 @@ fn unknown_kind_names_file_line_and_registered_kinds() {
         &err,
         2,
         7,
-        "unknown-kind.rman.yaml:2: unknown request kind 'soap' (expected one of: http, graphql, mcp)",
+        "unknown-kind.rman.yaml:2: unknown request kind 'soap' (expected one of: http, graphql, jsonrpc, mcp)",
     );
 }
 
@@ -207,7 +207,7 @@ fn missing_kind_is_rejected() {
         &err,
         1,
         1,
-        "missing-kind.rman.yaml:1: missing request kind (expected one of: http, graphql, mcp)",
+        "missing-kind.rman.yaml:1: missing request kind (expected one of: http, graphql, jsonrpc, mcp)",
     );
 }
 

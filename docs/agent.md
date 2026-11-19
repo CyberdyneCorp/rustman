@@ -78,7 +78,9 @@ Every request an agent triggers, saved or ad hoc, passes these checks before any
 3. **Production.** An environment marked `production: true`, or a host in `[safety].production_hosts`, is refused: agents can't confirm production hosts.
 4. **Confirmation.** See below.
 
-All the requests of a session share one rate limit and one concurrency limit, from `[safety].rate` and `[safety].concurrency`.
+All the requests of a session share one rate limit and one concurrency limit, from `[safety].rate` and `[safety].concurrency`, `rpc_call` calls included (over HTTP or WebSocket).
+
+`rpc_call` sends JSON-RPC calls, which are all POSTs: instead of the method rule it only sends methods matching `[jsonrpc] agent_read_only_methods`, and refuses subscriptions; the allowlist and production checks apply as above. See [JSON-RPC](jsonrpc.md#agent-tool).
 
 `send_request` and `run_collection` compare [snapshots](snapshots.md) in CI mode: an agent never writes or updates a snapshot file, and a missing snapshot fails the assertion.
 
@@ -118,6 +120,7 @@ The reference below is generated from the tool schemas that `tools/list` returns
 | `get_report` | `id`, `format` | yes | A report by exploration id or run job id: a summary (default), or rendered as json, markdown, junit, sarif or html. |
 | `list_findings` | `exploration_id`, `severity`, `operation`, `cursor`, `limit` | yes | The findings of an exploration (default: the latest), filtered by minimum severity and operation, 50 per page. |
 | `search_history` | `url`, `method`, `status`, `since`, `until`, `cursor`, `limit` | yes | Search recorded exchanges by URL text, method, status range (500-599, 5xx, 404) and time range, newest first, 50 per page. |
+| `rpc_call` | `path`, `endpoint`, `method`, `params`, `vars`, `timeout_ms` | no | Send one JSON-RPC call (endpoint, method, params) or a saved jsonrpc request through the safety policy. Only methods matching [jsonrpc] agent_read_only_methods are sent; subscriptions are refused. |
 
 <!-- tool-reference:end -->
 

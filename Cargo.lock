@@ -3928,6 +3928,7 @@ dependencies = [
  "rustman-graphql",
  "rustman-http",
  "rustman-import",
+ "rustman-jsonrpc",
  "rustman-mcp",
  "rustman-mock",
  "rustman-report",
@@ -4018,7 +4019,6 @@ dependencies = [
  "http",
  "insta",
  "ring",
- "rustls-pki-types",
  "rustman-core",
  "rustman-http",
  "rustman-test-support",
@@ -4027,7 +4027,6 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
- "tokio-rustls",
  "tokio-tungstenite",
  "tokio-util",
  "url",
@@ -4074,6 +4073,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-socks",
+ "tokio-tungstenite",
  "tokio-util",
  "tower-service",
  "tracing",
@@ -4097,6 +4097,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustman-jsonrpc"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "http",
+ "httpdate",
+ "jsonschema",
+ "ring",
+ "rustman-core",
+ "rustman-http",
+ "rustman-test-support",
+ "serde",
+ "serde_json",
+ "serde_json_path",
+ "strsim",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-tungstenite",
+ "tokio-util",
+ "url",
+]
+
+[[package]]
 name = "rustman-mcp"
 version = "0.1.0"
 dependencies = [
@@ -4114,6 +4138,7 @@ dependencies = [
  "rustman-core",
  "rustman-explore",
  "rustman-http",
+ "rustman-jsonrpc",
  "rustman-report",
  "rustman-test-support",
  "schemars",
@@ -4228,6 +4253,7 @@ dependencies = [
  "rustman-graphql",
  "rustman-http",
  "rustman-import",
+ "rustman-jsonrpc",
  "rustman-mock",
  "rustman-test-support",
  "rustman-viz-protocol",

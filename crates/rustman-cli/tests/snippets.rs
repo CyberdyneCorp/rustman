@@ -171,6 +171,42 @@ fn graphql_exports_as_an_http_post() {
         ));
 }
 
+/// Regression: `kind: jsonrpc` over HTTP, a plain JSON POST like
+/// `kind: graphql`, was refused as an unsupported kind.
+#[test]
+fn jsonrpc_over_http_exports_as_an_http_post() {
+    let ws = workspace();
+    write(
+        ws.path(),
+        "rpc/head.rman.yaml",
+        "version: 1\nkind: jsonrpc\nname: head\nendpoint: '{{base_url}}/rpc'\nmethod: getblockhash\nparams: ['{{id}}']\n",
+    );
+    rustman(ws.path())
+        .args(["export", "snippet", "--lang", "js-fetch", "rpc/head", "--env", "prod"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "fetch(\"https://api.example/rpc\", {\n  method: \"POST\",",
+        ))
+        .stdout(predicate::str::contains(
+            r#"body: JSON.stringify({"jsonrpc": "2.0", "method": "getblockhash", "params": ["42"], "id": 1}),"#,
+        ));
+    write(
+        ws.path(),
+        "rpc/live.rman.yaml",
+        "version: 1\nkind: jsonrpc\nname: live\nendpoint: 'wss://node.example'\nmethod: m\n",
+    );
+    rustman(ws.path())
+        .args([
+            "export", "snippet", "--lang", "curl", "rpc/live", "--env", "prod",
+        ])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains(
+            "only calls to an http(s) endpoint",
+        ));
+}
+
 #[test]
 fn other_kinds_exit_2() {
     let ws = workspace();

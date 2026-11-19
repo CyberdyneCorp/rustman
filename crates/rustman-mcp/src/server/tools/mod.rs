@@ -9,6 +9,7 @@ mod explore;
 mod history;
 pub mod reference;
 pub(crate) mod reports;
+pub mod rpc;
 pub(crate) mod workspace;
 
 use std::sync::Arc;
@@ -186,12 +187,16 @@ pub fn catalog() -> Vec<Tool> {
     tools
 }
 
-/// Tools of optional protocol capabilities: `graphql_introspect` and
-/// `graphql_query` with `graphql-requests`, `list_webhook_captures` with
-/// `webhook-inspector`. Neither capability is part of this build yet, so
-/// none is registered.
+/// Tools of optional protocol capabilities: `rpc_call` with
+/// `jsonrpc-requests`. `graphql_introspect` and `graphql_query`
+/// (`graphql-requests`) and `list_webhook_captures` (`webhook-inspector`)
+/// are not registered by this build yet.
 fn protocol_tools() -> Vec<Tool> {
-    Vec::new()
+    vec![tool::<rpc::RpcCallArgs, rpc::RpcCallResult>(
+        rpc::NAME,
+        "Send one JSON-RPC call (endpoint, method, params) or a saved jsonrpc request through the safety policy. Only methods matching [jsonrpc] agent_read_only_methods are sent; subscriptions are refused.",
+        Effect::Sends,
+    )]
 }
 
 /// Whether `name` is a registered tool.
@@ -216,6 +221,7 @@ pub async fn call(name: &str, call: &Call) -> Result<ToolOutput, ToolError> {
         "get_report" => reports::get_report(call),
         "list_findings" => reports::list_findings(call),
         "search_history" => history::search_history(call),
+        rpc::NAME => rpc::rpc_call(call).await,
         _ => Err(ToolError::new(
             ErrorCode::NotFound,
             format!("no tool '{name}'"),
