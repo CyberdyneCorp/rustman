@@ -124,7 +124,7 @@ Under `rustman run`, receiving SHALL stop after `stream.max_messages` (default 1
 #### Scenario: Endless stream bounded
 - **GIVEN** a server-streaming method that never ends and no `stream` limits
 - **WHEN** it runs in `rustman run`
-- **THEN** collection SHALL stop at 100 messages, the call SHALL be cancelled, and the step SHALL complete
+- **THEN** collection SHALL stop at 100 messages, the call SHALL be cancelled, and the step SHALL complete; without assertions the step SHALL pass (the default `grpc_status: OK` expectation does not apply to a stream the client stopped)
 
 ### Requirement: Deadlines
 Every call SHALL carry a deadline: `deadline_ms` from the request file, else `rustman.toml [defaults] timeout_ms`, else 30000 ms, sent as `grpc-timeout`. An expired deadline SHALL produce status `DEADLINE_EXCEEDED (4)` and count as a request error in `cli-runner` exit codes.
@@ -214,3 +214,11 @@ When the build includes `agent-mcp-interface`, the tools `grpc_list` and `grpc_d
 - **GIVEN** an agent calls `grpc_call` with a target not in `[agent].allowed_hosts`
 - **WHEN** the call is evaluated
 - **THEN** it SHALL be refused with `blocked: host not allowed` and recorded in the audit log
+
+### Requirement: Agent mutation rule
+`grpc_call` SHALL treat a method as read-only only when its descriptor sets `idempotency_level = NO_SIDE_EFFECTS`. Any other method SHALL be a mutation, gated by `[agent].allow_mutations` and human confirmation like an HTTP `POST`.
+
+#### Scenario: Unmarked method under default agent settings
+- **GIVEN** default `[agent]` settings and a unary method without `idempotency_level = NO_SIDE_EFFECTS`
+- **WHEN** an agent calls it with `grpc_call`
+- **THEN** it SHALL be refused with `blocked: mutations not allowed for agents` before anything is sent

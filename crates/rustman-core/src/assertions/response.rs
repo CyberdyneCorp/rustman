@@ -17,6 +17,26 @@ pub struct ResponseView<'a> {
     pub ttfb: Duration,
     /// Total time of the exchange.
     pub total: Duration,
+    /// The outcome of a gRPC call; `None` for every other kind.
+    pub grpc: Option<GrpcView>,
+}
+
+/// What a gRPC call adds to its response: the final status and the
+/// trailers (the response headers are [`ResponseView::headers`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct GrpcView {
+    pub code: i32,
+    /// The canonical code name, such as `NOT_FOUND`.
+    pub name: String,
+    /// Trailer names and values, in the order received.
+    pub trailers: Vec<(String, String)>,
+}
+
+impl GrpcView {
+    /// `NOT_FOUND (5)`.
+    pub fn label(&self) -> String {
+        format!("{} ({})", self.name, self.code)
+    }
 }
 
 impl ResponseView<'_> {
@@ -27,6 +47,22 @@ impl ResponseView<'_> {
             .filter(|(n, _)| n.eq_ignore_ascii_case(name))
             .map(|(_, v)| v.as_str())
             .collect()
+    }
+
+    /// Every value of gRPC metadata `name` (case-insensitive): the response
+    /// headers, then the trailers. Empty for a response of another kind.
+    pub fn metadata_values(&self, name: &str) -> Vec<&str> {
+        let Some(grpc) = &self.grpc else {
+            return Vec::new();
+        };
+        let trailers = grpc
+            .trailers
+            .iter()
+            .filter(|(n, _)| n.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str());
+        let mut values = self.header_values(name);
+        values.extend(trailers);
+        values
     }
 
     /// The body as text, or `Err("body is binary")`.

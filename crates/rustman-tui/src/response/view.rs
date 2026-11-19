@@ -59,13 +59,15 @@ pub fn render(frame: &mut Frame, rect: Rect, tab: Option<&Tab>, ctx: &Ctx) {
         |tab| summary_line(tab, ctx),
     );
     frame.render_widget(Paragraph::new(summary), row(inner, 0, 1));
-    if let Some(flight) = tab.and_then(|t| t.in_flight.as_ref()) {
-        live_events(
-            frame,
-            row(inner, 1, inner.height.saturating_sub(1)),
-            flight,
-            ui,
-        );
+    if let Some(tab) = tab
+        && let Some(flight) = &tab.in_flight
+    {
+        let rect = row(inner, 1, inner.height.saturating_sub(1));
+        if tab.editor.grpc().is_some() {
+            live_timeline(frame, rect, flight, ui);
+        } else {
+            live_events(frame, rect, flight, ui);
+        }
         return;
     }
     let Some((tab, received)) = tab.and_then(|t| t.exchange.as_deref().map(|r| (t, r))) else {
@@ -102,6 +104,9 @@ pub fn content_height(rect: Rect, viewer: &Viewer) -> usize {
 pub fn summary_line(tab: &Tab, ctx: &Ctx) -> Line<'static> {
     let ui = ctx.ui;
     if let Some(flight) = &tab.in_flight {
+        if let Some(grpc) = tab.editor.grpc() {
+            return grpc_sending_line(flight, grpc.is_bidi(), ctx);
+        }
         // `Esc` unsubscribes a JSON-RPC subscription (and keeps its events).
         let keys = if tab.editor.jsonrpc().is_some() {
             "Esc unsubscribes"
@@ -141,6 +146,49 @@ fn sending_line(flight: &InFlight, keys: &str, ctx: &Ctx) -> Line<'static> {
     Line::styled(text, ctx.ui.theme.fg(Token::Info))
 }
 
+/// A gRPC call in flight: its messages so far, and for a bidi call the
+/// keys that send the Message tab and half-close.
+fn grpc_sending_line(flight: &InFlight, bidi: bool, ctx: &Ctx) -> Line<'static> {
+    let elapsed = ctx.now.saturating_duration_since(flight.started);
+    let frames = ctx.ui.glyphs.spinner;
+    let frame = usize::try_from(elapsed.as_millis() / 100).unwrap_or(0) % frames.len();
+    let keys = if bidi && flight.outbound.is_some() {
+        "Ctrl+R sends, Alt+X half-closes"
+    } else {
+        "Esc cancels"
+    };
+    let text = format!(
+        "{} {} messages {} {:.1} s  ({keys})",
+        frames[frame],
+        flight.live_count(),
+        ctx.ui.glyphs.dot,
+        elapsed.as_secs_f64()
+    );
+    Line::styled(text, ctx.ui.theme.fg(Token::Info))
+}
+
+/// The newest timeline entries of a gRPC call still running.
+fn live_timeline(frame: &mut Frame, rect: Rect, flight: &InFlight, ui: &UiOptions) {
+    let (first, events) = flight.newest_live(usize::from(rect.height));
+    let lines: Vec<Line<'static>> = events
+        .iter()
+        .enumerate()
+        .map(|(i, event)| {
+            let row = super::grpc::TimelineRow {
+                direction: event.payload["direction"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned(),
+                at_ms: event.elapsed_ms,
+                size_bytes: event.payload["size_bytes"].as_u64().unwrap_or_default(),
+                message: event.payload["message"].to_string(),
+            };
+            super::grpc::timeline_row(first + i - 1, &row, ui)
+        })
+        .collect();
+    frame.render_widget(Paragraph::new(lines), rect);
+}
+
 /// The newest events of a subscription that is still running: one line
 /// each, as many as fit.
 fn live_events(frame: &mut Frame, rect: Rect, flight: &InFlight, ui: &UiOptions) {
@@ -158,6 +206,9 @@ fn outcome_line(received: &Received, ui: &UiOptions) -> Line<'static> {
     if received.is_cancelled() {
         let text = format!("Cancelled after {:.1} s", record.duration_ms / 1000.0);
         return Line::styled(text, ui.theme.fg(Token::Warn));
+    }
+    if let Some(line) = grpc_outcome(received, ui) {
+        return line;
     }
     match &record.exchange {
         Some(exchange) => {
@@ -183,6 +234,29 @@ fn outcome_line(received: &Received, ui: &UiOptions) -> Line<'static> {
         }
         None => failure_line(record, ui),
     }
+}
+
+/// `✔ OK (0) · 12 ms · 1/1 passed` for a gRPC call that ended with a
+/// status; `None` otherwise.
+fn grpc_outcome(received: &Received, ui: &UiOptions) -> Option<Line<'static>> {
+    let status = received.grpc.as_ref()?.status.as_ref()?;
+    let (symbol, token) = if status.code == 0 {
+        (ui.glyphs.ok, Token::Ok)
+    } else {
+        (ui.glyphs.fail, Token::Error)
+    };
+    let dot = ui.glyphs.dot;
+    let mut rest = format!(" {dot} {}", ms_text(received.record.duration_ms));
+    if let Some(tally) = tally(&received.record) {
+        rest.push_str(&format!(" {dot} {tally}"));
+    }
+    Some(Line::from(vec![
+        Span::styled(
+            format!("{symbol} {}", status.label()),
+            ui.theme.fg(token).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(rest, ui.theme.fg(Token::Text)),
+    ]))
 }
 
 /// `✔ 201 Created`, coloured by status class.
@@ -277,6 +351,7 @@ fn box_line(input: &super::InputBox, ui: &UiOptions) -> Line<'static> {
     let prompt = match input.kind {
         BoxKind::Filter => "JSONPath ",
         BoxKind::Search => "/",
+        BoxKind::Timeline => "Filter ",
     };
     let mut spans = vec![
         Span::styled(prompt, ui.theme.fg(Token::Accent)),
@@ -302,7 +377,7 @@ pub fn content(
     match viewer.tab {
         ResponseTab::Body => body(received, viewer, height, ctx),
         tab => {
-            let all = tab_lines(received, tab, width, ctx.ui);
+            let all = tab_lines(received, viewer, tab, width, ctx.ui);
             window(all, viewer.scroll, height)
         }
     }
@@ -311,11 +386,18 @@ pub fn content(
 /// The lines of a line-based tab, for drawing and scrolling.
 pub fn tab_lines(
     received: &Received,
+    viewer: &Viewer,
     tab: ResponseTab,
     width: usize,
     ui: &UiOptions,
 ) -> Vec<Line<'static>> {
     match tab {
+        ResponseTab::Messages | ResponseTab::Status | ResponseTab::Timeline => {
+            match &received.grpc {
+                Some(view) => super::grpc::lines(view, tab.label(), &viewer.timeline, ui),
+                None => vec![hint("Not a gRPC exchange.", ui)],
+            }
+        }
         ResponseTab::Headers => header_lines(received, ui),
         ResponseTab::Timing => timing_lines(received, width, ui),
         ResponseTab::Assertions => assertion_lines(&received.record, ui),
@@ -429,7 +511,7 @@ fn assertion_lines(record: &RequestRecord, ui: &UiOptions) -> Vec<Line<'static>>
 /// How many lines the current line-based view has (for scrolling).
 pub fn line_count(received: &Received, viewer: &Viewer, width: usize, ui: &UiOptions) -> usize {
     if viewer.tab != ResponseTab::Body {
-        return tab_lines(received, viewer.tab, width, ui).len();
+        return tab_lines(received, viewer, viewer.tab, width, ui).len();
     }
     match &received.body {
         BodyKind::Json { pretty, .. } => pretty.len() + 1,

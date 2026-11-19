@@ -3,10 +3,10 @@ source: crates/rustman-tui/src/workbench_tests.rs
 expression: screen
 ---
 ┌ Sidebar ─────────────────┐┌ hello ─────────────────────────────────────────────────────────┐┌ Response ──────────────────────────────────────────────────────┐
-│ ▾ grpc                   ││ No editor for kind "grpc"                                      ││ No response yet · press Ctrl+Enter to send                     │
-│   GRPC   hello           ││ Raw                                                            ││                                                                │
+│ ▾ soap                   ││ No editor for kind "soap"                                      ││ No response yet · press Ctrl+Enter to send                     │
+│   SOAP   hello           ││ Raw                                                            ││                                                                │
 │ ▾ users                  ││ version: 1                                                     ││                                                                │
-│   POST   create-user     ││ kind: grpc                                                     ││                                                                │
+│   POST   create-user     ││ kind: soap                                                     ││                                                                │
 │   GET    get-user        ││ name: Hello                                                    ││                                                                │
 │                          ││ service: Greeter                                               ││                                                                │
 │                          ││ rpc: SayHello                                                  ││                                                                │

@@ -26,7 +26,7 @@ use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
 use super::graphql::{STOP_GRACE, until_cancelled};
-use super::record::exchange_record;
+use super::record::{exchange_record, redact_capture_messages};
 use super::{Runner, Sent};
 use crate::engine::{HttpEngine, SendOptions};
 use crate::exchange::Exchange;
@@ -162,13 +162,8 @@ impl Runner<'_> {
         }
         record.jsonrpc = Some(outcome.record);
         let sent = Sent {
-            record,
             exchange: outcome.exchange,
-            resolved: None,
-            discard: None,
-            redactor: Redactor::new(),
-            snapshots: Vec::new(),
-            mcp_sent: None,
+            ..Sent::from_record(record)
         };
         sent.with_resolved(outcome.request)
     }
@@ -250,11 +245,7 @@ impl Verdict {
         record.warnings.extend(warnings);
         record.assertions = self.assertions;
         record.captures = self.captures;
-        for capture in &mut record.captures {
-            if let Some(message) = &mut capture.message {
-                *message = redactor.text(message).into_owned();
-            }
-        }
+        redact_capture_messages(&mut record.captures, redactor);
     }
 }
 

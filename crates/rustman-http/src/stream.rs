@@ -74,7 +74,22 @@ impl HttpEngine {
         options: &SendOptions,
     ) -> Result<StreamedResponse, RequestError> {
         let redactor = Redactor::for_request(request);
-        self.open_unredacted(request, options, &redactor)
+        self.open_unredacted(request, options, &redactor, None)
+            .await
+            .map_err(|e| e.redacted(&redactor))
+    }
+
+    /// [`HttpEngine::open_stream`] with `body` sent as the request body in
+    /// place of the request's own, for protocols whose bodies are binary
+    /// frames built by the caller (gRPC-Web).
+    pub async fn open_stream_with_body(
+        &self,
+        request: &ResolvedRequest,
+        options: &SendOptions,
+        body: Bytes,
+    ) -> Result<StreamedResponse, RequestError> {
+        let redactor = Redactor::for_request(request);
+        self.open_unredacted(request, options, &redactor, Some(body))
             .await
             .map_err(|e| e.redacted(&redactor))
     }
@@ -84,8 +99,12 @@ impl HttpEngine {
         request: &ResolvedRequest,
         options: &SendOptions,
         redactor: &Redactor,
+        body: Option<Bytes>,
     ) -> Result<StreamedResponse, RequestError> {
-        let prepared = Self::prepare(request, None).await?;
+        let mut prepared = Self::prepare(request, None).await?;
+        if let Some(body) = body {
+            *prepared.outgoing.body_mut() = http_body_util::Full::new(body);
+        }
         let transport = self.transport(options)?;
         let mut wire = on_the_wire(&prepared.outgoing, options);
         if let Some(signer) = &prepared.signer {

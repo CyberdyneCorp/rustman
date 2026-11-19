@@ -22,6 +22,7 @@ pub fn request_to_yaml(request: &Request) -> String {
         Request::Jsonrpc(jsonrpc) => jsonrpc.source.clone(),
         Request::Mcp(mcp) if mcp.source.is_empty() => mcp_to_yaml(mcp),
         Request::Mcp(mcp) => mcp.source.clone(),
+        Request::Grpc(grpc) => grpc.source.clone(),
         Request::Opaque(opaque) => opaque.source.clone(),
     }
 }
@@ -482,6 +483,8 @@ fn assertion(a: &Assertion) -> Node {
         Assertion::Structured(j) => ("structured", json_assertion(j)),
         Assertion::OutputSchema(expected) => ("output_schema", Node::plain(expected)),
         Assertion::ToolExists(name) => ("tool_exists", Node::str(name)),
+        Assertion::GrpcStatus(e) => ("grpc_status", Node::str(e.name())),
+        Assertion::Metadata(m) => ("metadata", header_assertion(m)),
     };
     Node::Map(vec![(key.to_owned(), node)])
 }

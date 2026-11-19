@@ -81,7 +81,7 @@ pub fn print_snapshot_notes(record: &RequestRecord) {
     }
 }
 
-fn overrides(vars: &[String]) -> Result<Variables, ConfigError> {
+pub(crate) fn overrides(vars: &[String]) -> Result<Variables, ConfigError> {
     parse_overrides(vars).map_err(ConfigError::Usage)
 }
 

@@ -27,6 +27,11 @@ pub mod graphql_schema;
 #[cfg(test)]
 mod graphql_tests;
 mod graphql_view;
+pub mod grpc;
+pub mod grpc_pane;
+#[cfg(test)]
+mod grpc_tests;
+mod grpc_view;
 pub mod help;
 pub mod http_pane;
 mod http_view;

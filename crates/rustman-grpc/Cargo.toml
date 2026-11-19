@@ -1,0 +1,50 @@
+[package]
+name = "rustman-grpc"
+description = "gRPC client for Rustman: schema discovery (reflection, .proto files, descriptor sets), descriptor cache, method browser, message templates, and unary and streaming calls over HTTP/2 (h2c, TLS, mTLS) or gRPC-Web"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+rustman-core.workspace = true
+rustman-http.workspace = true
+base64.workspace = true
+bytes.workspace = true
+http.workspace = true
+hyper-util = { workspace = true, features = ["tokio"] }
+miette.workspace = true
+percent-encoding.workspace = true
+prost.workspace = true
+prost-reflect.workspace = true
+prost-types.workspace = true
+protox.workspace = true
+ring.workspace = true
+rustls.workspace = true
+rustls-pki-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["time", "net", "sync", "macros"] }
+tokio-rustls.workspace = true
+tokio-stream.workspace = true
+tokio-util.workspace = true
+tower-service.workspace = true
+tonic = { workspace = true, features = ["channel", "codegen"] }
+tonic-prost.workspace = true
+tonic-reflection.workspace = true
+
+[build-dependencies]
+prost.workspace = true
+protox.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+rustman-test-support = { workspace = true, features = ["grpc"] }
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

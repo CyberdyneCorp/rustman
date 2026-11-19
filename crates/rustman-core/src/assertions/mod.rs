@@ -10,6 +10,7 @@
 mod body;
 mod expected;
 mod graphql;
+mod grpc;
 mod header;
 mod json;
 mod jsonrpc;
@@ -30,7 +31,7 @@ use crate::vars::Resolver;
 use crate::workspace::RequestRef;
 
 pub use mcp::McpFacts;
-pub use response::ResponseView;
+pub use response::{GrpcView, ResponseView};
 pub use schema::MAX_VIOLATIONS;
 
 use expected::Interp;
@@ -57,10 +58,11 @@ pub enum Outcome {
 pub struct AssertionResult {
     /// The assertion type: `status`, `header`, `json`, `schema`, `body`,
     /// `latency`, a GraphQL check (`no_errors`, `errors_count`,
-    /// `error_message_contains`, `error_code`, `data`), `rpc_error`, or an
+    /// `error_message_contains`, `error_code`, `data`), `rpc_error`, an
     /// MCP check
     /// (`is_error`, `content_text_contains`, `structured`, `output_schema`,
-    /// `tool_exists`).
+    /// `tool_exists`), or a
+    /// gRPC check (`grpc_status`, `metadata`).
     pub kind: &'static str,
     pub outcome: Outcome,
     /// A short description of the check, such as `json $.id equals 42`.
@@ -173,6 +175,8 @@ fn evaluate_one(
         Assertion::Body(body) => body::evaluate(body, view, interp),
         Assertion::Latency(latency) => status::latency(latency, view),
         Assertion::RpcError(expected) => jsonrpc::evaluate(expected, response, interp),
+        Assertion::GrpcStatus(expected) => grpc::evaluate(*expected, view),
+        Assertion::Metadata(metadata) => header::metadata(metadata, view, interp),
         Assertion::Snapshot(snapshot) => {
             Check::new("snapshot", format!("snapshot {}", snapshot.name()))
                 .error(SNAPSHOT_NEEDS_RUNNER)

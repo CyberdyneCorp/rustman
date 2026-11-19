@@ -75,7 +75,7 @@ The sidebar shows the workspace's folders and request files in run order (the or
 | `r` | rename the selected request or folder (open tabs follow) |
 | `d` | delete the selected request or folder, after a confirmation (Cancel is preselected) |
 
-Request kinds this build does not know (for example `kind: grpc`) still load: they open read-only, showing the file as it is, with the notice `No editor for kind "grpc"`.
+Request kinds this build does not know (for example `kind: soap`) still load: they open read-only, showing the file as it is, with the notice `No editor for kind "soap"`.
 
 ### Tabs
 
@@ -121,6 +121,18 @@ A `kind: jsonrpc` request (see [JSON-RPC](jsonrpc.md#in-the-tui)) opens in its o
 - **Batch**, **Headers**, **Auth** and **Assertions** are those parts of the file as YAML, the same syntax as in the file. YAML that does not parse, or a file that no longer loads (for example a method left empty), cannot be saved or sent: the error says why.
 
 An edited request is saved with its members in schema order; an unedited one keeps its file text. `Ctrl+R` sends it; the response viewer shows `Result` (each call's result exactly as received, hex included), `Error` (code, message and `data`, and `server rejected the batch` when one error answered a whole batch) and `Events`, then the usual `Body`, `Headers`, `Timing` and `Assertions`. A subscription runs until you stop it: the viewer counts the events and lists the newest live (`⠋ Subscribed: 3 events · 2.4 s  (Esc unsubscribes)`). `Esc` sends the `unsubscribe` call and stops it, keeping what arrived (`Ended: stopped, 3 events`); a second `Esc` cancels outright. A method guard that refuses the method stops the send with its message.
+
+### The gRPC editor
+
+A `kind: grpc` request (see [gRPC](grpc.md#in-the-tui)) opens in its own editor. The first row shows `GRPC` and the target. The editor tabs are `Method`, `Message`, `Metadata` and `Assertions` (`1`–`4` with the tab bar focused).
+
+- **Method** starts with where the schema comes from: the request's `.proto` files or descriptor set, else the [descriptor cache](grpc.md#descriptor-cache), else the server by reflection (whose answer is then cached). It loads in the background when the tab opens, with the request resolved in the active environment, so errors are redacted. `Ctrl+G` asks the server again. When the server cannot be reached and the cache has the target, the cached schema stands in and the line says so: `Schema (may be stale, Ctrl+G refreshes): 5 methods from the descriptor cache, fetched …`. Below the picked method and its call type, the browser lists every method of every service with its call type; `↑`/`↓` select and `Enter` picks one.
+- **Message** is the request message as JSON, in the proto3 JSON mapping, with its request type on the first line. Picking a method puts its template in the tab (every field at its default, nested messages to depth 3, repeated fields as one-element lists, enums as their first value) unless you typed something there; a client-streaming or bidi method takes a list (`messages`), sent in order. JSON that does not parse is reported on the last line.
+- **Metadata** and **Assertions** are those parts of the file as YAML.
+
+`Ctrl+R` sends the request. While a call streams, the response pane counts the messages and lists the newest live, each with its direction (`>` sent, `<` received), time since the call started, size and JSON (`⠋ 5 messages · 2.4 s  (Ctrl+R sends, Alt+X half-closes)`). Interactive streams have no `stream` bounds: they run until the server ends them, the deadline expires, or you stop them. During a bidi call, `Ctrl+R` sends the Message tab (each entry of a list) on the open stream instead of starting a new call; a message the schema rejects is not sent and the toast says why. `Alt+X` half-closes the stream: the server may still answer, and the call ends when it does. `Esc` cancels the call outright.
+
+The response viewer shows `Messages` (each received message), `Status` (the status code, name and message, the decoded `google.rpc.Status` details such as `BadRequest` field violations, an unknown detail as its type URL and base64, then the response headers and trailers), `Timeline` and `Assertions`. With the response focused, `d` cycles the timeline between all, sent and received messages, and `f` filters it by text as you type (`Enter` keeps the filter, `Esc` clears it); the filter line shows how many entries match (`Direction: received (d) · Filter: more (f) · 1 of 5`). Every value is redacted like history: a secret sent in metadata and echoed by the server shows `«redacted:token»`.
 
 ### Variables
 
@@ -379,6 +391,7 @@ The table below is generated from the action registry; a test fails if it drifts
 | Unfold all | `json.expand_all` | `zR` (response) |  |
 | Copy value | `json.copy` | `y` (response) |  |
 | Toggle raw body | `response.raw` | `r` (response) |  |
+| Cycle gRPC timeline direction | `response.timeline_direction` | `d` (response) |  |
 | Filter body (JSONPath) | `response.filter` | `f` (response) |  |
 | Search body | `response.search` | `/` (response) |  |
 | Next match | `search.next` | `n` (response) |  |

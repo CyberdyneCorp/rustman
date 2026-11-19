@@ -6,7 +6,7 @@ The examples on this page are checked by an integration test (`crates/rustman-ht
 
 ## How assertions are evaluated
 
-`assertions` is an ordered list in a request file. Each item has one key naming its type: `status`, `header`, `json`, `schema`, `body` or `latency`, or one of the GraphQL checks (`no_errors`, `errors_count`, `error_message_contains`, `error_code`, `data`) described in [GraphQL](graphql.md#assertions-and-captures), or `rpc_error` for JSON-RPC calls, described in [JSON-RPC](jsonrpc.md#assertions-and-captures), or one of the MCP checks (`is_error`, `content_text_contains`, `structured`, `output_schema`, `tool_exists`) described in [MCP client](mcp-client.md#assertions-and-captures).
+`assertions` is an ordered list in a request file. Each item has one key naming its type: `status`, `header`, `json`, `schema`, `body` or `latency`, or one of the GraphQL checks (`no_errors`, `errors_count`, `error_message_contains`, `error_code`, `data`) described in [GraphQL](graphql.md#assertions-and-captures), or `rpc_error` for JSON-RPC calls, described in [JSON-RPC](jsonrpc.md#assertions-and-captures), or one of the MCP checks (`is_error`, `content_text_contains`, `structured`, `output_schema`, `tool_exists`) described in [MCP client](mcp-client.md#assertions-and-captures), or `grpc_status` and `metadata` for gRPC calls, described in [gRPC](grpc.md#assertions-and-captures).
 
 - Every assertion is evaluated, even after one fails, so a report shows all of them.
 - Each one ends as `pass`, `fail` (with the expected and actual values) or `error` (it could not be evaluated, for example a JSONPath on a body that is not JSON).
@@ -178,6 +178,7 @@ A secret used in an expected value is redacted from every message, like everywhe
 | `status` | none | the status code, such as `201` |
 | `body_regex` | `pattern`, optional `group` | a group of the first match in the body text: group 1 by default, or the whole match when the pattern has no groups |
 | `cookie` | `name` | the value of that cookie set by this response (`Set-Cookie`) |
+| `metadata` | `name` | gRPC only: the first value of that metadata entry among the response headers, then the trailers (see [gRPC](grpc.md#assertions-and-captures)) |
 
 Every capture also takes `required` and `persist` (both default `false`).
 

@@ -58,6 +58,8 @@ enum Command {
     Run(commands::run::RunArgs),
     /// Introspect GraphQL schemas and send GraphQL operations
     Graphql(commands::graphql::GraphqlArgs),
+    /// List and describe gRPC services, call methods and check health
+    Grpc(commands::grpc::GrpcArgs),
     /// Send JSON-RPC calls and batches, and fetch OpenRPC catalogs
     Rpc(commands::rpc::RpcArgs),
     /// List, inspect, replay and clear past exchanges (redacted)
@@ -120,6 +122,7 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
         Command::Send(args) => commands::send::run(&args),
         Command::Run(args) => commands::run::run(&args),
         Command::Graphql(args) => commands::graphql::run(&args),
+        Command::Grpc(args) => commands::grpc::run(&args),
         Command::Rpc(args) => commands::rpc::run(&args),
         Command::History(args) => commands::history::run(&args),
         Command::Mcp(args) => commands::mcp::run(&args),

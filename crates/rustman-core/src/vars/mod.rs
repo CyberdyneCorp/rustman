@@ -3,6 +3,7 @@
 
 pub mod dynamic;
 pub mod graphql;
+pub mod grpc;
 pub mod jsonrpc;
 pub mod mcp;
 pub mod placeholders;
@@ -13,6 +14,7 @@ pub mod template;
 
 pub use dynamic::Dynamic;
 pub use graphql::{ResolvedGraphql, resolve_graphql};
+pub use grpc::{GRPC_SENT_METHOD, ResolvedGrpc, ResolvedSchema, resolve_grpc};
 pub use jsonrpc::{ResolvedCall, ResolvedJsonrpc, resolve_jsonrpc};
 pub use mcp::{ResolvedMcp, resolve_mcp};
 pub use placeholders::{PlaceholderVar, resolve_placeholders};

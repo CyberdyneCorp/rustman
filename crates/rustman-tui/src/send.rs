@@ -27,6 +27,7 @@ use rustman_core::vars::Lookup;
 use rustman_core::workspace::RequestRef;
 use rustman_core::{Redactor, Workspace};
 use rustman_graphql::{GraphqlRunner, Interactive, SubscriptionEvent};
+use rustman_grpc::GrpcRunner;
 use rustman_http::Exchange;
 use rustman_http::runner::{RunContext, RunOptions, Runner, Sent};
 use rustman_jsonrpc::JsonrpcRunner;
@@ -38,11 +39,12 @@ use tokio_util::sync::CancellationToken;
 use crate::app::{Action, Effect, Overlay, State};
 use crate::dialogs::Confirm;
 use crate::response::graphql::GraphqlView;
+use crate::response::grpc::GrpcView;
 use crate::response::jsonrpc::RpcView;
 use crate::response::timing::SPARK_POINTS;
 use crate::response::{Captured, RawBody, Received, Source};
 use crate::review::Reviews;
-use crate::tabs::{LiveEvent, LiveEvents, TabId};
+use crate::tabs::{LiveEvent, LiveEvents, TabId, Typed};
 use crate::toast::Severity;
 use crate::workbench;
 
@@ -71,6 +73,8 @@ pub struct SendJob {
     pub live: LiveEvents,
     /// How snapshot assertions treat their files.
     pub snapshots: SnapshotMode,
+    /// Messages typed while a gRPC bidi call runs.
+    pub typed: Typed,
 }
 
 impl fmt::Debug for SendJob {
@@ -135,6 +139,7 @@ pub fn start_with(state: &mut State, validate: bool) -> Vec<Effect> {
         stop: flight.stop.clone(),
         live: Arc::clone(&flight.live),
         snapshots: state.snapshot_mode,
+        typed: Arc::clone(&flight.typed),
     };
     state.status.in_flight = state.tabs.in_flight();
     vec![Effect::Send(Box::new(job))]
@@ -363,6 +368,16 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         ..JsonrpcRunner::default()
     };
     let mcp = mcp_runner(place.root, job.backend);
+    let (grpc_feed, grpc_entries) = unbounded_channel();
+    let typed = typed_messages(job);
+    let grpc = GrpcRunner {
+        interactive: Some(Arc::new(rustman_grpc::Interactive::new(
+            typed,
+            Some(grpc_feed),
+        ))),
+        unbounded: true,
+        ..GrpcRunner::default()
+    };
     let options = RunOptions {
         cancel: job.cancel.clone(),
         history: place.history(),
@@ -370,6 +385,7 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         graphql: Some(&graphql),
         jsonrpc: Some(&jsonrpc),
         mcp: Some(&mcp),
+        grpc: Some(&grpc),
         snapshots: job.snapshots,
         ..RunOptions::default()
     };
@@ -388,6 +404,9 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         sent = runner.send(target, 1) => sent,
         () = collect(events, &job.live) => unreachable!("the feed outlives the send"),
         () = crate::jsonrpc::collect(rpc_events, &job.live) => {
+            unreachable!("the feed outlives the send")
+        }
+        () = crate::grpc::collect(grpc_entries, &job.live) => {
             unreachable!("the feed outlives the send")
         }
     };
@@ -413,6 +432,11 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         .jsonrpc
         .as_ref()
         .map(|record| Box::new(RpcView::new(record)));
+    received.grpc = received
+        .record
+        .grpc
+        .as_ref()
+        .map(|record| Box::new(GrpcView::new(record)));
     if !ad_hoc && let Some(store) = place.history() {
         received.history = latencies(&store, &received.record.file);
     }
@@ -432,6 +456,11 @@ fn mcp_runner(root: &Path, backend: Option<SecretBackend>) -> McpRunner {
         ..ConnectOptions::default()
     };
     McpRunner::new(false, connect)
+}
+
+/// The messages typed during the job's gRPC bidi call, if not taken yet.
+fn typed_messages(job: &SendJob) -> Option<UnboundedReceiver<serde_json::Value>> {
+    job.typed.lock().ok().and_then(|mut typed| typed.take())
 }
 
 /// The GraphQL result of a GraphQL exchange, from its redacted record and
@@ -601,6 +630,7 @@ mod tests {
             stop: CancellationToken::new(),
             live: LiveEvents::default(),
             snapshots: SnapshotMode::Record,
+            typed: Typed::default(),
         };
         let mut other = job.clone();
         assert_eq!(job, other);

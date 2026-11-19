@@ -20,7 +20,7 @@ use crate::workbench::sidebar_rows;
 const GET_USER: &str = "version: 1\nkind: http\nname: Get user\nmethod: GET\n\
     url: '{{base_url}}/users/{{id}}'\nheaders:\n- name: Authorization\n  value: Bearer {{token}}\n";
 
-/// A workspace with users/get-user, users/create-user and grpc/hello, the
+/// A workspace with users/get-user, users/create-user and soap/hello, the
 /// environment `local` (with the secret `token`), loaded into a shell.
 fn fixture(width: u16, height: u16) -> (tempfile::TempDir, State) {
     let tmp = tempfile::tempdir().unwrap();
@@ -44,8 +44,8 @@ fn fixture(width: u16, height: u16) -> (tempfile::TempDir, State) {
         "version: 1\nkind: http\nname: Create user\nmethod: POST\nurl: '{{base_url}}/users'\n",
     );
     write(
-        "grpc/hello.rman.yaml",
-        "version: 1\nkind: grpc\nname: Hello\nservice: Greeter\nrpc: SayHello\n",
+        "soap/hello.rman.yaml",
+        "version: 1\nkind: soap\nname: Hello\nservice: Greeter\nrpc: SayHello\n",
     );
     let config = tmp.path().join("config");
     fs::create_dir(&config).unwrap();
@@ -146,8 +146,8 @@ fn the_tree_shows_folders_badges_and_opens_requests() {
     let (_tmp, mut state) = fixture(160, 45);
     let screen = text(&state);
     for row in [
-        "▾ grpc",
-        "GRPC   hello",
+        "▾ soap",
+        "SOAP   hello",
         "▾ users",
         "POST   create-user",
         "GET    get-user",
@@ -166,7 +166,7 @@ fn the_tree_shows_folders_badges_and_opens_requests() {
     press(&mut state, "Enter");
     assert_eq!(
         labels(&state),
-        ["grpc", "hello", "users"],
+        ["soap", "hello", "users"],
         "Enter folds a folder"
     );
     press(&mut state, "Right");
@@ -516,10 +516,10 @@ fn an_unknown_kind_opens_read_only_with_a_notice() {
     state.shell.focus = Focus::EditorBody;
     type_text(&mut state, "zz");
     let screen = text(&state);
-    assert!(screen.contains("No editor for kind \"grpc\""), "{screen}");
+    assert!(screen.contains("No editor for kind \"soap\""), "{screen}");
     assert!(screen.contains("service: Greeter"), "{screen}");
     assert!(!state.tabs.active().unwrap().dirty, "nothing can be typed");
-    insta::assert_snapshot!("read_only_grpc", screen);
+    insta::assert_snapshot!("read_only_soap", screen);
 }
 
 // ---- 4.6 variable highlighting and the tooltip -------------------------------------

@@ -143,6 +143,7 @@ fn assess(request: Option<&HttpRequest>, body: &[u8]) -> Vec<AssertionResult> {
         binary: false,
         ttfb: Duration::from_secs_f64(TTFB_MS / 1000.0),
         total: Duration::from_secs_f64(TOTAL_MS / 1000.0),
+        grpc: None,
     };
     let ctx = Context {
         resolver: &Resolver::new(),
@@ -215,7 +216,11 @@ fn exchange(path: &Path, request: Option<&HttpRequest>, body: Vec<u8>) -> Receiv
 fn open_request(state: &State) -> Option<HttpRequest> {
     match state.tabs.active()?.editor.request().ok()? {
         Request::Http(request) => Some(*request),
-        Request::Graphql(_) | Request::Jsonrpc(_) | Request::Mcp(_) | Request::Opaque(_) => None,
+        Request::Graphql(_)
+        | Request::Jsonrpc(_)
+        | Request::Mcp(_)
+        | Request::Grpc(_)
+        | Request::Opaque(_) => None,
     }
 }
 

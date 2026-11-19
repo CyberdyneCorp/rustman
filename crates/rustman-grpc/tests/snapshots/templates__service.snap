@@ -1,0 +1,9 @@
+---
+source: crates/rustman-grpc/tests/templates.rs
+expression: "schema.describe(\"shop.v1.Catalog\").unwrap().to_string()"
+---
+service shop.v1.Catalog
+  GetProduct (unary): shop.v1.GetProductRequest -> shop.v1.Product
+  ListProducts (server streaming): shop.v1.ListProductsRequest -> shop.v1.Product
+  UploadProducts (client streaming): shop.v1.Product -> shop.v1.UploadSummary
+  Chat (bidi): shop.v1.ChatMessage -> shop.v1.ChatMessage

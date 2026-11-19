@@ -133,21 +133,21 @@ fn reserved_kinds_load_and_report_unsupported() {
 #[test]
 fn registry_accepts_new_kinds() {
     let mut registry = KindRegistry::default();
-    registry.register("grpc", rustman_core::model::kind::load_opaque);
+    registry.register("soap", rustman_core::model::kind::load_opaque);
     assert_eq!(
         registry.names(),
-        ["http", "graphql", "jsonrpc", "mcp", "grpc"]
+        ["http", "graphql", "jsonrpc", "grpc", "mcp", "soap"]
     );
-    let text = "version: 1\nkind: grpc\nname: Say hello\n";
-    assert_eq!(registry.load(Path::new("g"), text).unwrap().kind(), "grpc");
+    let text = "version: 1\nkind: soap\nname: Say hello\n";
+    assert_eq!(registry.load(Path::new("g"), text).unwrap().kind(), "soap");
 }
 
 #[test]
 fn the_opaque_fallback_loads_unregistered_kinds() {
-    let text = "version: 1\nkind: grpc\nname: Say hello\nservice: Greeter\n";
+    let text = "version: 1\nkind: soap\nname: Say hello\nservice: Greeter\n";
     let registry = KindRegistry::default().with_opaque_fallback();
     let request = registry.load(Path::new("g"), text).unwrap();
-    assert_eq!((request.kind(), request.name()), ("grpc", "Say hello"));
+    assert_eq!((request.kind(), request.name()), ("soap", "Say hello"));
     let Request::Opaque(opaque) = request else {
         panic!("expected an opaque request");
     };
@@ -186,7 +186,7 @@ fn unknown_kind_names_file_line_and_registered_kinds() {
         &err,
         2,
         7,
-        "unknown-kind.rman.yaml:2: unknown request kind 'soap' (expected one of: http, graphql, jsonrpc, mcp)",
+        "unknown-kind.rman.yaml:2: unknown request kind 'soap' (expected one of: http, graphql, jsonrpc, grpc, mcp)",
     );
 }
 
@@ -208,7 +208,7 @@ fn missing_kind_is_rejected() {
         &err,
         1,
         1,
-        "missing-kind.rman.yaml:1: missing request kind (expected one of: http, graphql, jsonrpc, mcp)",
+        "missing-kind.rman.yaml:1: missing request kind (expected one of: http, graphql, jsonrpc, grpc, mcp)",
     );
 }
 

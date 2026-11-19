@@ -84,9 +84,13 @@ fn load(
                 request: *request,
             })
         }
-        Ok(Request::Graphql(_) | Request::Jsonrpc(_) | Request::Mcp(_) | Request::Opaque(_)) => {
-            None
-        }
+        Ok(
+            Request::Graphql(_)
+            | Request::Jsonrpc(_)
+            | Request::Mcp(_)
+            | Request::Grpc(_)
+            | Request::Opaque(_),
+        ) => None,
         Err(e) => {
             warnings.push(format!("{e}; the file is left as it is"));
             None

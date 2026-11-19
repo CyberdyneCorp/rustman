@@ -14,6 +14,7 @@ rustman-http.workspace = true
 rustman-graphql.workspace = true
 rustman-jsonrpc.workspace = true
 rustman-mcp.workspace = true
+rustman-grpc.workspace = true
 rustman-import.workspace = true
 rustman-viz-protocol.workspace = true
 rustman-webhook.workspace = true
@@ -41,7 +42,8 @@ http.workspace = true
 bytes.workspace = true
 time.workspace = true
 insta.workspace = true
-rustman-test-support.workspace = true
+rustman-test-support = { workspace = true, features = ["grpc"] }
+prost-reflect.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time", "signal", "macros"] }
 portable-pty.workspace = true
 vt100.workspace = true

@@ -1,0 +1,13 @@
+---
+source: crates/rustman-grpc/tests/templates.rs
+expression: text
+---
+shop.v1.Catalog/ListProducts
+  call type: server streaming
+  request:   shop.v1.ListProductsRequest
+  response:  shop.v1.Product
+  request template:
+    {
+      "pageSize": 0,
+      "category": "CATEGORY_UNSPECIFIED"
+    }

@@ -166,9 +166,11 @@ impl RequestPane for HttpPane {
     fn open(&self, request: &Request) -> Option<Box<dyn PaneEditor>> {
         match request {
             Request::Http(http) => Some(Box::new(HttpEditor::new(http))),
-            Request::Graphql(_) | Request::Jsonrpc(_) | Request::Mcp(_) | Request::Opaque(_) => {
-                None
-            }
+            Request::Graphql(_)
+            | Request::Jsonrpc(_)
+            | Request::Mcp(_)
+            | Request::Grpc(_)
+            | Request::Opaque(_) => None,
         }
     }
 }

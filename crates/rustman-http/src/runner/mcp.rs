@@ -244,15 +244,7 @@ struct McpChecked<'c, 'r> {
 
 impl Sent {
     fn finished(record: RequestRecord) -> Self {
-        Self {
-            record,
-            exchange: None,
-            resolved: None,
-            discard: None,
-            redactor: Redactor::new(),
-            mcp_sent: None,
-            snapshots: Vec::new(),
-        }
+        Self::from_record(record)
     }
 }
 
@@ -265,6 +257,7 @@ fn view(body: Vec<u8>, elapsed: Duration) -> ResponseView<'static> {
         binary: false,
         ttfb: elapsed,
         total: elapsed,
+        grpc: None,
     }
 }
 

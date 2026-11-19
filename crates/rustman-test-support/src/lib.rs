@@ -9,6 +9,8 @@ pub mod graphql;
 pub mod graphql_http;
 pub mod graphql_sse;
 pub mod graphql_ws;
+#[cfg(feature = "grpc")]
+pub mod grpc;
 pub mod jsonrpc;
 pub mod mcp_http;
 pub mod mcp_oauth;
@@ -26,6 +28,8 @@ pub use graphql::{GraphqlServer, Introspection};
 pub use graphql_http::{GraphqlHttpServer, RecordedRequest, Reply};
 pub use graphql_sse::{GraphqlSseServer, SseEnd, SseScript};
 pub use graphql_ws::{GraphqlWsServer, WsScript, WsSession};
+#[cfg(feature = "grpc")]
+pub use grpc::{CATALOG_SERVICE, GrpcServer, Reflection, ServerTls};
 pub use jsonrpc::{JsonrpcHttpServer, JsonrpcWsServer, RpcReply, RpcWsSession, WsFrame};
 pub use mcp_http::McpHttpServer;
 pub use oauth::OAuthServer;

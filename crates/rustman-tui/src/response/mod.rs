@@ -10,6 +10,7 @@
 pub mod diff;
 pub mod find;
 pub mod graphql;
+pub mod grpc;
 pub mod html;
 pub mod json_tree;
 pub mod jsonrpc;
@@ -53,6 +54,12 @@ pub enum ResponseTab {
     Error,
     /// A failed, missing or new snapshot and its review.
     Snapshot,
+    /// gRPC: the received messages.
+    Messages,
+    /// gRPC: the status with its details, headers and trailers.
+    Status,
+    /// gRPC: one row per sent and received message of a stream.
+    Timeline,
 }
 
 impl ResponseTab {
@@ -79,6 +86,14 @@ impl ResponseTab {
         Self::Body,
         Self::Headers,
         Self::Timing,
+        Self::Assertions,
+    ];
+
+    /// The tabs of a gRPC exchange.
+    pub const GRPC: [Self; 4] = [
+        Self::Messages,
+        Self::Status,
+        Self::Timeline,
         Self::Assertions,
     ];
 
@@ -117,6 +132,9 @@ impl ResponseTab {
             Self::Result => "Result",
             Self::Error => "Error",
             Self::Snapshot => "Snapshot",
+            Self::Messages => "Messages",
+            Self::Status => "Status",
+            Self::Timeline => "Timeline",
         }
     }
 
@@ -134,6 +152,8 @@ impl ResponseTab {
 pub enum BoxKind {
     /// `f`: a JSONPath filter.
     Filter,
+    /// `f` on a gRPC exchange: the timeline's text filter.
+    Timeline,
     /// `/`: incremental search.
     Search,
 }
@@ -265,6 +285,10 @@ pub struct Viewer {
     pub jsonrpc: bool,
     /// The exchange has a snapshot to review: the Snapshot tab is shown.
     pub snapshot: bool,
+    /// The exchange is a gRPC one: its result has tabs of its own.
+    pub grpc: bool,
+    /// What the gRPC Timeline tab shows.
+    pub timeline: grpc::TimelineFilter,
 }
 
 impl Viewer {
@@ -280,9 +304,11 @@ impl Viewer {
         });
         let graphql = received.graphql.is_some();
         let jsonrpc = received.jsonrpc.is_some();
-        let tab = match (graphql, jsonrpc) {
-            (true, _) => ResponseTab::Data,
-            (_, true) => ResponseTab::Result,
+        let grpc = received.grpc.is_some();
+        let tab = match (graphql, jsonrpc, grpc) {
+            (true, _, _) => ResponseTab::Data,
+            (_, true, _) => ResponseTab::Result,
+            (_, _, true) => ResponseTab::Messages,
             _ => ResponseTab::Body,
         };
         Self {
@@ -290,6 +316,7 @@ impl Viewer {
             page,
             graphql,
             jsonrpc,
+            grpc,
             snapshot: !received.snapshots.is_empty(),
             tab,
             ..Self::default()
@@ -300,6 +327,9 @@ impl Viewer {
     pub fn tabs(&self) -> &'static [ResponseTab] {
         if self.jsonrpc {
             return &ResponseTab::JSONRPC;
+        }
+        if self.grpc {
+            return &ResponseTab::GRPC;
         }
         match (self.graphql, self.snapshot) {
             (true, false) => &ResponseTab::GRAPHQL,
@@ -426,15 +456,25 @@ impl Viewer {
         }
     }
 
-    /// `f` or `/`: open the filter or search box (on the Body tab's tree).
+    /// `f` or `/`: open the filter or search box (on the Body tab's tree);
+    /// `f` on a gRPC exchange filters its timeline.
     pub fn open_box(&mut self, kind: BoxKind) -> bool {
+        if self.grpc && kind == BoxKind::Filter {
+            self.set_tab(ResponseTab::Timeline);
+            self.input = Some(InputBox {
+                kind: BoxKind::Timeline,
+                text: self.timeline.text.clone(),
+                error: None,
+            });
+            return true;
+        }
         if self.tree.is_none() {
             return false;
         }
         self.tab = ResponseTab::Body;
         self.raw = false;
         let text = match kind {
-            BoxKind::Filter => self.filtered.as_ref().map(|f| f.expr.clone()),
+            BoxKind::Filter | BoxKind::Timeline => self.filtered.as_ref().map(|f| f.expr.clone()),
             BoxKind::Search => self.search.as_ref().map(|s| s.query.clone()),
         };
         self.input = Some(InputBox {
@@ -448,6 +488,9 @@ impl Viewer {
     /// A key for the open box; `None` when no box is open.
     pub fn box_key(&mut self, chord: Chord) -> Option<Typed> {
         let input = self.input.as_mut()?;
+        if input.kind == BoxKind::Timeline {
+            return self.timeline_key(chord);
+        }
         match chord.code {
             Code::Esc => {
                 if input.kind == BoxKind::Filter {
@@ -471,6 +514,40 @@ impl Viewer {
             }
         }
         Some(Typed::Handled)
+    }
+
+    /// A key for the timeline filter box: the rows narrow as it is typed;
+    /// `Enter` keeps the filter, `Esc` clears it.
+    fn timeline_key(&mut self, chord: Chord) -> Option<Typed> {
+        let input = self.input.as_mut()?;
+        match chord.code {
+            Code::Esc => {
+                self.timeline.text.clear();
+                self.input = None;
+            }
+            Code::Enter => self.input = None,
+            Code::Backspace => {
+                input.text.pop();
+                self.timeline.text.clone_from(&input.text);
+            }
+            _ => {
+                input.text.push(chord.typed_char()?);
+                self.timeline.text.clone_from(&input.text);
+            }
+        }
+        self.scroll = 0;
+        Some(Typed::Handled)
+    }
+
+    /// `d` on a gRPC exchange: the next timeline direction filter.
+    pub fn cycle_direction(&mut self) -> bool {
+        if !self.grpc {
+            return false;
+        }
+        self.set_tab(ResponseTab::Timeline);
+        self.timeline.direction = self.timeline.direction.next();
+        self.scroll = 0;
+        true
     }
 
     fn after_typing(&mut self) -> Typed {

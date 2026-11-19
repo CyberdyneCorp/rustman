@@ -12,6 +12,7 @@ use rustman_core::run::{
 };
 use rustman_core::{ConfigError, Workspace};
 use rustman_graphql::GraphqlRunner;
+use rustman_grpc::GrpcRunner;
 use rustman_http::runner::{BailScope, RunContext, Runner};
 use rustman_jsonrpc::JsonrpcRunner;
 use rustman_mcp::client::McpRunner;
@@ -132,6 +133,8 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
         super::mcp_client::run_connect_options(store.clone()),
     );
     options.mcp = Some(&mcp);
+    let grpc = GrpcRunner::default();
+    options.grpc = Some(&grpc);
     let cancel = options.cancel.clone();
     let ctx = RunContext {
         root: &ws.root,

@@ -114,6 +114,7 @@ fn summary(request: &RequestRef<'_>) -> RequestSummary {
         ),
         Request::Graphql(graphql) => (None, Some(graphql.endpoint.clone())),
         Request::Jsonrpc(jsonrpc) => (None, Some(jsonrpc.endpoint.clone())),
+        Request::Grpc(grpc) => (None, Some(grpc.target.clone())),
         Request::Mcp(_) | Request::Opaque(_) => (None, None),
     };
     RequestSummary {

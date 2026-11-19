@@ -16,7 +16,8 @@ pub(super) enum Miss {
 }
 
 /// The captured text: a JSON string as is, any other JSON value as compact
-/// JSON, a header's first value, the status code, a regex group or a cookie.
+/// JSON, a header's first value, the status code, a regex group, a cookie or
+/// the first value of gRPC metadata (headers, then trailers).
 pub(super) fn extract(capture: &Capture, response: &ResponseView<'_>) -> Result<String, Miss> {
     let field = |value: &Option<String>| value.clone().unwrap_or_default();
     match capture.from {
@@ -36,7 +37,19 @@ pub(super) fn extract(capture: &Capture, response: &ResponseView<'_>) -> Result<
             value.ok_or_else(|| Miss::NoMatch(format!("no match for cookie {name}")))
         }
         CaptureSource::BodyRegex => body_regex(&field(&capture.pattern), capture.group, response),
+        CaptureSource::Metadata => metadata(&field(&capture.name), response),
     }
+}
+
+fn metadata(name: &str, response: &ResponseView<'_>) -> Result<String, Miss> {
+    if response.grpc.is_none() {
+        return Err(Miss::Error("metadata: not a gRPC response".to_owned()));
+    }
+    let value = response
+        .metadata_values(name)
+        .first()
+        .map(|v| (*v).to_owned());
+    value.ok_or_else(|| Miss::NoMatch(format!("no match for metadata {name}")))
 }
 
 fn json(path: &str, response: &ResponseView<'_>) -> Result<String, Miss> {
@@ -180,6 +193,30 @@ mod tests {
         assert_eq!(
             extract(&re("nothing", None), &r),
             Err(Miss::NoMatch("no match for /nothing/".into()))
+        );
+    }
+
+    #[test]
+    fn grpc_metadata_reads_headers_then_trailers() {
+        let at = |name: &str| Capture {
+            name: Some(name.into()),
+            ..capture(CaptureSource::Metadata)
+        };
+        assert_eq!(
+            extract(&at("x-request-id"), &response("")),
+            Err(Miss::Error("metadata: not a gRPC response".into()))
+        );
+        let mut r = response("");
+        r.grpc = Some(crate::assertions::GrpcView {
+            code: 0,
+            name: "OK".into(),
+            trailers: vec![("X-Trace".into(), "t-1".into())],
+        });
+        assert_eq!(extract(&at("x-request-id"), &r), Ok("7".into()));
+        assert_eq!(extract(&at("x-trace"), &r), Ok("t-1".into()));
+        assert_eq!(
+            extract(&at("nope"), &r),
+            Err(Miss::NoMatch("no match for metadata nope".into()))
         );
     }
 }

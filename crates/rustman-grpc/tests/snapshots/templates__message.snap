@@ -1,0 +1,16 @@
+---
+source: crates/rustman-grpc/tests/templates.rs
+expression: "schema.describe(\"shop.v1.Variant\").unwrap().to_string()"
+---
+message shop.v1.Variant
+  string sku = 1;
+  shop.v1.Money price = 2;
+  template:
+    {
+      "sku": "",
+      "price": {
+        "currencyCode": "",
+        "units": "0",
+        "nanos": 0
+      }
+    }

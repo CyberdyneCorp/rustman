@@ -82,6 +82,8 @@ All the requests of a session share one rate limit and one concurrency limit, fr
 
 `rpc_call` sends JSON-RPC calls, which are all POSTs: instead of the method rule it only sends methods matching `[jsonrpc] agent_read_only_methods`, and refuses subscriptions; the allowlist and production checks apply as above. See [JSON-RPC](jsonrpc.md#agent-tool).
 
+`grpc_list`, `grpc_describe` and `grpc_call` check a gRPC target as the `http` or `https` origin it is reached over (`grpc://h:1` as `http://h:1`); `grpc://` and `grpcs://` values of the active environment count for the allowlist like `http(s)` ones. `grpc_call` calls unary and server-streaming methods only. Every gRPC call is a POST, so the method rule reads the proto instead: a method marked `option idempotency_level = NO_SIDE_EFFECTS;` is a read, and any other method is a mutation, which needs `allow_mutations` and the human's confirmation like an HTTP POST. See [gRPC](grpc.md#agent-tools).
+
 `send_request` and `run_collection` compare [snapshots](snapshots.md) in CI mode: an agent never writes or updates a snapshot file, and a missing snapshot fails the assertion.
 
 ### Human confirmation
@@ -121,10 +123,13 @@ The reference below is generated from the tool schemas that `tools/list` returns
 | `list_findings` | `exploration_id`, `severity`, `operation`, `cursor`, `limit` | yes | The findings of an exploration (default: the latest), filtered by minimum severity and operation, 50 per page. |
 | `search_history` | `url`, `method`, `status`, `since`, `until`, `cursor`, `limit` | yes | Search recorded exchanges by URL text, method, status range (500-599, 5xx, 404) and time range, newest first, 50 per page. |
 | `rpc_call` | `path`, `endpoint`, `method`, `params`, `vars`, `timeout_ms` | no | Send one JSON-RPC call (endpoint, method, params) or a saved jsonrpc request through the safety policy. Only methods matching [jsonrpc] agent_read_only_methods are sent; subscriptions are refused. |
+| `grpc_list` | `target`, `path`, `refresh`, `vars` | yes | List the services and methods (with call types) of a gRPC target or saved grpc request, by reflection or its schema, through the safety policy's allowlist. |
+| `grpc_describe` | **`symbol`**, `target`, `path`, `refresh`, `vars` | yes | Describe a gRPC service, method (with a request message template) or message of a target or saved grpc request. |
+| `grpc_call` | `path`, `target`, `method`, `message`, `metadata`, `deadline_ms`, `vars` | no | Call a unary or server-streaming gRPC method (target, method, message, metadata) or a saved grpc request through the safety policy. Returns the redacted status, metadata and messages; streams stop at 100 messages or 30 s. |
 
 <!-- tool-reference:end -->
 
-`graphql_introspect`, `graphql_query` and `list_webhook_captures` are registered only in builds with the GraphQL and webhook inspector capabilities, which this version doesn't include.
+`graphql_introspect`, `graphql_query` and `list_webhook_captures` are registered only in builds with the GraphQL and webhook inspector capabilities, which this version doesn't include. `grpc_list`, `grpc_describe` and `grpc_call` are registered when `rustman-mcp` is built with its default `grpc` feature.
 
 Notes:
 

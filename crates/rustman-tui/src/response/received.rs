@@ -124,6 +124,8 @@ pub struct Received {
     pub graphql: Option<Box<super::graphql::GraphqlView>>,
     /// The JSON-RPC result, for a JSON-RPC exchange.
     pub jsonrpc: Option<Box<super::jsonrpc::RpcView>>,
+    /// The gRPC result, for a gRPC exchange.
+    pub grpc: Option<Box<super::grpc::GrpcView>>,
     /// The failed, missing and new snapshots, for the Snapshot tab.
     pub snapshots: crate::review::Reviews,
 }
@@ -150,6 +152,7 @@ impl Received {
             history: Vec::new(),
             graphql: None,
             jsonrpc: None,
+            grpc: None,
             snapshots: crate::review::Reviews::default(),
         }
     }
@@ -168,6 +171,7 @@ impl Received {
             history: Vec::new(),
             graphql: None,
             jsonrpc: None,
+            grpc: None,
             snapshots: crate::review::Reviews::default(),
         }
     }

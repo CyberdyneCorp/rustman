@@ -156,11 +156,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         fs::write(
             tmp.path().join("g.rman.yaml"),
-            "version: 1\nkind: grpc\nname: G\n",
+            "version: 1\nkind: soap\nname: G\n",
         )
         .unwrap();
         let request = read_request(tmp.path(), Path::new("g.rman.yaml")).unwrap();
-        assert_eq!(request.kind(), "grpc");
+        assert_eq!(request.kind(), "soap");
     }
 
     #[test]

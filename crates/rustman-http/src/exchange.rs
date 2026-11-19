@@ -121,6 +121,7 @@ impl Exchange {
             binary: self.binary,
             ttfb: self.timings.ttfb,
             total: self.timings.total,
+            grpc: None,
         })
     }
 }

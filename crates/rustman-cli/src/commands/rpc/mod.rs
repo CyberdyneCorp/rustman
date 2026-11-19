@@ -10,22 +10,21 @@ mod call;
 mod discover;
 mod print;
 
-use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use clap::{Args, Subcommand};
+use rustman_core::ConfigError;
 use rustman_core::collection::RequestEntry;
 use rustman_core::model::Request;
 use rustman_core::run::{RequestRecord, RequestStatus, RpcRefusal, SkipReason};
-use rustman_core::settings::Settings;
 use rustman_core::workspace::RequestRef;
-use rustman_core::{ConfigError, Workspace};
 use rustman_http::runner::{RunContext, Runner, Sent};
 use rustman_jsonrpc::JsonrpcRunner;
 use serde_json::{Map, Value, json};
 
 use crate::commands::exec::{SendFlags, cancel_on_ctrl_c, history_store, runtime, secret_store};
-use crate::commands::{EnvSelection, current_dir, print_warnings};
+use crate::commands::session::{Kind, Session};
+use crate::commands::{EnvSelection, print_warnings};
 use crate::exit::{CONFIG, CliError, INTERRUPTED, REQUEST, SAFETY};
 
 #[derive(Debug, Args)]
@@ -88,54 +87,13 @@ struct Mode {
     duration: Option<Duration>,
 }
 
-/// The workspace (if any) and what sending needs from it.
-struct Session {
-    ws: Option<Workspace>,
-    cwd: PathBuf,
-    settings: Settings,
-}
+/// `kind: jsonrpc` requests.
+const JSONRPC: Kind = Kind {
+    name: "jsonrpc",
+    matches: |request| matches!(request, Request::Jsonrpc(_)),
+};
 
 impl Session {
-    /// The workspace, if any; outside one, only ad-hoc calls can be sent.
-    fn open(selection: &EnvSelection, ad_hoc: bool) -> Result<Self, ConfigError> {
-        let cwd = current_dir()?;
-        let explicit = selection.workspace.is_some() || selection.env.is_some();
-        let ws = match selection.workspace() {
-            Ok(ws) => Some(ws),
-            Err(ConfigError::NoWorkspace) if !explicit && ad_hoc => None,
-            Err(e) => return Err(e),
-        };
-        let settings = ws
-            .as_ref()
-            .map_or_else(Settings::ad_hoc, |w| w.settings.clone());
-        Ok(Self { ws, cwd, settings })
-    }
-
-    fn root(&self) -> &Path {
-        self.ws.as_ref().map_or(self.cwd.as_path(), |w| &w.root)
-    }
-
-    /// The jsonrpc request `target` (a file, id or name) of the workspace.
-    fn find(&self, target: &str) -> Result<RequestRef<'_>, ConfigError> {
-        let ws = self.ws.as_ref().ok_or(ConfigError::NoWorkspace)?;
-        let found = ws.find_request(target, &self.cwd)?;
-        if !matches!(found.request(), Request::Jsonrpc(_)) {
-            let message = format!("request '{}' is not a jsonrpc request", found.entry.id());
-            return Err(ConfigError::Usage(message));
-        }
-        Ok(found)
-    }
-
-    /// `entry` as a request of this session.
-    fn ad_hoc<'s>(&'s self, entry: &'s RequestEntry) -> RequestRef<'s> {
-        RequestRef {
-            root: self.root(),
-            http: &self.settings.http,
-            entry,
-            ancestors: Vec::new(),
-        }
-    }
-
     /// Send every request of `targets` in one run (shared captures and
     /// WebSocket connections), in order.
     fn send(
