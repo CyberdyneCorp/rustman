@@ -1,0 +1,126 @@
+---
+source: crates/rustman-report/tests/contract.rs
+expression: rendered(format)
+---
+{
+  "schema": "rustman.report/v1",
+  "kind": "contract",
+  "rustman_version": "0.1.0",
+  "mode": "diff",
+  "sources": [
+    {
+      "role": "old",
+      "name": "origin/main:specs/v2.yaml"
+    },
+    {
+      "role": "new",
+      "name": "specs/v2.yaml"
+    }
+  ],
+  "catalog_version": 1,
+  "summary": {
+    "counts": [
+      {
+        "status": "breaking",
+        "count": 2
+      },
+      {
+        "status": "non-breaking",
+        "count": 1
+      },
+      {
+        "status": "unknown",
+        "count": 1
+      }
+    ],
+    "allowed": 1,
+    "failing": 1,
+    "passed": false
+  },
+  "items": [
+    {
+      "rule": "operation-added",
+      "description": "The operation-added rule.",
+      "status": "non-breaking",
+      "failing": false,
+      "subject": "GET /health",
+      "message": "operation added",
+      "locations": [
+        {
+          "role": "new",
+          "document": "specs/v2.yaml",
+          "pointer": "/paths/~1health/get"
+        },
+        {
+          "role": "old",
+          "document": "origin/main:specs/v2.yaml",
+          "pointer": "/paths"
+        }
+      ]
+    },
+    {
+      "rule": "operation-removed",
+      "description": "The operation-removed rule.",
+      "status": "breaking",
+      "allowed": "Deprecated since 2026-06, no traffic",
+      "failing": false,
+      "subject": "DELETE /users/{id}",
+      "message": "operation removed",
+      "locations": [
+        {
+          "role": "new",
+          "document": "specs/v2.yaml",
+          "pointer": "/paths/~1users~1{id}"
+        },
+        {
+          "role": "old",
+          "document": "origin/main:specs/v2.yaml",
+          "pointer": "/paths/~1users~1{id}/delete"
+        }
+      ]
+    },
+    {
+      "rule": "response-field-removed",
+      "description": "The response-field-removed rule.",
+      "status": "breaking",
+      "failing": true,
+      "subject": "GET /users/{id}",
+      "message": "response 200 (application/json) $.email: removed | <b>",
+      "locations": [
+        {
+          "role": "new",
+          "document": "specs/v2.yaml",
+          "pointer": "/components/schemas/User/properties"
+        },
+        {
+          "role": "old",
+          "document": "origin/main:specs/v2.yaml",
+          "pointer": "/components/schemas/User/properties/email"
+        }
+      ]
+    },
+    {
+      "rule": "composition-changed",
+      "description": "The composition-changed rule.",
+      "status": "unknown",
+      "failing": false,
+      "subject": "GET /pets",
+      "message": "response 200 (application/json) $: oneOf changed",
+      "locations": [
+        {
+          "role": "new",
+          "document": "specs/v2.yaml",
+          "pointer": "/components/schemas/Pet"
+        },
+        {
+          "role": "old",
+          "document": "origin/main:specs/v2.yaml",
+          "pointer": "/components/schemas/Pet"
+        }
+      ]
+    }
+  ],
+  "warnings": [
+    "contracts/allowlist.yaml:7: unused allowlist entry (operation-removed GET /old)"
+  ]
+}

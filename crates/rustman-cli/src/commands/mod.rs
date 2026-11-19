@@ -2,6 +2,7 @@
 
 pub mod auth;
 pub mod completions;
+pub mod contract;
 pub mod cookies;
 pub mod env;
 pub mod exec;

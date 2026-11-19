@@ -141,13 +141,8 @@ fn redactor(ws: &Workspace, env: Option<&Environment>) -> Result<Redactor, Confi
     let Some(env) = env else {
         return Ok(Redactor::new());
     };
-    let backend = SecretBackend::from_env_value(std::env::var(BACKEND_VAR).ok().as_deref())?;
-    let store = SecretStore::open(&ws.root, backend);
-    let redactor = env
-        .secrets
-        .iter()
-        .filter_map(|name| store.get(&env.name, name).ok().flatten())
-        .fold(Redactor::new(), |r, secret| r.with(&secret));
+    let store = super::exec::secret_store(&ws.root)?;
+    let redactor = super::exec::secret_redactor(&store, env);
     print_warnings(&store.take_warnings());
     Ok(redactor)
 }

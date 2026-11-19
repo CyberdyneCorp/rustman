@@ -1,0 +1,18 @@
+# X-Rate-Limit disappears from the 200 response
+expect: [response-header-removed]
+old:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            headers: {X-Rate-Limit: {schema: {type: integer}}}
+new:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            headers: {}

@@ -1,0 +1,50 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Compare two OpenAPI documents and classify every difference as breaking, non-breaking or unknown; exits 1 on a breaking difference
+
+Usage: rustman contract diff [OPTIONS] <OLD> [NEW]
+
+Arguments:
+  <OLD>
+          The old document (a file or an http(s) URL); with --base, the document's path, read at the ref and from the working tree
+
+  [NEW]
+          The new document (a file or an http(s) URL)
+
+Options:
+      --base <REF>
+          Read the old document (and the files its $refs name) from this git ref, as in origin/main
+
+      --fail-on-unknown
+          Exit 1 on unknown differences too
+
+      --fail-on <CLASSIFICATION>
+          The least severe classification that exits 1: breaking (default), unknown, or non-breaking for any difference (frozen APIs)
+          
+          [default: breaking]
+          [possible values: breaking, unknown, non-breaking]
+
+      --allowlist <FILE>
+          The allowlist of accepted differences (default: contracts/allowlist.yaml in the workspace, or the current folder)
+
+      --report <FORMAT[=PATH]>
+          Also write the report as json, junit, markdown, html or sarif, to a file or stdout, as in markdown=out/contract.md (repeatable)
+
+      --env <NAME>
+          Environment whose secret values are redacted from the output (default: RUSTMAN_ENV, then default_environment)
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards; a diff needs none)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

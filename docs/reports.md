@@ -10,8 +10,11 @@ A report has a top-level `schema` (`rustman.report/v1`) and a `kind`:
 |------|------------|---------|
 | `run` | `rustman run --reporter json`, `rustman send` | Every request with its file, redacted exchange, timings, assertion results and captures; see [the CLI reference](cli.md#rustman-run) |
 | `exploration` | `rustman explore run` (always, as `.rustman/explorations/<id>/report.json`) | The seed, safety settings, probe totals by outcome, the coverage matrix, the findings with evidence and reproduction, and the resources left behind; see [Exploration](exploration.md#findings-and-the-report) |
+| `contract` | `rustman contract diff --report json` | What a contract command checked, as one list of items, with a `mode` (`diff`, `pact-verify` or `conformance`); see [Contract reports](#contract-reports) |
 
-`rustman report schema` prints the JSON Schema (draft 2020-12) that both kinds validate against. The same file is published at [`schemas/report.schema.json`](schemas/report.schema.json). Its `kind: run` part is the contract the first reporters published, kept as is; its `kind: exploration` part is generated from the Rust types with `schemars`, and a test fails if the published file drifts from them.
+`rustman report schema` prints the JSON Schema (draft 2020-12) that every kind validates against. The same file is published at [`schemas/report.schema.json`](schemas/report.schema.json). Its `kind: run` part is the contract the first reporters published, kept as is; its `kind: exploration` and `kind: contract` parts are generated from the Rust types with `schemars`, and a test fails if the published file drifts from them.
+
+A reader built before a kind existed refuses it instead of misreading it: `rustman report render` exits 2 with `unknown report kind '<kind>'`.
 
 ```sh
 rustman report schema > report.schema.json
@@ -121,6 +124,24 @@ What comes from the target or the document is escaped: messages (which can quote
 ### HTML
 
 One self-contained file: its stylesheet and script are inlined, and it references nothing on the network (no `http://` or `https://` script, style, font or image). Findings are expandable `<details>` with the evidence and reproduction, which works with JavaScript disabled; the severity and operation filters are the only part that needs it, and they stay hidden without it. The page follows the system's light or dark theme.
+
+### Contract reports
+
+A `kind: contract` report has a `mode`: `diff` for [`rustman contract diff`](contract.md#reports), `pact-verify` for [`rustman contract pact verify`](contract.md#verifying-a-provider) and `conformance` for [`rustman contract verify`](contract.md#passive-conformance). It has its `sources` (for a diff, `old` and `new`, where a `--base` document is named `<ref>:<path>`; for a Pact verification, each `pact` file; for conformance, the `spec` and the `exchanges` source), the rule `catalog_version` (diffs only), a `summary` (the count per status in the mode's order, how many items an allowlist accepted, how many fail the command, and `passed`), the `items` and the `warnings` (expired and unused allowlist entries, failed provider-state teardowns). Each item has the `rule` id and its `description`, a `status`, the allowlist `allowed` justification when one accepted it, `failing`, the `subject`, a `message`, and `locations`: the primary one first, each with a JSON `pointer`.
+
+| Mode | Statuses, in order | One item per | Subject | Primary location |
+|------|--------------------|--------------|---------|------------------|
+| `diff` | `breaking`, `non-breaking`, `unknown` | difference (rule id from the [catalog](contract-rules.md)) | the operation | the new document, at the changed element |
+| `pact-verify` | `passed`, `failed`, `blocked` | interaction (rule `pact-interaction`) | the interaction's description and consumer | the Pact file, at `/interactions/<n>` |
+| `conformance` | `violation`, `undocumented`, `conforms` | exchange (rules `conformance-violation`, `undocumented-exchange`, `conforms`) | the matched operation, or the exchange's method and path | the document, at the operation |
+
+A conformance report also has a `coverage`: how many documented operations the exchanges `observed` out of the `total`, and every operation with its number of `exchanges` and of exchanges with `violations`.
+
+- **Markdown** and **HTML**: the sources and catalog version, a summary line with the counts per status (`2 breaking, 1 non-breaking, 0 unknown, 1 allowed`), then one table per status in that order, breaking first and failing items first within a table, each row with the rule id, operation, message and pointer; then the allowlist justifications, the coverage of a conformance check (`1/2 operations observed` after the summary, and a table of operations) and the warnings.
+- **JUnit XML**: one `<testsuite>` named after the mode (`contract diff`, `contract pact-verify`, `contract conformance`) and one `<testcase>` per item; an item that fails the command is a `<failure>` whose `type` is the rule id.
+- **SARIF**: one `reportingDescriptor` per rule id and one result per item, located in the primary document (`artifactLocation`) at the JSON pointer of the changed element (`logicalLocations[].fullyQualifiedName`). An item that fails the command is at level `error`, an unaccepted `unknown` one at `warning`, the others at `note`; an allowlisted item carries its justification as an `external` suppression.
+
+`report diff` does not compare contract reports (exit 2).
 
 ## Comparing reports
 

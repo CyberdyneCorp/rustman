@@ -15,7 +15,7 @@ use rustman_core::secrets::BACKEND_VAR;
 use rustman_core::settings::{HistorySettings, Settings};
 use rustman_core::snapshot::{CI_ENV, SnapshotMode};
 use rustman_core::vars::parse_overrides;
-use rustman_core::{ConfigError, SecretBackend, SecretStore};
+use rustman_core::{ConfigError, Environment, Redactor, SecretBackend, SecretStore};
 use rustman_http::RequestError;
 use rustman_http::runner::{LoginMode, RunOptions};
 use tokio_util::sync::CancellationToken;
@@ -124,6 +124,15 @@ pub fn secret_store(root: &Path) -> Result<SecretStore, ConfigError> {
     let backend = SecretBackend::from_env_value(std::env::var(BACKEND_VAR).ok().as_deref())
         .map_err(ConfigError::from)?;
     Ok(SecretStore::open(root, backend))
+}
+
+/// A redactor for the secret values of `env` held in `store`. The store's
+/// warnings are left for the caller to print once.
+pub fn secret_redactor(store: &SecretStore, env: &Environment) -> Redactor {
+    env.secrets
+        .iter()
+        .filter_map(|name| store.get(&env.name, name).ok().flatten())
+        .fold(Redactor::new(), |r, secret| r.with(&secret))
 }
 
 /// A runtime on the current thread: requests of a run interleave on it.

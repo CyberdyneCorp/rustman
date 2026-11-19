@@ -3,7 +3,11 @@
 //! `critical`/`high` to `error`, `medium` to `warning` and `low`/`info` to
 //! `note`, located in the OpenAPI document at the operation's JSON pointer.
 //! A run's failed and errored requests are results located in their
-//! request files.
+//! request files. A contract check's items are results too, one
+//! `reportingDescriptor` per rule id: an item that fails the command is an
+//! `error`, located in its primary document (for a diff, the new one) at
+//! the JSON pointer of the changed element; an allowlisted one carries the
+//! justification as an external suppression.
 
 use std::collections::BTreeMap;
 
@@ -11,6 +15,7 @@ use serde::Serialize;
 
 use super::RenderOptions;
 use super::view::{line_of, operations};
+use crate::contract::{ContractItem, ContractReport};
 use crate::exploration::{ExplorationReport, ReportFinding, Severity};
 use crate::run::{RunReport, RunRequest, Status};
 
@@ -83,8 +88,8 @@ struct Configuration {
 #[derive(Serialize)]
 struct DescriptorProperties {
     tags: Vec<&'static str>,
-    #[serde(rename = "security-severity")]
-    security_severity: &'static str,
+    #[serde(rename = "security-severity", skip_serializing_if = "Option::is_none")]
+    security_severity: Option<&'static str>,
 }
 
 #[derive(Serialize)]
@@ -96,7 +101,15 @@ struct SarifResult {
     message: Text,
     locations: Vec<Location>,
     partial_fingerprints: BTreeMap<&'static str, String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    suppressions: Vec<Suppression>,
     properties: BTreeMap<&'static str, String>,
+}
+
+#[derive(Serialize)]
+struct Suppression {
+    kind: &'static str,
+    justification: String,
 }
 
 #[derive(Serialize)]
@@ -205,7 +218,7 @@ fn rule_index(rules: &mut Vec<Descriptor>, finding: &ReportFinding) -> usize {
         },
         properties: DescriptorProperties {
             tags: vec!["security", "api"],
-            security_severity: score(finding.severity),
+            security_severity: Some(score(finding.severity)),
         },
     });
     rules.len() - 1
@@ -239,6 +252,7 @@ fn finding_result(
             }],
         }],
         partial_fingerprints: BTreeMap::from([("rustmanFinding/v1", fingerprint)]),
+        suppressions: Vec::new(),
         properties: BTreeMap::from([
             ("finding", finding.id.clone()),
             ("severity", finding.severity.to_string()),
@@ -286,7 +300,7 @@ fn run_rule(id: &str, description: &str, severity: Severity) -> Descriptor {
         },
         properties: DescriptorProperties {
             tags: vec!["api"],
-            security_severity: score(severity),
+            security_severity: Some(score(severity)),
         },
     }
 }
@@ -315,8 +329,114 @@ fn request_result(request: &RunRequest) -> Option<SarifResult> {
             "rustmanRequest/v1",
             format!("{rule_id}|{}", request.id),
         )]),
+        suppressions: Vec::new(),
         properties: BTreeMap::from([("iteration", request.iteration.to_string())]),
     })
+}
+
+/// A contract check as a SARIF log: one result per item.
+pub fn contract_sarif(report: &ContractReport, options: &RenderOptions) -> String {
+    let mut rules: Vec<Descriptor> = Vec::new();
+    let results = report
+        .items
+        .iter()
+        .map(|item| {
+            let index = contract_rule_index(&mut rules, item);
+            contract_result(item, index, options)
+        })
+        .collect();
+    to_text(&Log {
+        schema: SCHEMA,
+        version: VERSION,
+        runs: vec![Run {
+            tool: tool(rules),
+            results,
+            automation_details: Some(Automation {
+                id: format!("rustman/contract/{}", report.mode),
+            }),
+        }],
+    })
+}
+
+/// `error` for an item that fails the command, `warning` for an
+/// unallowed `unknown`, `note` otherwise.
+fn contract_level(item: &ContractItem) -> &'static str {
+    if item.failing {
+        "error"
+    } else if item.allowed.is_none() && item.status == "unknown" {
+        "warning"
+    } else {
+        "note"
+    }
+}
+
+fn contract_rule_index(rules: &mut Vec<Descriptor>, item: &ContractItem) -> usize {
+    if let Some(i) = rules.iter().position(|r| r.id == item.rule) {
+        return i;
+    }
+    let level = match item.status.as_str() {
+        "breaking" | "failed" | "violation" | "blocked" => "error",
+        "unknown" | "undocumented" => "warning",
+        _ => "note",
+    };
+    rules.push(Descriptor {
+        id: item.rule.clone(),
+        short_description: text(item.rule.clone()),
+        full_description: text(item.description.clone()),
+        help: text(item.description.clone()),
+        default_configuration: Configuration { level },
+        properties: DescriptorProperties {
+            tags: vec!["api", "contract"],
+            security_severity: None,
+        },
+    });
+    rules.len() - 1
+}
+
+fn contract_result(item: &ContractItem, rule_index: usize, options: &RenderOptions) -> SarifResult {
+    let primary = item.locations.first();
+    let pointer = primary.map_or_else(String::new, |l| l.pointer.clone());
+    let locations = primary
+        .map(|l| Location {
+            physical_location: Physical {
+                artifact_location: ArtifactLocation {
+                    uri: options.document_uri(&l.document),
+                },
+                region: None,
+            },
+            logical_locations: vec![Logical {
+                name: item.subject.clone(),
+                fully_qualified_name: l.pointer.clone(),
+                kind: "object",
+            }],
+        })
+        .into_iter()
+        .collect();
+    let suppressions = item
+        .allowed
+        .iter()
+        .map(|why| Suppression {
+            kind: "external",
+            justification: why.clone(),
+        })
+        .collect();
+    SarifResult {
+        rule_id: item.rule.clone(),
+        rule_index,
+        level: contract_level(item),
+        message: text(format!("{}: {}", item.subject, item.message)),
+        locations,
+        partial_fingerprints: BTreeMap::from([(
+            "rustmanContract/v1",
+            format!("{}|{}|{pointer}", item.rule, item.subject),
+        )]),
+        suppressions,
+        properties: BTreeMap::from([
+            ("status", item.status.clone()),
+            ("operation", item.subject.clone()),
+            ("pointer", pointer),
+        ]),
+    }
 }
 
 fn tool(rules: Vec<Descriptor>) -> Tool {

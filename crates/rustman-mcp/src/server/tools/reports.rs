@@ -137,7 +137,7 @@ pub fn exploration_report(ctx: &AgentContext, id: &str) -> Result<ExplorationRep
     })?;
     match Report::parse(&text) {
         Ok(Report::Exploration(report)) => Ok(*report),
-        Ok(Report::Run(_)) => Err(ToolError::internal(format!(
+        Ok(Report::Run(_) | Report::Contract(_)) => Err(ToolError::internal(format!(
             "{} is not an exploration report",
             path.display()
         ))),
@@ -196,6 +196,7 @@ pub fn get_report(call: &Call) -> Result<ToolOutput, ToolError> {
         let summary = match &report {
             Report::Run(r) => run_summary(r),
             Report::Exploration(r) => exploration_summary(r),
+            Report::Contract(r) => json!({ "mode": r.mode, "summary": r.summary }),
         };
         (Some(summary), None)
     } else {

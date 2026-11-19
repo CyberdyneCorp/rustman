@@ -10,10 +10,12 @@ use minijinja::{AutoEscape, Environment, Value};
 use serde::Serialize;
 
 use super::RenderOptions;
+use crate::contract::{ContractItem, ContractMode, ContractReport};
 use crate::exploration::{Evidence, ExplorationReport, ReportFinding, Severity};
 use crate::report::Report;
 use crate::run::{RunReport, RunRequest, Status};
 
+const CONTRACT_MD: &str = include_str!("templates/contract.md.jinja");
 const EXPLORATION_MD: &str = include_str!("templates/exploration.md.jinja");
 const RUN_MD: &str = include_str!("templates/run.md.jinja");
 const HTML: &str = include_str!("templates/report.html.jinja");
@@ -25,6 +27,7 @@ pub fn markdown(report: &Report, options: &RenderOptions) -> String {
     let (name, source) = match report {
         Report::Run(_) => ("run.md", RUN_MD),
         Report::Exploration(_) => ("exploration.md", EXPLORATION_MD),
+        Report::Contract(_) => ("contract.md", CONTRACT_MD),
     };
     finish(tidy(&render(name, source, context(report, options))))
 }
@@ -136,6 +139,72 @@ fn context(report: &Report, options: &RenderOptions) -> Value {
     match report {
         Report::Run(r) => Value::from(Serde(run_view(r))),
         Report::Exploration(r) => Value::from(Serde(exploration_view(r, options))),
+        Report::Contract(r) => Value::from(Serde(contract_view(r))),
+    }
+}
+
+#[derive(Serialize)]
+struct ContractView<'a> {
+    kind: &'static str,
+    title: String,
+    r: &'a ContractReport,
+    summary: String,
+    /// What an item is checked against: an operation, an interaction or an
+    /// exchange.
+    subject: &'static str,
+    groups: Vec<ContractGroup<'a>>,
+    allowed: Vec<ContractItemView<'a>>,
+    css: &'static str,
+    js: &'static str,
+}
+
+#[derive(Serialize)]
+struct ContractGroup<'a> {
+    status: &'a str,
+    items: Vec<ContractItemView<'a>>,
+}
+
+#[derive(Serialize)]
+struct ContractItemView<'a> {
+    #[serde(flatten)]
+    i: &'a ContractItem,
+    /// The primary location's pointer.
+    pointer: &'a str,
+}
+
+fn item_view(i: &ContractItem) -> ContractItemView<'_> {
+    let pointer = i.locations.first().map_or("", |l| l.pointer.as_str());
+    ContractItemView { i, pointer }
+}
+
+fn contract_view(r: &ContractReport) -> ContractView<'_> {
+    let (title, subject) = match r.mode {
+        ContractMode::Diff => ("Contract diff", "Operation"),
+        ContractMode::PactVerify => ("Pact verification", "Interaction"),
+        ContractMode::Conformance => ("Contract conformance", "Exchange"),
+    };
+    ContractView {
+        kind: "contract",
+        title: title.to_owned(),
+        r,
+        summary: r.summary.line(),
+        subject,
+        groups: r
+            .groups()
+            .into_iter()
+            .map(|(status, items)| ContractGroup {
+                status,
+                items: items.into_iter().map(item_view).collect(),
+            })
+            .collect(),
+        allowed: r
+            .items
+            .iter()
+            .filter(|i| i.allowed.is_some())
+            .map(item_view)
+            .collect(),
+        css: CSS,
+        js: JS,
     }
 }
 

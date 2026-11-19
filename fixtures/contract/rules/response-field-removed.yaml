@@ -1,0 +1,22 @@
+# email disappears from the 200 body
+expect: [response-field-removed]
+old:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            content:
+              application/json:
+                schema: {type: object, properties: {id: {type: integer}, email: {type: string}}}
+new:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            content:
+              application/json:
+                schema: {type: object, properties: {id: {type: integer}}}

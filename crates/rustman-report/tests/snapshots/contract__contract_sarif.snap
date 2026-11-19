@@ -1,0 +1,244 @@
+---
+source: crates/rustman-report/tests/contract.rs
+expression: rendered(format)
+---
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "rustman",
+          "version": "0.1.0",
+          "informationUri": "https://github.com/CyberdyneCorp/rustman",
+          "rules": [
+            {
+              "id": "operation-added",
+              "shortDescription": {
+                "text": "operation-added"
+              },
+              "fullDescription": {
+                "text": "The operation-added rule."
+              },
+              "help": {
+                "text": "The operation-added rule."
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "properties": {
+                "tags": [
+                  "api",
+                  "contract"
+                ]
+              }
+            },
+            {
+              "id": "operation-removed",
+              "shortDescription": {
+                "text": "operation-removed"
+              },
+              "fullDescription": {
+                "text": "The operation-removed rule."
+              },
+              "help": {
+                "text": "The operation-removed rule."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "api",
+                  "contract"
+                ]
+              }
+            },
+            {
+              "id": "response-field-removed",
+              "shortDescription": {
+                "text": "response-field-removed"
+              },
+              "fullDescription": {
+                "text": "The response-field-removed rule."
+              },
+              "help": {
+                "text": "The response-field-removed rule."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "api",
+                  "contract"
+                ]
+              }
+            },
+            {
+              "id": "composition-changed",
+              "shortDescription": {
+                "text": "composition-changed"
+              },
+              "fullDescription": {
+                "text": "The composition-changed rule."
+              },
+              "help": {
+                "text": "The composition-changed rule."
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "api",
+                  "contract"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "operation-added",
+          "ruleIndex": 0,
+          "level": "note",
+          "message": {
+            "text": "GET /health: operation added"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "specs/v2.yaml"
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "GET /health",
+                  "fullyQualifiedName": "/paths/~1health/get",
+                  "kind": "object"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "rustmanContract/v1": "operation-added|GET /health|/paths/~1health/get"
+          },
+          "properties": {
+            "operation": "GET /health",
+            "pointer": "/paths/~1health/get",
+            "status": "non-breaking"
+          }
+        },
+        {
+          "ruleId": "operation-removed",
+          "ruleIndex": 1,
+          "level": "note",
+          "message": {
+            "text": "DELETE /users/{id}: operation removed"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "specs/v2.yaml"
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "DELETE /users/{id}",
+                  "fullyQualifiedName": "/paths/~1users~1{id}",
+                  "kind": "object"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "rustmanContract/v1": "operation-removed|DELETE /users/{id}|/paths/~1users~1{id}"
+          },
+          "suppressions": [
+            {
+              "kind": "external",
+              "justification": "Deprecated since 2026-06, no traffic"
+            }
+          ],
+          "properties": {
+            "operation": "DELETE /users/{id}",
+            "pointer": "/paths/~1users~1{id}",
+            "status": "breaking"
+          }
+        },
+        {
+          "ruleId": "response-field-removed",
+          "ruleIndex": 2,
+          "level": "error",
+          "message": {
+            "text": "GET /users/{id}: response 200 (application/json) $.email: removed | <b>"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "specs/v2.yaml"
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "GET /users/{id}",
+                  "fullyQualifiedName": "/components/schemas/User/properties",
+                  "kind": "object"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "rustmanContract/v1": "response-field-removed|GET /users/{id}|/components/schemas/User/properties"
+          },
+          "properties": {
+            "operation": "GET /users/{id}",
+            "pointer": "/components/schemas/User/properties",
+            "status": "breaking"
+          }
+        },
+        {
+          "ruleId": "composition-changed",
+          "ruleIndex": 3,
+          "level": "warning",
+          "message": {
+            "text": "GET /pets: response 200 (application/json) $: oneOf changed"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "specs/v2.yaml"
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "GET /pets",
+                  "fullyQualifiedName": "/components/schemas/Pet",
+                  "kind": "object"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "rustmanContract/v1": "composition-changed|GET /pets|/components/schemas/Pet"
+          },
+          "properties": {
+            "operation": "GET /pets",
+            "pointer": "/components/schemas/Pet",
+            "status": "unknown"
+          }
+        }
+      ],
+      "automationDetails": {
+        "id": "rustman/contract/diff"
+      }
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+# $.id goes from integer to string
+expect: [response-field-type-changed]
+old:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            content:
+              application/json:
+                schema: {type: object, properties: {id: {type: integer}}}
+new:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            content:
+              application/json:
+                schema: {type: object, properties: {id: {type: string}}}

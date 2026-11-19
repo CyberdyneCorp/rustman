@@ -1,0 +1,20 @@
+# $.amount multipleOf 3 -> 1e300: too large to compare exactly
+expect: [constraint-changed]
+old:
+  paths:
+    /payments:
+      post:
+        requestBody:
+          content:
+            application/json:
+              schema: {type: object, properties: {amount: {type: number, multipleOf: 3}}}
+        responses: {'200': {description: ok}}
+new:
+  paths:
+    /payments:
+      post:
+        requestBody:
+          content:
+            application/json:
+              schema: {type: object, properties: {amount: {type: number, multipleOf: 1e300}}}
+        responses: {'200': {description: ok}}

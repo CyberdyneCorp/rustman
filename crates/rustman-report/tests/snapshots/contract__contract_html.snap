@@ -1,0 +1,84 @@
+---
+source: crates/rustman-report/tests/contract.rs
+expression: rendered(format)
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Contract diff</title>
+<style>:root { --fg: #1f2328; --muted: #59636e; --bg: #ffffff; --panel: #f6f8fa; --line: #d1d9e0;
+  --critical: #a40e26; --high: #d1242f; --medium: #9a6700; --low: #0969da; --info: #59636e; --ok: #1a7f37; }
+@media (prefers-color-scheme: dark) {
+  :root { --fg: #e6edf3; --muted: #9198a1; --bg: #0d1117; --panel: #151b23; --line: #3d444d;
+    --critical: #ff8182; --high: #f85149; --medium: #d29922; --low: #4493f8; --info: #9198a1; --ok: #3fb950; }
+}
+* { box-sizing: border-box; }
+body { margin: 0 auto; max-width: 72rem; padding: 1.5rem 1rem 3rem; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--fg); background: var(--bg); }
+h1 { font-size: 1.5rem; margin: 0 0 1rem; }
+h2 { font-size: 1.15rem; margin: 2rem 0 0.75rem; border-bottom: 1px solid var(--line); padding-bottom: 0.25rem; }
+code, pre { font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+pre { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 0.75rem; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+table { border-collapse: collapse; width: 100%; margin: 0.5rem 0; }
+th, td { text-align: left; padding: 0.35rem 0.6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.meta { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem; margin: 0; }
+.meta dt { color: var(--muted); }
+.meta dd { margin: 0; word-break: break-all; }
+.sev { display: inline-block; min-width: 4.5rem; font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.03em; }
+.sev-critical { color: var(--critical); } .sev-high { color: var(--high); } .sev-medium { color: var(--medium); }
+.sev-low { color: var(--low); } .sev-info { color: var(--info); }
+.state-observed, .status-passed { color: var(--ok); } .state-blocked, .status-skipped { color: var(--muted); }
+.state-not-observed { color: var(--medium); } .status-failed, .status-errored { color: var(--high); }
+.filters { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0.5rem 0 1rem; }
+.filters label { color: var(--muted); }
+.filters select { margin-left: 0.35rem; font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 0.15rem 0.35rem; }
+.finding { border: 1px solid var(--line); border-radius: 6px; margin: 0.5rem 0; background: var(--bg); }
+.finding > summary { cursor: pointer; padding: 0.5rem 0.75rem; display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; align-items: baseline; }
+.finding > div { padding: 0 0.75rem 0.75rem; }
+.finding .op { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.muted { color: var(--muted); }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<h1>Contract diff</h1>
+<dl class="meta">
+<dt>Old</dt><dd><code>origin&#x2f;main:specs&#x2f;v2.yaml</code></dd>
+<dt>New</dt><dd><code>specs&#x2f;v2.yaml</code></dd>
+<dt>Rule catalog</dt><dd>version 1</dd>
+</dl>
+
+<h2>Summary</h2>
+<p>2 breaking, 1 non-breaking, 1 unknown, 1 allowed. <strong class="status-failed">Failed</strong>: 1 failing.</p>
+<h2>Breaking (2)</h2>
+<table>
+<thead><tr><th>Rule</th><th>Operation</th><th>Description</th><th>Pointer</th></tr></thead>
+<tbody>
+<tr><td><code>response-field-removed</code> <span class="status-failed">(failing)</span></td><td><code>GET &#x2f;users&#x2f;{id}</code></td><td>response 200 (application&#x2f;json) $.email: removed | &lt;b&gt;</td><td><code>&#x2f;components&#x2f;schemas&#x2f;User&#x2f;properties</code></td></tr>
+<tr><td><code>operation-removed</code> <span class="muted">(allowed: Deprecated since 2026-06, no traffic)</span></td><td><code>DELETE &#x2f;users&#x2f;{id}</code></td><td>operation removed</td><td><code>&#x2f;paths&#x2f;~1users~1{id}</code></td></tr>
+</tbody>
+</table>
+<h2>Non-breaking (1)</h2>
+<table>
+<thead><tr><th>Rule</th><th>Operation</th><th>Description</th><th>Pointer</th></tr></thead>
+<tbody>
+<tr><td><code>operation-added</code></td><td><code>GET &#x2f;health</code></td><td>operation added</td><td><code>&#x2f;paths&#x2f;~1health&#x2f;get</code></td></tr>
+</tbody>
+</table>
+<h2>Unknown (1)</h2>
+<table>
+<thead><tr><th>Rule</th><th>Operation</th><th>Description</th><th>Pointer</th></tr></thead>
+<tbody>
+<tr><td><code>composition-changed</code></td><td><code>GET &#x2f;pets</code></td><td>response 200 (application&#x2f;json) $: oneOf changed</td><td><code>&#x2f;components&#x2f;schemas&#x2f;Pet</code></td></tr>
+</tbody>
+</table>
+<h2>Warnings</h2>
+<ul>
+<li>contracts&#x2f;allowlist.yaml:7: unused allowlist entry (operation-removed GET &#x2f;old)</li>
+</ul>
+</body>
+</html>

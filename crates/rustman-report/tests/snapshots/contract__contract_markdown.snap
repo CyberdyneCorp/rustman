@@ -1,0 +1,40 @@
+---
+source: crates/rustman-report/tests/contract.rs
+expression: rendered(format)
+---
+# Contract diff
+
+| | |
+|---|---|
+| Old | `origin/main:specs/v2.yaml` |
+| New | `specs/v2.yaml` |
+| Rule catalog | version 1 |
+
+**Summary:** 2 breaking, 1 non-breaking, 1 unknown, 1 allowed. Failed: 1 failing.
+
+## Breaking (2)
+
+| Rule | Operation | Description | Pointer |
+|---|---|---|---|
+| `response-field-removed` (failing) | `GET /users/{id}` | response 200 \(application/json\) $.email: removed \| \<b\> | `/components/schemas/User/properties` |
+| `operation-removed` (allowed) | `DELETE /users/{id}` | operation removed | `/paths/~1users~1{id}` |
+
+## Non-breaking (1)
+
+| Rule | Operation | Description | Pointer |
+|---|---|---|---|
+| `operation-added` | `GET /health` | operation added | `/paths/~1health/get` |
+
+## Unknown (1)
+
+| Rule | Operation | Description | Pointer |
+|---|---|---|---|
+| `composition-changed` | `GET /pets` | response 200 \(application/json\) $: oneOf changed | `/components/schemas/Pet` |
+
+## Allowed
+
+- `operation-removed` `DELETE /users/{id}`: Deprecated since 2026-06, no traffic
+
+## Warnings
+
+- contracts/allowlist.yaml:7: unused allowlist entry \(operation-removed GET /old\)

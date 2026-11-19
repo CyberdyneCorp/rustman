@@ -250,6 +250,32 @@ jobs:
         env:
           RUSTMAN_MCP_EVERYTHING: ${{ runner.temp }}/everything/node_modules/@modelcontextprotocol/server-everything/dist/index.js
 
+  # add-contract-testing task 6.3: the official Pact verifier verifies the
+  # Pact files we generate against the same fixture provider as ours, and
+  # the verdicts must match. pact_verifier_cli is a pinned release whose
+  # checksum is checked before it runs.
+  pact-interop:
+    runs-on: ubuntu-latest
+    env:
+      PACT_VERIFIER_VERSION: 1.4.0
+      PACT_VERIFIER_SHA256: 6bf564df3b830a831095beb3720405cbd1c99fb02e7147de93383d5885213482
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - name: Download pact_verifier_cli
+        run: |
+          mkdir -p "$RUNNER_TEMP/pact"
+          cd "$RUNNER_TEMP/pact"
+          curl -fsSL --retry 3 -o pact-verifier.gz \
+            "https://github.com/pact-foundation/pact-reference/releases/download/pact_verifier_cli-v${PACT_VERIFIER_VERSION}/pact-verifier-linux-x86_64.gz"
+          echo "${PACT_VERIFIER_SHA256}  pact-verifier.gz" | sha256sum -c -
+          gunzip pact-verifier.gz
+          chmod +x pact-verifier
+          echo "PACT_VERIFIER_CLI=$RUNNER_TEMP/pact/pact-verifier" >> "$GITHUB_ENV"
+      - run: cargo test -p rustman-contract --test pact_interop --locked -- --nocapture
+
   deny:
     runs-on: ubuntu-latest
     steps:

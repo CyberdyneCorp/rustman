@@ -127,6 +127,14 @@ fn normalize(path: &Path) -> PathBuf {
     out
 }
 
+/// Reads local documents from somewhere other than the disk, such as a Git
+/// tree (`rustman contract diff --base`). Paths are as the importer joins
+/// them: the root as given, referenced files relative to their document.
+pub trait FileSource: fmt::Debug + Send + Sync {
+    /// The text of `path`, at most `max_bytes` long.
+    fn read(&self, path: &Path, max_bytes: u64) -> Result<String, ImportError>;
+}
+
 /// How a document is fetched.
 #[derive(Clone, Debug)]
 pub struct FetchOptions {
@@ -136,6 +144,8 @@ pub struct FetchOptions {
     /// redirect hop, and its governor paces them. Without one, the plain
     /// engine follows redirects anywhere.
     pub sender: Option<Arc<GovernedSender>>,
+    /// Read local files through this source instead of the disk.
+    pub files: Option<Arc<dyn FileSource>>,
 }
 
 impl Default for FetchOptions {
@@ -144,6 +154,7 @@ impl Default for FetchOptions {
             timeout: FETCH_TIMEOUT,
             max_bytes: MAX_DOCUMENT_BYTES,
             sender: None,
+            files: None,
         }
     }
 }
@@ -151,7 +162,10 @@ impl Default for FetchOptions {
 /// The text at `location`.
 pub async fn read(location: &Location, options: &FetchOptions) -> Result<String, ImportError> {
     match location {
-        Location::File(path) => read_file(path, options.max_bytes),
+        Location::File(path) => match &options.files {
+            Some(files) => files.read(path, options.max_bytes),
+            None => read_file(path, options.max_bytes),
+        },
         Location::Url(url) => fetch(url, options).await,
     }
 }
@@ -302,6 +316,26 @@ mod tests {
         assert!(send.tls.verify);
         assert_eq!(send.timeout, FETCH_TIMEOUT);
         assert!(send.body.max_in_memory > send.body.max_download);
+    }
+
+    #[derive(Debug)]
+    struct Fixed;
+
+    impl FileSource for Fixed {
+        fn read(&self, path: &Path, _: u64) -> Result<String, ImportError> {
+            Ok(format!("from {}", path.display()))
+        }
+    }
+
+    #[tokio::test]
+    async fn a_file_source_replaces_the_disk() {
+        let options = FetchOptions {
+            files: Some(Arc::new(Fixed)),
+            ..FetchOptions::default()
+        };
+        let location = Location::File(PathBuf::from("no-such-file.yaml"));
+        let text = read(&location, &options).await.unwrap();
+        assert_eq!(text, "from no-such-file.yaml");
     }
 
     #[test]

@@ -1,0 +1,15 @@
+# The same operation with its path parameter renamed: matched as one
+# operation, reported only as path-parameter-renamed.
+expect: [path-parameter-renamed]
+old:
+  paths:
+    /users/{id}:
+      get:
+        parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+        responses: {'200': {description: ok}}
+new:
+  paths:
+    /users/{userId}:
+      get:
+        parameters: [{name: userId, in: path, required: true, schema: {type: string}}]
+        responses: {'200': {description: ok}}

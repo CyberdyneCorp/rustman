@@ -4093,6 +4093,7 @@ dependencies = [
  "regex",
  "roxmltree",
  "rpassword",
+ "rustman-contract",
  "rustman-core",
  "rustman-explore",
  "rustman-graphql",
@@ -4115,6 +4116,30 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "rustman-contract"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "dunce",
+ "form_urlencoded",
+ "http",
+ "jsonschema",
+ "regex",
+ "rustman-core",
+ "rustman-explore",
+ "rustman-http",
+ "rustman-mock",
+ "rustman-report",
+ "rustman-test-support",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
 ]
 
 [[package]]

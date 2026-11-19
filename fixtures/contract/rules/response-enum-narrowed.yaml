@@ -1,0 +1,22 @@
+# status loses deleted (spec scenario)
+expect: [response-enum-narrowed]
+old:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            content:
+              application/json:
+                schema: {type: object, properties: {status: {type: string, enum: [active, suspended, deleted]}}}
+new:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            content:
+              application/json:
+                schema: {type: object, properties: {status: {type: string, enum: [active, suspended]}}}

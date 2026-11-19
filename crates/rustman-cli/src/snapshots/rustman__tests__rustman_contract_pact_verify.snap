@@ -1,0 +1,47 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Replay Pact interactions against a provider and compare its responses
+
+Usage: rustman contract pact verify [OPTIONS] --provider-url <URL> <PACT_FILE>...
+
+Arguments:
+  <PACT_FILE>...
+          The Pact files to verify
+
+Options:
+      --provider-url <URL>
+          The provider's base URL, as in http://localhost:8080
+
+      --provider-states-url <URL>
+          The provider's state-change endpoint; each provider state is POSTed to it before (setup) and after (teardown) its interaction
+
+      --allow-mutations
+          Replay POST, PUT and PATCH interactions
+
+      --allow-destructive
+          Replay DELETE interactions
+
+      --production <HOST>
+          Confirm a production provider by repeating its exact host
+
+      --report <FORMAT[=PATH]>
+          Also write the report as json, junit, markdown, html or sarif, to a file or stdout, as in junit=out/pact.xml (repeatable)
+
+      --env <NAME>
+          Environment whose secret values are redacted from the output (default: RUSTMAN_ENV, then default_environment)
+
+      --workspace <DIR>
+          Workspace directory, for [safety] and redaction (default: search from the current directory upwards; verification needs none)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

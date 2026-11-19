@@ -1,0 +1,24 @@
+# oneOf [A, B] becomes oneOf [A, B, C] (spec scenario)
+expect: [composition-changed]
+old:
+  components: {schemas: {A: {type: object, properties: {a: {type: string}}}, B: {type: object, properties: {b: {type: string}}}, C: {type: object, properties: {c: {type: string}}}}}
+  paths:
+    /things:
+      get:
+        responses:
+          '200':
+            description: ok
+            content:
+              application/json:
+                schema: {oneOf: [{$ref: '#/components/schemas/A'}, {$ref: '#/components/schemas/B'}]}
+new:
+  components: {schemas: {A: {type: object, properties: {a: {type: string}}}, B: {type: object, properties: {b: {type: string}}}, C: {type: object, properties: {c: {type: string}}}}}
+  paths:
+    /things:
+      get:
+        responses:
+          '200':
+            description: ok
+            content:
+              application/json:
+                schema: {oneOf: [{$ref: '#/components/schemas/A'}, {$ref: '#/components/schemas/B'}, {$ref: '#/components/schemas/C'}]}

@@ -1,0 +1,44 @@
+# {{ title }}
+
+| | |
+|---|---|
+{% for s in r.sources -%}
+| {{ s.role | capitalize }} | {{ s.name | code }} |
+{% endfor -%}
+{% if r.catalog_version -%}
+| Rule catalog | version {{ r.catalog_version }} |
+{% endif %}
+**Summary:** {{ summary }}. {{ "Passed" if r.summary.passed else "Failed" }}: {{ r.summary.failing }} failing.
+{%- if r.coverage %} {{ r.coverage.observed }}/{{ r.coverage.total }} operations observed.{% endif %}
+{% for g in groups %}
+## {{ g.status | capitalize }} ({{ g.items | length }})
+
+| Rule | {{ subject }} | Description | Pointer |
+|---|---|---|---|
+{% for i in g.items -%}
+| {{ i.rule | code }}{% if i.allowed %} (allowed){% elif i.failing %} (failing){% endif %} | {{ i.subject | code }} | {{ i.message | text }} | {{ i.pointer | code }} |
+{% endfor %}
+{%- endfor %}
+{%- if allowed %}
+## Allowed
+
+{% for i in allowed -%}
+- {{ i.rule | code }} {{ i.subject | code }}: {{ i.allowed | text }}
+{% endfor %}
+{%- endif %}
+{%- if r.coverage %}
+## Coverage
+
+| Operation | Exchanges | Violations |
+|---|---|---|
+{% for o in r.coverage.operations -%}
+| {{ o.operation | code }} | {{ o.exchanges }} | {{ o.violations }} |
+{% endfor %}
+{%- endif %}
+{%- if r.warnings %}
+## Warnings
+
+{% for w in r.warnings -%}
+- {{ w | text }}
+{% endfor %}
+{%- endif %}

@@ -1,0 +1,141 @@
+# A hand-trimmed excerpt in the shape of GitHub's public REST API
+# description (github.com/github/rest-api-description): a few repository
+# and issue endpoints of an older release. Not a verbatim copy; see
+# fixtures/contract/README.md.
+openapi: 3.0.3
+info:
+  title: GitHub v3 REST API (excerpt)
+  version: 1.1.4
+servers:
+  - url: https://api.github.com
+paths:
+  /repos/{owner}/{repo}:
+    get:
+      summary: Get a repository
+      operationId: repos/get
+      parameters:
+        - $ref: '#/components/parameters/owner'
+        - $ref: '#/components/parameters/repo'
+      responses:
+        '200':
+          description: Response
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/full-repository'}
+        '404': {$ref: '#/components/responses/not_found'}
+  /repos/{owner}/{repo}/issues:
+    get:
+      summary: List repository issues
+      operationId: issues/list-for-repo
+      parameters:
+        - $ref: '#/components/parameters/owner'
+        - $ref: '#/components/parameters/repo'
+        - name: state
+          in: query
+          required: false
+          schema: {type: string, enum: [open, closed, all], default: open}
+        - $ref: '#/components/parameters/per-page'
+        - $ref: '#/components/parameters/page'
+      responses:
+        '200':
+          description: Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/issue'}
+        '404': {$ref: '#/components/responses/not_found'}
+  /repos/{owner}/{repo}/community/code_of_conduct:
+    get:
+      summary: Get the code of conduct for a repository
+      operationId: codes-of-conduct/get-for-repo
+      parameters:
+        - $ref: '#/components/parameters/owner'
+        - $ref: '#/components/parameters/repo'
+      responses:
+        '200':
+          description: Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key: {type: string}
+                  name: {type: string}
+components:
+  parameters:
+    owner:
+      name: owner
+      in: path
+      required: true
+      schema: {type: string}
+    repo:
+      name: repo
+      in: path
+      required: true
+      schema: {type: string}
+    per-page:
+      name: per_page
+      description: The number of results per page (max 100).
+      in: query
+      schema: {type: integer, default: 30}
+    page:
+      name: page
+      description: Page number of the results to fetch.
+      in: query
+      schema: {type: integer, default: 1}
+  responses:
+    not_found:
+      description: Resource not found
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/basic-error'}
+  schemas:
+    basic-error:
+      type: object
+      properties:
+        message: {type: string}
+        documentation_url: {type: string}
+    simple-user:
+      type: object
+      required: [login, id]
+      properties:
+        login: {type: string}
+        id: {type: integer}
+        site_admin: {type: boolean}
+    full-repository:
+      type: object
+      required: [id, node_id, name, full_name, owner, private]
+      properties:
+        id: {type: integer}
+        node_id: {type: string}
+        name: {type: string}
+        full_name: {type: string}
+        owner: {$ref: '#/components/schemas/simple-user'}
+        private: {type: boolean}
+        permissions:
+          type: object
+          required: [admin, pull, push]
+          properties:
+            admin: {type: boolean}
+            pull: {type: boolean}
+            push: {type: boolean}
+    issue:
+      type: object
+      required: [id, number, state, title, labels]
+      properties:
+        id: {type: integer}
+        number: {type: integer}
+        state: {type: string, description: State of the issue; either 'open' or 'closed'}
+        title: {type: string}
+        body: {type: string, nullable: true}
+        labels:
+          type: array
+          items:
+            oneOf:
+              - type: string
+              - type: object
+                properties:
+                  id: {type: integer}
+                  name: {type: string}
+        user: {$ref: '#/components/schemas/simple-user'}

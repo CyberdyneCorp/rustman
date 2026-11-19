@@ -1,0 +1,14 @@
+# sort gains desc
+expect: [request-enum-widened]
+old:
+  paths:
+    /users:
+      get:
+        parameters: [{name: sort, in: query, schema: {type: string, enum: [asc]}}]
+        responses: {'200': {description: ok}}
+new:
+  paths:
+    /users:
+      get:
+        parameters: [{name: sort, in: query, schema: {type: string, enum: [asc, desc]}}]
+        responses: {'200': {description: ok}}

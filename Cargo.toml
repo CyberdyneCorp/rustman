@@ -26,6 +26,7 @@ rustman-tui = { path = "crates/rustman-tui", version = "0.1.0" }
 rustman-viz-protocol = { path = "crates/rustman-viz-protocol", version = "0.1.0" }
 rustman-webhook = { path = "crates/rustman-webhook", version = "0.1.0" }
 rustman-mock = { path = "crates/rustman-mock", version = "0.1.0" }
+rustman-contract = { path = "crates/rustman-contract", version = "0.1.0" }
 
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }

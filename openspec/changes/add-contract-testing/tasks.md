@@ -4,43 +4,44 @@ See design.md "Building on existing code" for the components each task reuses.
 
 ## 1. Crate scaffold and normalized OpenAPI model
 
-- [ ] 1.1 Create `crates/rustman-contract` (depends on `rustman-core`, `rustman-explore`, `rustman-http`, `rustman-report`), add it to `[workspace.dependencies]`, and add `rustman contract --help` to `rustman-cli`; verify `cargo build` and that `rustman contract --help` lists `diff`, `rules`, `pact`, `verify`.
-- [ ] 1.2 Load both documents with `rustman_explore::import` (bundling, 3.0 → 3.1 rewrite, path-item parameter merge and validation are already done there; invalid documents print `openapi::diagnostic::render` output and exit 2). Add only cycle-aware inlining of `#/components` `$ref`s for comparison and path-template matching that ignores parameter names; verify with unit tests on fixture pairs (renamed path param, shared parameters, nullable, a recursive schema).
+- [x] 1.1 Create `crates/rustman-contract` (depends on `rustman-core`, `rustman-explore`, `rustman-http`, `rustman-report`), add it to `[workspace.dependencies]`, and add `rustman contract --help` to `rustman-cli`; verify `cargo build` and that `rustman contract --help` lists `diff`, `rules`, `pact`, `verify`.
+- [x] 1.2 Load both documents with `rustman_explore::import` (bundling, 3.0 → 3.1 rewrite, path-item parameter merge and validation are already done there; invalid documents print `openapi::diagnostic::render` output and exit 2). Add only cycle-aware inlining of `#/components` `$ref`s for comparison and path-template matching that ignores parameter names; verify with unit tests on fixture pairs (renamed path param, shared parameters, nullable, a recursive schema).
 
 ## 2. Diff engine and rule catalog
 
-- [ ] 2.1 Implement the `Rule` trait and direction-aware schema walker; verify unit tests per direction (request stricter = breaking, response field removed = breaking).
-- [ ] 2.2 Implement every breaking rule from the spec (operation/status removed, response field removed/renamed/type changed, request required field added, enum narrowed, stricter constraints, parameter location changed, security alternatives removed); verify one fixture pair and test per rule id.
-- [ ] 2.3 Implement non-breaking and `unknown` rules (`operation-added`, optional field added, loosened constraints, docs-only, `composition-changed`, vendor extensions); verify tests per rule id.
-- [ ] 2.4 Add the catalog version constant and a snapshot test of all classifications that fails unless the version changes with them; add `rustman contract rules [--json]`; verify the JSON output against the spec scenario.
-- [ ] 2.5 Build the real-world corpus in `fixtures/contract/` (Petstore, Stripe, GitHub version pairs) with snapshot expectations; verify `cargo test -p rustman-contract corpus` passes deterministically across 3 runs.
-- [ ] 2.6 Write `docs/contract-rules.md` generated from the catalog (a test checks the doc is up to date).
+- [x] 2.1 Implement the `Rule` trait and direction-aware schema walker; verify unit tests per direction (request stricter = breaking, response field removed = breaking).
+- [x] 2.2 Implement every breaking rule from the spec (operation/status removed, response field removed/renamed/type changed, request required field added, enum narrowed, stricter constraints, parameter location changed, security alternatives removed); verify one fixture pair and test per rule id.
+- [x] 2.3 Implement non-breaking and `unknown` rules (`operation-added`, optional field added, loosened constraints, docs-only, `composition-changed`, vendor extensions); verify tests per rule id.
+- [x] 2.4 Add the catalog version constant and a snapshot test of all classifications that fails unless the version changes with them; add `rustman contract rules [--json]`; verify the JSON output against the spec scenario.
+- [x] 2.5 Build the real-world corpus in `fixtures/contract/` (Petstore, Stripe, GitHub version pairs) with snapshot expectations; verify `cargo test -p rustman-contract corpus` passes deterministically across 3 runs.
+- [x] 2.6 Write `docs/contract-rules.md` generated from the catalog (a test checks the doc is up to date).
 
 ## 3. CLI diff, allowlist and Git base
 
-- [ ] 3.1 Implement `rustman contract diff <old> <new>` with human output, exit codes 0/1/2 (through `crates/rustman-cli/src/exit.rs`), `--fail-on-unknown` and `--fail-on non-breaking`; verify CLI integration tests per scenario.
-- [ ] 3.2 Implement `contracts/allowlist.yaml` parsing through `rustman_core::format` (located values give the line numbers), with justification required, `expires`, unused-entry warning and expired-entry warning; verify tests for each scenario including line-numbered errors.
-- [ ] 3.3 Implement `--base <ref>` (with `gix`, pending the design open question), feeding the old document and its relative `$ref` files from the same tree through a Git-blob source for `openapi::bundle`; verify tests against a temporary git repo with two commits, a missing path, and a missing ref.
+- [x] 3.1 Implement `rustman contract diff <old> <new>` with human output, exit codes 0/1/2 (through `crates/rustman-cli/src/exit.rs`), `--fail-on-unknown` and `--fail-on non-breaking`; verify CLI integration tests per scenario.
+- [x] 3.2 Implement `contracts/allowlist.yaml` parsing through `rustman_core::format` (located values give the line numbers), with justification required, `expires`, unused-entry warning and expired-entry warning; verify tests for each scenario including line-numbered errors.
+- [x] 3.3 Implement `--base <ref>` (with `git show <ref>:<path>`, design D3), feeding the old document and its relative `$ref` files from the same tree through a Git-blob source for `openapi::bundle`; verify tests against a temporary git repo with two commits, a missing path, and a missing ref.
 
 ## 4. Reports
 
-- [ ] 4.1 Add `kind: contract` (`mode: diff | pact-verify | conformance`) as a `rustman_report::Report` variant, with its schema part generated by `schemars` in `crates/rustman-report/src/schema.rs` and `docs/schemas/report.schema.json` regenerated; verify the published JSON Schema validates generated reports, and that a reader without the kind refuses it with `unknown report kind` (exit 2) instead of misreading it.
-- [ ] 4.2 Add contract sections to the Markdown, JUnit and SARIF renderers in `crates/rustman-report/src/render/`, and `--report fmt=path` (`rustman_report::ReportTarget`) to all contract commands; verify insta snapshots per format and a SARIF validation against the 2.1.0 schema.
+- [x] 4.1 Add `kind: contract` (`mode: diff | pact-verify | conformance`) as a `rustman_report::Report` variant, with its schema part generated by `schemars` in `crates/rustman-report/src/schema.rs` and `docs/schemas/report.schema.json` regenerated; verify the published JSON Schema validates generated reports, and that a reader without the kind refuses it with `unknown report kind` (exit 2) instead of misreading it.
+- [x] 4.2 Add contract sections to the Markdown, JUnit and SARIF renderers in `crates/rustman-report/src/render/`, and `--report fmt=path` (`rustman_report::ReportTarget`) to all contract commands; verify insta snapshots per format and a SARIF validation against the 2.1.0 schema.
 
 ## 5. Pact generation
 
-- [ ] 5.1 Implement Pact v3/v4 serde models and the assertion→matcher mapping from design D5; verify unit tests per mapping row and omitted-assertion warnings.
-- [ ] 5.2 Implement `rustman contract pact generate` (resolution with `rustman_core::vars::resolve_request`, secret/dynamic values to regex matchers, non-http kinds skipped, `--pact-version`); verify generated files with a test that no secret value appears, and against the Pact JSON schema.
+- [x] 5.1 Implement Pact v3/v4 serde models and the assertion→matcher mapping from design D5; verify unit tests per mapping row and omitted-assertion warnings.
+- [x] 5.2 Implement `rustman contract pact generate` (resolution with `rustman_core::vars::resolve_request`, secret/dynamic values to regex matchers, non-http kinds skipped, `--pact-version`); verify generated files with a test that no secret value appears, and against the Pact JSON schema.
 
 ## 6. Pact provider verification
 
-- [ ] 6.1 Implement Pact matching rules for verification (type, regex, equality, include, integer, decimal, min/max, eachLike) with JSON-path mismatch messages; verify unit tests per rule.
-- [ ] 6.2 Implement `rustman contract pact verify` through `rustman_http::GovernedSender` with a `SafetyPolicy` built from `--provider-url`/`--provider-states-url` and `Permission::from_flags`, provider-state setup/teardown, and exit 4 on blocked (`blocked: mutations not allowed`); verify integration tests with a local fixture provider and state endpoint, including the missing-URL and blocked-POST scenarios.
-- [ ] 6.3 Add a CI interop job running the official `pact_verifier_cli` on our generated Pact files against the fixture provider; verify verdicts match ours.
+- [x] 6.1 Implement Pact matching rules for verification (type, regex, equality, include, integer, decimal, min/max, eachLike) with JSON-path mismatch messages; verify unit tests per rule.
+- [x] 6.2 Implement `rustman contract pact verify` through `rustman_http::GovernedSender` with a `SafetyPolicy` built from `--provider-url`/`--provider-states-url` and `Permission::from_flags`, provider-state setup/teardown, and exit 4 on blocked (`blocked: mutations not allowed`); verify integration tests with a local fixture provider and state endpoint, including the missing-URL and blocked-POST scenarios.
+- [x] 6.3 Add a CI interop job running the official `pact_verifier_cli` on our generated Pact files against the fixture provider; verify verdicts match ours.
+  - The `pact-interop` job (pinned `pact_verifier_cli` 1.4.0, SHA-256 checked) runs `crates/rustman-contract/tests/pact_interop.rs`; the v3 and v4 verdicts match ours except `length` on an array with an empty example, where `pact_matching` skips the `min`/`max` check the specification requires. That interaction is left out of the comparison and documented in docs/contract.md.
 
 ## 7. Passive conformance
 
-- [ ] 7.1 Implement `rustman contract verify --spec` reading history (`history::query::Query` for `--since`, `--grep`) or a run report (`Report::parse`), matching exchanges to operations with the mock server's `Router` and validating parameters and schemas with `Checks` and `explore::detect::conformance` (location per the design open question); verify tests for violation, undocumented and coverage scenarios.
-- [ ] 7.2 Prove the no-network invariant: build the command with a sender that panics on use; verify the full conformance test suite passes with it.
-- [ ] 7.3 Add redaction tests across diff output, Pact files and conformance evidence (secret echoed in a body); verify no secret value appears in any written file.
-- [ ] 7.4 Document `rustman contract` in the user guide (diff in a GitHub Actions PR workflow, Pact consumer/provider flow, passive conformance); verify the doc examples run in a doc test.
+- [x] 7.1 Implement `rustman contract verify --spec` reading history (`history::query::Query` for `--since`, `--grep`) or a run report (`Report::parse`), matching exchanges to operations with the mock server's `Router` and validating parameters and schemas with `Checks` and `explore::detect::conformance` (location per the design open question); verify tests for violation, undocumented and coverage scenarios.
+- [x] 7.2 Prove the no-network invariant: build the command with a sender that panics on use; verify the full conformance test suite passes with it.
+- [x] 7.3 Add redaction tests across diff output, Pact files and conformance evidence (secret echoed in a body); verify no secret value appears in any written file.
+- [x] 7.4 Document `rustman contract` in the user guide (diff in a GitHub Actions PR workflow, Pact consumer/provider flow, passive conformance); verify the doc examples run in a doc test.

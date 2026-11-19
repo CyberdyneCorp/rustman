@@ -283,6 +283,33 @@ impl Redactor {
             || decode::variants(text).iter().any(|t| has_piece(t))
     }
 
+    /// Redact every string, key and number of `value` that holds a known
+    /// secret value; a number that held one becomes a string.
+    pub fn json(&self, value: &mut serde_json::Value) {
+        use serde_json::Value;
+        match value {
+            Value::String(s) => {
+                if let Cow::Owned(clean) = self.text(s) {
+                    *s = clean;
+                }
+            }
+            Value::Number(n) => {
+                let text = n.to_string();
+                if self.finds_secret(&text) {
+                    *value = Value::String(self.text(&text).into_owned());
+                }
+            }
+            Value::Array(items) => items.iter_mut().for_each(|v| self.json(v)),
+            Value::Object(map) => {
+                for (key, mut v) in std::mem::take(map) {
+                    self.json(&mut v);
+                    map.insert(self.text(&key).into_owned(), v);
+                }
+            }
+            Value::Null | Value::Bool(_) => {}
+        }
+    }
+
     /// `input` with every known secret value replaced.
     pub fn text<'a>(&self, input: &'a str) -> Cow<'a, str> {
         match self.bytes(input.as_bytes()) {
@@ -705,6 +732,17 @@ mod tests {
         assert!(is_credential("literal-token"));
         assert!(!is_credential("{{api_token}}"));
         assert!(!is_credential("short"));
+    }
+
+    #[test]
+    fn json_values_are_redacted_in_strings_keys_and_numbers() {
+        let r = Redactor::new().with(&Secret::new("pin", "90817263".to_owned()));
+        let mut value = serde_json::json!({"90817263": [90817263, "x90817263", 7, true, null]});
+        r.json(&mut value);
+        assert_eq!(
+            value,
+            serde_json::json!({"«redacted:pin»": ["«redacted:pin»", "x«redacted:pin»", 7, true, null]})
+        );
     }
 
     #[test]

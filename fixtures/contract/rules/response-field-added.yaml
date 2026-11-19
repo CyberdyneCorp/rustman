@@ -1,0 +1,22 @@
+# nickname appears in the 200 body
+expect: [response-field-added]
+old:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            content:
+              application/json:
+                schema: {type: object, properties: {id: {type: integer}}}
+new:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            content:
+              application/json:
+                schema: {type: object, properties: {id: {type: integer}, nickname: {type: string}}}

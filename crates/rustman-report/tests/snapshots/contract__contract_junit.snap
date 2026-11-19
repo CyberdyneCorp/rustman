@@ -1,0 +1,27 @@
+---
+source: crates/rustman-report/tests/contract.rs
+expression: rendered(format)
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="rustman" tests="4" skipped="0" failures="1" errors="0">
+    <testsuite name="contract diff" tests="4" skipped="0" errors="0" failures="1">
+        <properties>
+            <property name="old" value="origin/main:specs/v2.yaml"/>
+            <property name="new" value="specs/v2.yaml"/>
+            <property name="catalog_version" value="1"/>
+        </properties>
+        <testcase name="operation-added GET /health" classname="GET /health">
+            <system-out>non-breaking: operation added</system-out>
+        </testcase>
+        <testcase name="operation-removed DELETE /users/{id}" classname="DELETE /users/{id}">
+            <system-out>breaking (allowed): operation removed
+allowed: Deprecated since 2026-06, no traffic</system-out>
+        </testcase>
+        <testcase name="response-field-removed GET /users/{id}" classname="GET /users/{id}">
+            <failure message="breaking: response 200 (application/json) $.email: removed | &lt;b&gt;" type="response-field-removed">The response-field-removed rule.</failure>
+        </testcase>
+        <testcase name="composition-changed GET /pets" classname="GET /pets">
+            <system-out>unknown: response 200 (application/json) $: oneOf changed</system-out>
+        </testcase>
+    </testsuite>
+</testsuites>

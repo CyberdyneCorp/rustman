@@ -1,0 +1,32 @@
+# OpenAPI 3.0 `nullable: true` and the 3.1 `null` type are the same schema.
+expect: []
+old:
+  openapi: 3.0.3
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    nickname: {type: string, nullable: true}
+                    age: {type: integer, minimum: 0, exclusiveMinimum: true}
+new:
+  openapi: 3.1.0
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    nickname: {type: [string, 'null']}
+                    age: {type: integer, exclusiveMinimum: 0}
