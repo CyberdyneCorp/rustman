@@ -486,6 +486,24 @@ pub struct ExplorationReport {
     /// The documented operations, in document order.
     #[serde(default)]
     pub operations: Vec<OperationInfo>,
+    /// Data dependencies between operations: a value from one operation's
+    /// response used as a parameter of another (the API graph of the viz
+    /// companion). Added in 0.1; absent in older reports.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dependencies: Vec<Dependency>,
+}
+
+/// A value one operation's response provides to another's parameter.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct Dependency {
+    /// `METHOD /path` of the operation whose response provides the value.
+    pub producer: String,
+    /// `METHOD /path` of the operation that uses it.
+    pub consumer: String,
+    /// The consumer's parameter, e.g. `id`.
+    pub parameter: String,
+    /// A JSON pointer into the producer's response body, e.g. `/id`.
+    pub pointer: String,
 }
 
 impl ExplorationReport {

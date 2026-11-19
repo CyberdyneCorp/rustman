@@ -219,6 +219,7 @@ fn exploration() -> ExplorationReport {
             operation("GET /users/{id}", Some("users")),
             operation("DELETE /users/{id}", Some("users")),
         ],
+        dependencies: Vec::new(),
     }
 }
 

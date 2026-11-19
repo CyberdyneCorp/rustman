@@ -1,6 +1,10 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
+# The viz companion links the Raven C library and has its own workspace and
+# lockfile, so building rustman never fetches or builds Raven
+# (add-raven-visualizer design D1, D7).
+exclude = ["crates/rustman-viz"]
 
 [workspace.package]
 version = "0.1.0"

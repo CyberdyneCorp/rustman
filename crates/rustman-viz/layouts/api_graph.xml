@@ -1,0 +1,20 @@
+<!-- API graph (add-raven-visualizer D5, D6). -->
+<Window Title="Rustman · API graph" Width="1280" Height="860" MinWidth="900" MinHeight="600">
+  <VBox Spacing="14" Slot.Padding="18">
+    <VBox Spacing="2">
+      <Label Name="title" Text="API graph" TextSize="22"/>
+      <Label Name="subtitle" Text="" Color="#8A93A6"/>
+    </VBox>
+    <Splitter Orientation="Vertical" Slot.Fill="1">
+      <Border Padding="4" CornerRadius="10" Slot.Fill="3">
+        <VBox Name="graph"/>
+      </Border>
+      <Border Padding="12" CornerRadius="10" Slot.Fill="1">
+        <VBox Spacing="6">
+          <Label Name="selection_heading" Text="Select a node to list its findings." Color="#8A93A6"/>
+          <VBox Name="selection" Slot.Fill="1"/>
+        </VBox>
+      </Border>
+    </Splitter>
+  </VBox>
+</Window>

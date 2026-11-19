@@ -1,0 +1,802 @@
+{
+ "schema": "rustman.report/v1",
+ "kind": "exploration",
+ "rustman_version": "0.1.0",
+ "id": "exp-20261119-3fa9c1",
+ "started_at": "2026-11-19T10:00:00Z",
+ "finished_at": "2026-11-19T10:03:12Z",
+ "environment": "staging",
+ "target": "https://api.staging.example.com",
+ "spec": "api.yaml",
+ "document_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+ "seed": 7,
+ "settings": {
+  "probes": [
+   "conformance",
+   "auth",
+   "lifecycle",
+   "fuzz"
+  ],
+  "operations": [],
+  "seed": 7,
+  "fuzz_cases": 2,
+  "allow_mutations": true,
+  "allow_destructive": false,
+  "allow_hosts": [],
+  "production": null,
+  "allow_remote_refs": false,
+  "rate": 10,
+  "concurrency": 4,
+  "max_probes": 2000,
+  "max_duration_ms": 900000,
+  "fail_on": "high"
+ },
+ "summary": {
+  "probes": {
+   "total": 112,
+   "passed": 71,
+   "finding": 31,
+   "blocked": 6,
+   "skipped": 2,
+   "not_run": 0,
+   "failed": 2
+  },
+  "findings": {
+   "critical": 1,
+   "high": 1,
+   "medium": 1,
+   "low": 0,
+   "info": 0
+  },
+  "requests": 140,
+  "duration_ms": 192000
+ },
+ "coverage": {
+  "operations": {
+   "covered": 18,
+   "total": 24,
+   "percent": 75.0
+  },
+  "statuses": {
+   "covered": 48,
+   "total": 86,
+   "percent": 55.8
+  },
+  "matrix": [
+   {
+    "operation": "GET /users",
+    "statuses": [
+     {
+      "status": "200",
+      "state": "observed"
+     },
+     {
+      "status": "400",
+      "state": "observed"
+     },
+     {
+      "status": "404",
+      "state": "not-observed"
+     },
+     {
+      "status": "500",
+      "state": "observed"
+     }
+    ]
+   },
+   {
+    "operation": "POST /users",
+    "statuses": [
+     {
+      "status": "201",
+      "state": "observed"
+     },
+     {
+      "status": "400",
+      "state": "observed"
+     },
+     {
+      "status": "422",
+      "state": "observed"
+     },
+     {
+      "status": "500",
+      "state": "observed"
+     }
+    ]
+   },
+   {
+    "operation": "GET /users/{id}",
+    "statuses": [
+     {
+      "status": "200",
+      "state": "observed"
+     },
+     {
+      "status": "400",
+      "state": "not-observed"
+     },
+     {
+      "status": "404",
+      "state": "not-observed"
+     },
+     {
+      "status": "500",
+      "state": "not-observed"
+     }
+    ]
+   },
+   {
+    "operation": "PUT /users/{id}",
+    "statuses": [
+     {
+      "status": "200",
+      "state": "observed"
+     },
+     {
+      "status": "404",
+      "state": "observed"
+     }
+    ]
+   },
+   {
+    "operation": "DELETE /users/{id}",
+    "statuses": [
+     {
+      "status": "200",
+      "state": "observed"
+     },
+     {
+      "status": "404",
+      "state": "observed"
+     }
+    ]
+   },
+   {
+    "operation": "GET /users/{id}/orders",
+    "statuses": [
+     {
+      "status": "200",
+      "state": "observed"
+     },
+     {
+      "status": "400",
+      "state": "not-observed"
+     },
+     {
+      "status": "404",
+      "state": "observed"
+     },
+     {
+      "status": "500",
+      "state": "observed"
+     }
+    ]
+   },
+   {
+    "operation": "POST /users/{id}/orders",
+    "statuses": [
+     {
+      "status": "201",
+      "state": "observed"
+     },
+     {
+      "status": "400",
+      "state": "not-observed"
+     },
+     {
+      "status": "422",
+      "state": "observed"
+     },
+     {
+      "status": "500",
+      "state": "observed"
+     }
+    ]
+   },
+   {
+    "operation": "GET /orders",
+    "statuses": [
+     {
+      "status": "200",
+      "state": "observed"
+     },
+     {
+      "status": "400",
+      "state": "not-observed"
+     },
+     {
+      "status": "404",
+      "state": "observed"
+     },
+     {
+      "status": "500",
+      "state": "observed"
+     }
+    ]
+   },
+   {
+    "operation": "GET /orders/{orderId}",
+    "statuses": [
+     {
+      "status": "200",
+      "state": "observed"
+     },
+     {
+      "status": "400",
+      "state": "not-observed"
+     },
+     {
+      "status": "404",
+      "state": "observed"
+     },
+     {
+      "status": "500",
+      "state": "observed"
+     }
+    ]
+   },
+   {
+    "operation": "PATCH /orders/{orderId}",
+    "statuses": [
+     {
+      "status": "200",
+      "state": "observed"
+     },
+     {
+      "status": "404",
+      "state": "not-observed"
+     }
+    ]
+   },
+   {
+    "operation": "DELETE /orders/{orderId}",
+    "statuses": [
+     {
+      "status": "200",
+      "state": "observed"
+     },
+     {
+      "status": "404",
+      "state": "observed"
+     }
+    ]
+   },
+   {
+    "operation": "GET /orders/{orderId}/items",
+    "statuses": [
+     {
+      "status": "200",
+      "state": "observed"
+     },
+     {
+      "status": "400",
+      "state": "observed"
+     },
+     {
+      "status": "404",
+      "state": "observed"
+     },
+     {
+      "status": "500",
+      "state": "observed"
+     }
+    ]
+   },
+   {
+    "operation": "POST /orders/{orderId}/items",
+    "statuses": [
+     {
+      "status": "201",
+      "state": "observed"
+     },
+     {
+      "status": "400",
+      "state": "observed"
+     },
+     {
+      "status": "422",
+      "state": "not-observed"
+     },
+     {
+      "status": "500",
+      "state": "observed"
+     }
+    ]
+   },
+   {
+    "operation": "GET /products",
+    "statuses": [
+     {
+      "status": "200",
+      "state": "observed"
+     },
+     {
+      "status": "400",
+      "state": "observed"
+     },
+     {
+      "status": "404",
+      "state": "not-observed"
+     },
+     {
+      "status": "500",
+      "state": "not-observed"
+     }
+    ]
+   },
+   {
+    "operation": "POST /products",
+    "statuses": [
+     {
+      "status": "201",
+      "state": "observed"
+     },
+     {
+      "status": "400",
+      "state": "observed"
+     },
+     {
+      "status": "422",
+      "state": "observed"
+     },
+     {
+      "status": "500",
+      "state": "observed"
+     }
+    ]
+   },
+   {
+    "operation": "GET /products/{sku}",
+    "statuses": [
+     {
+      "status": "200",
+      "state": "observed"
+     },
+     {
+      "status": "400",
+      "state": "observed"
+     },
+     {
+      "status": "404",
+      "state": "observed"
+     },
+     {
+      "status": "500",
+      "state": "not-observed"
+     }
+    ]
+   },
+   {
+    "operation": "PUT /products/{sku}",
+    "statuses": [
+     {
+      "status": "200",
+      "state": "observed"
+     },
+     {
+      "status": "404",
+      "state": "not-observed"
+     }
+    ]
+   },
+   {
+    "operation": "GET /carts/{cartId}",
+    "statuses": [
+     {
+      "status": "200",
+      "state": "observed"
+     },
+     {
+      "status": "400",
+      "state": "observed"
+     },
+     {
+      "status": "404",
+      "state": "observed"
+     },
+     {
+      "status": "500",
+      "state": "observed"
+     }
+    ]
+   },
+   {
+    "operation": "POST /carts",
+    "statuses": [
+     {
+      "status": "201",
+      "state": "not-observed"
+     },
+     {
+      "status": "400",
+      "state": "not-observed"
+     },
+     {
+      "status": "422",
+      "state": "not-observed"
+     },
+     {
+      "status": "500",
+      "state": "not-observed"
+     }
+    ]
+   },
+   {
+    "operation": "POST /carts/{cartId}/checkout",
+    "statuses": [
+     {
+      "status": "201",
+      "state": "not-observed"
+     },
+     {
+      "status": "400",
+      "state": "not-observed"
+     },
+     {
+      "status": "422",
+      "state": "not-observed"
+     },
+     {
+      "status": "500",
+      "state": "not-observed"
+     }
+    ]
+   },
+   {
+    "operation": "GET /health",
+    "statuses": [
+     {
+      "status": "200",
+      "state": "not-observed"
+     },
+     {
+      "status": "400",
+      "state": "not-observed"
+     },
+     {
+      "status": "404",
+      "state": "not-observed"
+     },
+     {
+      "status": "500",
+      "state": "not-observed"
+     }
+    ]
+   },
+   {
+    "operation": "GET /admin/users",
+    "statuses": [
+     {
+      "status": "200",
+      "state": "not-observed"
+     },
+     {
+      "status": "400",
+      "state": "not-observed"
+     },
+     {
+      "status": "404",
+      "state": "not-observed"
+     },
+     {
+      "status": "500",
+      "state": "not-observed"
+     }
+    ]
+   },
+   {
+    "operation": "POST /auth/token",
+    "statuses": [
+     {
+      "status": "201",
+      "state": "not-observed"
+     },
+     {
+      "status": "400",
+      "state": "not-observed"
+     },
+     {
+      "status": "422",
+      "state": "not-observed"
+     },
+     {
+      "status": "500",
+      "state": "not-observed"
+     }
+    ]
+   },
+   {
+    "operation": "GET /search",
+    "statuses": [
+     {
+      "status": "200",
+      "state": "not-observed"
+     },
+     {
+      "status": "400",
+      "state": "not-observed"
+     },
+     {
+      "status": "404",
+      "state": "not-observed"
+     },
+     {
+      "status": "500",
+      "state": "not-observed"
+     }
+    ]
+   }
+  ]
+ },
+ "findings": [
+  {
+   "id": "f001",
+   "rule": "auth-not-enforced",
+   "severity": "critical",
+   "operation": "GET /admin/users",
+   "description": "Operation answers without credentials",
+   "message": "GET /admin/users returned 200 without an Authorization header",
+   "occurrences": 1,
+   "probes": [
+    "p0101"
+   ],
+   "evidence": {
+    "method": "POST",
+    "url": "https://api.staging.example.com/users",
+    "request_headers": [
+     [
+      "authorization",
+      "Bearer «redacted:bearerAuth_token»"
+     ]
+    ],
+    "request_body": "{}",
+    "status": 500,
+    "response_headers": [],
+    "body": "{\"error\":\"internal\"}",
+    "truncated": false
+   }
+  },
+  {
+   "id": "f002",
+   "rule": "server-error-on-invalid-input",
+   "severity": "high",
+   "operation": "POST /users",
+   "description": "5xx on invalid input",
+   "message": "POST /users with {} returned 500",
+   "occurrences": 12,
+   "probes": [
+    "p0012"
+   ],
+   "evidence": {
+    "method": "POST",
+    "url": "https://api.staging.example.com/users",
+    "request_headers": [
+     [
+      "authorization",
+      "Bearer «redacted:bearerAuth_token»"
+     ]
+    ],
+    "request_body": "{}",
+    "status": 500,
+    "response_headers": [],
+    "body": "{\"error\":\"internal\"}",
+    "truncated": false
+   }
+  },
+  {
+   "id": "f003",
+   "rule": "response-schema-violation",
+   "severity": "medium",
+   "operation": "GET /users/{id}",
+   "description": "Response does not match its schema",
+   "message": "GET /users/{id}: $.email is null, the schema requires a string",
+   "occurrences": 4,
+   "probes": [
+    "p0020"
+   ],
+   "evidence": {
+    "method": "POST",
+    "url": "https://api.staging.example.com/users",
+    "request_headers": [
+     [
+      "authorization",
+      "Bearer «redacted:bearerAuth_token»"
+     ]
+    ],
+    "request_body": "{}",
+    "status": 500,
+    "response_headers": [],
+    "body": "{\"error\":\"internal\"}",
+    "truncated": false
+   }
+  }
+ ],
+ "probes": [],
+ "left_behind": [],
+ "cleanup": [],
+ "operations": [
+  {
+   "operation": "GET /users",
+   "tags": []
+  },
+  {
+   "operation": "POST /users",
+   "tags": []
+  },
+  {
+   "operation": "GET /users/{id}",
+   "tags": []
+  },
+  {
+   "operation": "PUT /users/{id}",
+   "tags": []
+  },
+  {
+   "operation": "DELETE /users/{id}",
+   "tags": []
+  },
+  {
+   "operation": "GET /users/{id}/orders",
+   "tags": []
+  },
+  {
+   "operation": "POST /users/{id}/orders",
+   "tags": []
+  },
+  {
+   "operation": "GET /orders",
+   "tags": []
+  },
+  {
+   "operation": "GET /orders/{orderId}",
+   "tags": []
+  },
+  {
+   "operation": "PATCH /orders/{orderId}",
+   "tags": []
+  },
+  {
+   "operation": "DELETE /orders/{orderId}",
+   "tags": []
+  },
+  {
+   "operation": "GET /orders/{orderId}/items",
+   "tags": []
+  },
+  {
+   "operation": "POST /orders/{orderId}/items",
+   "tags": []
+  },
+  {
+   "operation": "GET /products",
+   "tags": []
+  },
+  {
+   "operation": "POST /products",
+   "tags": []
+  },
+  {
+   "operation": "GET /products/{sku}",
+   "tags": []
+  },
+  {
+   "operation": "PUT /products/{sku}",
+   "tags": []
+  },
+  {
+   "operation": "GET /carts/{cartId}",
+   "tags": []
+  },
+  {
+   "operation": "POST /carts",
+   "tags": []
+  },
+  {
+   "operation": "POST /carts/{cartId}/checkout",
+   "tags": []
+  },
+  {
+   "operation": "GET /health",
+   "tags": []
+  },
+  {
+   "operation": "GET /admin/users",
+   "tags": []
+  },
+  {
+   "operation": "POST /auth/token",
+   "tags": []
+  },
+  {
+   "operation": "GET /search",
+   "tags": []
+  }
+ ],
+ "dependencies": [
+  {
+   "producer": "POST /users",
+   "consumer": "GET /users/{id}",
+   "parameter": "id",
+   "pointer": "/id"
+  },
+  {
+   "producer": "POST /users",
+   "consumer": "PUT /users/{id}",
+   "parameter": "id",
+   "pointer": "/id"
+  },
+  {
+   "producer": "POST /users",
+   "consumer": "DELETE /users/{id}",
+   "parameter": "id",
+   "pointer": "/id"
+  },
+  {
+   "producer": "POST /users",
+   "consumer": "GET /users/{id}/orders",
+   "parameter": "id",
+   "pointer": "/id"
+  },
+  {
+   "producer": "POST /users",
+   "consumer": "POST /users/{id}/orders",
+   "parameter": "id",
+   "pointer": "/id"
+  },
+  {
+   "producer": "POST /users/{id}/orders",
+   "consumer": "GET /orders/{orderId}",
+   "parameter": "orderId",
+   "pointer": "/orderId"
+  },
+  {
+   "producer": "POST /users/{id}/orders",
+   "consumer": "PATCH /orders/{orderId}",
+   "parameter": "orderId",
+   "pointer": "/orderId"
+  },
+  {
+   "producer": "POST /users/{id}/orders",
+   "consumer": "DELETE /orders/{orderId}",
+   "parameter": "orderId",
+   "pointer": "/orderId"
+  },
+  {
+   "producer": "POST /users/{id}/orders",
+   "consumer": "GET /orders/{orderId}/items",
+   "parameter": "orderId",
+   "pointer": "/orderId"
+  },
+  {
+   "producer": "POST /users/{id}/orders",
+   "consumer": "POST /orders/{orderId}/items",
+   "parameter": "orderId",
+   "pointer": "/orderId"
+  },
+  {
+   "producer": "POST /products",
+   "consumer": "GET /products/{sku}",
+   "parameter": "sku",
+   "pointer": "/sku"
+  },
+  {
+   "producer": "POST /products",
+   "consumer": "PUT /products/{sku}",
+   "parameter": "sku",
+   "pointer": "/sku"
+  },
+  {
+   "producer": "POST /carts",
+   "consumer": "GET /carts/{cartId}",
+   "parameter": "cartId",
+   "pointer": "/cartId"
+  },
+  {
+   "producer": "POST /carts",
+   "consumer": "POST /carts/{cartId}/checkout",
+   "parameter": "cartId",
+   "pointer": "/cartId"
+  }
+ ]
+}

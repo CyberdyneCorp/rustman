@@ -237,7 +237,7 @@ Runs with [`snapshot` assertions](snapshots.md#in-reports) add a summary line su
 
 ## Viz companion
 
-`rustman-viz` is an optional graphical companion that draws runs, explorations and large responses as charts, tables and graphs. It is a separate program: `rustman` builds, installs and runs without it, and never needs a GPU. `rustman` talks to it over the [viz protocol](viz-protocol.md).
+`rustman-viz` is an optional graphical companion that draws runs, explorations and large responses as charts, tables and graphs. It is a separate program: `rustman` builds, installs and runs without it, and never needs a GPU. `rustman` talks to it over the [viz protocol](viz-protocol.md). Its views and how to install it are in [`viz.md`](viz.md).
 
 ```text
 rustman viz <REPORT> [--view dashboard|graph]
@@ -263,7 +263,7 @@ When the companion cannot be used, `--viz` prints the reason as a warning and th
 |-----------|---------|
 | Not found | `Viz companion not found; continuing without visuals (...)` |
 | Another protocol version | `Viz companion speaks rustman-viz/2, rustman needs rustman-viz/1; upgrade rustman-viz` |
-| No graphics (no Vulkan loader, or MoltenVK missing on macOS) | `Graphics unavailable (Vulkan); continuing without visuals` |
+| No graphics (no Vulkan driver on Linux or Windows; a VM or remote session) | `Graphics unavailable (Vulkan); continuing without visuals` |
 | Exits or crashes during a run | `Viz companion exited; continuing without visuals` |
 | Stops reading for 5 seconds | `Viz companion stopped reading for 5 s; detached from it, continuing without visuals` |
 

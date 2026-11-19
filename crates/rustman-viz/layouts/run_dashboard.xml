@@ -1,0 +1,79 @@
+<!-- Run dashboard (add-raven-visualizer D5, D6). Slots named here are
+     filled by the code: Labels get text, empty VBoxes get a chart, plot or
+     table. -->
+<Window Title="Rustman · Run" Width="1280" Height="860" MinWidth="900" MinHeight="600">
+  <VBox Spacing="14" Slot.Padding="18">
+    <HBox Spacing="12">
+      <VBox Spacing="2" Slot.Fill="1">
+        <Label Name="title" Text="Run" TextSize="22"/>
+        <Label Name="subtitle" Text="" Color="#8A93A6"/>
+      </VBox>
+      <Border Padding="8,4" CornerRadius="12" Slot.VAlign="Center">
+        <Label Name="state" Text="Running"/>
+      </Border>
+    </HBox>
+    <UniformGrid Columns="5" Spacing="12">
+      <Border Padding="12" CornerRadius="10">
+        <VBox Spacing="4">
+          <Label Text="Requests" Color="#8A93A6"/>
+          <Label Name="kpi_requests" Text="0" TextSize="26"/>
+          <VBox Name="spark_requests" Height="34"/>
+        </VBox>
+      </Border>
+      <Border Padding="12" CornerRadius="10">
+        <VBox Spacing="4">
+          <Label Text="Assertion pass rate" Color="#8A93A6"/>
+          <Label Name="kpi_pass_rate" Text="–" TextSize="26"/>
+          <VBox Name="spark_pass_rate" Height="34"/>
+        </VBox>
+      </Border>
+      <Border Padding="12" CornerRadius="10">
+        <VBox Spacing="4">
+          <Label Text="p50 latency" Color="#8A93A6"/>
+          <Label Name="kpi_p50" Text="–" TextSize="26"/>
+          <VBox Name="spark_p50" Height="34"/>
+        </VBox>
+      </Border>
+      <Border Padding="12" CornerRadius="10">
+        <VBox Spacing="4">
+          <Label Text="p95 latency" Color="#8A93A6"/>
+          <Label Name="kpi_p95" Text="–" TextSize="26"/>
+          <VBox Name="spark_p95" Height="34"/>
+        </VBox>
+      </Border>
+      <Border Padding="12" CornerRadius="10">
+        <VBox Spacing="4">
+          <Label Text="Errors" Color="#8A93A6"/>
+          <Label Name="kpi_errors" Text="0" TextSize="26"/>
+          <VBox Name="spark_errors" Height="34"/>
+        </VBox>
+      </Border>
+    </UniformGrid>
+    <HBox Spacing="12" Height="280">
+      <Border Padding="12" CornerRadius="10" Width="320">
+        <VBox Spacing="6">
+          <Label Text="Outcomes" Color="#8A93A6"/>
+          <VBox Name="outcomes" Slot.Fill="1"/>
+        </VBox>
+      </Border>
+      <Border Padding="12" CornerRadius="10" Slot.Fill="2">
+        <VBox Spacing="6">
+          <Label Text="Latency over time" Color="#8A93A6"/>
+          <VBox Name="latency" Slot.Fill="1"/>
+        </VBox>
+      </Border>
+      <Border Padding="12" CornerRadius="10" Slot.Fill="1">
+        <VBox Spacing="6">
+          <Label Text="Latency histogram" Color="#8A93A6"/>
+          <VBox Name="histogram" Slot.Fill="1"/>
+        </VBox>
+      </Border>
+    </HBox>
+    <Border Padding="12" CornerRadius="10" Slot.Fill="1">
+      <VBox Spacing="6">
+        <Label Text="Requests" Color="#8A93A6"/>
+        <VBox Name="requests" Slot.Fill="1"/>
+      </VBox>
+    </Border>
+  </VBox>
+</Window>

@@ -346,21 +346,28 @@ The listener accepts any method on any path and stores bodies byte for byte. You
 
 ### 9. See it visually when the terminal isn't enough
 
-_In progress (side track): the `rustman-viz` companion app is not built yet. Available today on the Rustman side: the [viz protocol](docs/viz-protocol.md); `--viz` on `run`, `explore run` and `explore resume`; `rustman viz <report>`; and the TUI's `v` key. Each streams to a companion when one is installed, and otherwise says why and continues (see [Viz companion](docs/cli.md#viz-companion)). `H` exports the exchange as a self-contained HTML report._
+_Side track. The companion and the Rustman side are built. Prebuilt `rustman-viz` packages are not published yet: [build it from source](docs/viz.md#installing) with the Raven library._
 
 With the optional **`rustman-viz`** companion, built on the [Raven](https://github.com/oscar-soirey/Raven) GUI library, run and exploration results open as native dashboards:
 
-- **Run dashboard:** summary tiles, a donut of status codes, latency plot and histogram, per-request sparklines
-- **Exploration dashboard:** heatmap of operations × status codes, coverage gauges, findings table
-- **API graph:** a node graph of operations and their data dependencies
-- **Large responses:** JSON arrays as sortable tables, plus a read-only JSON viewer
+![Run dashboard](docs/images/viz-run-dashboard.png)
+
+- **Run dashboard:** KPI tiles with sparklines, a donut of outcomes, latency over time and a histogram, per-request trends
+- **Exploration dashboard:** a heatmap of operations × status classes (click a row to filter the findings), coverage gauges, findings by severity
+- **API graph:** the operations and the values they pass to each other, coloured by their worst finding
+- **Large responses:** JSON arrays as sortable tables with virtual rows, plus a read-only JSON view
+
+| Exploration dashboard | API graph |
+|---|---|
+| ![Exploration dashboard](docs/images/viz-exploration-dashboard.png) | ![API graph](docs/images/viz-api-graph.png) |
 
 ```bash
 rustman run api/ --viz                 # stream a live dashboard while the run executes
-rustman viz reports/run.json           # open a saved report
+rustman explore run --spec api.yaml --target https://staging.example.com --viz
+rustman viz reports/run.json           # open a saved report (--view graph for an exploration's API graph)
 ```
 
-The companion is **optional and read-only**: it never sends requests. It needs Vulkan (MoltenVK on macOS), so it's built separately (cargo feature `raven`). If it isn't installed, Rustman offers the self-contained HTML report instead.
+In the TUI, `v` opens the current response in the inspector. The companion is **optional and read-only**: it never sends requests, and it gets only redacted data. It draws with Metal on macOS and Vulkan on Linux and Windows. It is built separately (cargo feature `raven`, in a workspace of its own), so `rustman` never needs it. When it isn't installed, or graphics can't start, Rustman says why and offers the self-contained HTML report instead. See [`docs/viz.md`](docs/viz.md). The screenshots show sample data.
 
 ### 10. Work with Ethereum and other JSON-RPC chains
 
@@ -601,7 +608,7 @@ Today, `rustman secret set|rm|list` manages the OS keychain (or `.rustman/secret
 | Code button (snippets) | `rustman export snippet`, or `Alt+C` in the TUI |
 | Mock servers, monitors, API docs | `rustman mock`, all local; `rustman monitor` and `rustman docs` are planned |
 | Interceptor / proxy capture | `rustman record`, with a local CA (planned) |
-| Visualizer | Raven dashboards (`rustman-viz`, planned) |
+| Visualizer | Raven dashboards (`rustman-viz`, optional companion) |
 | GraphQL, gRPC, WebSocket, Socket.IO, MQTT | GraphQL, gRPC and JSON-RPC today; WebSocket, SSE, Kafka, MQTT and AMQP planned. Socket.IO via plugins. |
 | Team workspaces and cloud sync | Git. Rustman is local-first, with no accounts. |
 
@@ -667,7 +674,7 @@ graph TD
 | `rustman-grpc` | gRPC client using tonic, reflection and protox |
 | `rustman-import` | Postman, Insomnia, Bruno, HAR and `.http` import and export |
 | `rustman-mock` | OpenAPI mock server |
-| `rustman-viz` | _Planned:_ optional Raven GUI companion, separate binary |
+| `rustman-viz` | Optional Raven GUI companion: a separate binary in its own workspace (`crates/rustman-viz`) |
 | `rustman-evm` | _Planned:_ Ethereum toolkit on `alloy`: ABI, decoding, simulation, ENS, signing gate |
 | `rustman-realtime` | _In progress:_ WebSocket and SSE sessions |
 | `rustman-messaging` | _Planned:_ Kafka, MQTT and AMQP clients (pure Rust) |

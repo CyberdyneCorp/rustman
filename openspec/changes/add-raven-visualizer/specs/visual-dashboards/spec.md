@@ -113,7 +113,7 @@ The exploration dashboard SHALL show a heatmap with one row per API operation an
 - **THEN** the operation coverage gauge SHALL read `75%`
 
 ### Requirement: API graph
-The API graph view SHALL render one node per API operation from an exploration report, and one link per data dependency (a value captured from one operation's response used as input to another). Nodes SHALL be coloured by the worst finding severity on that operation, with no findings shown in the neutral colour. Selecting a node SHALL list its findings.
+The API graph view SHALL render one node per API operation from an exploration report, and one link per data dependency (a value captured from one operation's response used as input to another), read from the report's optional `dependencies` field. Nodes SHALL be coloured by the worst finding severity on that operation, with no findings shown in the neutral colour. Selecting a node SHALL list its findings.
 
 #### Scenario: Dependency link
 - **GIVEN** an exploration in which `POST /users` produced `id` that was used as `{id}` in `GET /users/{id}`
@@ -167,7 +167,7 @@ While a run or exploration is in progress, the dashboard SHALL update as progres
 - **AND** the exit code SHALL reflect only the run's results
 
 ### Requirement: Graceful fallback
-When the companion is not found, rejects the protocol, or cannot initialise graphics, `rustman` SHALL explain the specific reason and offer to write the HTML report from `test-reports` instead. When graphics cannot start (no Vulkan, including missing MoltenVK on macOS), the companion SHALL exit with code 3 after writing an `error` line with code `vulkan_unavailable`.
+When the companion is not found, rejects the protocol, or cannot initialise graphics, `rustman` SHALL explain the specific reason and offer to write the HTML report from `test-reports` instead. When graphics cannot start (no GPU backend: no Vulkan driver on Linux or Windows, or no Metal device), the companion SHALL exit with code 3 after writing an `error` line with code `vulkan_unavailable`.
 
 #### Scenario: No Vulkan
 - **GIVEN** a machine without a Vulkan loader

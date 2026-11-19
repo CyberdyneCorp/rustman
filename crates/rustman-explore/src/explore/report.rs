@@ -19,8 +19,8 @@ use crate::openapi::model::ApiModel;
 
 pub use rustman_report::SCHEMA;
 pub use rustman_report::exploration::{
-    ExplorationReport, KIND_EXPLORATION, OperationInfo, ProbeResult, ProbeTotals, ReportFinding,
-    Summary,
+    Dependency, ExplorationReport, KIND_EXPLORATION, OperationInfo, ProbeResult, ProbeTotals,
+    ReportFinding, Summary,
 };
 
 /// The report of the exploration `state`, from its plan, the model and the
@@ -69,7 +69,26 @@ pub fn build(state: &State, plan: &Plan, model: &ApiModel, entries: &[Entry]) ->
         left_behind: live(entries),
         cleanup,
         operations: operations(model),
+        dependencies: dependencies(state),
     }
+}
+
+/// The producer edges of the resource graph, one per producer, consumer
+/// and parameter (the first, preferred source of each).
+fn dependencies(state: &State) -> Vec<Dependency> {
+    let mut seen = std::collections::BTreeSet::new();
+    state
+        .graph
+        .edges
+        .iter()
+        .filter(|e| seen.insert((e.producer.clone(), e.consumer.clone(), e.parameter.clone())))
+        .map(|e| Dependency {
+            producer: e.producer.clone(),
+            consumer: e.consumer.clone(),
+            parameter: e.parameter.clone(),
+            pointer: e.pointer.clone(),
+        })
+        .collect()
 }
 
 /// The findings of `outcomes` (in plan order), one per rule and operation,
