@@ -22,6 +22,7 @@ mod execute;
 mod graphql;
 mod history;
 mod jsonrpc;
+mod mcp;
 mod record;
 mod seed;
 mod snapshots;
@@ -54,6 +55,7 @@ use crate::timing::millis;
 
 pub use graphql::{GraphqlCall, GraphqlExecutor, GraphqlFuture, GraphqlOutcome};
 pub use jsonrpc::{JsonrpcCall, JsonrpcCallCheck, JsonrpcExecutor, JsonrpcFuture, JsonrpcOutcome};
+pub use mcp::{McpCall, McpExecutor, McpFuture, McpOutcome};
 pub use record::{exchange_record, timings_record};
 
 /// Where requests run: the workspace (or, for an ad-hoc request outside
@@ -118,6 +120,9 @@ pub struct RunOptions<'a> {
     /// How `snapshot` assertions treat their files: record, update
     /// (`--update-snapshots`) or CI (`--ci`, `CI=true`).
     pub snapshots: SnapshotMode,
+    /// Sends `kind: mcp` requests, one session per server for the run;
+    /// without one they are skipped as an unsupported kind.
+    pub mcp: Option<&'a dyn McpExecutor>,
     /// Sends every request instead of the engine; `None` for the CLI and
     /// the TUI.
     pub gate: Option<&'a dyn SendGate>,
@@ -153,6 +158,7 @@ impl Default for RunOptions<'_> {
             ad_hoc: false,
             graphql: None,
             jsonrpc: None,
+            mcp: None,
             gate: None,
             snapshots: SnapshotMode::Record,
         }
@@ -184,6 +190,8 @@ pub struct Sent {
     /// The failed, missing and new snapshots of this exchange, for a review
     /// after the send (redacted).
     pub snapshots: Vec<SnapshotReview>,
+    /// What an mcp request sent, until its history entry is written.
+    mcp_sent: Option<rustman_core::run::SentRequest>,
 }
 
 impl Sent {

@@ -7,6 +7,7 @@ use rustman_core::Redactor;
 use rustman_core::assertions::{AssertionResult, ResponseView};
 use rustman_core::model::Assertion;
 use rustman_core::snapshot::{CheckedSnapshots, Exchange, SnapshotContext, check_all};
+use rustman_core::workspace::RequestRef;
 
 use super::Runner;
 use super::execute::Checked;
@@ -22,16 +23,6 @@ impl Runner<'_> {
         redactor: &Redactor,
         results: &mut [AssertionResult],
     ) -> CheckedSnapshots {
-        let has_snapshot = checked
-            .assertions
-            .iter()
-            .any(|a| matches!(a, Assertion::Snapshot(_)));
-        if !has_snapshot {
-            return CheckedSnapshots::default();
-        }
-        let entry = checked.request.entry;
-        let request_file = self.ctx.root.join(&entry.path);
-        let request = entry.path.to_string_lossy();
         let exchange = Exchange {
             kind: checked.kind,
             status: Some(view.status),
@@ -39,12 +30,44 @@ impl Runner<'_> {
             body: &view.body,
             events: checked.events.as_deref(),
         };
+        let target = SnapshotTarget {
+            request: checked.request,
+            assertions: checked.assertions,
+        };
+        self.check_exchange_snapshots(&target, &exchange, redactor, results)
+    }
+
+    /// Check the snapshot assertions of `target` against `exchange`, filling
+    /// their slots of `results`.
+    pub(super) fn check_exchange_snapshots(
+        &self,
+        target: &SnapshotTarget<'_, '_>,
+        exchange: &Exchange<'_>,
+        redactor: &Redactor,
+        results: &mut [AssertionResult],
+    ) -> CheckedSnapshots {
+        let has_snapshot = target
+            .assertions
+            .iter()
+            .any(|a| matches!(a, Assertion::Snapshot(_)));
+        if !has_snapshot {
+            return CheckedSnapshots::default();
+        }
+        let entry = target.request.entry;
+        let request_file = self.ctx.root.join(&entry.path);
+        let request = entry.path.to_string_lossy();
         let ctx = SnapshotContext {
             request_file: &request_file,
             request: &request,
             mode: self.options.snapshots,
             redactor,
         };
-        check_all(checked.assertions, results, &exchange, &ctx)
+        check_all(target.assertions, results, exchange, &ctx)
     }
+}
+
+/// The request whose snapshot assertions are checked.
+pub(super) struct SnapshotTarget<'c, 'r> {
+    pub request: &'c RequestRef<'r>,
+    pub assertions: &'c [Assertion],
 }

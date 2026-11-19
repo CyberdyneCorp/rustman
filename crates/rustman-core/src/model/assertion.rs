@@ -35,6 +35,19 @@ pub enum Assertion {
     RpcError(RpcErrorExpectation),
     /// `snapshot` or `snapshot: {...}`: compare with a stored snapshot.
     Snapshot(Box<Checked<SnapshotAssertion>>),
+    /// `is_error: true`: an MCP tool result with `isError` (`false`: without).
+    IsError(bool),
+    /// `content_text_contains: text`: some text content item of an MCP
+    /// result has it.
+    ContentTextContains(String),
+    /// `structured: {path, <op>: value}`: a JSONPath check rooted at an MCP
+    /// tool result's `structuredContent`.
+    Structured(Box<Checked<JsonAssertion>>),
+    /// `output_schema: true`: `structuredContent` matches the tool's
+    /// `outputSchema` (implicit for tools that declare one).
+    OutputSchema(bool),
+    /// `tool_exists: name`: an MCP `tools/list` result has the tool.
+    ToolExists(String),
 }
 
 /// The key naming an assertion's type.
@@ -54,6 +67,11 @@ enum AssertionKey {
     Data,
     RpcError,
     Snapshot,
+    IsError,
+    ContentTextContains,
+    Structured,
+    OutputSchema,
+    ToolExists,
 }
 
 impl<'de> Deserialize<'de> for Assertion {
@@ -104,6 +122,11 @@ impl<'de> Visitor<'de> for AssertionVisitor {
             AssertionKey::Data => Assertion::Data(map.next_value()?),
             AssertionKey::RpcError => Assertion::RpcError(map.next_value()?),
             AssertionKey::Snapshot => Assertion::Snapshot(map.next_value()?),
+            AssertionKey::IsError => Assertion::IsError(map.next_value()?),
+            AssertionKey::ContentTextContains => Assertion::ContentTextContains(map.next_value()?),
+            AssertionKey::Structured => Assertion::Structured(map.next_value()?),
+            AssertionKey::OutputSchema => Assertion::OutputSchema(map.next_value()?),
+            AssertionKey::ToolExists => Assertion::ToolExists(map.next_value()?),
         };
         if let Some(extra) = map.next_key::<String>()? {
             return Err(de::Error::custom(format!(
@@ -131,6 +154,11 @@ impl AssertionKey {
             Self::Data => "data",
             Self::RpcError => "rpc_error",
             Self::Snapshot => "snapshot",
+            Self::IsError => "is_error",
+            Self::ContentTextContains => "content_text_contains",
+            Self::Structured => "structured",
+            Self::OutputSchema => "output_schema",
+            Self::ToolExists => "tool_exists",
         }
     }
 }
@@ -512,6 +540,23 @@ mod tests {
         );
         let err = list("- status: 999\n").unwrap_err();
         assert_eq!(err.message, "invalid status code 999 (expected 100-599)");
+    }
+
+    #[test]
+    fn mcp_assertions_load() {
+        let text = "\
+- is_error: false
+- content_text_contains: found
+- structured: {path: $.count, equals: 3}
+- output_schema: true
+- tool_exists: search
+";
+        let all = list(text).unwrap();
+        assert_eq!(all[0], Assertion::IsError(false));
+        assert_eq!(all[1], Assertion::ContentTextContains("found".into()));
+        assert!(matches!(&all[2], Assertion::Structured(s) if s.path == "$.count"));
+        assert_eq!(all[3], Assertion::OutputSchema(true));
+        assert_eq!(all[4], Assertion::ToolExists("search".into()));
     }
 
     #[test]

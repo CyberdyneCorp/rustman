@@ -215,6 +215,8 @@ pub enum Purpose {
     Webhook(crate::webhook::Prompt),
     /// A mock server pane prompt (the document to serve).
     Mock(crate::mock_server::Prompt),
+    /// An MCP inspector prompt (save the last call).
+    Mcp(crate::mcp::Prompt),
 }
 
 /// A one-line text prompt.

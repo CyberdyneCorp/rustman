@@ -108,6 +108,7 @@ fn execute_other(effect: Effect) -> Action {
         Effect::WriteReport(job) => Action::ReportWritten(html::write(&job)),
         Effect::Webhook(job) => crate::webhook::execute(*job),
         Effect::Mock(job) => crate::mock_server::execute(*job),
+        Effect::Mcp(job) => crate::mcp::execute(*job),
         Effect::GraphqlSchema(job) => graphql_schema::execute(&job),
         Effect::Snippet(job) => crate::copy_as::execute(&job),
         Effect::Import(job) => crate::import_dialog::execute(&job),
@@ -147,9 +148,10 @@ pub fn spawn_runner_with(
     let (tx, mut rx) = unbounded_channel::<Effect>();
     tokio::spawn(async move {
         while let Some(effect) = rx.recv().await {
-            let Some(effect) = crate::webhook::intercept(effect, &actions)
+            let effect = crate::webhook::intercept(effect, &actions)
                 .and_then(|effect| crate::mock_server::intercept(effect, &actions))
-            else {
+                .and_then(|effect| crate::mcp::intercept(effect, &actions));
+            let Some(effect) = effect else {
                 continue;
             };
             let actions = actions.clone();

@@ -115,6 +115,7 @@ pub const DEFAULT: &[Builtin] = &[
     (Context::Global, "Alt+R", ActionId::SecretsReveal),
     (Context::Global, "Alt+W", ActionId::WebhookOpen),
     (Context::Global, "Alt+O", ActionId::MockOpen),
+    (Context::Global, "Alt+I", ActionId::McpOpen),
     (Context::Global, "Alt+C", ActionId::CopyAs),
     (Context::Global, "Ctrl+Q", ActionId::Quit),
     (Context::Global, "Ctrl+G", ActionId::GraphqlRefreshSchema),

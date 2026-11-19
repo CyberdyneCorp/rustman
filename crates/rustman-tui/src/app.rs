@@ -22,6 +22,7 @@ use crate::files::FileOp;
 use crate::graphql_schema::{SchemaJob, SchemaLoaded};
 use crate::keymap::{Chord, Keymap};
 use crate::launch::Launch;
+use crate::mcp::{self, McpPane};
 use crate::palette::{Palette, Target};
 use crate::response::html::ReportJob;
 use crate::response::json_tree::JsonTree;
@@ -85,6 +86,8 @@ pub struct State {
     pub snapshot_mode: SnapshotMode,
     /// The mock server pane and its server.
     pub mock: crate::mock_server::MockPane,
+    /// The MCP inspector pane and its session.
+    pub mcp: McpPane,
 }
 
 /// Modals drawn over the shell.
@@ -288,6 +291,8 @@ pub enum Action {
     Webhook(Box<webhook::Msg>),
     /// A mock server event or a mock pane job finished.
     Mock(Box<crate::mock_server::Msg>),
+    /// An MCP session event or an MCP inspector job finished.
+    Mcp(Box<mcp::Msg>),
     /// A GraphQL tab's schema was loaded (or refreshed).
     GraphqlSchema {
         tab: TabId,
@@ -391,6 +396,8 @@ pub enum Effect {
     Webhook(Box<webhook::Job>),
     /// Mock pane work: settings and the server.
     Mock(Box<crate::mock_server::Job>),
+    /// MCP inspector work: servers, trust, the session, saving a call.
+    Mcp(Box<mcp::Job>),
     /// Load (or refresh) a GraphQL tab's schema.
     GraphqlSchema(Box<SchemaJob>),
     /// Make a "Copy as…" snippet.
@@ -441,6 +448,7 @@ impl State {
             webhook: WebhookPane::default(),
             snapshot_mode: SnapshotMode::Record,
             mock: crate::mock_server::MockPane::default(),
+            mcp: McpPane::default(),
         }
     }
 
@@ -563,6 +571,7 @@ fn on_workbench(state: &mut State, action: Action) -> Vec<Effect> {
         }
         Action::Webhook(msg) => webhook::on_msg(state, *msg),
         Action::Mock(msg) => crate::mock_server::on_msg(state, *msg),
+        Action::Mcp(msg) => mcp::on_msg(state, *msg),
         Action::GraphqlSchema {
             tab,
             refresh,

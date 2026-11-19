@@ -184,7 +184,9 @@ pub fn http_entry(target: &RequestRef<'_>) -> Result<Option<RequestEntry>, Snipp
             graphql_as_http(&file, graphql, read)
         }
         Request::Jsonrpc(jsonrpc) => jsonrpc_as_http(&file, jsonrpc),
-        Request::Opaque(other) => return Err(SnippetError::UnsupportedKind(other.kind.clone())),
+        other @ (Request::Mcp(_) | Request::Opaque(_)) => {
+            return Err(SnippetError::UnsupportedKind(other.kind().to_owned()));
+        }
     };
     let http = http.map_err(|e| SnippetError::Invalid(e.to_string()))?;
     Ok(Some(RequestEntry {

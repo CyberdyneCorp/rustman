@@ -20,20 +20,50 @@ The workspace SHALL define MCP servers by name in `rustman.toml` under `[mcp_ser
 - **THEN** loading SHALL fail with `mcp: server <name> must define either command or url, not both`
 
 ### Requirement: Stdio command trust
-Before spawning a stdio server command for the first time (or after its command, args or env keys change), the TUI SHALL show the full command line and require confirmation; the approval SHALL be recorded in `.rustman/trust.yaml` keyed by a hash of the definition. Headless commands SHALL refuse untrusted definitions unless `--trust` is passed.
+Before spawning a stdio server command for the first time (or after its command, args, env keys or env values change; a secret counts only by its name), the TUI SHALL show the full command line and require confirmation; the approval SHALL be recorded in `.rustman/trust.yaml` keyed by a hash of the definition. Headless commands SHALL refuse untrusted definitions unless `--trust` is passed.
 
 #### Scenario: First spawn in TUI
 - **GIVEN** a never-approved stdio definition
 - **WHEN** the user connects
 - **THEN** the exact command line SHALL be shown and nothing SHALL be spawned until the user confirms
 
+
 #### Scenario: Changed command headless
 - **GIVEN** an approved definition whose `args` changed
 - **WHEN** `rustman mcp-client tools files` runs without `--trust`
 - **THEN** it SHALL exit non-zero with `mcp: server files is not trusted; review it or pass --trust`
 
+#### Scenario: Changed env value headless
+- **GIVEN** an approved definition whose literal `env` value changed
+- **WHEN** a headless command connects to it without `--trust`
+- **THEN** it SHALL be refused as untrusted, while a rotated secret in `env` SHALL keep the approval
+
+### Requirement: Trust dialog shows the environment
+The trust dialog SHALL also show the working directory and each env variable of the definition as `KEY=value`, with substituted secrets and the values of variables named like a secret (`password`, `token`, `secret`, `api_key`) redacted.
+
+#### Scenario: Env values in the trust dialog
+- **GIVEN** a never-approved stdio definition with `env = { MODE = "fast", API_TOKEN = "literal-token-value" }`
+- **WHEN** the TUI asks for approval
+- **THEN** it SHALL show `MODE=fast` and `API_TOKEN=«redacted:API_TOKEN»`, and never `literal-token-value`
+
+### Requirement: Trust approvals sealed per machine
+Each approval in `.rustman/trust.yaml` SHALL be an HMAC-SHA256, under a per-machine key, of the workspace's location, the subject and the definition's hash. The key SHALL be 32 random bytes kept outside every workspace (in the user's data directory, `RUSTMAN_DATA_DIR` when set), created on the first approval and readable by the current user only. An approval that does not verify under this key for this workspace SHALL count as not approved, with or without Git.
+
+#### Scenario: Trust file shipped outside Git
+- **GIVEN** a workspace without a Git repository (for example a downloaded archive) that contains a `.rustman/trust.yaml` approving its stdio server, written on another machine or for another workspace
+- **WHEN** a headless command connects to that server without `--trust`
+- **THEN** it SHALL exit non-zero with `mcp: server <name> is not trusted; review it or pass --trust` and nothing SHALL be spawned
+
+### Requirement: Trust file provenance
+A trust file that Git tracks or does not ignore, or that is (or sits under) a symbolic link, SHALL be refused when read as well as when written, so a repository cannot ship approvals for its own commands.
+
+#### Scenario: Committed trust file
+- **GIVEN** a repository that commits a `.rustman/trust.yaml` approving its own stdio server
+- **WHEN** a headless command connects to that server without `--trust`
+- **THEN** it SHALL exit non-zero with `refusing .rustman/trust.yaml: Git tracks it or does not ignore it; delete it and approve the servers again` and nothing SHALL be spawned
+
 ### Requirement: Stdio transport
-For stdio servers the system SHALL spawn the process with the configured args, env (merged over the parent environment) and cwd (default: workspace root), exchange newline-delimited JSON-RPC over stdin/stdout, and capture stderr into a per-session log viewable by the user. On disconnect the system SHALL close stdin, wait 5 s, then terminate the process.
+For stdio servers the system SHALL spawn the process with the configured args, env (see "Stdio server environment") and cwd (default: workspace root), exchange newline-delimited JSON-RPC over stdin/stdout, and capture stderr into a per-session log viewable by the user. On disconnect the system SHALL close stdin, wait 5 s, then terminate the process together with the processes it started (its process group on Unix, its process tree on Windows).
 
 #### Scenario: Stderr captured
 - **GIVEN** a stdio server that writes warnings to stderr
@@ -44,6 +74,27 @@ For stdio servers the system SHALL spawn the process with the configured args, e
 - **GIVEN** a connected stdio server
 - **WHEN** the process exits with code 1
 - **THEN** the session SHALL be marked disconnected with the exit code and last 50 stderr lines
+
+### Requirement: Stdio server environment
+A stdio server's environment SHALL be a minimal allowlist of the parent environment, each variable only when set: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TERM`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TMPDIR`, `TEMP`, `TMP`, plus on Windows the system variables launchers need (see the scenario). The definition's `env` SHALL be applied over it; no other parent variable SHALL reach the process.
+
+#### Scenario: Windows system variables
+- **GIVEN** Rustman runs on Windows
+- **WHEN** a stdio server is spawned
+- **THEN** it SHALL also inherit `SystemRoot`, `SystemDrive`, `windir`, `ComSpec`, `PATHEXT`, `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `ProgramData`, `ProgramFiles`, `ProgramFiles(x86)`, `HOMEDRIVE`, `HOMEPATH`, `NUMBER_OF_PROCESSORS` and `PROCESSOR_ARCHITECTURE` when set
+
+#### Scenario: Parent environment not inherited
+- **GIVEN** Rustman runs with `FAKE_SECRET_TOKEN` set and a stdio definition with `env = { MODE = "x" }`
+- **WHEN** the server is spawned
+- **THEN** the process SHALL see `MODE` and `PATH`, and SHALL NOT see `FAKE_SECRET_TOKEN`
+
+### Requirement: Stdio message size limit
+A stdout message line longer than 16 MiB SHALL end a stdio session, failing the requests in flight with `mcp: server <name>: the server sent a message larger than 16 MiB; the session was closed`.
+
+#### Scenario: Oversized message
+- **GIVEN** a connected stdio server that answers with a 17 MiB line
+- **WHEN** the answer arrives
+- **THEN** the session SHALL end and the request SHALL fail with that error
 
 ### Requirement: Streamable HTTP transport with legacy fallback
 For HTTP servers the system SHALL use the Streamable HTTP transport, including `Mcp-Session-Id` handling and SSE response streams. If the initial POST returns 4xx other than 401, the system SHALL retry using the legacy HTTP+SSE transport (GET the SSE endpoint, POST to the announced endpoint) and SHALL label the session `legacy SSE`.
@@ -162,12 +213,17 @@ The system SHALL show every server notification (log messages with level and log
 - **THEN** `logging/setLevel` with `debug` SHALL be sent and subsequent debug messages SHALL appear in the stream
 
 ### Requirement: Progress, timeout and cancellation
-Every request SHALL carry a `progressToken`; progress notifications SHALL update a progress indicator. Requests SHALL time out after 60 s by default (configurable per server and per request file), sending `notifications/cancelled` on timeout or user cancel, and reporting `mcp: request timed out after 60s` or `cancelled by user`.
+Every request SHALL carry a `progressToken`; progress notifications SHALL update a progress indicator. Requests, `initialize` included, SHALL time out after 60 s by default (configurable per server, per request file, and with `--timeout` of `rustman mcp-client`, which also bounds `initialize`), sending `notifications/cancelled` on timeout or user cancel, and reporting `mcp: request timed out after 60s` or `cancelled by user`.
 
 #### Scenario: Timeout
 - **GIVEN** a tool that never answers
 - **WHEN** 60 s elapse
 - **THEN** `notifications/cancelled` SHALL be sent and the call SHALL fail with `mcp: request timed out after 60s`
+
+#### Scenario: Server never initializes
+- **GIVEN** a server that never answers `initialize`
+- **WHEN** a session is opened (for example by `rustman mcp-client tools <server> --timeout 500ms`)
+- **THEN** it SHALL fail with `mcp: request timed out after <timeout>` and a stdio server SHALL be stopped
 
 #### Scenario: User cancel
 - **GIVEN** a long-running call showing progress 40%
@@ -220,6 +276,24 @@ When an HTTP server responds 401 with `WWW-Authenticate` pointing to protected-r
 - **GIVEN** an authorization server without dynamic registration and no `client_id` configured
 - **WHEN** the user connects
 - **THEN** connection SHALL fail with `mcp: oauth requires client_id for <server>`
+
+### Requirement: OAuth metadata validation
+Before a login, the protected resource metadata's `resource` SHALL be the server URL or a parent of it on the same origin, and the authorization server metadata's `issuer` SHALL be the URL it was looked up for, and the issuer and the authorization, token and registration endpoints SHALL use `https` (`http` only on a loopback host); otherwise the login SHALL fail before the browser opens.
+
+#### Scenario: Resource of another API
+- **GIVEN** a server whose protected resource metadata names a `resource` on another origin
+- **WHEN** the user connects
+- **THEN** connection SHALL fail with `mcp: oauth: the protected resource <resource> does not match the server URL <url>` and no browser SHALL open
+
+#### Scenario: Another issuer
+- **GIVEN** authorization server metadata whose `issuer` differs from the URL it was read for
+- **WHEN** the user connects
+- **THEN** connection SHALL fail with an `mcp: oauth:` error naming both issuers and no browser SHALL open
+
+#### Scenario: Endpoint that is not https
+- **GIVEN** authorization server metadata whose `authorization_endpoint` is a `file:` URL or whose `token_endpoint` is plain `http` on a remote host
+- **WHEN** the user connects
+- **THEN** connection SHALL fail with `mcp: oauth: refusing OAuth URL <url>: it must use https (http only on a loopback host)`, no browser SHALL open and nothing SHALL be sent to the endpoint
 
 ### Requirement: OAuth token storage
 Access and refresh tokens SHALL be stored only in the OS keychain (fallback: git-ignored `.rustman/secrets.yaml` per `environments`), refreshed automatically before expiry, and SHALL be redacted in history, logs and reports. `rustman mcp-client logout <server>` SHALL delete them.
@@ -275,6 +349,24 @@ Every MCP operation SHALL be recorded by `request-history` with server name, tra
 #### Scenario: Tool error exit code
 - **WHEN** `rustman mcp-client call files read --arg path=missing` returns `isError: true`
 - **THEN** the content SHALL be printed and the exit code SHALL be 1
+
+### Requirement: MCP client CLI interruption
+Ctrl+C during a `rustman mcp-client` command SHALL cancel the request in flight, stop the server together with the processes it started, and exit with 130. On Unix, SIGTERM and SIGHUP SHALL be handled the same way. A second Ctrl+C SHALL quit at once with 130, even during the server's shutdown grace period, and SHALL first kill every stdio server process tree still running.
+
+#### Scenario: Ctrl+C while waiting for a server
+- **GIVEN** `rustman mcp-client call` waiting on a stdio server whose launcher started a background process
+- **WHEN** the user presses Ctrl+C
+- **THEN** the command SHALL exit with 130 and the background process SHALL no longer run
+
+#### Scenario: Second Ctrl+C during shutdown
+- **GIVEN** `rustman mcp-client call` on a stdio server that ignores the end of its stdin and whose launcher started a background process
+- **WHEN** the user presses Ctrl+C, then again during the 5 s shutdown grace period
+- **THEN** the command SHALL exit with 130 at once and the background process SHALL no longer run
+
+#### Scenario: SIGTERM
+- **GIVEN** `rustman mcp-client call` waiting on a stdio server whose launcher started a background process
+- **WHEN** the process receives SIGTERM
+- **THEN** the request SHALL be cancelled, the command SHALL exit with 130 and the background process SHALL no longer run
 
 ### Requirement: TUI MCP inspector pane
 The TUI SHALL provide an MCP inspector pane with: server list and connection status, server info/capabilities, tabs `Tools`, `Resources`, `Prompts`, `Notifications`, `Stderr`, the argument form, result view, and approval dialogs for sampling and elicitation. Layout, keymap and theming follow `add-terminal-ui`.

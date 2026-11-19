@@ -7,8 +7,9 @@ use crate::model::signed_auth::DEFAULT_JWT_TTL_SECS;
 use crate::model::{
     ApiKeyLocation, Assertion, Auth, AwsCredentials, AwsSigV4, Body, Capture, CountExpectation,
     CountOp, GraphqlMethod, GraphqlRequest, GraphqlTransport, HeaderAssertion, HttpRequest,
-    JsonAssertion, JsonContent, Jwt, NameValue, OAuth2, Part, PartSource, Request, RequestSettings,
-    RpcErrorExpectation, SnapshotAssertion, StatusExpectation, VarValue, Variables, WsProtocol,
+    JsonAssertion, JsonContent, Jwt, McpRequest, NameValue, OAuth2, Part, PartSource, Request,
+    RequestSettings, RpcErrorExpectation, SnapshotAssertion, StatusExpectation, VarValue,
+    Variables, WsProtocol,
 };
 
 /// The YAML text Rustman writes for a request file.
@@ -19,6 +20,8 @@ pub fn request_to_yaml(request: &Request) -> String {
         Request::Http(http) => render(&http_node(http)),
         Request::Graphql(graphql) => graphql.source.clone(),
         Request::Jsonrpc(jsonrpc) => jsonrpc.source.clone(),
+        Request::Mcp(mcp) if mcp.source.is_empty() => mcp_to_yaml(mcp),
+        Request::Mcp(mcp) => mcp.source.clone(),
         Request::Opaque(opaque) => opaque.source.clone(),
     }
 }
@@ -118,6 +121,37 @@ pub fn graphql_to_yaml(r: &GraphqlRequest) -> String {
         )
         .opt_plain("max_events", r.max_events)
         .opt("duration", r.duration.map(duration_node))
+        .opt(
+            "assertions",
+            r.assertions
+                .as_deref()
+                .map(|a| Node::Seq(a.iter().map(assertion).collect())),
+        )
+        .opt(
+            "captures",
+            r.captures
+                .as_deref()
+                .map(|c| Node::Seq(c.iter().map(|c| capture(c)).collect())),
+        )
+        .build();
+    render(&node)
+}
+
+/// The YAML text of a `kind: mcp` request, every field in schema order:
+/// for a request built in the TUI (a loaded file keeps its text).
+pub fn mcp_to_yaml(r: &McpRequest) -> String {
+    let node = MapBuilder::new()
+        .node("version", Node::plain(r.version))
+        .str("kind", &r.kind)
+        .str("name", &r.name)
+        .opt_str("description", r.description.as_deref())
+        .opt("tags", r.tags.as_deref().map(strings))
+        .str("server", &r.server)
+        .str("operation", r.operation.as_str())
+        .opt("params", r.params.as_ref().map(json_map))
+        .opt("timeout", r.timeout.map(duration_node))
+        .opt_plain("validate", r.validate)
+        .opt("variables", r.variables.as_ref().map(variables))
         .opt(
             "assertions",
             r.assertions
@@ -443,6 +477,11 @@ fn assertion(a: &Assertion) -> Node {
         Assertion::ErrorCode(code) => ("error_code", Node::str(code)),
         Assertion::Data(j) => ("data", json_assertion(j)),
         Assertion::RpcError(e) => ("rpc_error", rpc_error_node(e)),
+        Assertion::IsError(expected) => ("is_error", Node::plain(expected)),
+        Assertion::ContentTextContains(text) => ("content_text_contains", Node::str(text)),
+        Assertion::Structured(j) => ("structured", json_assertion(j)),
+        Assertion::OutputSchema(expected) => ("output_schema", Node::plain(expected)),
+        Assertion::ToolExists(name) => ("tool_exists", Node::str(name)),
     };
     Node::Map(vec![(key.to_owned(), node)])
 }

@@ -120,5 +120,6 @@ fn replayed(mut record: RequestRecord, resolved: &ResolvedRequest, exchange: Exc
         discard: None,
         redactor: Redactor::new(),
         snapshots: Vec::new(),
+        mcp_sent: None,
     }
 }

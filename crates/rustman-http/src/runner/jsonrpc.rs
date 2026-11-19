@@ -168,6 +168,7 @@ impl Runner<'_> {
             discard: None,
             redactor: Redactor::new(),
             snapshots: Vec::new(),
+            mcp_sent: None,
         };
         sent.with_resolved(outcome.request)
     }

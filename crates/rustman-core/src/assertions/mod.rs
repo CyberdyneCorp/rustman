@@ -13,6 +13,7 @@ mod graphql;
 mod header;
 mod json;
 mod jsonrpc;
+mod mcp;
 mod response;
 mod schema;
 mod shown;
@@ -28,6 +29,7 @@ use crate::redact::Redactor;
 use crate::vars::Resolver;
 use crate::workspace::RequestRef;
 
+pub use mcp::McpFacts;
 pub use response::ResponseView;
 pub use schema::MAX_VIOLATIONS;
 
@@ -55,7 +57,10 @@ pub enum Outcome {
 pub struct AssertionResult {
     /// The assertion type: `status`, `header`, `json`, `schema`, `body`,
     /// `latency`, a GraphQL check (`no_errors`, `errors_count`,
-    /// `error_message_contains`, `error_code`, `data`) or `rpc_error`.
+    /// `error_message_contains`, `error_code`, `data`), `rpc_error`, or an
+    /// MCP check
+    /// (`is_error`, `content_text_contains`, `structured`, `output_schema`,
+    /// `tool_exists`).
     pub kind: &'static str,
     pub outcome: Outcome,
     /// A short description of the check, such as `json $.id equals 42`.
@@ -110,6 +115,7 @@ pub fn needs_body(assertions: &[Assertion]) -> bool {
                 | Assertion::RpcError(_)
                 | Assertion::Snapshot(_)
         ) || graphql::reads_result(a)
+            || mcp::reads_result(a)
     })
 }
 
@@ -119,11 +125,33 @@ pub fn evaluate(
     response: &ResponseView<'_>,
     ctx: &Context<'_, '_>,
 ) -> Vec<AssertionResult> {
+    evaluate_all(assertions, response, ctx, None)
+}
+
+/// Evaluate the assertions of an MCP request against `response`, whose
+/// body is the MCP result, plus the implicit `output_schema` check when the
+/// tool declares an `outputSchema`.
+pub fn evaluate_mcp(
+    assertions: &[Assertion],
+    response: &ResponseView<'_>,
+    ctx: &Context<'_, '_>,
+    facts: &McpFacts,
+) -> Vec<AssertionResult> {
+    let all = mcp::with_implicit(assertions, facts);
+    evaluate_all(&all, response, ctx, Some(facts))
+}
+
+fn evaluate_all(
+    assertions: &[Assertion],
+    response: &ResponseView<'_>,
+    ctx: &Context<'_, '_>,
+    facts: Option<&McpFacts>,
+) -> Vec<AssertionResult> {
     let mut interp = Interp::new(ctx.resolver, ctx.redactor);
     let parsed = Parsed::new(response);
     let results: Vec<AssertionResult> = assertions
         .iter()
-        .map(|a| evaluate_one(a, &parsed, ctx, &mut interp))
+        .map(|a| evaluate_one(a, &parsed, ctx, &mut interp, facts))
         .collect();
     let redactor = interp.into_redactor();
     results.into_iter().map(|r| redact(r, &redactor)).collect()
@@ -134,6 +162,7 @@ fn evaluate_one(
     response: &Parsed<'_, '_>,
     ctx: &Context<'_, '_>,
     interp: &mut Interp<'_, '_>,
+    facts: Option<&McpFacts>,
 ) -> AssertionResult {
     let view = response.view;
     match assertion {
@@ -148,6 +177,7 @@ fn evaluate_one(
             Check::new("snapshot", format!("snapshot {}", snapshot.name()))
                 .error(SNAPSHOT_NEEDS_RUNNER)
         }
+        other if mcp::reads_result(other) => mcp::evaluate(other, response, interp, facts),
         graphql => graphql::evaluate(graphql, response, interp),
     }
 }

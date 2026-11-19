@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use super::graphql::GraphqlRecord;
 use super::jsonrpc::JsonrpcRecord;
+use super::mcp::McpRecord;
 use crate::assertions::AssertionResult;
 use crate::captures::CaptureResult;
 use crate::model::{ApiKeyLocation, Auth};
@@ -246,6 +247,10 @@ pub struct RequestRecord {
     /// for every other kind.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub jsonrpc: Option<JsonrpcRecord>,
+    /// The server, method, params, result and notifications of an MCP
+    /// request; absent for every other kind.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcp: Option<McpRecord>,
 }
 
 impl RequestRecord {
@@ -268,6 +273,7 @@ impl RequestRecord {
             duration_ms: 0.0,
             graphql: None,
             jsonrpc: None,
+            mcp: None,
         }
     }
 

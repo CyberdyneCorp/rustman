@@ -4,6 +4,7 @@
 pub mod dynamic;
 pub mod graphql;
 pub mod jsonrpc;
+pub mod mcp;
 pub mod placeholders;
 pub mod request;
 pub mod resolver;
@@ -13,10 +14,11 @@ pub mod template;
 pub use dynamic::Dynamic;
 pub use graphql::{ResolvedGraphql, resolve_graphql};
 pub use jsonrpc::{ResolvedCall, ResolvedJsonrpc, resolve_jsonrpc};
+pub use mcp::{ResolvedMcp, resolve_mcp};
 pub use placeholders::{PlaceholderVar, resolve_placeholders};
 pub use request::{
     ResolvedBody, ResolvedFile, ResolvedPair, ResolvedPart, ResolvedPartSource, ResolvedRequest,
-    TlsFiles, resolve_request,
+    TlsFiles, resolve_auth, resolve_request,
 };
 pub use resolver::{
     Interpolator, Missing, ResolveError, Resolved, Resolver, SecretSpan, UsedSecret,

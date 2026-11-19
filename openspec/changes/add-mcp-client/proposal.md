@@ -24,7 +24,7 @@ MCP servers are becoming a primary API surface (for agents), yet testing one tod
 
 ### Modified Capabilities
 
-None (builds on `workspace`, `environments`, `assertions`, `cli-runner` and `request-history` from `bootstrap-core-engine` without changing their requirements).
+- `cli-runner`: SIGTERM and SIGHUP are handled like Ctrl+C on Unix (cancel, stop stdio MCP servers with their process trees, exit 130), since stdio servers run in process groups of their own that terminal signals do not reach. Otherwise builds on `workspace`, `environments`, `assertions`, `cli-runner` and `request-history` from `bootstrap-core-engine` without changing their requirements.
 
 ## Out of Scope
 
@@ -36,5 +36,5 @@ None (builds on `workspace`, `environments`, `assertions`, `cli-runner` and `req
 ## Impact
 
 - `crates/rustman-mcp` (client half; the server half arrives with `add-agent-mcp-server`), TUI pane in `crates/rustman-tui`, subcommands in `crates/rustman-cli`.
-- New dependencies: `rmcp` (official Rust MCP SDK) with client, `transport-child-process` and `transport-streamable-http-client` features; `jsonschema` (already used by `assertions`) for argument/output validation; `oauth2` for the OAuth flow; `keyring` (already in core) for tokens.
-- Spawning stdio servers executes user-configured commands — covered by an explicit trust prompt (see spec).
+- New dependencies: `rmcp` (official Rust MCP SDK) with client, `transport-child-process` and `transport-streamable-http-client` features; `jsonschema` (already used by `assertions`) for argument/output validation; the OAuth flow reuses the PKCE and loopback helper of `rustman-http`, and tokens go to the existing `SecretStore` (keychain).
+- Spawning stdio servers executes user-configured commands — covered by an explicit trust prompt whose approvals are sealed with a per-machine key (so a repository cannot ship them), a minimal inherited environment, and process-tree cleanup on every exit path (see spec).

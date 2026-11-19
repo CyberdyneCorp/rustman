@@ -194,6 +194,10 @@ When the companion cannot be used, a warning toast says why and offers the HTML 
 
 Each ends with `Export HTML report: H`. `H` (response focused, or **Export HTML report** in the palette) writes the current exchange as a self-contained HTML page (summary, assertions, response headers and body, all redacted) to `.rustman/reports/<request>-<time>.html` in the workspace, which `rustman init` keeps out of Git, or to the temp directory in a scratch session, and the toast gives the path. The run dashboard (`v` in a run view) arrives with the TUI's run view.
 
+### MCP inspector
+
+`Alt+I` (or **MCP inspector** in the palette) shows the [MCP inspector](mcp-client.md#the-tui-mcp-inspector) in place of the request and response panes; `Esc` or `Alt+I` hides it again, and the session keeps running while it is hidden. It lists the workspace's MCP servers with their connection status, the connected server's info and capabilities, and the `Tools`, `Resources`, `Prompts`, `Notifications` and `Stderr` tabs, with argument forms, the result view and the dialogs for stdio trust, sampling and elicitation. While a sampling or elicitation request waits for you, the status bar shows `MCP APPROVAL (<n>)` on every screen until it is handled.
+
 ### Webhook pane
 
 `Alt+W` (or **Webhook inspector** in the palette) shows the [webhook inspector](webhooks.md) in place of the request and response panes; `Esc` or `Alt+W` hides it again, and the listener keeps running while it is hidden. The pane shows the listener's state and address with the number of buffered captures and their size, the captures newest first (time, method, path, body size and the signature verdict as a coloured badge: `valid`, `invalid`, `missing`, `expired`), the selected capture (request line, receive time, every header in order, then the body), and the event log. Values are redacted with the signature verifier secrets; credentials such as `Authorization` show as placeholders.
@@ -384,6 +388,7 @@ The table below is generated from the action registry; a test fails if it drifts
 | Export HTML report | `report.html` | `H` (response) |  |
 | Webhook inspector | `webhook.open` | `Alt+W` |  |
 | Mock server | `mock.open` | `Alt+O` |  |
+| MCP inspector | `mcp.open` | `Alt+I` |  |
 | Refresh GraphQL schema | `graphql.refresh_schema` | `Ctrl+G` |  |
 | Start GraphQL subscription | `graphql.subscription_start` | `Alt+S` |  |
 | Stop GraphQL subscription | `graphql.subscription_stop` | `Alt+X` |  |

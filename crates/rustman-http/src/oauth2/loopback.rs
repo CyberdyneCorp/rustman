@@ -52,7 +52,7 @@ enum Callback {
     Failed(String),
 }
 
-pub(crate) struct Loopback {
+pub struct Loopback {
     listener: TcpListener,
     redirect_uri: String,
 }

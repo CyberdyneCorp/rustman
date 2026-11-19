@@ -111,7 +111,8 @@ impl Payload {
     }
 }
 
-fn object(i: &mut Interpolator<'_, '_>, map: &Map<String, Value>) -> Map<String, Value> {
+/// `map` with every string value interpolated (also used by mcp params).
+pub(super) fn object(i: &mut Interpolator<'_, '_>, map: &Map<String, Value>) -> Map<String, Value> {
     map.iter()
         .map(|(key, value)| (key.clone(), string_values(i, value)))
         .collect()

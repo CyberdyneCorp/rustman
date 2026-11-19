@@ -174,6 +174,9 @@ subtle = { version = "2.6", default-features = false }
 # axum mounts the Streamable HTTP service behind the token and Origin checks
 # (design D2).
 rmcp = { version = "~3.10", default-features = false }
+# SSE parsing of the MCP client's HTTP transports (add-mcp-client D2): the
+# parser rmcp itself uses, so its stream type is the one rmcp expects.
+sse-stream = { version = "0.2.6", default-features = false }
 axum = { version = "0.8", default-features = false, features = ["tokio", "http1"] }
 
 assert_cmd = "2"

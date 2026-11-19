@@ -383,6 +383,12 @@ fn json(i: &mut Interpolator<'_, '_>, value: &Value) -> Value {
     }
 }
 
+/// `auth` with every string field interpolated, for front-ends that send
+/// with an auth outside a request file (an MCP server definition).
+pub fn resolve_auth(i: &mut Interpolator<'_, '_>, value: &Auth) -> Auth {
+    auth(i, value)
+}
+
 pub(super) fn auth(i: &mut Interpolator<'_, '_>, auth: &Auth) -> Auth {
     let mut t = |s: &str| i.text(s).text;
     match auth {

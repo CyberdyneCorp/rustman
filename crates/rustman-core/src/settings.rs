@@ -343,7 +343,9 @@ fn invalid(file: &Path, message: String) -> ConfigError {
 fn unknown_keys(table: &toml::Table) -> Vec<String> {
     let mut warnings = Vec::new();
     for (section, value) in table {
-        if section == "variables" {
+        // Keys of these sections are user-chosen names. `[mcp_servers]` is
+        // read by rustman-mcp (add-mcp-client).
+        if matches!(section.as_str(), "variables" | "mcp_servers") {
             continue;
         }
         let Some((_, known)) = KNOWN_KEYS.iter().find(|(name, _)| name == section) else {
@@ -517,6 +519,14 @@ base_url = "http://localhost"
     #[test]
     fn mock_keys_are_known() {
         let text = "[workspace]\nname = \"a\"\nversion = 1\n[mock]\nport = 4011\nseed = 7\nmax_body_bytes = 10\ndir = \"stubs\"\ndelay_ms = 5\njitter_ms = 1\nmax_items = 9\nmax_store_bytes = 99\n[mock.security]\nbearer = \"{{t}}\"\n";
+        let (_, warnings) = parse(text).unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    #[test]
+    fn mcp_servers_are_a_known_key() {
+        let text =
+            "[workspace]\nname = \"a\"\nversion = 1\n[mcp_servers.files]\ncommand = \"npx\"\n";
         let (_, warnings) = parse(text).unwrap();
         assert!(warnings.is_empty(), "{warnings:?}");
     }

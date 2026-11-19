@@ -50,6 +50,7 @@ expression: screen
 │             │   Alt+R                    Reveal secrets                            │             │
 │             │   Alt+W                    Webhook inspector                         │             │
 │             │   Alt+O                    Mock server                               │             │
+│             │   Alt+I                    MCP inspector                             │             │
 │             │   Ctrl+G                   Refresh GraphQL schema                    │             │
 │             │   Alt+S                    Start GraphQL subscription                │             │
 │             │   Alt+X                    Stop GraphQL subscription                 │             │
@@ -59,7 +60,6 @@ expression: screen
 │             │                                                                      │             │
 │             │ ↑↓ scroll · Esc close                                                │             │
 │             └──────────────────────────────────────────────────────────────────────┘             │
-│                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │

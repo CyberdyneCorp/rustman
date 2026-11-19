@@ -22,6 +22,7 @@ serde-saphyr.workspace = true
 serde_json.workspace = true
 serde_json_path.workspace = true
 sha2.workspace = true
+hmac.workspace = true
 similar.workspace = true
 jsonschema.workspace = true
 regex.workspace = true
