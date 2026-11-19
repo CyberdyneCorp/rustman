@@ -1,0 +1,14 @@
+version: 1
+kind: grpc
+name: List products
+target: '{{grpc_host}}'
+method: shop.v1.Catalog/ListProducts
+schema:
+  protos: [shop.proto]
+message:
+  category: toys
+  page_size: 3
+metadata:
+  - name: x-client
+    value: rustman
+deadline_ms: 5000

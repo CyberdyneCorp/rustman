@@ -1,0 +1,11 @@
+version: 1
+kind: jsonrpc
+name: Get balance
+endpoint: '{{rpc_url}}'
+method: eth_getBalance
+params:
+  - '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045'
+  - latest
+assertions:
+  - rpc_error: none
+  - json: {path: $.result, type: string}

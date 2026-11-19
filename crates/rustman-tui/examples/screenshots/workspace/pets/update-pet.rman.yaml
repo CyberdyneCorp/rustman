@@ -1,0 +1,41 @@
+version: 1
+kind: http
+name: Update pet
+method: PUT
+url: '{{base_url}}/pets/{{pet_id}}'
+headers:
+  - name: Accept
+    value: application/json
+  - name: X-Request-Id
+    value: '{{$uuid}}'
+auth:
+  type: bearer
+  token: '{{api_token}}'
+body:
+  type: json
+  content:
+    name: Rex
+    status: available
+    tags:
+      - id: 7
+        name: good-boy
+      - id: 9
+        name: vaccinated
+      - id: 12
+        name: adopted
+assertions:
+  - status: 200
+  - header:
+      name: content-type
+      contains: json
+  - json:
+      path: $.id
+      equals: 42
+  - json:
+      path: $.status
+      equals: available
+  - json:
+      path: $.tags
+      length: 3
+  - latency:
+      total_lt: 50

@@ -11,11 +11,17 @@
 //! default) as plain text, or with ANSI colours with `--ansi`. `tui.toml` is
 //! not read, so the output only depends on the flags. `--open` opens a
 //! request file (relative to the workspace root) in a tab. `--response`
-//! shows the JSON file as that tab's exchange, a `200 OK` with fixed
-//! timings and history, so a frame with a response needs no network; the
-//! request's assertions are evaluated against it.
+//! shows the JSON file as that tab's exchange, so a frame with a response
+//! needs no network: for an HTTP request it is the body of a `200 OK` with
+//! fixed timings and history, and the request's assertions are evaluated
+//! against it (a GraphQL request reads it as a GraphQL result); for a
+//! gRPC request it is the call's record (the `grpc` member of a
+//! `rustman.report/v1` request).
 //! `--keys` presses space-separated chords last (`"Ctrl+P s w"`), e.g. to
 //! show the palette.
+//!
+//! `examples/screenshots/` holds the sample workspace and responses of the
+//! README frames, and `render.sh` there renders them all.
 
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
@@ -25,17 +31,19 @@ use std::time::Duration;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use rustman_core::Redactor;
 use rustman_core::assertions::{self, AssertionResult, Context, ResponseView};
-use rustman_core::model::{HttpRequest, Request};
+use rustman_core::model::{GraphqlRequest, HttpRequest, Request};
 use rustman_core::run::{
-    ExchangeRecord, HeaderRecord, RequestRecord, RequestStatus, ResponseRecord, SentRequest,
-    TimingsRecord,
+    ExchangeRecord, GraphqlRecord, HeaderRecord, RequestRecord, RequestStatus, ResponseRecord,
+    SentRequest, TimingsRecord,
 };
 use rustman_core::vars::Resolver;
-use rustman_tui::app::{Action, State, update};
+use rustman_tui::app::{Action, Effect, State, update};
 use rustman_tui::config::{Overrides, TuiConfig, UiOptions};
 use rustman_tui::effects::execute;
 use rustman_tui::keymap::chord::{Chord, Code, parse_chord};
 use rustman_tui::launch::discover;
+use rustman_tui::response::graphql::GraphqlView;
+use rustman_tui::response::grpc::GrpcView;
 use rustman_tui::response::{RawBody, Received, Source};
 use rustman_tui::snapshot::{buffer_ansi, buffer_text, render};
 use rustman_tui::theme::ColorMode;
@@ -109,7 +117,7 @@ fn parse_size(size: &str) -> Result<(u16, u16), String> {
     Ok((number(w)?, number(h)?))
 }
 
-fn key_event(chord: &Chord) -> Result<KeyEvent, String> {
+fn key_event(chord: &Chord) -> KeyEvent {
     let code = match chord.code {
         Code::Char(c) => KeyCode::Char(c),
         Code::F(n) => KeyCode::F(n),
@@ -118,16 +126,22 @@ fn key_event(chord: &Chord) -> Result<KeyEvent, String> {
         Code::Tab => KeyCode::Tab,
         Code::BackTab => KeyCode::BackTab,
         Code::Backspace => KeyCode::Backspace,
+        Code::Delete => KeyCode::Delete,
+        Code::Insert => KeyCode::Insert,
+        Code::Home => KeyCode::Home,
+        Code::End => KeyCode::End,
+        Code::PageUp => KeyCode::PageUp,
+        Code::PageDown => KeyCode::PageDown,
         Code::Up => KeyCode::Up,
         Code::Down => KeyCode::Down,
         Code::Left => KeyCode::Left,
         Code::Right => KeyCode::Right,
-        other => return Err(format!("unsupported key {other:?}")),
     };
     let mut modifiers = KeyModifiers::NONE;
     modifiers.set(KeyModifiers::CONTROL, chord.ctrl);
     modifiers.set(KeyModifiers::ALT, chord.alt);
-    Ok(KeyEvent::new(code, modifiers))
+    modifiers.set(KeyModifiers::SHIFT, chord.shift);
+    KeyEvent::new(code, modifiers)
 }
 
 /// The assertions of `request` evaluated against the sample `200 OK` of
@@ -212,15 +226,70 @@ fn exchange(path: &Path, request: Option<&HttpRequest>, body: Vec<u8>) -> Receiv
     received
 }
 
-/// The `http` request open in the active tab, if any.
-fn open_request(state: &State) -> Option<HttpRequest> {
-    match state.tabs.active()?.editor.request().ok()? {
-        Request::Http(request) => Some(*request),
-        Request::Graphql(_)
-        | Request::Jsonrpc(_)
-        | Request::Mcp(_)
-        | Request::Grpc(_)
-        | Request::Opaque(_) => None,
+/// The gRPC `call` (a request's `grpc` member in a report) for the
+/// request at `path`, ended in [`TOTAL_MS`].
+fn grpc_exchange(path: &Path, call: serde_json::Value) -> Received {
+    let file = path.to_string_lossy().replace('\\', "/");
+    let id = file.trim_end_matches(".rman.yaml").to_owned();
+    let mut record = RequestRecord::new(id.clone(), id, file);
+    record.status = RequestStatus::Passed;
+    record.duration_ms = TOTAL_MS;
+    let view = GrpcView::new(&call);
+    record.grpc = Some(call);
+    let mut received = Received::without_body(record);
+    received.grpc = Some(Box::new(view));
+    received
+}
+
+/// A `200 OK` of the GraphQL result `body` for `request`, with the
+/// record of a query sent over HTTP.
+fn graphql_exchange(path: &Path, request: &GraphqlRequest, body: &[u8]) -> Received {
+    let result = serde_json::from_slice::<serde_json::Value>(body).unwrap_or_default();
+    let errors = result["errors"].as_array().is_some_and(|e| !e.is_empty());
+    let outcome = match (errors, result["data"].is_null()) {
+        (false, _) => "ok",
+        (true, false) => "partial",
+        (true, true) => "errors",
+    };
+    let record = GraphqlRecord {
+        operation_name: request.operation_name.clone(),
+        operation_type: "query".into(),
+        transport: "http".into(),
+        protocol: None,
+        variables: request
+            .variables
+            .clone()
+            .map(Into::into)
+            .unwrap_or_default(),
+        result: Some(outcome.into()),
+        apq: None,
+        subscription: None,
+    };
+    let mut received = exchange(path, None, body.to_vec());
+    received.graphql = Some(Box::new(GraphqlView::new(&record, Some(body))));
+    received.record.graphql = Some(record);
+    received
+}
+
+/// The exchange `--response` shows for the request open in the active
+/// tab: a gRPC call's record, or else an HTTP response body (a GraphQL
+/// result for a GraphQL request).
+fn sample(state: &State, path: &Path, file: &[u8]) -> Result<Received, String> {
+    match state.tabs.active().map(|tab| tab.editor.request()) {
+        Some(Ok(Request::Grpc(_))) => serde_json::from_slice(file)
+            .map(|call| grpc_exchange(path, call))
+            .map_err(|e| format!("bad gRPC record: {e}")),
+        Some(Ok(Request::Http(request))) => Ok(exchange(path, Some(&request), file.to_vec())),
+        Some(Ok(Request::Graphql(request))) => Ok(graphql_exchange(path, &request, file)),
+        Some(_) => Ok(exchange(path, None, file.to_vec())),
+        None => Err("--response needs a tab: pass --open".into()),
+    }
+}
+
+/// Run `effects`, and the effects of their outcomes, to completion.
+fn settle(state: &mut State, mut effects: Vec<Effect>) {
+    while let Some(effect) = effects.pop() {
+        effects.extend(update(state, execute(effect)));
     }
 }
 
@@ -232,61 +301,53 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let start = match std::env::current_dir() {
-        Ok(cwd) => cwd.join(&options.path),
-        Err(err) => {
-            eprintln!("error: no current directory: {err}");
-            return ExitCode::from(2);
+    match frame(&options) {
+        Ok(frame) => {
+            print!("{frame}");
+            ExitCode::SUCCESS
         }
-    };
-    let (state, mut effects) = State::new(discover(&start));
+        Err(message) => {
+            eprintln!("error: {message}");
+            ExitCode::from(2)
+        }
+    }
+}
+
+/// The frame `options` ask for.
+fn frame(options: &Options) -> Result<String, String> {
+    let cwd = std::env::current_dir().map_err(|e| format!("no current directory: {e}"))?;
+    let (state, effects) = State::new(discover(&cwd.join(&options.path)));
     let ui = UiOptions::resolve(&TuiConfig::default(), options.overrides, options.mode);
     let mut state = state.with_ui(ui);
-    let (width, height) = (options.width, options.height);
-    update(&mut state, Action::Resize { width, height });
-    while let Some(effect) = effects.pop() {
-        effects.extend(update(&mut state, execute(effect)));
-    }
+    let resize = || Action::Resize {
+        width: options.width,
+        height: options.height,
+    };
+    update(&mut state, resize());
+    settle(&mut state, effects);
     if let Some(request) = &options.open {
         rustman_tui::workbench::open_path(&mut state, request);
+        // Any update starts the tab's background loads (schemas, catalogs).
+        let effects = update(&mut state, resize());
+        settle(&mut state, effects);
     }
     if let Some(file) = &options.response {
-        let body = match std::fs::read(file) {
-            Ok(body) => body,
-            Err(err) => {
-                eprintln!("error: cannot read {}: {err}", file.display());
-                return ExitCode::from(2);
-            }
-        };
+        let body =
+            std::fs::read(file).map_err(|e| format!("cannot read {}: {e}", file.display()))?;
         let path = options.open.clone().unwrap_or_default();
-        let request = open_request(&state);
-        match state.tabs.active_mut() {
-            Some(tab) => tab.show(exchange(&path, request.as_ref(), body)),
-            None => {
-                eprintln!("error: --response needs a tab: pass --open");
-                return ExitCode::from(2);
-            }
+        let received = sample(&state, &path, &body)?;
+        if let Some(tab) = state.tabs.active_mut() {
+            tab.show(received);
         }
     }
     for chord in &options.keys {
-        let key = match key_event(chord) {
-            Ok(key) => key,
-            Err(message) => {
-                eprintln!("error: {message}");
-                return ExitCode::from(2);
-            }
-        };
-        effects.extend(update(&mut state, Action::Key(key)));
-        while let Some(effect) = effects.pop() {
-            effects.extend(update(&mut state, execute(effect)));
-        }
+        let effects = update(&mut state, Action::Key(key_event(chord)));
+        settle(&mut state, effects);
     }
     let buffer = render(&state, options.width, options.height);
-    let frame = if options.ansi {
+    Ok(if options.ansi {
         buffer_ansi(&buffer)
     } else {
         buffer_text(&buffer)
-    };
-    print!("{frame}");
-    ExitCode::SUCCESS
+    })
 }

@@ -1,0 +1,5 @@
+version: 1
+kind: http
+name: List pets
+method: GET
+url: '{{base_url}}/pets'

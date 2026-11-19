@@ -1,0 +1,28 @@
+version: 1
+kind: http
+name: Get pet
+method: GET
+url: '{{base_url}}/pets/{{pet_id}}'
+query:
+  - name: expand
+    value: owner
+headers:
+  - name: Accept
+    value: application/json
+  - name: X-Request-Id
+    value: '{{$uuid}}'
+  - name: Cache-Control
+    value: no-cache
+auth:
+  type: bearer
+  token: '{{api_token}}'
+assertions:
+  - status: 200
+  - header:
+      name: content-type
+      contains: json
+  - json:
+      path: $.id
+      equals: 42
+  - latency:
+      total_lt: 200

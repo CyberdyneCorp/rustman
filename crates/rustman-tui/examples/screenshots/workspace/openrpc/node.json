@@ -1,0 +1,270 @@
+{
+  "openrpc": "1.2.6",
+  "info": {
+    "title": "Local node",
+    "version": "1.0.0"
+  },
+  "methods": [
+    {
+      "name": "eth_blockNumber",
+      "summary": "Latest block number",
+      "params": [],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "eth_chainId",
+      "summary": "Chain id",
+      "params": [],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "eth_gasPrice",
+      "summary": "Current gas price",
+      "params": [],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "eth_getBalance",
+      "summary": "Balance of an account",
+      "params": [
+        {
+          "name": "address",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "block",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "eth_getBlockByNumber",
+      "summary": "A block by number",
+      "params": [
+        {
+          "name": "block",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "full_transactions",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      }
+    },
+    {
+      "name": "eth_getCode",
+      "summary": "Code at an address",
+      "params": [
+        {
+          "name": "address",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "block",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "eth_getLogs",
+      "summary": "Logs matching a filter",
+      "params": [
+        {
+          "name": "filter",
+          "required": true,
+          "schema": {
+            "type": "object"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "array"
+        }
+      }
+    },
+    {
+      "name": "eth_getTransactionByHash",
+      "summary": "A transaction by hash",
+      "params": [
+        {
+          "name": "hash",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      }
+    },
+    {
+      "name": "eth_getTransactionCount",
+      "summary": "Nonce of an account",
+      "params": [
+        {
+          "name": "address",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "block",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "eth_getTransactionReceipt",
+      "summary": "A transaction receipt",
+      "params": [
+        {
+          "name": "hash",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object"
+        }
+      }
+    },
+    {
+      "name": "eth_call",
+      "summary": "Execute a call without a transaction",
+      "params": [
+        {
+          "name": "transaction",
+          "required": true,
+          "schema": {
+            "type": "object"
+          }
+        },
+        {
+          "name": "block",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "eth_estimateGas",
+      "summary": "Estimate gas",
+      "params": [
+        {
+          "name": "transaction",
+          "required": true,
+          "schema": {
+            "type": "object"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "net_version",
+      "summary": "Network id",
+      "params": [],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "web3_clientVersion",
+      "summary": "Client version",
+      "params": [],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "string"
+        }
+      }
+    }
+  ]
+}
