@@ -15,8 +15,9 @@ use rustman_viz_protocol::{PROTOCOL, is_compatible, major};
 use crate::connect::wait_for_exit;
 use crate::{COMPANION, OVERRIDE_VAR, PROTOCOL_CHECK, VizError};
 
-/// How long `--protocol-check` may take.
-const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
+/// How long `--protocol-check` may take: as long as the handshake, since
+/// starting a process can be slow on a loaded machine (a CI runner).
+const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// How much of the `--protocol-check` output is read.
 const PROBE_OUTPUT_LIMIT: u64 = 64 * 1024;
@@ -130,7 +131,7 @@ pub fn probe(program: &Path) -> Result<(), VizError> {
         let _ = child.kill();
         let _ = child.wait();
         return Err(VizError::failed(format!(
-            "{PROTOCOL_CHECK} did not answer within 5 s"
+            "{PROTOCOL_CHECK} did not answer within 10 s"
         )));
     };
     let status = wait_for_exit(&mut child, PROBE_TIMEOUT);
@@ -320,9 +321,9 @@ mod tests {
         let started = std::time::Instant::now();
         let err = probe(&script).unwrap_err();
         assert!(
-            err.to_string().contains("did not answer within 5 s"),
+            err.to_string().contains("did not answer within 10 s"),
             "{err}"
         );
-        assert!(started.elapsed() < Duration::from_secs(15));
+        assert!(started.elapsed() < Duration::from_secs(20));
     }
 }
