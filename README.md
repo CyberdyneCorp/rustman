@@ -3,7 +3,7 @@
 > A fast, local-first API workbench for the terminal. It speaks **REST, GraphQL, MCP, gRPC, WebSocket/SSE, JSON-RPC, Kafka/MQTT/AMQP and Ethereum**, it can **test a backend on its own from an OpenAPI spec**, and **AI agents can drive it over MCP**. Written entirely in Rust.
 
 > [!NOTE]
-> **Status: pre-1.0, under active development.** Releases v0.1 to v0.4 of the [roadmap](#roadmap) are implemented: the HTTP engine and CLI runner, the terminal UI, importers, the OpenAPI explorer, the agent MCP server, GraphQL, the MCP client, the webhook inspector, snapshot tests and the mock server. From v0.5, the JSON-RPC and gRPC clients are implemented too; WebSocket and SSE are being built. Sections marked _Planned_ below describe behavior that is specified in the [OpenSpec](https://github.com/Fission-AI/OpenSpec) changes in [`openspec/`](openspec/) but not built yet. Commands and file formats may still change before v1.
+> **Status: pre-1.0, under active development.** Releases v0.1 to v0.5 of the [roadmap](#roadmap) are implemented: the HTTP engine and CLI runner, the terminal UI, importers, the OpenAPI explorer, the agent MCP server, GraphQL, the MCP client, the webhook inspector, snapshot tests and the mock server. v0.5 added the JSON-RPC, gRPC and WebSocket/SSE clients. Sections marked _Planned_ below describe behavior that is specified in the [OpenSpec](https://github.com/Fission-AI/OpenSpec) changes in [`openspec/`](openspec/) but not built yet. Commands and file formats may still change before v1.
 
 ## Install and quick start
 
@@ -55,7 +55,7 @@ Some of these answers are still planned (message brokers, the Ethereum console, 
 
 ## Feature map
 
-**Available today** (v0.1 to v0.4, plus JSON-RPC and gRPC from v0.5):
+**Available today** (v0.1 to v0.5):
 
 ```mermaid
 mindmap
@@ -78,6 +78,9 @@ mindmap
       JSON-RPC
         Batches and subscriptions
         OpenRPC catalogs
+      WebSocket and SSE
+        Scripted message flows
+        SSE resume with Last-Event-ID
     Workspace
       Plain YAML files in Git
       Environments and variables
@@ -109,14 +112,12 @@ mindmap
       Audit log
 ```
 
-**Planned** (WebSocket and SSE are in progress for v0.5; the rest is specified for v0.6, v0.7 and the side tracks):
+**Planned** (specified for v0.6, v0.7 and the side tracks):
 
 ```mermaid
 mindmap
   root((Rustman planned))
     Protocols
-      WebSocket and SSE
-        Scripted message flows
       Message brokers
         Kafka, MQTT, AMQP
         AsyncAPI import
@@ -463,7 +464,7 @@ rustman grpc health grpc://localhost:50051 --service shop.v1.Catalog          # 
 
 <sub>The gRPC response is a sample call record loaded by the `screenshot` example; no server was called.</sub>
 
-**WebSocket and SSE** — _In progress (v0.5)._ **Message brokers** — _Planned (v0.7)._
+**Message brokers** — _Planned (v0.7)._ WebSocket and SSE are available today ([docs](docs/realtime.md)).
 
 ```bash
 rustman ws connect wss://echo.example.com --json
@@ -609,7 +610,7 @@ Today, `rustman secret set|rm|list` manages the OS keychain (or `.rustman/secret
 | Mock servers, monitors, API docs | `rustman mock`, all local; `rustman monitor` and `rustman docs` are planned |
 | Interceptor / proxy capture | `rustman record`, with a local CA (planned) |
 | Visualizer | Raven dashboards (`rustman-viz`, optional companion) |
-| GraphQL, gRPC, WebSocket, Socket.IO, MQTT | GraphQL, gRPC and JSON-RPC today; WebSocket, SSE, Kafka, MQTT and AMQP planned. Socket.IO via plugins. |
+| GraphQL, gRPC, WebSocket, Socket.IO, MQTT | GraphQL, gRPC, JSON-RPC, WebSocket and SSE today; Kafka, MQTT and AMQP planned. Socket.IO via plugins. |
 | Team workspaces and cloud sync | Git. Rustman is local-first, with no accounts. |
 
 **What you lose:** running arbitrary JavaScript in requests, and cloud collaboration. Both are deliberate choices.
@@ -676,7 +677,7 @@ graph TD
 | `rustman-mock` | OpenAPI mock server |
 | `rustman-viz` | Optional Raven GUI companion: a separate binary in its own workspace (`crates/rustman-viz`) |
 | `rustman-evm` | _Planned:_ Ethereum toolkit on `alloy`: ABI, decoding, simulation, ENS, signing gate |
-| `rustman-realtime` | _In progress:_ WebSocket and SSE sessions |
+| `rustman-realtime` | WebSocket and SSE sessions |
 | `rustman-messaging` | _Planned:_ Kafka, MQTT and AMQP clients (pure Rust) |
 | `rustman-proxy` | _Planned:_ traffic recorder |
 | `rustman-bench` | _Planned:_ load-testing engine |
@@ -692,7 +693,7 @@ graph TD
 
 ## Roadmap
 
-All 26 changes are specified in OpenSpec. v0.1 (headless core), v0.2 (usable), v0.3 (autonomous) and v0.4 (multi-protocol) are done, and v0.5 is in progress (JSON-RPC and gRPC are merged, WebSocket and SSE are being built); open work is tracked in the [roadmap tracking issue](https://github.com/CyberdyneCorp/rustman/issues/46). Releases are ordered by dependency, user value and risk. The full delivery plan, with exit criteria, shared enablers and risks, is in [`ROADMAP.md`](ROADMAP.md).
+All 26 changes are specified in OpenSpec. v0.1 (headless core), v0.2 (usable), v0.3 (autonomous), v0.4 (multi-protocol) and v0.5 (protocols) are done; open work is tracked in the [roadmap tracking issue](https://github.com/CyberdyneCorp/rustman/issues/46). Releases are ordered by dependency, user value and risk. The full delivery plan, with exit criteria, shared enablers and risks, is in [`ROADMAP.md`](ROADMAP.md).
 
 | Release | Changes | You get | Status |
 |---|---|---|---|
@@ -701,8 +702,8 @@ All 26 changes are specified in OpenSpec. v0.1 (headless core), v0.2 (usable), v
 | **v0.2 - Usable** (first public release) | `add-terminal-ui`, `add-importers`, `add-runner-parity` | TUI, import from Postman/Insomnia/Bruno/HAR/`.http`, data-driven runs, Digest/SigV4/JWT, code snippets | ✅ done |
 | **v0.3 - Autonomous** | `add-openapi-explorer`, `add-agent-mcp-server` | OpenAPI import and exploration, HTML/SARIF reports, agent interface | ✅ done |
 | **v0.4 - Multi-protocol** | `add-graphql-client`, `add-mcp-client`, `add-webhook-inspector`, `add-snapshot-testing`, `add-openapi-mock-server` | GraphQL, MCP client, webhooks, snapshot tests, mock server | ✅ done |
-| **v0.5 - Protocols** | `add-jsonrpc-client`, `add-grpc-client`, `add-realtime-client` | JSON-RPC, gRPC, WebSocket and SSE | 🚧 in progress (JSON-RPC and gRPC done, realtime in progress) |
-| **v0.6 - Pro testing** | `add-contract-testing`, `add-trace-propagation`, `add-load-testing`, `add-docs-generator`, `add-stress-testing` | Breaking-change checks, tracing, load and stress tests, generated docs | planned |
+| **v0.5 - Protocols** | `add-jsonrpc-client`, `add-grpc-client`, `add-realtime-client` | JSON-RPC, gRPC, WebSocket and SSE | ✅ done |
+| **v0.6 - Pro testing** | `add-contract-testing`, `add-trace-propagation`, `add-load-testing`, `add-docs-generator`, `add-stress-testing` | Breaking-change checks, tracing, load and stress tests, generated docs | 🚧 in progress (contract testing and trace propagation being built) |
 | **v0.7 - Operate & extend** | `add-secret-providers`, `add-scheduled-monitors`, `add-plugin-system`, `add-traffic-recorder`, `add-messaging-client` | Secret providers, monitors, plugins, traffic recorder, message brokers | planned |
 | **Side tracks** | `add-raven-visualizer`, `add-evm-toolkit` | Raven dashboards, Ethereum console (never block a release) | — |
 | **v1.0 - Stable** | — | Frozen request-file, report, viz and plugin formats; signed release artifacts | — |

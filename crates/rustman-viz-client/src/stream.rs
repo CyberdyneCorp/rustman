@@ -448,15 +448,22 @@ mod tests {
         let pid = tmp.path().join("pid");
         let program = companion(
             tmp.path(),
-            &format!("echo $$ > {}\nexec cat > /dev/null", pid.display()),
+            // Written then renamed: the test must never read a half-written
+            // pid (an empty read used to kill nothing on a slow runner).
+            &format!(
+                "echo $$ > {pid}.tmp\nmv {pid}.tmp {pid}\nexec cat > /dev/null",
+                pid = pid.display()
+            ),
         );
         let (mut stream, warnings) = start(&program, StreamOptions::default());
         wait_until("no pid", || pid.exists());
         let id = std::fs::read_to_string(&pid).unwrap();
-        std::process::Command::new("kill")
+        assert!(!id.trim().is_empty(), "no pid");
+        let killed = std::process::Command::new("kill")
             .args(["-9", id.trim()])
             .status()
             .unwrap();
+        assert!(killed.success(), "kill {id} failed");
         let started = Instant::now();
         for _ in 0..2000 {
             stream.send(&exchange(64));
