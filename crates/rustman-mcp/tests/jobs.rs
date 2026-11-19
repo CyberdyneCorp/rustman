@@ -299,6 +299,26 @@ async fn a_run_job_reports_its_progress_while_running() {
     );
 }
 
+/// Remove `dir`, retrying while Windows refuses because the job has one of
+/// its files open for an append.
+async fn remove_dir_retrying(dir: &std::path::Path) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        match std::fs::remove_dir_all(dir) {
+            Ok(()) => return,
+            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                assert!(
+                    Instant::now() < deadline,
+                    "{} stayed locked: {e}",
+                    dir.display()
+                );
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+            Err(e) => panic!("cannot remove {}: {e}", dir.display()),
+        }
+    }
+}
+
 /// Wait until `api` has received at least `count` requests.
 async fn wait_for_hits(api: &BadApi, count: usize) {
     let deadline = Instant::now() + Duration::from_secs(30);
@@ -324,7 +344,7 @@ async fn a_run_job_stops_sending_once_its_audit_log_cannot_be_written() {
     // At one request per second, break the audit log right after the first.
     wait_for_hits(&api, 1).await;
     let audit = ws.path().join(".rustman/audit");
-    std::fs::remove_dir_all(&audit).unwrap();
+    remove_dir_retrying(&audit).await;
     std::fs::write(&audit, "not a folder").unwrap();
     tokio::time::sleep(Duration::from_millis(2500)).await;
     std::fs::remove_file(&audit).unwrap();
