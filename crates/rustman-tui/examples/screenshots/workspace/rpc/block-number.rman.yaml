@@ -1,0 +1,5 @@
+version: 1
+kind: jsonrpc
+name: Block number
+endpoint: '{{rpc_url}}'
+method: eth_blockNumber

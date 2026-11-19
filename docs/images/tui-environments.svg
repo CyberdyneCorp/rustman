@@ -270,15 +270,15 @@
 <path d="M1150.2 71.5L1150.2 63.0M1150.2 71.5L1150.2 80.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 88.5L16.2 80.0M16.2 88.5L16.2 97.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <text x="28.8" y="93.3" fill="#737aa2" textLength="16.8" lengthAdjust="spacingAndGlyphs">▾ </text>
-<text x="45.6" y="93.3" fill="#c0caf5" font-weight="bold" textLength="33.6" lengthAdjust="spacingAndGlyphs">pets</text>
+<text x="45.6" y="93.3" fill="#c0caf5" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">graphql</text>
 <path d="M243.0 88.5L243.0 80.0M243.0 88.5L243.0 97.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 88.5L251.4 80.0M251.4 88.5L251.4 97.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M285.0 88.5L285.0 80.0M285.0 88.5L285.0 97.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M881.4 88.5L881.4 80.0M881.4 88.5L881.4 97.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M1150.2 88.5L1150.2 80.0M1150.2 88.5L1150.2 97.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 105.5L16.2 97.0M16.2 105.5L16.2 114.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="45.6" y="110.3" fill="#7aa2f7" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">POST   </text>
-<text x="104.4" y="110.3" fill="#c0caf5" textLength="84.0" lengthAdjust="spacingAndGlyphs">create-pet</text>
+<text x="45.6" y="110.3" fill="#7dcfff" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">GQL    </text>
+<text x="104.4" y="110.3" fill="#c0caf5" textLength="117.6" lengthAdjust="spacingAndGlyphs">pet-with-owner</text>
 <path d="M243.0 105.5L243.0 97.0M243.0 105.5L243.0 114.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 105.5L251.4 97.0M251.4 105.5L251.4 114.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M285.0 105.5L285.0 97.0M285.0 105.5L285.0 114.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
@@ -286,8 +286,8 @@
 <path d="M881.4 105.5L881.4 97.0M881.4 105.5L881.4 114.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M1150.2 105.5L1150.2 97.0M1150.2 105.5L1150.2 114.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 122.5L16.2 114.0M16.2 122.5L16.2 131.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="45.6" y="127.3" fill="#f7768e" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">DELETE </text>
-<text x="104.4" y="127.3" fill="#c0caf5" textLength="84.0" lengthAdjust="spacingAndGlyphs">delete-pet</text>
+<text x="28.8" y="127.3" fill="#737aa2" textLength="16.8" lengthAdjust="spacingAndGlyphs">▾ </text>
+<text x="45.6" y="127.3" fill="#c0caf5" font-weight="bold" textLength="33.6" lengthAdjust="spacingAndGlyphs">grpc</text>
 <path d="M243.0 122.5L243.0 114.0M243.0 122.5L243.0 131.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 122.5L251.4 114.0M251.4 122.5L251.4 131.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M285.0 122.5L285.0 114.0M285.0 122.5L285.0 131.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
@@ -296,8 +296,8 @@
 <text x="885.6" y="127.3" fill="#9ece6a" textLength="25.2" lengthAdjust="spacingAndGlyphs">le&quot;</text>
 <path d="M1150.2 122.5L1150.2 114.0M1150.2 122.5L1150.2 131.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 139.5L16.2 131.0M16.2 139.5L16.2 148.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="45.6" y="144.3" fill="#9ece6a" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">GET    </text>
-<text x="104.4" y="144.3" fill="#c0caf5" textLength="58.8" lengthAdjust="spacingAndGlyphs">get-pet</text>
+<text x="45.6" y="144.3" fill="#7dcfff" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">GRPC   </text>
+<text x="104.4" y="144.3" fill="#c0caf5" textLength="109.2" lengthAdjust="spacingAndGlyphs">list-products</text>
 <path d="M243.0 139.5L243.0 131.0M243.0 139.5L243.0 148.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 139.5L251.4 131.0M251.4 139.5L251.4 148.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M285.0 139.5L285.0 131.0M285.0 139.5L285.0 148.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
@@ -306,16 +306,16 @@
 <text x="885.6" y="144.3" fill="#737aa2" textLength="16.8" lengthAdjust="spacingAndGlyphs">s}</text>
 <path d="M1150.2 139.5L1150.2 131.0M1150.2 139.5L1150.2 148.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 156.5L16.2 148.0M16.2 156.5L16.2 165.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="45.6" y="161.3" fill="#9ece6a" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">GET    </text>
-<text x="104.4" y="161.3" fill="#c0caf5" textLength="75.6" lengthAdjust="spacingAndGlyphs">list-pets</text>
+<text x="28.8" y="161.3" fill="#737aa2" textLength="16.8" lengthAdjust="spacingAndGlyphs">▾ </text>
+<text x="45.6" y="161.3" fill="#c0caf5" font-weight="bold" textLength="33.6" lengthAdjust="spacingAndGlyphs">pets</text>
 <path d="M243.0 156.5L243.0 148.0M243.0 156.5L243.0 165.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 156.5L251.4 148.0M251.4 156.5L251.4 165.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M285.0 156.5L285.0 148.0M285.0 156.5L285.0 165.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M881.4 156.5L881.4 148.0M881.4 156.5L881.4 165.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M1150.2 156.5L1150.2 148.0M1150.2 156.5L1150.2 165.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 173.5L16.2 165.0M16.2 173.5L16.2 182.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="45.6" y="178.3" fill="#e0af68" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">PUT    </text>
-<text x="104.4" y="178.3" fill="#c0caf5" textLength="84.0" lengthAdjust="spacingAndGlyphs">update-pet</text>
+<text x="45.6" y="178.3" fill="#7aa2f7" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">POST   </text>
+<text x="104.4" y="178.3" fill="#c0caf5" textLength="84.0" lengthAdjust="spacingAndGlyphs">create-pet</text>
 <path d="M243.0 173.5L243.0 165.0M243.0 173.5L243.0 182.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 173.5L251.4 165.0M251.4 173.5L251.4 182.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M285.0 173.5L285.0 165.0M285.0 173.5L285.0 182.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
@@ -323,8 +323,8 @@
 <path d="M881.4 173.5L881.4 165.0M881.4 173.5L881.4 182.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M1150.2 173.5L1150.2 165.0M1150.2 173.5L1150.2 182.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 190.5L16.2 182.0M16.2 190.5L16.2 199.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="28.8" y="195.3" fill="#737aa2" textLength="16.8" lengthAdjust="spacingAndGlyphs">▾ </text>
-<text x="45.6" y="195.3" fill="#c0caf5" font-weight="bold" textLength="42.0" lengthAdjust="spacingAndGlyphs">store</text>
+<text x="45.6" y="195.3" fill="#f7768e" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">DELETE </text>
+<text x="104.4" y="195.3" fill="#c0caf5" textLength="84.0" lengthAdjust="spacingAndGlyphs">delete-pet</text>
 <path d="M243.0 190.5L243.0 182.0M243.0 190.5L243.0 199.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 190.5L251.4 182.0M251.4 190.5L251.4 199.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M285.0 190.5L285.0 182.0M285.0 190.5L285.0 199.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
@@ -335,7 +335,7 @@
 <path d="M1150.2 190.5L1150.2 182.0M1150.2 190.5L1150.2 199.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 207.5L16.2 199.0M16.2 207.5L16.2 216.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <text x="45.6" y="212.3" fill="#9ece6a" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">GET    </text>
-<text x="104.4" y="212.3" fill="#c0caf5" textLength="75.6" lengthAdjust="spacingAndGlyphs">inventory</text>
+<text x="104.4" y="212.3" fill="#c0caf5" textLength="58.8" lengthAdjust="spacingAndGlyphs">get-pet</text>
 <path d="M243.0 207.5L243.0 199.0M243.0 207.5L243.0 216.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 207.5L251.4 199.0M251.4 207.5L251.4 216.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M285.0 207.5L285.0 199.0M285.0 207.5L285.0 216.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
@@ -345,40 +345,53 @@
 <path d="M881.4 207.5L881.4 199.0M881.4 207.5L881.4 216.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M1150.2 207.5L1150.2 199.0M1150.2 207.5L1150.2 216.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 224.5L16.2 216.0M16.2 224.5L16.2 233.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="45.6" y="229.3" fill="#7aa2f7" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">POST   </text>
-<text x="104.4" y="229.3" fill="#c0caf5" textLength="92.4" lengthAdjust="spacingAndGlyphs">place-order</text>
+<text x="45.6" y="229.3" fill="#9ece6a" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">GET    </text>
+<text x="104.4" y="229.3" fill="#c0caf5" textLength="75.6" lengthAdjust="spacingAndGlyphs">list-pets</text>
 <path d="M243.0 224.5L243.0 216.0M243.0 224.5L243.0 233.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 224.5L251.4 216.0M251.4 224.5L251.4 233.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M285.0 224.5L285.0 216.0M285.0 224.5L285.0 233.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="297.6" y="229.3" fill="#7aa2f7" textLength="100.8" lengthAdjust="spacingAndGlyphs"> api_token  </text>
+<text x="297.6" y="229.3" fill="#7aa2f7" textLength="100.8" lengthAdjust="spacingAndGlyphs"> rpc_url    </text>
 <text x="398.4" y="229.3" fill="#737aa2" textLength="109.2" lengthAdjust="spacingAndGlyphs">environment  </text>
-<text x="507.6" y="229.3" fill="#e0af68" textLength="67.2" lengthAdjust="spacingAndGlyphs">••••••••</text>
+<text x="507.6" y="229.3" fill="#c0caf5" textLength="176.4" lengthAdjust="spacingAndGlyphs">http://127.0.0.1:8545</text>
 <path d="M881.4 224.5L881.4 216.0M881.4 224.5L881.4 233.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M1150.2 224.5L1150.2 216.0M1150.2 224.5L1150.2 233.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 241.5L16.2 233.0M16.2 241.5L16.2 250.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="28.8" y="246.3" fill="#737aa2" textLength="16.8" lengthAdjust="spacingAndGlyphs">▾ </text>
-<text x="45.6" y="246.3" fill="#c0caf5" font-weight="bold" textLength="42.0" lengthAdjust="spacingAndGlyphs">users</text>
+<text x="45.6" y="246.3" fill="#e0af68" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">PUT    </text>
+<text x="104.4" y="246.3" fill="#c0caf5" textLength="84.0" lengthAdjust="spacingAndGlyphs">update-pet</text>
 <path d="M243.0 241.5L243.0 233.0M243.0 241.5L243.0 250.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 241.5L251.4 233.0M251.4 241.5L251.4 250.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M285.0 241.5L285.0 233.0M285.0 241.5L285.0 250.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
+<text x="297.6" y="246.3" fill="#7aa2f7" textLength="100.8" lengthAdjust="spacingAndGlyphs"> grpc_host  </text>
+<text x="398.4" y="246.3" fill="#737aa2" textLength="109.2" lengthAdjust="spacingAndGlyphs">environment  </text>
+<text x="507.6" y="246.3" fill="#c0caf5" textLength="184.8" lengthAdjust="spacingAndGlyphs">grpc://127.0.0.1:50051</text>
 <path d="M881.4 241.5L881.4 233.0M881.4 241.5L881.4 250.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <text x="885.6" y="246.3" fill="#9ece6a" textLength="33.6" lengthAdjust="spacingAndGlyphs">boy&quot;</text>
 <path d="M1150.2 241.5L1150.2 233.0M1150.2 241.5L1150.2 250.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 258.5L16.2 250.0M16.2 258.5L16.2 267.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="45.6" y="263.3" fill="#9ece6a" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">GET    </text>
-<text x="104.4" y="263.3" fill="#c0caf5" textLength="16.8" lengthAdjust="spacingAndGlyphs">me</text>
+<text x="28.8" y="263.3" fill="#737aa2" textLength="16.8" lengthAdjust="spacingAndGlyphs">▾ </text>
+<text x="45.6" y="263.3" fill="#c0caf5" font-weight="bold" textLength="25.2" lengthAdjust="spacingAndGlyphs">rpc</text>
 <path d="M243.0 258.5L243.0 250.0M243.0 258.5L243.0 267.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 258.5L251.4 250.0M251.4 258.5L251.4 267.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M285.0 258.5L285.0 250.0M285.0 258.5L285.0 267.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
+<text x="297.6" y="263.3" fill="#7aa2f7" textLength="100.8" lengthAdjust="spacingAndGlyphs"> mcp_base   </text>
+<text x="398.4" y="263.3" fill="#737aa2" textLength="109.2" lengthAdjust="spacingAndGlyphs">environment  </text>
+<text x="507.6" y="263.3" fill="#c0caf5" textLength="176.4" lengthAdjust="spacingAndGlyphs">http://127.0.0.1:8765</text>
 <path d="M881.4 258.5L881.4 250.0M881.4 258.5L881.4 267.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M1150.2 258.5L1150.2 250.0M1150.2 258.5L1150.2 267.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 275.5L16.2 267.0M16.2 275.5L16.2 284.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
+<text x="45.6" y="280.3" fill="#7dcfff" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">RPC    </text>
+<text x="104.4" y="280.3" fill="#c0caf5" textLength="100.8" lengthAdjust="spacingAndGlyphs">block-number</text>
 <path d="M243.0 275.5L243.0 267.0M243.0 275.5L243.0 284.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 275.5L251.4 267.0M251.4 275.5L251.4 284.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M285.0 275.5L285.0 267.0M285.0 275.5L285.0 284.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
+<text x="297.6" y="280.3" fill="#7aa2f7" textLength="100.8" lengthAdjust="spacingAndGlyphs"> api_token  </text>
+<text x="398.4" y="280.3" fill="#737aa2" textLength="109.2" lengthAdjust="spacingAndGlyphs">environment  </text>
+<text x="507.6" y="280.3" fill="#e0af68" textLength="67.2" lengthAdjust="spacingAndGlyphs">••••••••</text>
 <path d="M881.4 275.5L881.4 267.0M881.4 275.5L881.4 284.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M1150.2 275.5L1150.2 267.0M1150.2 275.5L1150.2 284.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 292.5L16.2 284.0M16.2 292.5L16.2 301.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
+<text x="45.6" y="297.3" fill="#7dcfff" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">RPC    </text>
+<text x="104.4" y="297.3" fill="#c0caf5" textLength="92.4" lengthAdjust="spacingAndGlyphs">get-balance</text>
 <path d="M243.0 292.5L243.0 284.0M243.0 292.5L243.0 301.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 292.5L251.4 284.0M251.4 292.5L251.4 301.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M285.0 292.5L285.0 284.0M285.0 292.5L285.0 301.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
@@ -386,6 +399,8 @@
 <text x="885.6" y="297.3" fill="#9ece6a" textLength="50.4" lengthAdjust="spacingAndGlyphs">nated&quot;</text>
 <path d="M1150.2 292.5L1150.2 284.0M1150.2 292.5L1150.2 301.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 309.5L16.2 301.0M16.2 309.5L16.2 318.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
+<text x="28.8" y="314.3" fill="#737aa2" textLength="16.8" lengthAdjust="spacingAndGlyphs">▾ </text>
+<text x="45.6" y="314.3" fill="#c0caf5" font-weight="bold" textLength="42.0" lengthAdjust="spacingAndGlyphs">store</text>
 <path d="M243.0 309.5L243.0 301.0M243.0 309.5L243.0 318.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 309.5L251.4 301.0M251.4 309.5L251.4 318.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M285.0 309.5L285.0 301.0M285.0 309.5L285.0 318.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
@@ -393,6 +408,8 @@
 <text x="885.6" y="314.3" fill="#737aa2" textLength="33.6" lengthAdjust="spacingAndGlyphs">ems]</text>
 <path d="M1150.2 309.5L1150.2 301.0M1150.2 309.5L1150.2 318.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 326.5L16.2 318.0M16.2 326.5L16.2 335.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
+<text x="45.6" y="331.3" fill="#9ece6a" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">GET    </text>
+<text x="104.4" y="331.3" fill="#c0caf5" textLength="75.6" lengthAdjust="spacingAndGlyphs">inventory</text>
 <path d="M243.0 326.5L243.0 318.0M243.0 326.5L243.0 335.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 326.5L251.4 318.0M251.4 326.5L251.4 335.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M285.0 326.5L285.0 318.0M285.0 326.5L285.0 335.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
@@ -401,6 +418,8 @@
 <text x="885.6" y="331.3" fill="#9ece6a" textLength="235.2" lengthAdjust="spacingAndGlyphs">cdn.petstore.test/rex-1.jpg&quot;</text>
 <path d="M1150.2 326.5L1150.2 318.0M1150.2 326.5L1150.2 335.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 343.5L16.2 335.0M16.2 343.5L16.2 352.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
+<text x="45.6" y="348.3" fill="#7aa2f7" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">POST   </text>
+<text x="104.4" y="348.3" fill="#c0caf5" textLength="92.4" lengthAdjust="spacingAndGlyphs">place-order</text>
 <path d="M243.0 343.5L243.0 335.0M243.0 343.5L243.0 352.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 343.5L251.4 335.0M251.4 343.5L251.4 352.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M285.0 343.5L285.0 335.0M285.0 343.5L289.2 343.5" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
@@ -478,6 +497,8 @@
 <text x="885.6" y="348.3" fill="#9ece6a" textLength="235.2" lengthAdjust="spacingAndGlyphs">cdn.petstore.test/rex-2.jpg&quot;</text>
 <path d="M1150.2 343.5L1150.2 335.0M1150.2 343.5L1150.2 352.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 360.5L16.2 352.0M16.2 360.5L16.2 369.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
+<text x="28.8" y="365.3" fill="#737aa2" textLength="16.8" lengthAdjust="spacingAndGlyphs">▾ </text>
+<text x="45.6" y="365.3" fill="#c0caf5" font-weight="bold" textLength="42.0" lengthAdjust="spacingAndGlyphs">users</text>
 <path d="M243.0 360.5L243.0 352.0M243.0 360.5L243.0 369.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 360.5L251.4 352.0M251.4 360.5L251.4 369.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M696.6 360.5L696.6 352.0M696.6 360.5L696.6 369.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
@@ -487,6 +508,8 @@
 <text x="793.2" y="365.3" fill="#737aa2" textLength="84.0" lengthAdjust="spacingAndGlyphs">: {3 keys}</text>
 <path d="M1150.2 360.5L1150.2 352.0M1150.2 360.5L1150.2 369.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 377.5L16.2 369.0M16.2 377.5L16.2 386.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
+<text x="45.6" y="382.3" fill="#9ece6a" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">GET    </text>
+<text x="104.4" y="382.3" fill="#c0caf5" textLength="16.8" lengthAdjust="spacingAndGlyphs">me</text>
 <path d="M243.0 377.5L243.0 369.0M243.0 377.5L243.0 386.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 377.5L251.4 369.0M251.4 377.5L251.4 386.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M696.6 377.5L696.6 369.0M696.6 377.5L696.6 386.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>

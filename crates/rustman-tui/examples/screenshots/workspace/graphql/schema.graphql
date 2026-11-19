@@ -1,0 +1,33 @@
+type Query {
+  pet(id: ID!): Pet
+  pets(status: Status, first: Int = 20): [Pet!]!
+  owner(id: ID!): Owner
+}
+
+type Mutation {
+  adoptPet(id: ID!, ownerId: ID!): Pet
+}
+
+"A pet in the store."
+type Pet {
+  id: ID!
+  name: String!
+  status: Status!
+  tags: [String!]!
+  owner: Owner
+  photoUrl: String @deprecated(reason: "Use photos.")
+  photos: [String!]!
+}
+
+type Owner {
+  id: ID!
+  name: String!
+  email: String!
+  pets: [Pet!]!
+}
+
+enum Status {
+  AVAILABLE
+  PENDING
+  SOLD
+}

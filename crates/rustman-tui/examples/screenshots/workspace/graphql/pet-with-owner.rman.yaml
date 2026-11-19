@@ -1,0 +1,20 @@
+version: 1
+kind: graphql
+name: Pet with owner
+endpoint: '{{base_url}}/graphql'
+schema_file: schema.graphql
+document: |
+  query PetWithOwner($id: ID!) {
+    pet(id: $id) {
+      name
+      status
+      tags
+      owner {
+        name
+        emial
+      }
+    }
+  }
+operation_name: PetWithOwner
+variables:
+  id: '{{pet_id}}'

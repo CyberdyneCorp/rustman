@@ -1,0 +1,5 @@
+version: 1
+kind: http
+name: Refresh token
+method: POST
+url: '{{base_url}}/auth/refresh'

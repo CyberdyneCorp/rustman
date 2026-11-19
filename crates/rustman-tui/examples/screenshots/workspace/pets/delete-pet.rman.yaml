@@ -1,0 +1,5 @@
+version: 1
+kind: http
+name: Delete pet
+method: DELETE
+url: '{{base_url}}/pets/{{pet_id}}'

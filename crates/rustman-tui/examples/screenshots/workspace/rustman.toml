@@ -1,0 +1,16 @@
+[workspace]
+name = "petstore-api"
+version = 1
+
+[defaults]
+default_environment = "local"
+
+[jsonrpc.catalogs]
+"{{rpc_url}}" = "openrpc/node.json"
+
+[mcp_servers.rustman]
+command = "rustman"
+args = ["mcp", "serve"]
+
+[mcp_servers.docs]
+url = "{{mcp_base}}/mcp"

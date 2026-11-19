@@ -1,0 +1,22 @@
+{
+  "protocol": "grpc",
+  "method": "shop.v1.Catalog/ListProducts",
+  "call_type": "server_streaming",
+  "status": {"code": 0, "name": "OK", "message": "", "details": []},
+  "headers": [
+    {"name": "content-type", "value": "application/grpc"},
+    {"name": "x-served-by", "value": "catalog-7f3a"}
+  ],
+  "trailers": [{"name": "grpc-status", "value": "0"}],
+  "messages": [
+    {"id": "p-101", "name": "Rubber duck", "priceCents": "499", "tags": ["toys", "bath"], "inStock": true},
+    {"id": "p-102", "name": "Squeaky bone", "priceCents": "799", "tags": ["toys", "dogs"], "inStock": true},
+    {"id": "p-103", "name": "Laser pointer", "priceCents": "1299", "tags": ["toys", "cats"], "inStock": false}
+  ],
+  "timeline": [
+    {"direction": "sent", "at_ms": 0.4, "size_bytes": 11, "message": {"category": "toys", "pageSize": 3}},
+    {"direction": "received", "at_ms": 18.2, "size_bytes": 35, "message": {"id": "p-101", "name": "Rubber duck", "priceCents": "499", "tags": ["toys", "bath"], "inStock": true}},
+    {"direction": "received", "at_ms": 24.9, "size_bytes": 36, "message": {"id": "p-102", "name": "Squeaky bone", "priceCents": "799", "tags": ["toys", "dogs"], "inStock": true}},
+    {"direction": "received", "at_ms": 31.5, "size_bytes": 35, "message": {"id": "p-103", "name": "Laser pointer", "priceCents": "1299", "tags": ["toys", "cats"], "inStock": false}}
+  ]
+}

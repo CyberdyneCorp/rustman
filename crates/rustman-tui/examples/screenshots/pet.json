@@ -1,0 +1,1 @@
+{"id":42,"name":"Rex","status":"available","category":{"id":1,"name":"Dogs"},"tags":[{"id":7,"name":"good-boy"},{"id":9,"name":"vaccinated"}],"photoUrls":["https://cdn.petstore.test/rex-1.jpg","https://cdn.petstore.test/rex-2.jpg"],"owner":{"id":1001,"name":"Ana","email":"ana@example.com"},"birthDate":"2021-04-12","weightKg":28.4,"microchipped":true,"notes":null}

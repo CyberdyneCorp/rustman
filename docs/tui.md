@@ -445,14 +445,35 @@ cargo run -p rustman-tui --example screenshot -- [--ansi] [--size WxH] [--theme 
 
 It opens PATH as `rustman tui` would, runs the start-up work synchronously, and prints a 120x36 frame (or `--size`) as plain text, or with ANSI colours with `--ansi` (view it with `cat` or `less -R`). It ignores `tui.toml` and renders in 24-bit colour unless `--no-color` is given, so the output depends only on the flags and the workspace.
 
-The README images in `docs/images/` are real frames rendered off-screen by the `screenshot` example:
+The README images in `docs/images/tui-*.svg` are real frames rendered off-screen by the `screenshot` example. [`crates/rustman-tui/examples/screenshots/`](../crates/rustman-tui/examples/screenshots/) holds the sample workspace (HTTP, GraphQL, JSON-RPC and gRPC requests, a `.proto` file, an OpenRPC catalog and MCP server definitions) and the sample responses, and its `render.sh` renders every frame and converts it to SVG with `ansi2svg.py` next to it:
+
+```bash
+crates/rustman-tui/examples/screenshots/render.sh
+```
+
+| Frame | What it shows |
+|---|---|
+| `tui-shell` | a request's Headers tab and its JSON response tree |
+| `tui-assertions` | failed assertions with expected and actual values |
+| `tui-timing` | the timing waterfall and latency sparkline, with a masked bearer token |
+| `tui-environments` | the environment switcher with each variable's layer, the secret masked |
+| `tui-palette` | the command palette fuzzy-matching `swenv` |
+| `tui-help` | the help overlay |
+| `tui-graphql` | the GraphQL editor's inline validation and the response's Errors tab |
+| `tui-graphql-schema` | the GraphQL schema browser, with a deprecated field |
+| `tui-jsonrpc` | JSON-RPC method completion from an OpenRPC catalog |
+| `tui-grpc` | the gRPC method browser and a server-streaming call's messages |
+| `tui-grpc-timeline` | a gRPC request message and the call's timeline |
+| `tui-mcp` | the MCP inspector asking for workspace trust before running a stdio server |
+
+To render a single frame:
 
 ```bash
 cargo run -p rustman-tui --example screenshot -- --ansi --size 136x30 \
     [--open pets/get-pet.rman.yaml --response pet.json] [--keys "Ctrl+P s w e n v"] <workspace> > frame.ans
 ```
 
-`--open` opens a request file (relative to the workspace root) in a tab, and `--response` shows a JSON file as its exchange: a `200 OK` with fixed timings and history, so a frame with a response needs no network and is the same on every run. The open request's assertions are evaluated against that response, so the Assertions tab and the summary line's tally are real results. `--keys` presses space-separated chords before the frame is captured (for example `Ctrl+P` for the palette, `F1` for help, `Tab 2 Tab` to show and focus the Headers tab, or `Tab Tab Tab ] ]` to focus the response and show its Timing tab; the URL has the focus first, so a printable key such as `?` is typed into it). Convert the ANSI output to SVG with any ANSI-to-SVG tool to refresh the images.
+`--open` opens a request file (relative to the workspace root) in a tab, and its background loads (a GraphQL or gRPC schema, an OpenRPC catalog) run before the frame is captured. `--response` shows a JSON file as its exchange, so a frame with a response needs no network and is the same on every run: for an HTTP request it is the body of a `200 OK` with fixed timings and history, and the request's assertions are evaluated against it, so the Assertions tab and the summary line's tally are real results; for a GraphQL request the body is read as a GraphQL result (`Data`, `Errors` and `Extensions` tabs); for a gRPC request the file is the call's record, the `grpc` member of a `rustman.report/v1` request. `--keys` presses space-separated chords before the frame is captured (for example `Ctrl+P` for the palette, `F1` for help, `Alt+I` for the MCP inspector, `Tab 2 Tab` to show and focus the Headers tab, or `Tab Tab Tab ] ]` to focus the response and show its third tab; the URL has the focus first, so a printable key such as `?` is typed into it). Frames that need a running listener or session (webhook captures, the mock server's request log, a connected MCP server) can't be rendered this way.
 
 ## Platform checks
 

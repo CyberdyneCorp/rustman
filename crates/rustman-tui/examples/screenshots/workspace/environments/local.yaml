@@ -1,0 +1,7 @@
+variables:
+  base_url: https://httpbin.org
+  pet_id: 42
+  rpc_url: http://127.0.0.1:8545
+  grpc_host: grpc://127.0.0.1:50051
+  mcp_base: http://127.0.0.1:8765
+secrets: [api_token]
