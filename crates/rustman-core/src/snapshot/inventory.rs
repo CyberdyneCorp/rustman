@@ -137,6 +137,7 @@ pub fn snapshot_names(request: &Request) -> Option<Vec<String>> {
         Request::Graphql(graphql) => graphql.assertions.as_deref(),
         // JSON-RPC calls have no snapshot assertions: nothing is declared.
         Request::Jsonrpc(_) => return Some(Vec::new()),
+        Request::Mcp(mcp) => mcp.assertions.as_deref(),
         Request::Opaque(_) => return None,
     };
     let names = assertions

@@ -353,6 +353,7 @@ pub fn input_key(state: &mut State, chord: crate::keymap::Chord) -> Vec<Effect> 
             Purpose::SaveBody { tab } => crate::viewer_keys::save_to(state, tab, &text),
             Purpose::Webhook(prompt) => crate::webhook::submit(state, prompt, &text),
             Purpose::Mock(prompt) => crate::mock_server::submit(state, prompt, &text),
+            Purpose::Mcp(prompt) => crate::mcp::submit(state, prompt, &text),
             purpose => submit(state, purpose, &text),
         },
     }
@@ -388,7 +389,9 @@ fn submit(state: &mut State, purpose: Purpose, text: &str) -> Vec<Effect> {
             }
             save_tab(state, tab)
         }
-        Purpose::SaveBody { .. } | Purpose::Webhook(_) | Purpose::Mock(_) => Vec::new(),
+        Purpose::SaveBody { .. } | Purpose::Webhook(_) | Purpose::Mock(_) | Purpose::Mcp(_) => {
+            Vec::new()
+        }
     }
 }
 

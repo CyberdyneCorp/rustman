@@ -214,6 +214,26 @@ jobs:
           RUSTMAN_SNIPPET_CARGO_TARGET: ${{ runner.temp }}/reqwest-target
           RUSTMAN_REQUIRE_SNIPPET_LANGS: curl,wget,httpie,python-requests,python-httpx,js-fetch,node-axios,go,rust-reqwest,powershell,csharp
 
+  # add-mcp-client task 3.5: the MCP client against the reference server
+  # (@modelcontextprotocol/server-everything, run locally over stdio).
+  mcp-reference-server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install the reference server
+        run: |
+          mkdir -p "$RUNNER_TEMP/everything"
+          npm install --prefix "$RUNNER_TEMP/everything" --ignore-scripts @modelcontextprotocol/server-everything@2.2.1
+      - run: cargo test -p rustman-mcp --test client_everything --locked -- --ignored --nocapture
+        env:
+          RUSTMAN_MCP_EVERYTHING: ${{ runner.temp }}/everything/node_modules/@modelcontextprotocol/server-everything/dist/index.js
+
   deny:
     runs-on: ubuntu-latest
     steps:

@@ -328,3 +328,156 @@ esac
     ;;
 esac
 ;;
+(mcp-client)
+_arguments "${_arguments_options[@]}" : \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_rustman__subcmd__mcp-client_commands" \
+"*::: :->mcp-client" \
+&& ret=0
+
+    case $state in
+    (mcp-client)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rustman-mcp-client-command-$line[1]:"
+        case $line[1] in
+            (tools)
+_arguments "${_arguments_options[@]}" : \
+'--timeout=[Give up on a request after this long (default\: the server'\''s timeout_ms, else 60s)]:DURATION:_default' \
+'--env=[Environment (default\: RUSTMAN_ENV, then default_environment)]:NAME:_default' \
+'--workspace=[Workspace directory (default\: search from the current directory upwards)]:DIR:_files' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'--json[Print the result as JSON]' \
+'--trust[Spawn a stdio server that is not trusted yet, and record the approval]' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':server -- A server of the workspace, stdio\:<command line> or an http(s)\:// URL:_default' \
+&& ret=0
+;;
+(call)
+_arguments "${_arguments_options[@]}" : \
+'--timeout=[Give up on a request after this long (default\: the server'\''s timeout_ms, else 60s)]:DURATION:_default' \
+'--env=[Environment (default\: RUSTMAN_ENV, then default_environment)]:NAME:_default' \
+'--workspace=[Workspace directory (default\: search from the current directory upwards)]:DIR:_files' \
+'(--arg)--args=[The arguments as one JSON object]:JSON:_default' \
+'*--arg=[One argument\: k=v for a string, k\:=JSON for any JSON value (repeatable)]:K=V:_default' \
+'--sampling-response=[Answer sampling requests with the CreateMessageResult in FILE (default\: reject them)]:FILE:_files' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'--json[Print the result as JSON]' \
+'--trust[Spawn a stdio server that is not trusted yet, and record the approval]' \
+'--no-validate[Send arguments that break the tool'\''s input schema anyway]' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':server -- A server of the workspace, stdio\:<command line> or an http(s)\:// URL:_default' \
+':tool -- The tool to call:_default' \
+&& ret=0
+;;
+(resources)
+_arguments "${_arguments_options[@]}" : \
+'--timeout=[Give up on a request after this long (default\: the server'\''s timeout_ms, else 60s)]:DURATION:_default' \
+'--env=[Environment (default\: RUSTMAN_ENV, then default_environment)]:NAME:_default' \
+'--workspace=[Workspace directory (default\: search from the current directory upwards)]:DIR:_files' \
+'--read=[Read the resource at URI instead of listing]:URI:_default' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'--json[Print the result as JSON]' \
+'--trust[Spawn a stdio server that is not trusted yet, and record the approval]' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':server -- A server of the workspace, stdio\:<command line> or an http(s)\:// URL:_default' \
+&& ret=0
+;;
+(prompts)
+_arguments "${_arguments_options[@]}" : \
+'--timeout=[Give up on a request after this long (default\: the server'\''s timeout_ms, else 60s)]:DURATION:_default' \
+'--env=[Environment (default\: RUSTMAN_ENV, then default_environment)]:NAME:_default' \
+'--workspace=[Workspace directory (default\: search from the current directory upwards)]:DIR:_files' \
+'--get=[Get the prompt NAME instead of listing]:NAME:_default' \
+'*--arg=[One argument of --get\: k=v (repeatable)]:K=V:_default' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'--json[Print the result as JSON]' \
+'--trust[Spawn a stdio server that is not trusted yet, and record the approval]' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':server -- A server of the workspace, stdio\:<command line> or an http(s)\:// URL:_default' \
+&& ret=0
+;;
+(logout)
+_arguments "${_arguments_options[@]}" : \
+'--env=[Environment (default\: RUSTMAN_ENV, then default_environment)]:NAME:_default' \
+'--workspace=[Workspace directory (default\: search from the current directory upwards)]:DIR:_files' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':server -- A server of the workspace or an http(s)\:// URL:_default' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_rustman__subcmd__mcp-client__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rustman-mcp-client-help-command-$line[1]:"
+        case $line[1] in
+            (tools)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(call)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(resources)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(prompts)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(logout)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;

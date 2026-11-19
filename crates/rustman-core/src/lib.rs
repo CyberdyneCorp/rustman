@@ -24,6 +24,7 @@ pub mod secret;
 pub mod secrets;
 pub mod settings;
 pub mod snapshot;
+pub mod trust;
 pub mod vars;
 pub mod workspace;
 

@@ -9,7 +9,7 @@ use rustman_core::model::OAuth2;
 use crate::error::RequestError;
 
 /// A fresh code verifier, its `S256` challenge and an anti-CSRF `state`.
-pub(crate) struct Pkce {
+pub struct Pkce {
     pub verifier: String,
     pub challenge: String,
     pub state: String,

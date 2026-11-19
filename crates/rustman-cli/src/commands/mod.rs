@@ -12,6 +12,7 @@ pub mod history;
 pub mod import;
 pub mod init;
 pub mod mcp;
+pub mod mcp_client;
 pub mod mock;
 pub mod report;
 pub mod rpc;

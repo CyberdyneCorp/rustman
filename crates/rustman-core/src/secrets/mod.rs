@@ -21,6 +21,7 @@ pub use file::{FileSecretStore, SECRETS_FILE};
 /// spilled bodies), shared with the secrets file.
 pub use git::ensure_private;
 pub use keychain::{Keychain, KeychainError, SERVICE};
+pub(crate) use private_file::write_new as write_private_new;
 pub use private_file::{
     create_private_dir, ensure_private_dir, user_temp_dir, write as write_private,
 };

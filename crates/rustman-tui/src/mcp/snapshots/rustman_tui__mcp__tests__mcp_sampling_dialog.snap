@@ -1,0 +1,36 @@
+---
+source: crates/rustman-tui/src/mcp/tests.rs
+expression: dialog
+---
+┌ MCP inspector ─────────────────────────────────────────────────────────────────────────────────────────────┐
+│  1 APPROVAL PENDING  2 servers                                                                             │
+│ ┌ Servers ─────────────┐┌ fake-files 1.2.0 · stdio · 2025-06-18 ─────────────────────────────────────────┐ │
+│ │› files ● stdio       ││tools ✔  resources ✔ (subscribe)  prompts ✔  logging ✔  completions ✖           │ │
+│ │  remote ○ http       ││1 Tools  2 Resources  3 Prompts  4 Notifications  5 Stderr                      │ │
+│ │                      ││› search [read-only]                                                            │ │
+│ │                      ││  delete [destructive]                                                          │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                   ┌ files asks to sample an LLM ───────────────────────────────────┐                   │ │
+│ │                   │ System prompt: Be brief.                                       │                   │ │
+│ │                   │ Model preferences: (none)                                      │                   │ │
+│ │                   │ Max tokens: 100                                                │                   │ │
+│ │                   │ Messages:                                                      │                   │ │
+│ │                   │   user: Summarize the file                                     │                   │ │
+│ │                   │                                                                │                   │ │
+│ │                   │ Your response:                                                 │                   │ │
+│ │                   │ > _                                                            │                   │ │
+│ │                   │                                                                │                   │ │
+│ │                   │ Ctrl+S send · Ctrl+R or Esc reject                             │                   │ │
+│ │                   └────────────────────────────────────────────────────────────────┘                   │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ └──────────────────────┘└────────────────────────────────────────────────────────────────────────────────┘ │
+│ Enter open · s subscribe · r read again · l log level · Ctrl+S save call · Ctrl+C cancel                   │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ Scratch session │ no environment │ TLS verified │ 0 in flight                  MCP APPROVAL (1)  Ctrl+Q quit

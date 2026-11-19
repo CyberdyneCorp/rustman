@@ -64,6 +64,9 @@ enum Command {
     History(commands::history::HistoryArgs),
     /// Serve the workspace to AI agents over MCP (Model Context Protocol)
     Mcp(commands::mcp::McpArgs),
+    /// Explore and call MCP servers: their tools, resources and prompts
+    #[command(name = "mcp-client")]
+    McpClient(commands::mcp_client::McpClientArgs),
     /// Print a shell completion script: rustman completions zsh > _rustman
     Completions(commands::completions::CompletionsArgs),
     /// Open the terminal UI (the default when stdin and stdout are a terminal)
@@ -120,6 +123,7 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
         Command::Rpc(args) => commands::rpc::run(&args),
         Command::History(args) => commands::history::run(&args),
         Command::Mcp(args) => commands::mcp::run(&args),
+        Command::McpClient(args) => commands::mcp_client::run(&args),
         Command::Completions(args) => {
             commands::completions::run(&args, &mut Cli::command());
             Ok(exit::SUCCESS)

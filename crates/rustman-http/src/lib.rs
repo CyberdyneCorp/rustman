@@ -46,8 +46,9 @@ pub use error::{Phase, RequestError};
 pub use exchange::{Exchange, HttpVersion};
 pub use governed::{GovernedError, GovernedSender};
 pub use oauth2::{
-    LOGIN_TIMEOUT, Login, OAuth2Context, TOKEN_FILE_WARNING, cache_key as oauth2_cache_key,
-    interactive_login_required, login_warnings as oauth2_login_warnings,
+    LOGIN_TIMEOUT, Login, Loopback, OAuth2Context, Pkce, TOKEN_FILE_WARNING,
+    cache_key as oauth2_cache_key, interactive_login_required,
+    login_warnings as oauth2_login_warnings,
 };
 pub use proxy::{NoProxy, ProxyKind, ProxySettings, ProxyUrl};
 pub use redirect::RedirectHop;

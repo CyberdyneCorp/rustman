@@ -540,3 +540,93 @@ fn rpc_error_forms_are_checked_at_load() {
     .unwrap_err();
     assert!(err.to_string().contains("code"), "{err}");
 }
+
+mod mcp {
+    use super::*;
+
+    fn run_mcp(yaml: &str, body: &str, facts: &McpFacts) -> Vec<String> {
+        let redactor = Redactor::new();
+        let resolver = Resolver::new();
+        let ctx = Context {
+            resolver: &resolver,
+            request: None,
+            redactor: &redactor,
+        };
+        evaluate_mcp(&assertions(yaml), &response(200, body), &ctx, facts)
+            .iter()
+            .map(ToString::to_string)
+            .collect()
+    }
+
+    const RESULT: &str = r#"{"content":[{"type":"text","text":"found 3 files"}],"structuredContent":{"count":3},"isError":false}"#;
+
+    #[test]
+    fn tool_results_are_checked() {
+        let yaml = "- is_error: false\n- content_text_contains: found\n- structured: {path: $.count, equals: 3}\n";
+        let shown = run_mcp(yaml, RESULT, &McpFacts::default());
+        assert!(shown.iter().all(|s| s.starts_with("pass: ")), "{shown:?}");
+        let yaml = "- is_error: true\n- content_text_contains: missing\n- structured: {path: $.count, equals: 4}\n";
+        let shown = run_mcp(yaml, RESULT, &McpFacts::default());
+        assert_eq!(shown[0], "is_error: expected true, got false");
+        assert_eq!(
+            shown[1],
+            "content_text_contains: expected text content containing \"missing\", got \"found 3 files\""
+        );
+        assert!(shown[2].starts_with("structured $.count"), "{}", shown[2]);
+    }
+
+    #[test]
+    fn structured_needs_structured_content() {
+        let shown = run_mcp(
+            "- structured: {path: $.a, exists: true}\n",
+            r#"{"content":[]}"#,
+            &McpFacts::default(),
+        );
+        assert_eq!(
+            shown[0],
+            "error: structured: the result has no structuredContent"
+        );
+    }
+
+    #[test]
+    fn the_output_schema_check_reads_the_violations() {
+        let facts = McpFacts {
+            output_violations: Some(vec!["/count: expected integer".into()]),
+        };
+        let shown = run_mcp("", RESULT, &facts);
+        assert_eq!(
+            shown,
+            [
+                "output_schema: expected structuredContent matching outputSchema, got /count: expected integer"
+            ]
+        );
+        assert_eq!(
+            run_mcp("- output_schema: true\n", RESULT, &McpFacts::default()),
+            ["error: output_schema: the tool declares no outputSchema"]
+        );
+        let ok = McpFacts {
+            output_violations: Some(Vec::new()),
+        };
+        assert_eq!(run_mcp("", RESULT, &ok), ["pass: output_schema true"]);
+    }
+
+    #[test]
+    fn tool_exists_lists_the_available_tools() {
+        let body = r#"{"tools":[{"name":"read"},{"name":"write"}]}"#;
+        assert_eq!(
+            run_mcp("- tool_exists: search\n", body, &McpFacts::default()),
+            ["tool_exists: expected a tool named \"search\", got available tools: read, write"]
+        );
+        assert_eq!(
+            run_mcp("- tool_exists: read\n", body, &McpFacts::default()),
+            ["pass: tool_exists \"read\""]
+        );
+        let shown = run_mcp("- tool_exists: read\n", RESULT, &McpFacts::default());
+        assert!(shown[0].contains("use operation: tools/list"), "{shown:?}");
+    }
+
+    #[test]
+    fn mcp_checks_read_the_body() {
+        assert!(needs_body(&assertions("- tool_exists: x\n")));
+    }
+}

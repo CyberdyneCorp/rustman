@@ -9,6 +9,7 @@ mod data;
 mod filter;
 mod graphql;
 mod jsonrpc;
+mod mcp;
 mod plan;
 mod record;
 
@@ -21,6 +22,7 @@ pub use jsonrpc::{
     JsonrpcRecord, MAX_RPC_EVENTS, RpcAttemptRecord, RpcCallRecord, RpcRefusal,
     RpcSubscriptionRecord,
 };
+pub use mcp::{MAX_RECORDED_NOTIFICATIONS, McpRecord};
 pub use plan::{Plan, plan};
 pub use record::{
     DataRowRecord, ExchangeRecord, HeaderRecord, RedirectRecord, RequestRecord, RequestStatus,

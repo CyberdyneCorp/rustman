@@ -1,0 +1,36 @@
+---
+source: crates/rustman-tui/src/mcp/tests.rs
+expression: text
+---
+┌ MCP inspector ─────────────────────────────────────────────────────────────────────────────────────────────┐
+│ 1 server                                                                                                   │
+│ ┌ Servers ─────────────┐┌ Session ───────────────────────────────────────────────────────────────────────┐ │
+│ │› files … stdio       ││Select a server and press Enter to connect                                      │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                   ┌ Run this command? ─────────────────────────────────────────────┐                   │ │
+│ │                   │ The stdio server files has not been approved on this machine.  │                   │ │
+│ │                   │                                                                │                   │ │
+│ │                   │ Command line:                                                  │                   │ │
+│ │                   │   npx server                                                   │                   │ │
+│ │                   │ Working directory: /work/files                                 │                   │ │
+│ │                   │ Environment:                                                   │                   │ │
+│ │                   │   API_TOKEN=«redacted:API_TOKEN»                               │                   │ │
+│ │                   │   MODE=fast                                                    │                   │ │
+│ │                   │                                                                │                   │ │
+│ │                   │ y run it and remember · n do not run it                        │                   │ │
+│ │                   └────────────────────────────────────────────────────────────────┘                   │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ └──────────────────────┘└────────────────────────────────────────────────────────────────────────────────┘ │
+│ Enter connect · d disconnect · Tab focus · 1-5 tabs · Esc close                                            │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ mcp │ no environment │ TLS verified │ 0 in flight                                                Ctrl+Q quit

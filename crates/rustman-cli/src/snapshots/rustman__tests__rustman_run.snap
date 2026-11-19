@@ -75,6 +75,9 @@ Options:
       --duration <DURATION>
           GraphQL and JSON-RPC subscriptions stop after this long (default: each request's duration or max_duration_ms, else 30s)
 
+      --trust
+          Spawn the workspace's stdio MCP servers that are not trusted yet, and record the approvals
+
       --color <WHEN>
           Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
           

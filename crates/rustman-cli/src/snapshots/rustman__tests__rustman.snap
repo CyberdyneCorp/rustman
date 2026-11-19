@@ -22,6 +22,7 @@ Commands:
   rpc          Send JSON-RPC calls and batches, and fetch OpenRPC catalogs
   history      List, inspect, replay and clear past exchanges (redacted)
   mcp          Serve the workspace to AI agents over MCP (Model Context Protocol)
+  mcp-client   Explore and call MCP servers: their tools, resources and prompts
   completions  Print a shell completion script: rustman completions zsh > _rustman
   tui          Open the terminal UI (the default when stdin and stdout are a terminal)
   webhook      Capture, inspect and mock inbound webhooks on a local listener

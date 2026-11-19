@@ -1009,3 +1009,26 @@ async fn every_request_of_a_run_job_is_audited() {
     let text = serde_json::to_string(&lines).unwrap();
     assert!(!text.contains(TOKEN), "{text}");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn mcp_requests_are_skipped_and_spawn_nothing() {
+    let ws = workspace("http://127.0.0.1:9", "");
+    let marker = ws.path().join("spawned");
+    let fixture = env!("CARGO_BIN_EXE_rustman-mcp-fixture");
+    let server = format!(
+        "\n[mcp_servers.local]\ncommand = {:?}\nargs = [\"--marker\", {:?}]\n",
+        fixture,
+        marker.to_str().unwrap()
+    );
+    let toml = std::fs::read_to_string(ws.path().join("rustman.toml")).unwrap();
+    write(ws.path(), "rustman.toml", &format!("{toml}{server}"));
+    write(
+        ws.path(),
+        "tools.rman.yaml",
+        "version: 1\nkind: mcp\nname: Tools\nserver: local\noperation: tools/list\n",
+    );
+    let client = connect(ws.path()).await;
+    let result = ok(&client, "send_request", json!({"path": "tools"})).await;
+    assert_eq!(result["outcome"], "skipped", "{result}");
+    assert!(!marker.exists(), "the agent spawned a workspace command");
+}

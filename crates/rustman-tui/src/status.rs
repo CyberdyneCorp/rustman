@@ -39,6 +39,15 @@ pub struct StatusInfo {
     pub secrets_visible: bool,
     /// The webhook listener, while it runs.
     pub webhook: Option<WebhookBadge>,
+    /// MCP sampling or elicitation requests waiting for the user.
+    pub mcp: Option<McpBadge>,
+}
+
+/// The MCP approvals waiting for the user, shown on every screen until
+/// they are handled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct McpBadge {
+    pub pending: usize,
 }
 
 /// The running webhook listener in the status bar.
@@ -120,6 +129,11 @@ fn right_spans(info: &StatusInfo, quit: &str, ui: &UiOptions) -> Vec<Span<'stati
             let text = format!("webhook {} ", webhook.addr);
             Span::styled(text, theme.fg(Token::Accent))
         });
+        spans.push(Span::raw(" "));
+    }
+    if let Some(mcp) = info.mcp {
+        let text = format!(" MCP APPROVAL ({}) ", mcp.pending);
+        spans.push(Span::styled(text, theme.badge(Token::Warn)));
         spans.push(Span::raw(" "));
     }
     if info.secrets_visible {
@@ -233,6 +247,7 @@ mod tests {
             vim: Some(VimMode::Normal),
             secrets_visible: true,
             webhook: None,
+            mcp: None,
         };
         insta::assert_snapshot!(text(&info));
     }

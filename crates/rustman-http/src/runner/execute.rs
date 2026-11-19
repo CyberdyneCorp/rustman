@@ -33,6 +33,7 @@ impl Sent {
             discard: None,
             redactor: Redactor::new(),
             snapshots: Vec::new(),
+            mcp_sent: None,
         }
     }
 
@@ -44,6 +45,7 @@ impl Sent {
             discard: None,
             redactor: Redactor::new(),
             snapshots: Vec::new(),
+            mcp_sent: None,
         }
     }
 
@@ -79,7 +81,11 @@ impl Runner<'_> {
         if let Some(jsonrpc) = sent.record.jsonrpc.take() {
             sent.record.jsonrpc = Some(jsonrpc.redacted(&redactor));
         }
+        if let Some(mcp) = sent.record.mcp.take() {
+            sent.record.mcp = Some(mcp.redacted(&redactor));
+        }
         sent.redactor = redactor.clone();
+        self.record_mcp_history(&mut sent, &redactor, file.clone());
         let kept = self.record_history(&mut sent, &redactor, file, Some(cache_key(request)));
         sent.discard_spill_unless(kept);
         log_record(&sent.record);
@@ -117,6 +123,7 @@ impl Runner<'_> {
                     .execute_jsonrpc(request, jsonrpc, record, iteration)
                     .await;
             }
+            Request::Mcp(mcp) => return self.execute_mcp(request, mcp, record, iteration).await,
             Request::Opaque(_) => return Sent::skipped(record, SkipReason::UnsupportedKind),
         };
         let captured = self.lock_captures().clone();
@@ -288,6 +295,7 @@ impl Runner<'_> {
             discard: None,
             redactor: Redactor::new(),
             snapshots: snapshots.reviews,
+            mcp_sent: None,
         }
     }
 
@@ -331,6 +339,14 @@ impl Runner<'_> {
         for secret in secrets {
             known.add(secret);
         }
+    }
+
+    /// Add every secret `redactor` knows to those every sink redacts.
+    pub(super) fn remember_all(&self, redactor: &Redactor) {
+        self.known
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .merge(redactor);
     }
 
     /// Every secret value resolved or captured so far in this run.

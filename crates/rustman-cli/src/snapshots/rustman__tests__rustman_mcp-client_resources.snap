@@ -1,0 +1,41 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+List the resources of an MCP server, or read one
+
+Usage: rustman mcp-client resources [OPTIONS] <SERVER>
+
+Arguments:
+  <SERVER>
+          A server of the workspace, stdio:<command line> or an http(s):// URL
+
+Options:
+      --json
+          Print the result as JSON
+
+      --trust
+          Spawn a stdio server that is not trusted yet, and record the approval
+
+      --timeout <DURATION>
+          Give up on a request after this long (default: the server's timeout_ms, else 60s)
+
+      --env <NAME>
+          Environment (default: RUSTMAN_ENV, then default_environment)
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --read <URI>
+          Read the resource at URI instead of listing
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

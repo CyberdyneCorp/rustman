@@ -1,0 +1,36 @@
+---
+source: crates/rustman-tui/src/mcp/tests.rs
+expression: text
+---
+┌ MCP inspector ─────────────────────────────────────────────────────────────────────────────────────────────┐
+│ 2 servers                                                                                                  │
+│ ┌ Servers ─────────────┐┌ fake-files 1.2.0 · stdio · 2025-06-18 ─────────────────────────────────────────┐ │
+│ │› files ● stdio       ││tools ✔  resources ✔ (subscribe)  prompts ✔  logging ✔  completions ✖           │ │
+│ │  remote ○ http       ││1 Tools  2 Resources  3 Prompts  4 Notifications  5 Stderr                      │ │
+│ │                      ││› search [read-only]        › q*  string                                        │ │
+│ │                      ││  delete [destructive]          What to find                                    │ │
+│ │                      ││                              mode  one of  fast | safe                         │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ │                      ││                                                                                │ │
+│ └──────────────────────┘└────────────────────────────────────────────────────────────────────────────────┘ │
+│ Enter send · ←/→ pick · Space toggle · Ctrl+J raw JSON · Esc back                                          │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ Scratch session │ no environment │ TLS verified │ 0 in flight                                    Ctrl+Q quit

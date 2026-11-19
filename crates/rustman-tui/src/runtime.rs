@@ -96,6 +96,7 @@ pub async fn run_app<B: Backend>(
     workbench::cancel_all(&mut state);
     crate::webhook::shut_down(&mut state);
     crate::mock_server::shut_down(&mut state);
+    crate::mcp::shut_down(&mut state);
     Ok(state)
 }
 

@@ -1,0 +1,36 @@
+---
+source: crates/rustman-tui/src/mcp/tests.rs
+expression: text
+---
+┌ › Request ─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ METHOD   No request open                                                                                   │
+│ Params  Headers  Body  Auth  Assertions                                                                    │
+│ Open a request from the sidebar · press Ctrl+T for a new one                                               │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌ Response ──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ No response yet.                                                                                           │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ Scratch session │ no environment │ TLS verified │ 0 in flight                  MCP APPROVAL (1)  Ctrl+Q quit

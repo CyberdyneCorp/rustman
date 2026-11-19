@@ -23,8 +23,8 @@ use crate::cookies::NO_ENVIRONMENT;
 use crate::engine::{HttpEngine, SendOptions};
 use crate::error::RequestError;
 use crate::exchange::Exchange;
-use loopback::Loopback;
-use pkce::Pkce;
+pub use loopback::Loopback;
+pub use pkce::Pkce;
 use token::{TokenCache, TokenEndpoint, TokenSet, now};
 
 /// How long the authorization-code flow waits for the browser.
@@ -80,7 +80,7 @@ pub fn cache_key(request: &RequestRef<'_>) -> String {
         rustman_core::model::Request::Http(http) => http.auth.is_some(),
         rustman_core::model::Request::Graphql(graphql) => graphql.auth.is_some(),
         rustman_core::model::Request::Jsonrpc(jsonrpc) => jsonrpc.auth.is_some(),
-        rustman_core::model::Request::Opaque(_) => false,
+        rustman_core::model::Request::Mcp(_) | rustman_core::model::Request::Opaque(_) => false,
     };
     let owner = request
         .ancestors

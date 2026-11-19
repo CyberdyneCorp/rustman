@@ -14,6 +14,7 @@ use rustman_core::{ConfigError, Workspace};
 use rustman_graphql::GraphqlRunner;
 use rustman_http::runner::{BailScope, RunContext, Runner};
 use rustman_jsonrpc::JsonrpcRunner;
+use rustman_mcp::client::McpRunner;
 use rustman_report::{Report, ReportTarget, Reporter, RunReport};
 
 use super::exec::{
@@ -81,6 +82,10 @@ pub struct RunArgs {
     /// each request's duration or max_duration_ms, else 30s)
     #[arg(long, value_name = "DURATION", value_parser = parse_duration)]
     duration: Option<Duration>,
+    /// Spawn the workspace's stdio MCP servers that are not trusted yet, and
+    /// record the approvals
+    #[arg(long)]
+    trust: bool,
 }
 
 pub fn run(args: &RunArgs) -> Result<u8, CliError> {
@@ -99,7 +104,7 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
         );
     }
     let data = data_run(args, &ws, &cwd, &scopes, &plan)?;
-    let store = secret_store(&ws.root)?;
+    let store = std::sync::Arc::new(secret_store(&ws.root)?);
     let mut options = args.flags.options()?;
     options.bail = args.bail.is_some();
     options.bail_scope = match args.bail {
@@ -122,6 +127,11 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
         ..JsonrpcRunner::default()
     };
     options.jsonrpc = Some(&jsonrpc);
+    let mcp = McpRunner::new(
+        args.trust,
+        super::mcp_client::run_connect_options(store.clone()),
+    );
+    options.mcp = Some(&mcp);
     let cancel = options.cancel.clone();
     let ctx = RunContext {
         root: &ws.root,
@@ -135,6 +145,7 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
         cancel_on_ctrl_c(&cancel);
         let record = runner.run(&plan).await;
         jsonrpc.close().await;
+        mcp.shutdown().await;
         record
     });
     if let Err(e) = runner.finish() {

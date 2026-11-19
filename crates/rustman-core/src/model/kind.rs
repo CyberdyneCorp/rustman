@@ -12,6 +12,7 @@ use super::common::Variables;
 use super::graphql::GraphqlRequest;
 use super::http::HttpRequest;
 use super::jsonrpc::JsonrpcRequest;
+use super::mcp::McpRequest;
 use crate::error::{LoadError, Position};
 use crate::format::{Located, from_yaml};
 
@@ -27,7 +28,8 @@ pub enum Request {
     Http(Box<HttpRequest>),
     Graphql(Box<GraphqlRequest>),
     Jsonrpc(Box<JsonrpcRequest>),
-    /// A registered kind this build can list but not execute (e.g. `mcp`).
+    Mcp(Box<McpRequest>),
+    /// A registered kind this build can list but not execute (e.g. `grpc`).
     Opaque(OpaqueRequest),
 }
 
@@ -37,6 +39,7 @@ impl Request {
             Self::Http(r) => &r.kind,
             Self::Graphql(r) => &r.kind,
             Self::Jsonrpc(r) => &r.kind,
+            Self::Mcp(r) => &r.kind,
             Self::Opaque(r) => &r.kind,
         }
     }
@@ -46,6 +49,7 @@ impl Request {
             Self::Http(r) => &r.name,
             Self::Graphql(r) => &r.name,
             Self::Jsonrpc(r) => &r.name,
+            Self::Mcp(r) => &r.name,
             Self::Opaque(r) => &r.name,
         }
     }
@@ -55,6 +59,7 @@ impl Request {
             Self::Http(r) => r.description.as_deref(),
             Self::Graphql(r) => r.description.as_deref(),
             Self::Jsonrpc(r) => r.description.as_deref(),
+            Self::Mcp(r) => r.description.as_deref(),
             Self::Opaque(r) => r.description.as_deref(),
         }
     }
@@ -64,6 +69,7 @@ impl Request {
             Self::Http(r) => &r.tags,
             Self::Graphql(r) => &r.tags,
             Self::Jsonrpc(r) => &r.tags,
+            Self::Mcp(r) => &r.tags,
             Self::Opaque(r) => &r.tags,
         };
         tags.as_deref().unwrap_or_default()
@@ -76,6 +82,7 @@ impl Request {
             Self::Http(r) => r.variables.as_ref(),
             Self::Graphql(_) => None,
             Self::Jsonrpc(r) => r.variables.as_ref(),
+            Self::Mcp(r) => r.variables.as_ref(),
             Self::Opaque(r) => r.variables.as_ref(),
         }
     }
@@ -86,6 +93,7 @@ impl Request {
             Self::Http(_) => return None,
             Self::Graphql(r) => &r.kind,
             Self::Jsonrpc(r) => &r.kind,
+            Self::Mcp(r) => &r.kind,
             Self::Opaque(r) => &r.kind,
         };
         Some(format!(
@@ -115,15 +123,14 @@ pub struct KindRegistry {
 }
 
 impl Default for KindRegistry {
-    /// The built-in kinds: `http`, `graphql`, `jsonrpc`, and the reserved
-    /// `mcp`.
+    /// The built-in kinds: `http`, `graphql`, `jsonrpc` and `mcp`.
     fn default() -> Self {
         Self {
             kinds: vec![
                 ("http", load_http),
                 ("graphql", load_graphql),
                 ("jsonrpc", load_jsonrpc),
-                ("mcp", load_opaque),
+                ("mcp", load_mcp),
             ],
             fallback: None,
         }
@@ -251,6 +258,11 @@ fn load_graphql(file: &Path, text: &str) -> Result<Request, LoadError> {
 fn load_jsonrpc(file: &Path, text: &str) -> Result<Request, LoadError> {
     let request = JsonrpcRequest::parse(file, text)?;
     Ok(Request::Jsonrpc(Box::new(request)))
+}
+
+fn load_mcp(file: &Path, text: &str) -> Result<Request, LoadError> {
+    let request = McpRequest::parse(file, text)?;
+    Ok(Request::Mcp(Box::new(request)))
 }
 
 #[derive(Deserialize)]

@@ -213,7 +213,7 @@ fn other_kinds_exit_2() {
     write(
         ws.path(),
         "tools/m.rman.yaml",
-        "version: 1\nkind: mcp\nname: m\n",
+        "version: 1\nkind: mcp\nname: m\nserver: files\noperation: tools/list\n",
     );
     rustman(ws.path())
         .args([

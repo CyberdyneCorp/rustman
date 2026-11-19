@@ -134,11 +134,13 @@ pub fn runtime() -> Result<tokio::runtime::Runtime, RequestError> {
         .map_err(|e| RequestError::Io(format!("cannot start the async runtime: {e}")))
 }
 
-/// Cancel `token` on Ctrl+C (SIGINT on Unix, the console handler on
-/// Windows); a second Ctrl+C quits at once with exit code 130, even while
-/// reports are being written after the run. The signal is watched on its
-/// own thread, so it is heard whatever the main thread is doing; it is
-/// registered before this returns.
+/// Cancel `token` on Ctrl+C (SIGINT, and also SIGTERM and SIGHUP, on Unix;
+/// the console handler on Windows); a second one quits at once with exit
+/// code 130, even while reports are being written after the run, after
+/// killing the stdio MCP servers still running (they sit in process groups
+/// of their own, out of reach of terminal signals). The signal is watched
+/// on its own thread, so it is heard whatever the main thread is doing; it
+/// is registered before this returns.
 pub fn cancel_on_ctrl_c(token: &CancellationToken) {
     let token = token.clone();
     let (ready, registered) = std::sync::mpsc::channel();
@@ -166,10 +168,19 @@ trait Interrupts {
     fn recv(&mut self) -> impl Future<Output = Option<()>>;
 }
 
+/// SIGINT, SIGTERM and SIGHUP: each asks the process to stop.
 #[cfg(unix)]
-impl Interrupts for tokio::signal::unix::Signal {
-    fn recv(&mut self) -> impl Future<Output = Option<()>> {
-        tokio::signal::unix::Signal::recv(self)
+struct Terminations([tokio::signal::unix::Signal; 3]);
+
+#[cfg(unix)]
+impl Interrupts for Terminations {
+    async fn recv(&mut self) -> Option<()> {
+        let [int, term, hup] = &mut self.0;
+        tokio::select! {
+            got = int.recv() => got,
+            got = term.recv() => got,
+            got = hup.recv() => got,
+        }
     }
 }
 
@@ -183,7 +194,11 @@ impl Interrupts for tokio::signal::windows::CtrlC {
 #[cfg(unix)]
 fn interrupts() -> std::io::Result<impl Interrupts> {
     use tokio::signal::unix::{SignalKind, signal};
-    signal(SignalKind::interrupt())
+    Ok(Terminations([
+        signal(SignalKind::interrupt())?,
+        signal(SignalKind::terminate())?,
+        signal(SignalKind::hangup())?,
+    ]))
 }
 
 #[cfg(windows)]
@@ -209,6 +224,8 @@ async fn watch_interrupts(
 
 fn quit_interrupted() {
     eprintln!("interrupted again: quitting");
+    // `exit` runs no destructor: stop the servers' process trees first.
+    rustman_mcp::client::kill_all_servers();
     std::process::exit(i32::from(crate::exit::INTERRUPTED));
 }
 

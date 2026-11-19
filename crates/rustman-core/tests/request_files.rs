@@ -124,9 +124,10 @@ fn reserved_kinds_load_and_report_unsupported() {
         request.unsupported_reason().as_deref(),
         Some("request kind 'graphql' is not supported by this build")
     );
-    let mcp = "version: 1\nkind: mcp\nname: Call tool\ntool: echo\n";
+    let mcp = "version: 1\nkind: mcp\nname: Call tool\nserver: files\noperation: tools/call\nparams: {name: echo}\n";
     let request = KindRegistry::default().load(Path::new("m"), mcp).unwrap();
     assert_eq!(request.kind(), "mcp");
+    assert!(matches!(request, rustman_core::model::Request::Mcp(_)));
 }
 
 #[test]

@@ -9,6 +9,7 @@ pub mod graphql;
 pub mod http;
 pub mod jsonrpc;
 pub mod kind;
+pub mod mcp;
 pub mod signed_auth;
 pub mod snapshot;
 
@@ -30,6 +31,7 @@ pub use jsonrpc::{
     RetrySettings, SubscriptionSpec, jsonrpc_as_http, unlocated,
 };
 pub use kind::{KindLoader, KindRegistry, OpaqueRequest, REQUEST_VERSION, Request};
+pub use mcp::{McpOperation, McpRequest};
 pub use signed_auth::{AwsCredentials, AwsSigV4, Jwt, JwtAlgorithm};
 pub use snapshot::{
     ComparedPart, DEFAULT_SNAPSHOT_NAME, Preset, Replacement, SnapshotAssertion, SnapshotHeaders,

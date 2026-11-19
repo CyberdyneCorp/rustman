@@ -14,6 +14,7 @@ use rustman_graphql::GraphqlError;
 use rustman_http::snippet::RequestSnippetError;
 use rustman_http::{CurlError, RequestError, SnippetError};
 use rustman_import::ImportError;
+use rustman_mcp::client::ClientError as McpError;
 
 /// Usage or configuration error: bad flag, invalid file, unsupported version.
 pub const CONFIG: u8 = 2;
@@ -82,6 +83,10 @@ pub enum CliError {
     /// A GraphQL schema that cannot be fetched, read or written.
     #[error(transparent)]
     Graphql(#[from] GraphqlError),
+    /// An MCP server that cannot be reached, refused or failed a call; the
+    /// message may quote the server, so control characters are escaped.
+    #[error("{}", rustman_mcp::client::output::printable(&.0.to_string()))]
+    Mcp(#[from] McpError),
 }
 
 impl From<RequestSnippetError> for CliError {
@@ -101,6 +106,7 @@ impl CliError {
             Self::OpenApi(err) if err.is_request_failure() => REQUEST,
             Self::Policy(err) if err.is_refusal() => SAFETY,
             Self::Graphql(err) => graphql_code(err),
+            Self::Mcp(err) => mcp_code(err),
             Self::Curl(_)
             | Self::History(_)
             | Self::Import(_)
@@ -132,6 +138,27 @@ fn graphql_code(err: &GraphqlError) -> u8 {
         | GraphqlError::Resolve(_)
         | GraphqlError::AckTimeout
         | GraphqlError::Subscription(_) => REQUEST,
+        _ => CONFIG,
+    }
+}
+
+/// The exit code of an MCP client error (mcp-client "MCP client CLI"): a
+/// protocol error is a failed call (1), like an `isError` result; a server
+/// that cannot be reached or does not answer is a request failure (3); a
+/// definition, trust or argument problem a configuration error (2).
+fn mcp_code(err: &McpError) -> u8 {
+    match err {
+        McpError::Protocol { .. } => ASSERTION,
+        McpError::Cancelled => INTERRUPTED,
+        McpError::Spawn { .. }
+        | McpError::UnsupportedVersion(_)
+        | McpError::Connect { .. }
+        | McpError::Disconnected(_)
+        | McpError::Transport { .. }
+        | McpError::Timeout(_)
+        | McpError::TooManyPages(_)
+        | McpError::OAuth(_)
+        | McpError::OAuthClientId(_) => REQUEST,
         _ => CONFIG,
     }
 }
@@ -183,6 +210,23 @@ mod tests {
     use std::path::Path;
 
     use rustman_core::settings::Settings;
+
+    #[test]
+    fn mcp_errors_exit_by_kind() {
+        let protocol = McpError::Protocol {
+            code: -32602,
+            message: "bad".into(),
+        };
+        assert_eq!(CliError::from(protocol).code(), ASSERTION);
+        let untrusted = CliError::from(McpError::Untrusted("files".into()));
+        assert_eq!(untrusted.code(), CONFIG);
+        assert_eq!(
+            untrusted.render(),
+            "error: mcp: server files is not trusted; review it or pass --trust"
+        );
+        let timeout = McpError::Timeout("60s".into());
+        assert_eq!(CliError::from(timeout).code(), REQUEST);
+    }
 
     #[test]
     fn no_workspace_renders_the_spec_text() {

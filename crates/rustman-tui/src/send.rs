@@ -30,6 +30,8 @@ use rustman_graphql::{GraphqlRunner, Interactive, SubscriptionEvent};
 use rustman_http::Exchange;
 use rustman_http::runner::{RunContext, RunOptions, Runner, Sent};
 use rustman_jsonrpc::JsonrpcRunner;
+use rustman_mcp::client::oauth::OAuthOptions;
+use rustman_mcp::client::{ConnectOptions, McpRunner};
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio_util::sync::CancellationToken;
 
@@ -360,12 +362,14 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         }),
         ..JsonrpcRunner::default()
     };
+    let mcp = mcp_runner(place.root, job.backend);
     let options = RunOptions {
         cancel: job.cancel.clone(),
         history: place.history(),
         ad_hoc,
         graphql: Some(&graphql),
         jsonrpc: Some(&jsonrpc),
+        mcp: Some(&mcp),
         snapshots: job.snapshots,
         ..RunOptions::default()
     };
@@ -388,6 +392,7 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         }
     };
     jsonrpc.close().await;
+    mcp.shutdown().await;
     if let Err(e) = runner.finish() {
         sent.record.warnings.push(e.to_string());
     }
@@ -412,6 +417,21 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         received.history = latencies(&store, &received.record.file);
     }
     received
+}
+
+/// Sends `kind: mcp` requests as `rustman run` does without `--trust`: a
+/// stdio server must have been approved (in the MCP inspector), and OAuth
+/// uses the tokens already stored (a needed login fails).
+fn mcp_runner(root: &Path, backend: Option<SecretBackend>) -> McpRunner {
+    let oauth = secret_store(root, backend).ok().map(|store| OAuthOptions {
+        store: Arc::new(store),
+        prompt: None,
+    });
+    let connect = ConnectOptions {
+        oauth,
+        ..ConnectOptions::default()
+    };
+    McpRunner::new(false, connect)
 }
 
 /// The GraphQL result of a GraphQL exchange, from its redacted record and
