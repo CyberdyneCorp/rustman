@@ -13,6 +13,7 @@ rustman-core.workspace = true
 rustman-http.workspace = true
 rustman-graphql.workspace = true
 rustman-jsonrpc.workspace = true
+rustman-realtime.workspace = true
 rustman-mcp.workspace = true
 rustman-grpc.workspace = true
 rustman-import.workspace = true

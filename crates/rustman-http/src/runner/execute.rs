@@ -139,6 +139,9 @@ impl Runner<'_> {
             Request::Grpc(grpc) => {
                 return self.execute_grpc(request, grpc, record, iteration).await;
             }
+            Request::Ws(_) | Request::Sse(_) => {
+                return self.execute_realtime(request, record, iteration).await;
+            }
             Request::Opaque(_) => return Sent::skipped(record, SkipReason::UnsupportedKind),
         };
         let captured = self.lock_captures().clone();

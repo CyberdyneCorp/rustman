@@ -1,0 +1,26 @@
+# The SSE parser fuzz target (add-realtime-client task 3.1). Not part of the
+# workspace: it needs nightly and cargo-fuzz. Run from the crate folder:
+#   cargo +nightly fuzz run sse_parser -- -max_total_time=60
+[package]
+name = "rustman-http-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+rustman-http = { path = ".." }
+
+[[bin]]
+name = "sse_parser"
+path = "fuzz_targets/sse_parser.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]

@@ -22,6 +22,7 @@ rustman-graphql.workspace = true
 rustman-jsonrpc.workspace = true
 rustman-grpc.workspace = true
 rustman-mcp.workspace = true
+rustman-realtime.workspace = true
 rustman-tui.workspace = true
 rustman-webhook.workspace = true
 rustman-mock.workspace = true
@@ -34,7 +35,7 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 dunce.workspace = true
-tokio = { workspace = true, features = ["rt", "signal", "macros", "net"] }
+tokio = { workspace = true, features = ["rt", "signal", "macros", "net", "sync"] }
 tokio-util.workspace = true
 
 [dev-dependencies]

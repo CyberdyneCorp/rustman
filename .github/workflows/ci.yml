@@ -183,6 +183,18 @@ jobs:
         working-directory: crates/rustman-viz-protocol
         run: cargo +nightly fuzz run decode -- -max_total_time=60
 
+  # add-realtime-client task 3.1: the SSE parser never panics, and how a
+  # stream is split into chunks never changes what it parses to.
+  fuzz-sse-parser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup toolchain install nightly --profile minimal
+      - run: cargo +nightly install cargo-fuzz --locked
+      - name: Fuzz the SSE parser for 60 s
+        working-directory: crates/rustman-http
+        run: cargo +nightly fuzz run sse_parser -- -max_total_time=60
+
   # Runner-parity task 4.4: every snippet language with an interpreter on the
   # runner sends the same request to the local echo server. Languages listed
   # in RUSTMAN_REQUIRE_SNIPPET_LANGS (all 11) fail the job when their tool

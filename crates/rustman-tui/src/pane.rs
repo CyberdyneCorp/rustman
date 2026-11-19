@@ -22,6 +22,7 @@ use crate::grpc_pane::{GrpcEditor, GrpcPane};
 use crate::http_pane::HttpPane;
 use crate::jsonrpc_pane::{JsonrpcEditor, JsonrpcPane};
 use crate::keymap::{Chord, Keymap};
+use crate::realtime_pane::{RealtimeEditor, RealtimePane};
 use crate::theme::Token;
 use crate::vars_view::VarScope;
 use crate::vim::Vim;
@@ -96,6 +97,13 @@ pub trait PaneEditor: fmt::Debug + Send {
     fn grpc_mut(&mut self) -> Option<&mut GrpcEditor> {
         None
     }
+    /// The realtime editor, for its live session.
+    fn realtime(&self) -> Option<&RealtimeEditor> {
+        None
+    }
+    fn realtime_mut(&mut self) -> Option<&mut RealtimeEditor> {
+        None
+    }
 }
 
 /// A pane registered for one request kind.
@@ -111,10 +119,18 @@ pub struct Registry {
 }
 
 impl Registry {
-    /// The panes shipped here: `http`, `graphql`, `jsonrpc` and `grpc`.
+    /// The panes shipped here: `http`, `graphql`, `jsonrpc`, `grpc`, and
+    /// the realtime pane for `ws` and `sse`.
     pub fn builtin() -> Self {
         Self {
-            panes: vec![&HttpPane, &GraphqlPane, &JsonrpcPane, &GrpcPane],
+            panes: vec![
+                &HttpPane,
+                &GraphqlPane,
+                &JsonrpcPane,
+                &GrpcPane,
+                &RealtimePane::WS,
+                &RealtimePane::SSE,
+            ],
         }
     }
 
@@ -233,7 +249,10 @@ mod tests {
     #[test]
     fn http_has_a_pane_and_unknown_kinds_open_read_only() {
         let registry = Registry::builtin();
-        assert_eq!(registry.kinds(), ["http", "graphql", "jsonrpc", "grpc"]);
+        assert_eq!(
+            registry.kinds(),
+            ["http", "graphql", "jsonrpc", "grpc", "ws", "sse"]
+        );
         let http = load("version: 1\nkind: http\nname: A\nurl: http://x/\n");
         let editor = registry.open(&http);
         assert_eq!(editor.kind(), "http");

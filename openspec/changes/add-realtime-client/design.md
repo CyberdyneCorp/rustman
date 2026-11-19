@@ -9,7 +9,7 @@
 `rustman-jsonrpc` is the reference for a protocol crate. Reuse, don't rebuild:
 
 - **WebSocket transport**: `rustman_http::open_websocket` (`crates/rustman-http/src/websocket.rs`), shared by GraphQL subscriptions and JSON-RPC, already performs the handshake over the engine's `Connector`: DNS, connect timeout, HTTP `CONNECT`/HTTPS/SOCKS5 proxies (always tunnelled), `TlsSettings` (`ca_bundle`, client certificate, `verify_tls`) with ALPN `http/1.1`, headers, auth helpers and cookies through `request_head`, a subprotocol offer and redacted transport errors. D1's hand-made `CONNECT` tunnel plus `client_async_tls` is not needed. `tokio-tungstenite` is already in `[workspace.dependencies]` with only the `handshake` feature; no TLS feature may be enabled.
-  - Gaps to close in `websocket.rs` without changing GraphQL or JSON-RPC behavior: the message/frame cap is `SendOptions.body.max_in_memory` (from `[http] max_body_bytes`, default 10 MiB) instead of a caller value, and `handshake_error` collapses a refused upgrade to `WebSocket handshake failed: HTTP <code>`, dropping the reason phrase, headers and body that this spec records.
+  - Gaps to close in `websocket.rs` without changing GraphQL or JSON-RPC behavior (closed by D8): the message/frame cap is `SendOptions.body.max_in_memory` (from `[http] max_body_bytes`, default 10 MiB) instead of a caller value, and `handshake_error` collapses a refused upgrade to `WebSocket handshake failed: HTTP <code>`, dropping the reason phrase, headers and body that this spec records.
 - **SSE transport**: `HttpEngine::open_stream` (`crates/rustman-http/src/stream.rs`) returns a `StreamedResponse` read chunk by chunk, with the same auth, signing, cookies, TLS and proxies as `send`. GraphQL over SSE uses it (`crates/rustman-graphql/src/subscription/sse.rs`), with a `pub(crate)` incremental `SseParser` (`event`, `data`, comments, per-event size limit) that ignores `id` and `retry`. D2's parser should be that one, moved to `rustman-http` and extended, not a second implementation.
 - **Request model and registry**: kinds are a closed enum in `crates/rustman-core/src/model/kind.rs` (`Request::{Http, Graphql, Jsonrpc, Mcp, Opaque}`, `KindRegistry::default`). New kinds need `model/ws.rs` and `model/sse.rs` (`deny_unknown_fields`), enum variants, the writer in `crates/rustman-core/src/format/write/request.rs`, and resolution in `crates/rustman-core/src/vars/` (as `vars/jsonrpc.rs`).
 - **Runner**: `rustman-realtime` depends on `rustman-http`, so the runner reaches it through an injected executor, as `RunOptions::jsonrpc` / `JsonrpcExecutor` (`crates/rustman-http/src/runner/jsonrpc.rs`) and `RunOptions::graphql` do. The record part goes next to `crates/rustman-core/src/run/jsonrpc.rs`, and the report part into `crates/rustman-report/src/run.schema.json` and `docs/schemas/report.schema.json`.
@@ -48,6 +48,18 @@ One tokio task owns each session. It exposes an `mpsc` command channel (send, cl
 ### D6. Bounds and limits
 The defaults (50 messages / 30 s headless, 16 MiB per message, 10000 timeline entries) are a little more generous than GraphQL's 10 events, because raw feeds are chattier. All of them can be overridden per file and per CLI flag.
 
+### D7. One SSE parser, moved to `rustman-http` (rejected: adopting `sse-stream`)
+GraphQL's incremental `SseParser` moves from `crates/rustman-graphql/src/subscription/sse.rs` into `rustman-http` and gains `id`, `retry` and the leading BOM, so it implements the whole WHATWG algorithm. GraphQL over SSE switches to the moved parser; there is one parser in the tree. GraphQL keeps one leniency of its old parser through `SseParser::keeping_typed_events`: an event with a type but no `data` line (`event: complete` alone) is still dispatched, so such a `complete` still ends the subscription; realtime sessions follow WHATWG and drop it. The size limit counts the held line before it is applied, so whether an event passes the limit does not depend on how the stream is split into chunks (the fuzz target asserts it). `sse-stream` stays a dependency of the MCP client only, because rmcp expects its stream type; it does not enforce our per-event size limit or record raw `retry` values the way the reconnect policy needs.
+
+### D8. The realtime message cap is explicit (rejected: bounding it by `[http] max_body_bytes`)
+`open_websocket` takes the message and frame cap as an explicit argument. GraphQL and JSON-RPC pass `[http] max_body_bytes` as before, so their behavior does not change. Realtime sessions pass `limits.max_message_bytes` (default 16 MiB), which is the only cap for their connections. A refused upgrade now keeps its status, reason phrase, headers and body (up to 64 KiB) in `WebSocketError::Handshake`. Tungstenite does not keep the reason phrase the server sent, so the standard phrase of the status is recorded, and the body is what arrived with the response head; both, like the credentials the handshake sent, travel with the failure; GraphQL and JSON-RPC keep showing the same `WebSocket handshake failed: HTTP <code>` message.
+
+### D9. Bound names stay `limits.max_messages` / `limits.duration_ms` (rejected: renaming to `max_events` / `max_duration_ms`)
+The realtime kinds keep the spec's names under `limits`, next to `max_message_bytes` and `max_timeline`. GraphQL and JSON-RPC subscriptions keep their top-level `max_events` / `max_duration_ms`; `docs/request-files.md` states the difference.
+
+### D10. `permessage-deflate` is not negotiated
+Sessions offer no WebSocket extensions. Tungstenite's support is limited, and compression can be added later without changing the specs.
+
 ## Risks / Trade-offs
 
 - [Servers that require a specific `Origin` header] → `headers` can set `Origin`. It isn't sent by default, which matches non-browser clients.
@@ -61,7 +73,4 @@ Additive. There's nothing to migrate.
 
 ## Open Questions
 
-- Whether `permessage-deflate` compression should be negotiated by default. Tungstenite's support is limited; this can be added later without changing the specs.
-- SSE parser: move GraphQL's `SseParser` into `rustman-http` and extend it with `id`, `retry` and the leading BOM (keeps one parser, as D2 intends), or adopt `sse-stream`, already a workspace dependency of the MCP client (`crates/rustman-mcp/src/client`)?
-- Message cap: `limits.max_message_bytes` defaults to 16 MiB, while `open_websocket` caps messages at `[http] max_body_bytes` (10 MiB by default). Should the realtime limit override the HTTP cap, or be bounded by it?
-- Bound names: GraphQL and JSON-RPC subscriptions use top-level `max_events` / `max_duration_ms` (default 10 events, 30 s); this spec uses `limits.max_messages` / `limits.duration_ms`. Keep the spec's names, or align them before implementation?
+None. The questions raised while refreshing the specs are settled in D7 to D10.

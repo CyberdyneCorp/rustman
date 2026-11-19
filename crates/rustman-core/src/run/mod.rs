@@ -11,6 +11,7 @@ mod graphql;
 mod jsonrpc;
 mod mcp;
 mod plan;
+mod realtime;
 mod record;
 
 pub use data::{CollectionData, DataRun, collection_data, secret_columns};
@@ -24,6 +25,10 @@ pub use jsonrpc::{
 };
 pub use mcp::{MAX_RECORDED_NOTIFICATIONS, McpRecord};
 pub use plan::{Plan, plan};
+pub use realtime::{
+    EndRecord, HandshakeRecord, MAX_RECORDED_FIELD, MAX_RECORDED_PAYLOAD, RealtimeRecord,
+    TimelineRecord,
+};
 pub use record::{
     DataRowRecord, ExchangeRecord, HeaderRecord, RedirectRecord, RequestRecord, RequestStatus,
     ResponseRecord, RunRecord, SentRequest, SkipReason, Summary, TimingsRecord, now_rfc3339,

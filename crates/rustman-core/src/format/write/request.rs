@@ -23,6 +23,10 @@ pub fn request_to_yaml(request: &Request) -> String {
         Request::Mcp(mcp) if mcp.source.is_empty() => mcp_to_yaml(mcp),
         Request::Mcp(mcp) => mcp.source.clone(),
         Request::Grpc(grpc) => grpc.source.clone(),
+        Request::Ws(ws) if ws.source.is_empty() => super::realtime::ws_to_yaml(ws),
+        Request::Ws(ws) => ws.source.clone(),
+        Request::Sse(sse) if sse.source.is_empty() => super::realtime::sse_to_yaml(sse),
+        Request::Sse(sse) => sse.source.clone(),
         Request::Opaque(opaque) => opaque.source.clone(),
     }
 }
@@ -239,11 +243,11 @@ fn http_node(r: &HttpRequest) -> Node {
         .build()
 }
 
-fn strings(values: &[String]) -> Node {
+pub(super) fn strings(values: &[String]) -> Node {
     Node::Seq(values.iter().map(Node::str).collect())
 }
 
-fn name_values(pairs: &[NameValue]) -> Node {
+pub(super) fn name_values(pairs: &[NameValue]) -> Node {
     Node::Seq(
         pairs
             .iter()
@@ -258,7 +262,7 @@ fn name_values(pairs: &[NameValue]) -> Node {
     )
 }
 
-fn variables(vars: &Variables) -> Node {
+pub(super) fn variables(vars: &Variables) -> Node {
     Node::Map(
         vars.iter()
             .map(|(name, value)| (name.to_owned(), var_value(value)))
@@ -286,7 +290,7 @@ fn float(n: f64) -> String {
     }
 }
 
-fn json(value: &serde_json::Value) -> Node {
+pub(super) fn json(value: &serde_json::Value) -> Node {
     use serde_json::Value;
     match value {
         Value::Null => Node::plain("null"),
@@ -302,7 +306,7 @@ fn json(value: &serde_json::Value) -> Node {
     }
 }
 
-fn body(b: &Body) -> Node {
+pub(super) fn body(b: &Body) -> Node {
     let typed = |kind: &str| MapBuilder::new().str("type", kind);
     match b {
         Body::None => typed("none").build(),
@@ -328,7 +332,7 @@ fn part(p: &Part) -> Node {
         .build()
 }
 
-fn auth(a: &Auth) -> Node {
+pub(super) fn auth(a: &Auth) -> Node {
     let typed = |kind: &str| MapBuilder::new().str("type", kind);
     match a {
         Auth::None => typed("none").build(),
@@ -440,7 +444,7 @@ fn settings(s: &RequestSettings) -> Node {
         .build()
 }
 
-fn assertion(a: &Assertion) -> Node {
+pub(super) fn assertion(a: &Assertion) -> Node {
     let (key, node) = match a {
         Assertion::Snapshot(s) if ***s == SnapshotAssertion::default() => {
             return Node::str("snapshot");
@@ -485,6 +489,15 @@ fn assertion(a: &Assertion) -> Node {
         Assertion::ToolExists(name) => ("tool_exists", Node::str(name)),
         Assertion::GrpcStatus(e) => ("grpc_status", Node::str(e.name())),
         Assertion::Metadata(m) => ("metadata", header_assertion(m)),
+        Assertion::Messages(m) => (
+            "messages",
+            MapBuilder::new()
+                .opt_plain("count_gte", m.count_gte)
+                .opt_plain("count_lte", m.count_lte)
+                .opt_plain("count_eq", m.count_eq)
+                .build(),
+        ),
+        Assertion::CloseCode(code) => ("close_code", Node::plain(code)),
     };
     Node::Map(vec![(key.to_owned(), node)])
 }
@@ -593,7 +606,7 @@ fn header_assertion(h: &HeaderAssertion) -> Node {
         .build()
 }
 
-fn json_assertion(j: &JsonAssertion) -> Node {
+pub(super) fn json_assertion(j: &JsonAssertion) -> Node {
     MapBuilder::new()
         .str("path", &j.path)
         .opt("equals", j.equals.as_ref().map(json))
@@ -610,7 +623,7 @@ fn json_assertion(j: &JsonAssertion) -> Node {
         .build()
 }
 
-fn capture(c: &Capture) -> Node {
+pub(super) fn capture(c: &Capture) -> Node {
     MapBuilder::new()
         .str("var", &c.var)
         .str("from", c.from.as_str())

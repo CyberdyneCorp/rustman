@@ -83,7 +83,11 @@ fn snapshot_spec<'r>(request: &'r Request, name: &str) -> &'r SnapshotAssertion 
         Request::Http(http) => http.assertions.as_deref(),
         Request::Graphql(graphql) => graphql.assertions.as_deref(),
         Request::Mcp(mcp) => mcp.assertions.as_deref(),
-        Request::Jsonrpc(_) | Request::Grpc(_) | Request::Opaque(_) => None,
+        Request::Jsonrpc(_)
+        | Request::Grpc(_)
+        | Request::Ws(_)
+        | Request::Sse(_)
+        | Request::Opaque(_) => None,
     };
     assertions
         .into_iter()

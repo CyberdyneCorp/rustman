@@ -15,6 +15,7 @@ mod header;
 mod json;
 mod jsonrpc;
 mod mcp;
+mod realtime;
 mod response;
 mod schema;
 mod shown;
@@ -31,6 +32,7 @@ use crate::vars::Resolver;
 use crate::workspace::RequestRef;
 
 pub use mcp::McpFacts;
+pub use realtime::{RealtimeFacts, wait_matches};
 pub use response::{GrpcView, ResponseView};
 pub use schema::MAX_VIOLATIONS;
 
@@ -61,8 +63,9 @@ pub struct AssertionResult {
     /// `error_message_contains`, `error_code`, `data`), `rpc_error`, an
     /// MCP check
     /// (`is_error`, `content_text_contains`, `structured`, `output_schema`,
-    /// `tool_exists`), or a
-    /// gRPC check (`grpc_status`, `metadata`).
+    /// `tool_exists`), a
+    /// gRPC check (`grpc_status`, `metadata`), or a realtime check
+    /// (`messages`, `close_code`).
     pub kind: &'static str,
     pub outcome: Outcome,
     /// A short description of the check, such as `json $.id equals 42`.
@@ -127,7 +130,7 @@ pub fn evaluate(
     response: &ResponseView<'_>,
     ctx: &Context<'_, '_>,
 ) -> Vec<AssertionResult> {
-    evaluate_all(assertions, response, ctx, None)
+    evaluate_all(assertions, response, ctx, Facts::None)
 }
 
 /// Evaluate the assertions of an MCP request against `response`, whose
@@ -140,14 +143,34 @@ pub fn evaluate_mcp(
     facts: &McpFacts,
 ) -> Vec<AssertionResult> {
     let all = mcp::with_implicit(assertions, facts);
-    evaluate_all(&all, response, ctx, Some(facts))
+    evaluate_all(&all, response, ctx, Facts::Mcp(facts))
+}
+
+/// Evaluate the assertions of a realtime session against `response`,
+/// whose body is `{"messages": [...]}` (each received message parsed as
+/// JSON, or its text), with what `facts` says about the session.
+pub fn evaluate_realtime(
+    assertions: &[Assertion],
+    response: &ResponseView<'_>,
+    ctx: &Context<'_, '_>,
+    facts: &RealtimeFacts,
+) -> Vec<AssertionResult> {
+    evaluate_all(assertions, response, ctx, Facts::Realtime(facts))
+}
+
+/// What a protocol client learned besides the response.
+#[derive(Clone, Copy)]
+enum Facts<'f> {
+    None,
+    Mcp(&'f McpFacts),
+    Realtime(&'f RealtimeFacts),
 }
 
 fn evaluate_all(
     assertions: &[Assertion],
     response: &ResponseView<'_>,
     ctx: &Context<'_, '_>,
-    facts: Option<&McpFacts>,
+    facts: Facts<'_>,
 ) -> Vec<AssertionResult> {
     let mut interp = Interp::new(ctx.resolver, ctx.redactor);
     let parsed = Parsed::new(response);
@@ -164,7 +187,7 @@ fn evaluate_one(
     response: &Parsed<'_, '_>,
     ctx: &Context<'_, '_>,
     interp: &mut Interp<'_, '_>,
-    facts: Option<&McpFacts>,
+    facts: Facts<'_>,
 ) -> AssertionResult {
     let view = response.view;
     match assertion {
@@ -181,7 +204,20 @@ fn evaluate_one(
             Check::new("snapshot", format!("snapshot {}", snapshot.name()))
                 .error(SNAPSHOT_NEEDS_RUNNER)
         }
-        other if mcp::reads_result(other) => mcp::evaluate(other, response, interp, facts),
+        other if mcp::reads_result(other) => {
+            let mcp = match facts {
+                Facts::Mcp(facts) => Some(facts),
+                _ => None,
+            };
+            mcp::evaluate(other, response, interp, mcp)
+        }
+        other if realtime::is_session_check(other) => {
+            let session = match facts {
+                Facts::Realtime(facts) => Some(facts),
+                _ => None,
+            };
+            realtime::evaluate(other, session)
+        }
         graphql => graphql::evaluate(graphql, response, interp),
     }
 }

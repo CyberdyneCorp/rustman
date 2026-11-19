@@ -9,6 +9,7 @@ mod explore;
 #[cfg(feature = "grpc")]
 pub mod grpc;
 mod history;
+pub mod realtime;
 pub mod reference;
 pub(crate) mod reports;
 pub mod rpc;
@@ -190,16 +191,24 @@ pub fn catalog() -> Vec<Tool> {
 }
 
 /// Tools of optional protocol capabilities: `rpc_call` with
-/// `jsonrpc-requests`, and `grpc_list`, `grpc_describe` and `grpc_call`
-/// with `grpc-requests` (the `grpc` feature). `graphql_introspect` and
+/// `jsonrpc-requests`, `realtime_listen` with `realtime-sessions`, and
+/// `grpc_list`, `grpc_describe` and `grpc_call` with `grpc-requests` (the
+/// `grpc` feature). `graphql_introspect` and
 /// `graphql_query` (`graphql-requests`) and `list_webhook_captures`
 /// (`webhook-inspector`) are not registered by this build yet.
 fn protocol_tools() -> Vec<Tool> {
-    let mut tools = vec![tool::<rpc::RpcCallArgs, rpc::RpcCallResult>(
-        rpc::NAME,
-        "Send one JSON-RPC call (endpoint, method, params) or a saved jsonrpc request through the safety policy. Only methods matching [jsonrpc] agent_read_only_methods are sent; subscriptions are refused.",
-        Effect::Sends,
-    )];
+    let mut tools = vec![
+        tool::<rpc::RpcCallArgs, rpc::RpcCallResult>(
+            rpc::NAME,
+            "Send one JSON-RPC call (endpoint, method, params) or a saved jsonrpc request through the safety policy. Only methods matching [jsonrpc] agent_read_only_methods are sent; subscriptions are refused.",
+            Effect::Sends,
+        ),
+        tool::<realtime::RealtimeListenArgs, realtime::RealtimeListenResult>(
+            realtime::NAME,
+            "Open a WebSocket (ws:// or wss:// url) or SSE (http(s):// url) session, or a saved ws or sse request, through the safety policy, optionally send initial frames (a mutation: needs [agent] allow_mutations), and return the redacted messages received, after at most 100 messages or 60 s.",
+            Effect::Sends,
+        ),
+    ];
     tools.extend(grpc_tools());
     tools
 }
@@ -273,6 +282,7 @@ pub async fn call(name: &str, call: &Call) -> Result<ToolOutput, ToolError> {
         "list_findings" => reports::list_findings(call),
         "search_history" => history::search_history(call),
         rpc::NAME => rpc::rpc_call(call).await,
+        realtime::NAME => realtime::realtime_listen(call).await,
         _ => call_grpc(name, call).await.unwrap_or_else(|| {
             Err(ToolError::new(
                 ErrorCode::NotFound,

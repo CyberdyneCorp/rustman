@@ -16,6 +16,7 @@ use rustman_grpc::GrpcRunner;
 use rustman_http::runner::{BailScope, RunContext, Runner};
 use rustman_jsonrpc::JsonrpcRunner;
 use rustman_mcp::client::McpRunner;
+use rustman_realtime::RealtimeRunner;
 use rustman_report::{Report, ReportTarget, Reporter, RunReport};
 
 use super::exec::{
@@ -135,6 +136,8 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
     options.mcp = Some(&mcp);
     let grpc = GrpcRunner::default();
     options.grpc = Some(&grpc);
+    let realtime = RealtimeRunner::default();
+    options.realtime = Some(&realtime);
     let cancel = options.cancel.clone();
     let ctx = RunContext {
         root: &ws.root,

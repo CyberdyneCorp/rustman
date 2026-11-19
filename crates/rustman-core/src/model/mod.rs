@@ -13,11 +13,13 @@ pub mod kind;
 pub mod mcp;
 pub mod signed_auth;
 pub mod snapshot;
+pub mod sse;
+pub mod ws;
 
 pub use assertion::{
     Assertion, BodyAssertion, CountExpectation, CountOp, GrpcStatusExpectation, HeaderAssertion,
-    JsonAssertion, LatencyAssertion, MetadataAssertion, RpcErrorExpectation, SchemaAssertion,
-    StatusExpectation,
+    JsonAssertion, LatencyAssertion, MessagesAssertion, MetadataAssertion, RpcErrorExpectation,
+    SchemaAssertion, StatusExpectation,
 };
 pub use auth::{ApiKeyLocation, Auth, OAuth2, OAuth2Grant};
 pub use body::{Body, JsonContent, Part, PartSource};
@@ -43,6 +45,15 @@ pub use signed_auth::{AwsCredentials, AwsSigV4, Jwt, JwtAlgorithm};
 pub use snapshot::{
     ComparedPart, DEFAULT_SNAPSHOT_NAME, Preset, Replacement, SnapshotAssertion, SnapshotHeaders,
     SortRule,
+};
+pub use sse::{
+    DEFAULT_MAX_ATTEMPTS, DEFAULT_RETRY_MS, MAX_RETRY_MS, Reconnect, SSE_ACCEPT, SSE_SCHEME_ERROR,
+    SseRequest,
+};
+pub use ws::{
+    BinarySource, CloseStep, DEFAULT_DURATION_MS, DEFAULT_MAX_MESSAGE_BYTES, DEFAULT_MAX_MESSAGES,
+    DEFAULT_MAX_TIMELINE, Frame, MAX_CLOSE_REASON, RealtimeLimits, RealtimeTls, Step, WaitFor,
+    WsRequest,
 };
 
 /// Request files end with this suffix.

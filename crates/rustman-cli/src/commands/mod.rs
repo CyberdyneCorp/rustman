@@ -15,6 +15,7 @@ pub mod init;
 pub mod mcp;
 pub mod mcp_client;
 pub mod mock;
+pub mod realtime;
 pub mod report;
 pub mod rpc;
 pub mod run;

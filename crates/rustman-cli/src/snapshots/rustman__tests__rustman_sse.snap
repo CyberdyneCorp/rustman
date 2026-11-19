@@ -1,0 +1,28 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Listen to Server-Sent Events streams and print their events
+
+Usage: rustman sse [OPTIONS] <COMMAND>
+
+Commands:
+  listen  Open a Server-Sent Events stream (an http:// or https:// URL, or a kind: sse request) and print its events
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help
+
+Examples:
+  rustman sse listen https://api.example.com/events --json --max-messages 3 | jq .data
+  rustman sse listen {{events_url}} --header "Authorization: Bearer {{token}}"
+  rustman sse listen streams/completions.rman.yaml --duration 1m

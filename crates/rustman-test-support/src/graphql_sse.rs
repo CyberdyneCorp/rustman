@@ -35,6 +35,9 @@ pub struct SseScript {
 pub enum SseEnd {
     /// A `complete` event, then the end of the stream.
     Complete,
+    /// A `complete` event without a `data` line, then the end of the
+    /// stream.
+    CompleteWithoutData,
     /// Nothing: the stream stays open.
     Open,
     /// The end of the stream, without `complete`.
@@ -140,6 +143,10 @@ fn events(script: SseScript) -> BoxStream<'static, Result<Frame<Bytes>, Infallib
     match script.end {
         SseEnd::Complete => {
             let complete = stream::iter([frame("event: complete\ndata:\n\n".to_owned())]);
+            opening.chain(next).chain(complete).boxed()
+        }
+        SseEnd::CompleteWithoutData => {
+            let complete = stream::iter([frame("event: complete\n\n".to_owned())]);
             opening.chain(next).chain(complete).boxed()
         }
         SseEnd::Open => opening.chain(next).chain(stream::pending()).boxed(),

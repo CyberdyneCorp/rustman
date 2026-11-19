@@ -1,0 +1,59 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Open a Server-Sent Events stream (an http:// or https:// URL, or a kind: sse request) and print its events
+
+Usage: rustman sse listen [OPTIONS] <URL|REQUEST>
+
+Arguments:
+  <URL|REQUEST>
+          A URL (or a {{variable}} holding one), or a request file, its id or its name
+
+Options:
+  -H, --header <NAME: VALUE>
+          Add a header (repeatable): --header "Authorization: Bearer {{token}}"
+
+      --max-messages <N>
+          Stop after N received messages (default: the request's limits.max_messages, else 50)
+
+      --duration <DURATION>
+          Stop after this long (default: the request's limits.duration_ms, else 30s)
+
+      --json
+          Print one JSON object per received message (type, id, data, t_ms, dir, size)
+
+      --env <NAME>
+          Environment (default: RUSTMAN_ENV, then default_environment)
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --var <K=V>
+          Set a variable, above every other source (repeatable): --var k=v
+
+      --timeout <DURATION>
+          Total timeout per request, replacing settings.timeout_ms: 500ms, 5s, 2m, or a number of milliseconds
+
+  -k, --insecure
+          Do not verify TLS certificates (exchanges are flagged insecure)
+
+      --no-history
+          Do not record the exchanges in history
+
+  -u, --update-snapshots
+          Overwrite snapshots that differ from the response (not in CI mode)
+
+      --ci
+          CI mode: never write snapshots, and fail on a missing one (also on when the CI variable is true or 1)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

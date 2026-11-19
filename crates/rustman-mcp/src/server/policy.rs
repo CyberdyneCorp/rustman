@@ -28,10 +28,24 @@ pub fn check_method(permission: Permission, method: &str) -> Result<(), ToolErro
     }))
 }
 
+/// `url` with a WebSocket scheme as the HTTP origin an allowlist names:
+/// `ws://` as `http://`, `wss://` as `https://`; other URLs unchanged.
+pub fn http_url(url: &str) -> String {
+    let trimmed = url.trim_start();
+    let scheme = trimmed
+        .split_once("://")
+        .map(|(s, _)| s.to_ascii_lowercase());
+    match scheme.as_deref() {
+        Some("wss") => format!("https://{}", &trimmed[6..]),
+        Some("ws") => format!("http://{}", &trimmed[5..]),
+        _ => trimmed.to_owned(),
+    }
+}
+
 /// The origins agents may reach: `[agent].allowed_hosts`, or else every
 /// `http(s)` origin among the active environment's variable values. A
 /// `grpc://` or `grpcs://` value counts as the `http` or `https` origin it
-/// is reached over.
+/// is reached over, and so does a `ws://` or `wss://` value.
 pub fn allowlist(agent: &AgentSettings, environment: Option<&Environment>) -> Vec<Origin> {
     if !agent.allowed_hosts.is_empty() {
         return agent.allowed_hosts.clone();
@@ -42,7 +56,7 @@ pub fn allowlist(agent: &AgentSettings, environment: Option<&Environment>) -> Ve
         let VarValue::String(text) = value else {
             continue;
         };
-        if let Ok(origin) = Origin::of(&http_form(text))
+        if let Ok(origin) = Origin::of(&http_url(&http_form(text)))
             && !origins.contains(&origin)
         {
             origins.push(origin);
@@ -141,6 +155,17 @@ mod tests {
     use rustman_core::model::Variables;
 
     use super::*;
+
+    #[test]
+    fn websocket_urls_are_checked_as_their_http_origin() {
+        assert_eq!(http_url("ws://127.0.0.1:9/feed"), "http://127.0.0.1:9/feed");
+        assert_eq!(http_url("WSS://api.example/ws"), "https://api.example/ws");
+        assert_eq!(
+            http_url("https://api.example/sse"),
+            "https://api.example/sse"
+        );
+        assert_eq!(http_url("{{feed}}"), "{{feed}}");
+    }
 
     fn agent(mutations: bool, destructive: bool) -> AgentSettings {
         AgentSettings {

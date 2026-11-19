@@ -150,7 +150,7 @@ pub struct ResolvedFile {
 
 impl ResolvedFile {
     /// A path not yet checked; [`resolve_request`] fills in `path`.
-    fn unchecked(raw: String) -> Self {
+    pub(super) fn unchecked(raw: String) -> Self {
         Self {
             raw,
             path: PathBuf::new(),
@@ -344,7 +344,7 @@ pub(super) fn pairs(i: &mut Interpolator<'_, '_>, items: &[NameValue]) -> Vec<Re
         .collect()
 }
 
-fn body(i: &mut Interpolator<'_, '_>, body: Option<&Body>) -> ResolvedBody {
+pub(super) fn body(i: &mut Interpolator<'_, '_>, body: Option<&Body>) -> ResolvedBody {
     match body {
         None | Some(Body::None) => ResolvedBody::None,
         Some(Body::Json(JsonContent::Value(value))) => ResolvedBody::Json(json(i, value)),

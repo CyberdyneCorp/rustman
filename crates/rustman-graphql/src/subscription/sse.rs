@@ -4,138 +4,22 @@
 //! and every `next` event is recorded until `complete`, the limits or the
 //! caller's stop, which closes the connection.
 //!
-//! The event stream is parsed by a small [`SseParser`] rather than the
-//! `eventsource-stream` crate named in design D4: the subset GraphQL over
-//! SSE needs (`event`, `data`, comments) fits in a few lines and keeps
-//! `nom` out of the dependency tree.
+//! The event stream is parsed by `rustman-http`'s [`SseParser`], the one
+//! WHATWG parser shared with realtime SSE sessions, rather than the
+//! `eventsource-stream` crate named in design D4.
 
 use std::time::{Duration, Instant};
 
 use rustman_core::vars::{Resolved, ResolvedGraphql, ResolvedPair, ResolvedRequest};
-use rustman_http::{HttpEngine, SendOptions, StreamedResponse};
+use rustman_http::{
+    EVENT_STREAM, HttpEngine, SendOptions, SseEvent, SseParser, SseTooLarge, StreamedResponse,
+    is_event_stream,
+};
 use serde_json::Value;
 
 use super::{Collector, Ended, SubscribeOptions, Subscription, SubscriptionProtocol};
 use crate::error::GraphqlError;
 use crate::execute::HttpOperation;
-
-/// The media type of an event stream.
-const EVENT_STREAM: &str = "text/event-stream";
-
-/// One dispatched event.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct SseEvent {
-    /// The `event` field; `message` when absent.
-    pub event: String,
-    /// The `data` lines joined with `\n`.
-    pub data: String,
-}
-
-/// An event (with the line still being read) larger than the limit.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct TooLarge {
-    pub limit: u64,
-}
-
-/// An incremental `text/event-stream` parser: feed it chunks as they
-/// arrive, in any split, and get the events they complete. Each byte is
-/// scanned once, and an event may not grow past `limit` bytes.
-#[derive(Debug)]
-pub(crate) struct SseParser {
-    /// Bytes of a line not yet ended.
-    pending: Vec<u8>,
-    event: Option<String>,
-    data: Option<String>,
-    limit: u64,
-}
-
-impl SseParser {
-    pub fn new(limit: u64) -> Self {
-        Self {
-            pending: Vec::new(),
-            event: None,
-            data: None,
-            limit,
-        }
-    }
-
-    pub fn push(&mut self, chunk: &[u8]) -> Result<Vec<SseEvent>, TooLarge> {
-        let mut events = Vec::new();
-        let mut rest = chunk;
-        while let Some(end) = rest.iter().position(|b| *b == b'\n') {
-            self.pending.extend_from_slice(&rest[..end]);
-            rest = &rest[end + 1..];
-            let mut line = std::mem::take(&mut self.pending);
-            if line.last() == Some(&b'\r') {
-                line.pop();
-            }
-            events.extend(self.line(text(line)));
-            self.check()?;
-        }
-        self.pending.extend_from_slice(rest);
-        self.check()?;
-        Ok(events)
-    }
-
-    /// The bytes held for the event being read must stay within the limit.
-    fn check(&self) -> Result<(), TooLarge> {
-        let held = self.pending.len() + self.data.as_ref().map_or(0, String::len);
-        if held as u64 > self.limit {
-            return Err(TooLarge { limit: self.limit });
-        }
-        Ok(())
-    }
-
-    /// Apply one line; an empty line dispatches the event. The first
-    /// `data` line becomes the event's data in place, without a copy.
-    fn line(&mut self, mut line: String) -> Option<SseEvent> {
-        if line.is_empty() {
-            return self.dispatch();
-        }
-        if line.starts_with(':') {
-            return None;
-        }
-        let (field, value) = match line.find(':') {
-            Some(colon) => (
-                colon,
-                colon + 1 + usize::from(line[colon + 1..].starts_with(' ')),
-            ),
-            None => (line.len(), line.len()),
-        };
-        match &line[..field] {
-            "event" => self.event = Some(line[value..].to_owned()),
-            "data" => match &mut self.data {
-                Some(data) => {
-                    data.push('\n');
-                    data.push_str(&line[value..]);
-                }
-                None => {
-                    line.drain(..value);
-                    self.data = Some(line);
-                }
-            },
-            _ => {}
-        }
-        None
-    }
-
-    fn dispatch(&mut self) -> Option<SseEvent> {
-        let event = self.event.take();
-        let data = self.data.take();
-        if event.is_none() && data.is_none() {
-            return None;
-        }
-        Some(SseEvent {
-            event: event.unwrap_or_else(|| "message".to_owned()),
-            data: data.unwrap_or_default(),
-        })
-    }
-}
-
-/// `line` as text; invalid UTF-8 is replaced, and only then copied.
-fn text(line: Vec<u8>) -> String {
-    String::from_utf8(line).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned())
-}
 
 /// Run `operation` as a subscription over SSE to the endpoint of `target`.
 pub async fn subscribe_sse(
@@ -154,7 +38,7 @@ pub async fn subscribe_sse(
     let mut collector = Collector::new(options, started);
     let mut warnings = std::mem::take(&mut response.warnings);
     // Events are held in memory, so the in-memory body cap bounds them.
-    let mut parser = SseParser::new(send_options.body.max_in_memory);
+    let mut parser = SseParser::new(send_options.body.max_in_memory).keeping_typed_events();
     let read = Reader {
         parser: &mut parser,
         warnings: &mut warnings,
@@ -227,11 +111,7 @@ fn stream_request(operation: &HttpOperation, target: &ResolvedGraphql) -> Resolv
 /// Reject a response that is not a successful event stream.
 fn check_stream(response: &StreamedResponse) -> Result<(), GraphqlError> {
     let media = response.header("content-type").unwrap_or_default();
-    let stream = media
-        .split(';')
-        .next()
-        .is_some_and(|m| m.trim().eq_ignore_ascii_case(EVENT_STREAM));
-    if (200..300).contains(&response.status) && stream {
+    if (200..300).contains(&response.status) && is_event_stream(media) {
         return Ok(());
     }
     Err(GraphqlError::Subscription(format!(
@@ -266,7 +146,7 @@ async fn collect(
         };
         let events = match read.parser.push(&chunk) {
             Ok(events) => events,
-            Err(TooLarge { limit }) => {
+            Err(SseTooLarge { limit, .. }) => {
                 collector.fail(format!(
                     "SSE: an event is larger than the {limit} byte limit (max_body_bytes)"
                 ));
@@ -297,95 +177,5 @@ fn apply(
             }
         },
         _ => None,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn event(event: &str, data: &str) -> SseEvent {
-        SseEvent {
-            event: event.into(),
-            data: data.into(),
-        }
-    }
-
-    #[test]
-    fn events_split_anywhere_are_parsed() {
-        let stream = ": open\n\nevent: next\ndata: {\"a\":\ndata: 1}\r\n\r\nevent: complete\ndata:\n\ndata: plain\n\n";
-        let whole = SseParser::new(1024).push(stream.as_bytes()).unwrap();
-        let expected = vec![
-            event("next", "{\"a\":\n1}"),
-            event("complete", ""),
-            event("message", "plain"),
-        ];
-        assert_eq!(whole, expected);
-        let mut parser = SseParser::new(1024);
-        let mut split = Vec::new();
-        for byte in stream.as_bytes() {
-            split.extend(parser.push(std::slice::from_ref(byte)).unwrap());
-        }
-        assert_eq!(split, expected);
-    }
-
-    #[test]
-    fn unknown_fields_and_unfinished_events_wait() {
-        let mut parser = SseParser::new(1024);
-        assert!(
-            parser
-                .push(b"id: 7\nretry: 10\nevent: next\ndata: x")
-                .unwrap()
-                .is_empty()
-        );
-        assert_eq!(parser.push(b"\n\n").unwrap(), vec![event("next", "x")]);
-    }
-
-    #[test]
-    fn a_line_without_end_cannot_grow_past_the_limit() {
-        let mut parser = SseParser::new(64);
-        assert!(parser.push(b"data: ").unwrap().is_empty());
-        let chunk = [b'x'; 16];
-        let mut pushed = 0;
-        let err = loop {
-            match parser.push(&chunk) {
-                Ok(events) => assert!(events.is_empty()),
-                Err(err) => break err,
-            }
-            pushed += 1;
-            assert!(pushed < 10, "the limit was never reached");
-        };
-        assert_eq!(err, TooLarge { limit: 64 });
-    }
-
-    #[test]
-    fn data_spread_over_many_lines_cannot_grow_past_the_limit() {
-        let mut parser = SseParser::new(64);
-        let lines = "data: 0123456789\n".repeat(8);
-        assert_eq!(parser.push(lines.as_bytes()), Err(TooLarge { limit: 64 }));
-        let mut fits = SseParser::new(64);
-        let events = fits.push(b"data: 0123456789\ndata: x\n\n").unwrap();
-        assert_eq!(events, vec![event("message", "0123456789\nx")]);
-    }
-
-    #[test]
-    fn fields_without_a_space_or_value_and_invalid_utf8_are_read() {
-        let mut parser = SseParser::new(1024);
-        let events = parser.push(b"event:next\ndata\ndata:\xff\n\n").unwrap();
-        assert_eq!(events, vec![event("next", "\n\u{fffd}")]);
-    }
-
-    #[test]
-    fn a_long_line_in_small_chunks_is_scanned_once() {
-        // 4 MiB in 64-byte chunks: rescanning the pending line on every
-        // push would compare bytes about 10^11 times.
-        let mut parser = SseParser::new(8 * 1024 * 1024);
-        parser.push(b"event: next\ndata: ").unwrap();
-        let chunk = [b'a'; 64];
-        for _ in 0..(4 * 1024 * 1024 / 64) {
-            assert!(parser.push(&chunk).unwrap().is_empty());
-        }
-        let events = parser.push(b"\n\n").unwrap();
-        assert_eq!(events[0].data.len(), 4 * 1024 * 1024);
     }
 }

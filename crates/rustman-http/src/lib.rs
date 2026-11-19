@@ -23,6 +23,7 @@ mod shown;
 mod signed;
 mod sigv4;
 pub mod snippet;
+mod sse;
 mod stream;
 mod timing;
 mod tls;
@@ -41,7 +42,7 @@ pub use curl::{
     COMPRESSED_ACCEPT_ENCODING, CurlError, Exported, Imported, export_curl, import_curl,
     import_curl_words,
 };
-pub use engine::{DEFAULT_CONNECT_TIMEOUT, HttpEngine, SendOptions};
+pub use engine::{DEFAULT_CONNECT_TIMEOUT, HttpEngine, SendOptions, header_pairs};
 pub use error::{Phase, RequestError};
 pub use exchange::{Exchange, HttpVersion};
 pub use governed::{GovernedError, GovernedSender};
@@ -53,10 +54,12 @@ pub use oauth2::{
 pub use proxy::{NoProxy, ProxyKind, ProxySettings, ProxyUrl};
 pub use redirect::RedirectHop;
 pub use snippet::{Lang, Snippet, SnippetError, SnippetOptions, snippet};
+pub use sse::{EVENT_STREAM, SseEvent, SseParser, SseTooLarge, is_event_stream};
 pub use stream::{StreamedResponse, request_head};
 pub use timing::{Timings, millis};
 pub use tls::{ALPN_HTTP, TlsSettings};
 pub use websocket::{
-    OpenedWebSocket, UrlScheme, WebSocket, WebSocketError, WsIo, open_websocket, with_scheme,
+    HandshakeFailure, MAX_REFUSED_BODY, OpenedWebSocket, RefusedUpgrade, UrlScheme, WebSocket,
+    WebSocketError, WsIo, open_websocket, with_scheme,
 };
 pub use wire::USER_AGENT_VALUE;

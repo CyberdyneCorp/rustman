@@ -1,0 +1,28 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Open WebSocket sessions: send frames and print received messages
+
+Usage: rustman ws [OPTIONS] <COMMAND>
+
+Commands:
+  connect  Open a WebSocket session (a ws:// or wss:// URL, or a kind: ws request), send stdin lines as text frames when stdin is not a terminal, and print the received messages
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help
+
+Examples:
+  rustman ws connect wss://echo.example.com --json --max-messages 2 < frames.txt
+  rustman ws connect {{feed_url}} --header "Authorization: Bearer {{token}}" --subprotocol v2.feed
+  rustman ws connect feeds/prices.rman.yaml --duration 10s
