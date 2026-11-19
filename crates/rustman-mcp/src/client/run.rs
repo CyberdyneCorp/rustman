@@ -13,6 +13,7 @@ use std::time::Duration;
 use rustman_core::Redactor;
 use rustman_core::assertions::McpFacts;
 use rustman_core::run::{HeaderRecord, McpRecord, SentRequest};
+use rustman_core::trace::TracePropagation;
 use rustman_core::trust::{TrustKey, TrustStore};
 use rustman_core::vars::{ResolvedMcp, Resolver};
 use rustman_http::runner::{McpCall, McpExecutor, McpFuture, McpOutcome};
@@ -94,6 +95,7 @@ impl McpRunner {
         name: &str,
         resolver: &Resolver<'_>,
         root: &Path,
+        trace: Option<&TracePropagation>,
     ) -> (Pooled, Option<Arc<ResolvedServer>>) {
         let mut sessions = self.sessions.lock().await;
         if let Some((pooled, server)) = sessions.get(name) {
@@ -104,7 +106,7 @@ impl McpRunner {
             Err(e) => return (Err(e.to_string()), None),
         };
         let pooled = self
-            .connect(&server, root)
+            .connect(&server, root, trace)
             .await
             .map(Arc::new)
             .map_err(|e| e.to_string());
@@ -116,17 +118,22 @@ impl McpRunner {
         &self,
         server: &ResolvedServer,
         root: &Path,
+        trace: Option<&TracePropagation>,
     ) -> Result<McpSession, ClientError> {
         let mut store = TrustStore::load_with_key(root, self.trust_key.clone())?;
         let approved = require_trust(&mut store, server, self.trust)?;
-        McpSession::connect(server, &approved, &self.connect).await
+        let mut connect = self.connect.clone();
+        if let Some(trace) = trace {
+            connect.send.trace = Some(trace.clone());
+        }
+        Box::pin(McpSession::connect(server, &approved, &connect)).await
     }
 
     async fn run(&self, call: McpCall<'_>) -> McpOutcome {
         let resolved = call.resolved;
         let options = call_options(&call);
         let (pooled, server) = self
-            .session(&resolved.server, call.resolver, call.root)
+            .session(&resolved.server, call.resolver, call.root, call.trace)
             .await;
         let mut outcome = Outcome::new(resolved, server.as_deref());
         let session = match pooled {

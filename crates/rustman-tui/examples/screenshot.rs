@@ -211,6 +211,7 @@ fn exchange(path: &Path, request: Option<&HttpRequest>, body: Vec<u8>) -> Receiv
         },
         redirects: Vec::new(),
         insecure: false,
+        server_timings: Vec::new(),
     });
     let raw = RawBody {
         source: Source::Memory(body.into()),

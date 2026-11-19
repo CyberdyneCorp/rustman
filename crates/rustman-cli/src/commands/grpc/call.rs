@@ -118,6 +118,7 @@ fn send(
         cancel_on_ctrl_c(&cancel);
         runner.send(request, 1).await
     });
+    crate::commands::exec::finish_spans(&runner);
     if let Err(e) = runner.finish() {
         print_warnings(&[e.to_string()]);
     }

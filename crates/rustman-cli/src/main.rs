@@ -86,6 +86,8 @@ enum Command {
     /// Contract testing: classify OpenAPI changes as breaking or not, Pact
     /// contracts and passive conformance
     Contract(commands::contract::ContractArgs),
+    /// Open the trace link of a past exchange in the browser
+    Trace(commands::trace::TraceArgs),
 }
 
 fn main() -> ExitCode {
@@ -145,6 +147,7 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
         Command::Ws(args) => commands::realtime::run_ws(&args),
         Command::Sse(args) => commands::realtime::run_sse(&args),
         Command::Contract(args) => commands::contract::run(&args),
+        Command::Trace(args) => commands::trace::run(&args),
     }
 }
 

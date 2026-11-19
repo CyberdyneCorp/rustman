@@ -174,6 +174,7 @@ mod tests {
             variables: Variables::new(vec![("n".into(), VarValue::Integer(5))]),
             secrets: vec!["api_token".into(), "other".into(), "broken".into()],
             production: false,
+            trace: Default::default(),
         }
     }
 

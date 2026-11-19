@@ -195,7 +195,7 @@ Everything the viewer shows is redacted with the exchange's secrets, as in histo
   - Binary bodies (images, audio, video, fonts, PDFs, `application/octet-stream`, or anything that is not UTF-8) show a hex dump of the first 4 KiB and the total size. `s` saves the body to a file (relative paths are taken from the workspace root); an existing file is never overwritten.
   - Bodies above the engine's `max_body_bytes` (10 MiB by default, see [Request files](request-files.md)) are kept on disk instead of in memory. Above 50 MiB the tree is disabled: the viewer says so and shows the raw text a page at a time (scrolling past the end of a page loads the next one).
 - **Headers**: every response header in the order received, duplicates included (two `Set-Cookie` headers are two rows), then the request's captured variables with their new values; secret ones show `••••••••`.
-- **Timing**: a waterfall of the phases the engine measures (DNS, connect, TLS, waiting for the first byte, download), each bar placed and sized by its share of the total, with its duration. Phases that did not happen, such as DNS, connect and TLS on a reused connection, show `—`. Below it, a sparkline of the total times of the last 30 exchanges of the same request file from history, the newest highlighted, with the min, median, p95 and max; with fewer than two exchanges it says `not enough history`.
+- **Timing**: a waterfall of the phases the engine measures (DNS, connect, TLS, waiting for the first byte, download), each bar placed and sized by its share of the total, with its duration. Phases that did not happen, such as DNS, connect and TLS on a reused connection, show `—`. The response's `Server-Timing` metrics appear as labeled sub-bars under the waiting phase (`db 53.2 ms`), with their description. When the exchange carried [trace context](tracing.md), a `Trace` block shows the trace id, the span id, the backend's own trace id when its `traceresponse` names a different one, and the trace link when one is configured; `Ctrl+O` (`trace.open`) opens the link in the system browser. Below it, a sparkline of the total times of the last 30 exchanges of the same request file from history, the newest highlighted, with the min, median, p95 and max; with fewer than two exchanges it says `not enough history`.
 - **Assertions**: each assertion as passed or failed, with the expected and actual values of failures (`✖ failed status == 200 · expected 200 · actual 404`).
 - **Snapshot** (only when a [snapshot](snapshots.md#reviewing-in-the-tui) failed, is missing or was just recorded): each snapshot with its file and diff. `a` approves (writes the received snapshot) and `r` rejects (keeps the stored file); `Alt+A` opens a queue over every failing snapshot in the open tabs. Approving is disabled in CI mode (`CI=true`).
 
@@ -418,6 +418,7 @@ The table below is generated from the action registry; a test fails if it drifts
 | Copy as… | `request.copy_as` | `Alt+C` |  |
 | Import… | `import.open` |  |  |
 | Review snapshots | `snapshot.review` | `Alt+A` |  |
+| Open trace link | `trace.open` | `Ctrl+O` |  |
 | Quit | `app.quit` | `Ctrl+Q` |  |
 
 In vim mode, text areas (the request body) are modal:

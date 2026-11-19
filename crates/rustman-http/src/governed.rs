@@ -139,7 +139,7 @@ impl GovernedSender {
         options: &SendOptions,
     ) -> Result<Exchange, GovernedError> {
         let (policy, governor) = (&self.policy, &self.governor);
-        let prepared = HttpEngine::prepare(request, None).await?;
+        let prepared = HttpEngine::prepare(request, options, None).await?;
         check(policy, &prepared.outgoing)?;
         let _admission = governor.admit().await.map_err(GovernedError::NotRun)?;
         let paced = governor.pace().await.map_err(GovernedError::NotRun)?;
@@ -156,7 +156,7 @@ impl GovernedSender {
         request: &ResolvedRequest,
         options: &SendOptions,
     ) -> Result<Exchange, GovernedError> {
-        let prepared = HttpEngine::prepare(request, None).await?;
+        let prepared = HttpEngine::prepare(request, options, None).await?;
         check(&self.policy, &prepared.outgoing)?;
         let paced = self.governor.pace_cleanup().await;
         let gate = PolicyGate::new(self, paced, Budgeted::No);

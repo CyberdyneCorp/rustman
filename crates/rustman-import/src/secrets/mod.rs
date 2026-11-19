@@ -899,6 +899,7 @@ mod tests {
             variables: Variables::new(vec![("password".into(), VarValue::String("x".into()))]),
             secrets: vec!["token".into(), "api_key".into()],
             production: false,
+            trace: Default::default(),
         }];
         let lookup = |_: &str, name: &str| {
             (name == "token").then(|| Secret::new("token", "same".to_owned()))

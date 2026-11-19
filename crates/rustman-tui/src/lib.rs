@@ -78,6 +78,7 @@ pub mod terminal;
 pub mod textarea;
 pub mod theme;
 pub mod toast;
+pub mod trace_link;
 pub mod tree;
 pub mod vars_view;
 pub mod view;
@@ -287,6 +288,16 @@ fn shut_down(rt: tokio::runtime::Runtime) {
     rt.shutdown_background();
 }
 
+/// Send the client spans still queued (`[trace.export]`), as `rustman
+/// send` does before exiting, and print the export warnings now that the
+/// terminal is restored.
+fn flush_spans() {
+    let warnings = rustman_http::runner::flush_all_exports(rustman_http::runner::FLUSH_WAIT);
+    for warning in warnings {
+        eprintln!("warning: {warning}");
+    }
+}
+
 /// Open the TUI on the workspace found from `start` (spec: Launching the
 /// TUI) and run it until the user quits.
 pub fn run(start: &Path, overrides: Overrides) -> Result<(), TuiError> {
@@ -329,6 +340,7 @@ pub fn run(start: &Path, overrides: Overrides) -> Result<(), TuiError> {
     let _ = reader.join();
     drop(guard);
     shut_down(rt);
+    flush_spans();
     match result?.abort {
         Some(abort) => Err(abort.into()),
         None => Ok(()),

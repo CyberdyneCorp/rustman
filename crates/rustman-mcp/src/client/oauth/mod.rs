@@ -8,7 +8,6 @@
 //! live in the secret store, are refreshed before they expire, and every
 //! value is added to the session's redactor.
 
-mod browser;
 mod discovery;
 mod token;
 mod web;
@@ -27,8 +26,8 @@ use url::Url;
 use super::error::ClientError;
 use super::resolve::{ResolvedOAuthClient, ResolvedServer, ResolvedTransport};
 use super::shared::SharedRedactor;
-pub use browser::open_browser;
 use discovery::{ResourceMetadata, ServerMetadata};
+pub use rustman_core::browser::open_browser;
 pub(crate) use token::ACCESS_TOKEN;
 pub use token::store_key;
 use token::{Client, Grant, TokenStore, now};

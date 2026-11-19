@@ -423,3 +423,43 @@ async fn a_snapshot_assertion_records_then_compares_the_result() {
         messages(&third[0])
     );
 }
+
+/// With `trace: {enabled: true, scope: run}`, every HTTP request of an
+/// HTTP server's session carries `traceparent` under the run's trace id,
+/// and a stdio server (no HTTP layer) runs as usual
+/// (add-trace-propagation task 2.3).
+#[tokio::test]
+async fn http_sessions_carry_the_run_trace_and_stdio_ones_are_unaffected() {
+    let fake = McpHttpServer::streamable().await;
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    write(
+        root,
+        "rustman.toml",
+        &format!(
+            "[workspace]\nname = \"t\"\nversion = 1\n\n[mcp_servers.remote]\nurl = '{}'\n\n[mcp_servers.files]\ncommand = '{FIXTURE}'\n",
+            fake.url()
+        ),
+    );
+    write(
+        root,
+        "environments/prod.yaml",
+        "trace:\n  enabled: true\n  scope: run\n",
+    );
+    let remote = "version: 1\nkind: mcp\nname: Remote\nserver: remote\noperation: tools/list\nassertions:\n  - tool_exists: echo\n";
+    let local = "version: 1\nkind: mcp\nname: Local\nserver: files\noperation: tools/list\nassertions:\n  - tool_exists: search\n";
+    write(root, "1-remote.rman.yaml", remote);
+    write(root, "2-local.rman.yaml", local);
+    let records = run(root, true).await;
+    for record in &records {
+        assert_eq!(record.status, RequestStatus::Passed, "{record:?}");
+    }
+    let hits = fake.hits();
+    assert!(hits.len() >= 2, "initialize, then the call");
+    let traces: Vec<String> = hits
+        .iter()
+        .filter(|h| h.method == "POST")
+        .map(|h| h.header("traceparent").expect("a traceparent")[3..35].to_owned())
+        .collect();
+    assert!(traces.iter().all(|t| *t == traces[0]), "{traces:?}");
+}

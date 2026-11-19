@@ -39,6 +39,11 @@ dunce.workspace = true
 tokio = { workspace = true, features = ["rt", "signal", "macros", "net", "sync"] }
 tokio-util.workspace = true
 
+[features]
+# OTLP export of client spans (add-trace-propagation section 4); off by
+# default, so the default build has no opentelemetry crate.
+otlp = ["rustman-http/otlp", "rustman-tui/otlp", "rustman-test-support/otlp"]
+
 [dev-dependencies]
 assert_cmd.workspace = true
 base64.workspace = true

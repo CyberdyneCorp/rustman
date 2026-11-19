@@ -28,7 +28,8 @@ See proposal.md, Why. `http-requests` (from `bootstrap-core-engine`) already own
 ### D1. Hand-rolled context handling, `opentelemetry` crates only for export (rejected: the full OTel SDK as the propagation path)
 - **Propagation:** generating and parsing `traceparent`/B3/`baggage` is about 200 lines, with spec test vectors, and no global state.
 - **Why not the SDK:** using it for propagation would need a global tracer provider and context propagation through our async tasks, which couples the core to OTel's runtime even when tracing is off.
-- **Export:** only `opentelemetry-otlp` + `opentelemetry_sdk` behind the cargo feature `otlp`, initialized lazily the first time export is enabled.
+- **Export:** only `opentelemetry-proto` (the OTLP protobuf messages, with `prost`) behind the cargo feature `otlp` of `rustman-http` (enabled by `rustman-cli`'s and `rustman-tui`'s own `otlp` features, off by default), initialized lazily the first time a run enables export. The request goes over `rustman-http`'s hyper/rustls transport: gRPC unary over HTTP/2 (h2c for `http://`), or `http/protobuf`. `opentelemetry-proto`'s `trace` feature, which generates the trace messages, also brings in `opentelemetry` and `opentelemetry_sdk` as dependencies (their types only; no tracer provider or global state is set up); this stays behind `otlp`, and the default build has no `opentelemetry` crate.
+- **Rejected for export: `opentelemetry-otlp`.** Its exporter builders read `OTEL_EXPORTER_OTLP_HEADERS`, `_TIMEOUT`, `_COMPRESSION` and `_INSECURE` unconditionally, which the spec forbids without `use_env = true`, its HTTP exporter defaults to `reqwest`, and its gRPC exporter needs `tonic`'s own transport and TLS features. The SDK's `BatchSpanProcessor` drops the newest span when full, not the oldest (D6).
 
 ### D2. Injection point
 - **Where:** in `HttpEngine::prepare`, after `wire::build` (variables resolved, user headers present) so user-supplied headers can be detected and win, and before the per-hop signer.
@@ -54,7 +55,7 @@ Datadog uses 64-bit ids in some setups. The datadog preset also exposes `{trace_
 A lenient parser that splits metrics on commas, keeps the first `dur` and `desc`, and ignores malformed entries with a debug log. Values attach to the exchange as `server_timings: [{name, dur_ms, desc}]`, rendered under the TTFB phase.
 
 ### D6. Export pipeline
-`BatchSpanProcessor` with a queue of 2048, a 5-second scheduled delay, and drop-oldest when full. Spans are built after the exchange completes, using recorded timestamps, so export never sits on the request's critical path. URL query values pass through the `environments` redaction step. Headers are never exported (that also avoids leaking `Authorization`).
+A small batcher of our own (`rustman_core::trace::SpanQueue` plus a worker thread with its own current-thread runtime in `rustman-http`'s `otlp` module, one per collector for the process): a queue of 2048 that drops the oldest span when full, sent every 5 seconds, when 512 are waiting, or when `rustman send`/`run` flush before exiting (5 seconds at most). Failures go through `WarnLimiter`, so at most one warning a minute is shown, and never touch the exchange's result. Spans are built after the exchange completes, using recorded timestamps, so export never sits on the request's critical path. URL query values pass through the `environments` redaction step. Headers are never exported (that also avoids leaking `Authorization`).
 
 ## Risks / Trade-offs
 
@@ -71,5 +72,5 @@ Additive. The `trace` fields are optional in history and reports (`rustman.repor
 Additional link presets (New Relic, Lightstep) can be added later without spec changes, since templates are user-configurable. Questions for the maintainer:
 
 - JSON-RPC over WebSocket caches one connection per endpoint for a run (`rustman-jsonrpc`), so calls sharing it share the handshake's `traceparent`; per-call ids can't be injected into frames. Record the handshake's ids on each call, or record none for WebSocket calls?
-- OTLP transport: `opentelemetry-otlp`'s gRPC exporter pulls `tonic`/`prost`, and its HTTP exporter defaults to `reqwest`, which the core design rejects. Which exporter and HTTP client should the `otlp` feature use, and should it stay on by default?
+- ~~OTLP transport~~ Resolved: OTLP messages from `opentelemetry-proto` over `rustman-http`'s transport, both `grpc` and `http/protobuf`; the `otlp` feature is off by default (see D1).
 - `scope: run` for bench iterations and trace ids in bench reports depend on `add-load-testing`. Land them with whichever change comes second?

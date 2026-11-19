@@ -312,3 +312,69 @@ fn oauth2_login_without_a_terminal_fails_with_the_hint() {
             "error: oauth2: interactive login required (run 'rustman auth login http/oauth-login')\n",
         );
 }
+
+/// `--trace` sends a sampled `traceparent`; without it, and without a
+/// `trace:` block, none is sent (add-trace-propagation task 2.1).
+#[test]
+fn trace_flag_sends_a_traceparent() {
+    let server = Server::http();
+    let dir = tempfile::tempdir().unwrap();
+    let traceparents = |extra: &[&str]| -> Vec<String> {
+        let output = rustman(dir.path())
+            .args([
+                "send",
+                "GET",
+                &server.url("/echo"),
+                "--body-only",
+                "--no-history",
+            ])
+            .args(extra)
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(0), "{output:?}");
+        let echo: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        echo["headers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|h| h[0] == "traceparent")
+            .map(|h| h[1].as_str().unwrap().to_owned())
+            .collect()
+    };
+    assert!(traceparents(&[]).is_empty());
+    let sent = traceparents(&["--trace"]);
+    assert_eq!(sent.len(), 1);
+    assert!(sent[0].starts_with("00-") && sent[0].ends_with("-01") && sent[0].len() == 55);
+}
+
+/// A workspace whose environment enables tracing sends `traceparent` and
+/// the resolved `baggage`.
+#[test]
+fn an_environment_trace_block_enables_propagation() {
+    let server = Server::http();
+    let ws = workspace(&server);
+    let env = fs::read_to_string(ws.path().join("environments/dev.yaml")).unwrap();
+    let env = format!("{env}\ntrace:\n  enabled: true\n  baggage:\n    tenant: '{{{{tenant}}}}'\n");
+    write(ws.path(), "environments/dev.yaml", &env);
+    let output = rustman(ws.path())
+        .args([
+            "send",
+            "GET",
+            "{{base_url}}/echo",
+            "--env",
+            "dev",
+            "--body-only",
+        ])
+        .args(["--var", "tenant=acme"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(0), "{output:?}");
+    let echo: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let headers = echo["headers"].as_array().unwrap();
+    assert!(headers.iter().any(|h| h[0] == "traceparent"));
+    assert!(
+        headers
+            .iter()
+            .any(|h| h[0] == "baggage" && h[1] == "tenant=acme")
+    );
+}

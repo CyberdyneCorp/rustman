@@ -255,6 +255,15 @@ protox = { version = "0.10.0", default-features = false }
 # Line and column of protox compile errors (its diagnostics are miette ones).
 miette = { version = "7.6", default-features = false }
 tokio-stream = { version = "0.1.17", default-features = false }
+# OTLP export of client spans (add-trace-propagation design D1, D6), only
+# behind the `otlp` feature: the OTLP protobuf messages, sent over
+# rustman-http's own hyper/rustls transport. opentelemetry-otlp is rejected:
+# its builders read OTEL_EXPORTER_OTLP_* variables unconditionally (the spec
+# reads them only with `use_env = true`) and its HTTP client is reqwest.
+# Its `trace` feature, needed for the trace messages, also pulls the
+# opentelemetry and opentelemetry_sdk crates (types only, no global state is
+# set up); the default build has none of them.
+opentelemetry-proto = { version = "0.33.1", default-features = false, features = ["gen-tonic-messages", "trace"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

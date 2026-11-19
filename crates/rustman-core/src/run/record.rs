@@ -15,6 +15,7 @@ use crate::model::{ApiKeyLocation, Auth};
 use crate::redact::Redactor;
 use crate::secret::placeholder;
 use crate::snapshot::SnapshotCounts;
+use crate::trace::{ServerTiming, TraceRecord};
 use crate::vars::{ResolvedBody, ResolvedRequest};
 
 /// How one request of a run ended.
@@ -190,6 +191,9 @@ pub struct ExchangeRecord {
     pub redirects: Vec<RedirectRecord>,
     /// Sent over TLS with certificate verification off.
     pub insecure: bool,
+    /// The response's `Server-Timing` metrics; absent when it has none.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub server_timings: Vec<ServerTiming>,
 }
 
 /// The data row a request of a data-driven (`--data`) run used
@@ -261,6 +265,10 @@ pub struct RequestRecord {
     /// absent for every other kind.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub realtime: Option<RealtimeRecord>,
+    /// The trace context the request carried, when trace propagation was
+    /// on or the request set its own; absent otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trace: Option<TraceRecord>,
 }
 
 impl RequestRecord {
@@ -281,6 +289,7 @@ impl RequestRecord {
             captures: Vec::new(),
             warnings: Vec::new(),
             duration_ms: 0.0,
+            trace: None,
             graphql: None,
             jsonrpc: None,
             mcp: None,

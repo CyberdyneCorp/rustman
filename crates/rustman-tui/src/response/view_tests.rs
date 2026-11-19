@@ -632,3 +632,130 @@ fn hints_name_the_keys_of_the_effective_keymap() {
     state.keymap = rebind("[global]\n\"Ctrl+Enter\" = \"none\"\n\"Ctrl+R\" = \"none\"");
     assert_eq!(summary(&state), "No response yet", "no key: no advice");
 }
+
+/// A received exchange with `Server-Timing` metrics and a trace whose
+/// backend restarted it, linked to Jaeger.
+fn traced() -> Received {
+    use rustman_core::trace::{ServerTiming, TraceRecord};
+    let mut r = received(200, "text/plain", b"ok");
+    r.record.exchange.as_mut().unwrap().server_timings = vec![
+        ServerTiming {
+            name: "db".into(),
+            dur_ms: Some(53.2),
+            desc: Some("query".into()),
+        },
+        ServerTiming {
+            name: "app".into(),
+            dur_ms: Some(12.0),
+            desc: None,
+        },
+    ];
+    r.record.trace = Some(TraceRecord {
+        trace_id: "4bf92f3577b34da6a3ce929d0e0e4736".into(),
+        span_id: "00f067aa0ba902b7".into(),
+        sampled: true,
+        backend_trace_id: Some("0af7651916cd43dd8448eb211c80319c".into()),
+        tracestate: None,
+        baggage: None,
+        start_ms: 1_700_000_000_000,
+        end_ms: 1_700_000_000_084,
+        link: Some("http://localhost:16686/trace/0af7651916cd43dd8448eb211c80319c".into()),
+    });
+    r
+}
+
+#[test]
+fn the_timing_tab_shows_server_timings_under_waiting_and_the_trace() {
+    // Scenario "Server-Timing shown".
+    let mut state = state(ColorMode::TrueColor, 160, 30);
+    show(&mut state, traced());
+    state
+        .tabs
+        .active_mut()
+        .unwrap()
+        .viewer
+        .set_tab(ResponseTab::Timing);
+    let screen = pane(&state);
+    let rows: Vec<&str> = screen.lines().collect();
+    let at = |text: &str| {
+        rows.iter()
+            .position(|l| l.contains(text))
+            .unwrap_or_else(|| panic!("no {text} in {screen}"))
+    };
+    let (waiting, download) = (at("Waiting"), at("Download"));
+    let (db, app) = (at("db 53.2 ms"), at("app 12 ms"));
+    assert!(waiting < db && db < app && app < download, "{screen}");
+    assert!(rows[db].ends_with("query"), "{}", rows[db]);
+    assert!(screen.contains("Trace id 4bf92f3577b34da6a3ce929d0e0e4736"));
+    assert!(screen.contains("Backend  0af7651916cd43dd8448eb211c80319c"));
+    let link: String = rows[at("Link")..]
+        .iter()
+        .take(2)
+        .map(|l| l.trim_start_matches("Link").trim())
+        .collect();
+    assert!(
+        link.starts_with("http://localhost:16686/trace/0af7651916cd43dd8448eb211c80319c"),
+        "{screen}"
+    );
+    insta::assert_snapshot!("waterfall_traced", screen);
+}
+
+/// The URLs the stand-in opener was handed.
+static OPENED: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+fn record_url(url: &str) -> std::io::Result<()> {
+    OPENED.lock().unwrap().push(url.to_owned());
+    Ok(())
+}
+
+#[test]
+fn ctrl_o_opens_the_trace_link_with_the_opener() {
+    let mut state = state(ColorMode::TrueColor, 160, 30);
+    show(&mut state, traced());
+    let link = "http://localhost:16686/trace/0af7651916cd43dd8448eb211c80319c";
+    let effects = press(&mut state, "Ctrl+O");
+    assert_eq!(
+        effects,
+        [Effect::OpenUrl(crate::trace_link::LinkJob::plain(link))]
+    );
+    let Effect::OpenUrl(url) = effects.into_iter().next().unwrap() else {
+        unreachable!()
+    };
+    let done = crate::trace_link::execute(url, record_url);
+    assert_eq!(*OPENED.lock().unwrap(), [link]);
+    update(&mut state, done);
+    let toast = state.notifications.visible().next().unwrap();
+    assert_eq!(toast.message, format!("Opened {link}"));
+    let failed = crate::trace_link::execute(crate::trace_link::LinkJob::plain(link), |_| {
+        Err(std::io::Error::other("none"))
+    });
+    update(&mut state, failed);
+    let shown: Vec<&str> = state
+        .notifications
+        .visible()
+        .map(|t| t.message.as_str())
+        .collect();
+    assert!(
+        shown.contains(&format!("Cannot open a browser (none): {link}").as_str()),
+        "{shown:?}"
+    );
+}
+
+#[test]
+fn ctrl_o_without_a_link_explains_why() {
+    let mut state = state(ColorMode::TrueColor, 160, 30);
+    let mut unlinked = traced();
+    unlinked.record.trace.as_mut().unwrap().link = None;
+    show(&mut state, unlinked);
+    assert!(press(&mut state, "Ctrl+O").is_empty());
+    let shown = |state: &State, text: &str| {
+        state
+            .notifications
+            .visible()
+            .any(|t| t.message.starts_with(text))
+    };
+    assert!(shown(&state, "No trace link: set trace.link"));
+    show(&mut state, received(200, "text/plain", b"ok"));
+    assert!(press(&mut state, "Ctrl+O").is_empty());
+    assert!(shown(&state, "This exchange carries no trace context"));
+}

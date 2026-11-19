@@ -1,0 +1,5 @@
+---
+source: crates/rustman-tui/src/status.rs
+expression: text(&info)
+---
+ demo │ env: dev │ TLS verified │ 0 in flight                     OTLP →localhost:4317  Ctrl+Q quit

@@ -1,5 +1,6 @@
 //! The status bar: workspace, environment, TLS verification, in-flight count
-//! on the left; vim mode, `SECRETS VISIBLE` and the quit hint on the right.
+//! on the left; vim mode, `OTLP →<host>` while spans are exported,
+//! `SECRETS VISIBLE` and the quit hint on the right.
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -41,6 +42,9 @@ pub struct StatusInfo {
     pub webhook: Option<WebhookBadge>,
     /// MCP sampling or elicitation requests waiting for the user.
     pub mcp: Option<McpBadge>,
+    /// The collector client spans are exported to (`[trace.export]`), as
+    /// `host:port`.
+    pub otlp: Option<String>,
 }
 
 /// The MCP approvals waiting for the user, shown on every screen until
@@ -136,6 +140,13 @@ fn right_spans(info: &StatusInfo, quit: &str, ui: &UiOptions) -> Vec<Span<'stati
         spans.push(Span::styled(text, theme.badge(Token::Warn)));
         spans.push(Span::raw(" "));
     }
+    if let Some(host) = &info.otlp {
+        spans.push(Span::styled(
+            format!("OTLP →{host} "),
+            theme.fg(Token::Accent),
+        ));
+        spans.push(Span::raw(" "));
+    }
     if info.secrets_visible {
         spans.push(Span::styled(" SECRETS VISIBLE ", theme.badge(Token::Warn)));
         spans.push(Span::raw(" "));
@@ -176,6 +187,19 @@ mod tests {
             ..StatusInfo::default()
         };
         insta::assert_snapshot!(text(&info));
+    }
+
+    #[test]
+    fn status_otlp_export() {
+        let info = StatusInfo {
+            environment: Some("dev".into()),
+            otlp: Some("localhost:4317".into()),
+            ..StatusInfo::default()
+        };
+        insta::assert_snapshot!(text(&info));
+        let ui = UiOptions::default();
+        let style = style_of(&draw(&info, &ui), "OTLP →localhost:4317").unwrap();
+        assert_eq!(style.fg, ui.theme.color(Token::Accent));
     }
 
     #[test]
@@ -248,6 +272,7 @@ mod tests {
             secrets_visible: true,
             webhook: None,
             mcp: None,
+            otlp: None,
         };
         insta::assert_snapshot!(text(&info));
     }

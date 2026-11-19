@@ -39,6 +39,7 @@ pub fn environments(
             variables: variables(server, base_url),
             secrets: secrets.to_vec(),
             production: false,
+            trace: Default::default(),
         });
     }
     out

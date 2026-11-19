@@ -42,8 +42,12 @@ impl Workspace {
 
     pub fn load_with(root: &Path, registry: &KindRegistry) -> Result<Self, ConfigError> {
         let (settings, mut warnings) = Settings::load(root)?;
-        let envs = environment::load_all(root);
+        let mut envs = environment::load_all(root);
         warnings.extend(envs.warnings);
+        envs.errors.extend(environment::check_merged_trace(
+            &settings.trace,
+            &envs.environments,
+        ));
         let mut loader = Loader {
             root,
             registry,

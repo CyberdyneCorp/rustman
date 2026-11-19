@@ -154,6 +154,7 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
         mcp.shutdown().await;
         record
     });
+    crate::commands::exec::finish_spans(&runner);
     if let Err(e) = runner.finish() {
         print_warnings(&[e.to_string()]);
     }

@@ -407,3 +407,22 @@ async fn a_body_of_exactly_max_body_bytes_is_read() {
         exchange.error
     );
 }
+
+/// A traced call carries `traceparent` on its HTTP POST
+/// (add-trace-propagation task 2.3).
+#[tokio::test]
+async fn a_traced_call_carries_a_traceparent() {
+    let server = JsonrpcHttpServer::start(|req, _| RpcReply::json(&echo_result(&req.json()))).await;
+    let options = SendOptions {
+        trace: Some(rustman_core::trace::TracePropagation::default()),
+        ..SendOptions::default()
+    };
+    let target = target(&server.url("/"), vec![call("eth_blockNumber")], false);
+    assert!(send(&target, &options).await.passed());
+    assert!(send(&target, &SendOptions::default()).await.passed());
+    let hits = server.hits();
+    let traceparent = hits[0].header("traceparent").expect("a traceparent");
+    assert!(traceparent.starts_with("00-") && traceparent.ends_with("-01"));
+    assert_eq!(traceparent.len(), 55);
+    assert_eq!(hits[1].header("traceparent"), None);
+}

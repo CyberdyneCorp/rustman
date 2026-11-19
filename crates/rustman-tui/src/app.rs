@@ -273,6 +273,11 @@ pub enum Action {
         path: PathBuf,
         result: Result<(), String>,
     },
+    /// A trace link was handed to the browser, or could not be.
+    UrlOpened {
+        url: String,
+        result: Result<(), String>,
+    },
     /// Text was copied with a clipboard tool (`None`: no tool worked).
     Copied {
         text: String,
@@ -387,6 +392,8 @@ pub enum Effect {
     },
     /// Put text on the system clipboard.
     Copy(String),
+    /// Open a trace link in the system browser.
+    OpenUrl(crate::trace_link::LinkJob),
     /// Read the secrets `names` of `environment` for the reveal toggle.
     ReadSecrets {
         root: PathBuf,
@@ -490,7 +497,24 @@ pub fn update(state: &mut State, action: Action) -> Vec<Effect> {
     crate::jsonrpc::pending_catalogs(state);
     workbench::ask_conflict(state);
     state.status.tls_insecure = tls_insecure(state);
+    state.status.otlp = otlp_host(state);
     effects
+}
+
+/// The collector the active environment's sends export spans to
+/// (`[trace.export]`), when this build can export.
+fn otlp_host(state: &State) -> Option<String> {
+    let ws = workbench::workspace(state)?;
+    let environment = state
+        .status
+        .environment
+        .as_deref()
+        .and_then(|name| ws.environments.iter().find(|e| e.name == name));
+    let config = match environment {
+        Some(env) => env.trace.over(&ws.settings.trace),
+        None => ws.settings.trace.clone(),
+    };
+    rustman_http::runner::export_host(&config)
 }
 
 /// TLS verification is off for the workspace or for the request in the

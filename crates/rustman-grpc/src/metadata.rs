@@ -13,6 +13,7 @@ use tonic::metadata::{
 };
 
 use crate::error::GrpcError;
+use rustman_core::trace::{self, TraceContext, TraceContextInjector, TracePropagation};
 
 /// One metadata entry as recorded: binary values in base64.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -98,6 +99,33 @@ pub fn header_entries(headers: &HeaderMap) -> Vec<MetadataEntry> {
             MetadataEntry::new(name.as_str(), String::from_utf8_lossy(value.as_bytes()))
         })
         .collect()
+}
+
+/// Add the trace metadata of `propagation` to `map` (W3C and B3 headers as
+/// ASCII metadata), unless the call already sets its own, and return the
+/// context sent: `None` when the call sets a trace header that does not
+/// parse, which is then sent as given.
+pub fn inject_trace(map: &mut MetadataMap, propagation: &TracePropagation) -> Option<TraceContext> {
+    trace::inject_random(&mut TraceMetadata(map), propagation)
+}
+
+/// Request metadata as a trace carrier.
+struct TraceMetadata<'a>(&'a mut MetadataMap);
+
+impl TraceContextInjector for TraceMetadata<'_> {
+    fn get(&self, name: &str) -> Option<String> {
+        let key = name.to_ascii_lowercase();
+        let value = self.0.get(key.as_str())?;
+        value.to_str().ok().map(str::to_owned)
+    }
+
+    fn set(&mut self, name: &str, value: String) {
+        let key = AsciiMetadataKey::from_bytes(name.to_ascii_lowercase().as_bytes());
+        let value = AsciiMetadataValue::try_from(value);
+        if let (Ok(key), Ok(value)) = (key, value) {
+            self.0.insert(key, value);
+        }
+    }
 }
 
 #[cfg(test)]

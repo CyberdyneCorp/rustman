@@ -140,6 +140,20 @@ async fn wait_for(client: &Client, job: &str, state: &str) -> Value {
     }
 }
 
+/// Wait until job `job` is in its execute phase with a probe done.
+async fn wait_for_execution(client: &Client, job: &str) {
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        let status = ok(client, "explore_status", json!({"id": job})).await;
+        if status["phase"] == "execute" && status["done"].as_u64().unwrap_or(0) > 0 {
+            return;
+        }
+        assert_eq!(status["state"], "running", "{status:#}");
+        assert!(Instant::now() < deadline, "never executing: {status:#}");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn jobs_answer_at_once_on_a_slow_target_and_a_third_is_busy() {
     // Every GET is received but never answered: probes hang.
@@ -250,6 +264,8 @@ async fn an_mcp_cancellation_of_explore_run_cancels_its_job() {
         .as_str()
         .unwrap()
         .to_owned();
+    // Cancel once probes are being sent, not while the plan is still made.
+    wait_for_execution(&client, &job).await;
     client
         .notify_cancelled(CancelledNotificationParam::new(
             Some(request_id),

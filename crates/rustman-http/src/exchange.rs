@@ -9,6 +9,7 @@ use bytes::Bytes;
 use http::{HeaderMap, Version};
 use rustman_core::Redactor;
 use rustman_core::assertions::ResponseView;
+use rustman_core::trace::SentTrace;
 use rustman_core::vars::ResolvedRequest;
 use serde::{Serialize, Serializer};
 
@@ -84,6 +85,9 @@ pub struct Exchange {
     /// itself does not name. Merge it into the request's redactor so an
     /// echoing server cannot leak them.
     pub credentials: Redactor,
+    /// The trace context sent: injected by trace propagation, or set by
+    /// the request itself.
+    pub trace: Option<SentTrace>,
 }
 
 impl Exchange {

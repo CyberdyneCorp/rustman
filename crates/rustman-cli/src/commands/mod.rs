@@ -24,6 +24,7 @@ pub mod secret;
 pub mod send;
 pub(crate) mod session;
 pub mod snapshot;
+pub mod trace;
 pub mod tui;
 pub mod webhook;
 

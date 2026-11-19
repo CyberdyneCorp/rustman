@@ -118,15 +118,24 @@ impl McpSession {
         let redactor = SharedRedactor::new(server.redactor());
         let state = client_state(server, &redactor, options)?;
         let client = RustmanClient::new(state.clone());
+        // The connect and initialize futures are boxed, as large as they
+        // are: inline, a run's MCP request overflowed the 1 MiB main-thread
+        // stack of Windows in debug builds.
         let (service, transport, process) = match &server.transport {
             ResolvedTransport::Stdio(stdio) => {
-                let (service, process) =
-                    connect_stdio(server, stdio, &redactor.get(), options, client).await?;
+                let (service, process) = Box::pin(connect_stdio(
+                    server,
+                    stdio,
+                    &redactor.get(),
+                    options,
+                    client,
+                ))
+                .await?;
                 (service, TransportKind::Stdio, Some(process))
             }
             ResolvedTransport::Http(http) => {
                 let (service, kind) =
-                    connect_http(server, http, &redactor, options, client).await?;
+                    Box::pin(connect_http(server, http, &redactor, options, client)).await?;
                 (service, kind, None)
             }
         };
@@ -312,7 +321,7 @@ async fn connect_stdio(
     let ended = state.ended.clone();
     let stdout = LineLimit::new(spawned.stdout, MAX_STDIO_MESSAGE, ended.clone());
     let serve = client.serve(tap((stdout, spawned.stdin), state));
-    match initialize(request_timeout(server, options), serve).await {
+    match Box::pin(initialize(request_timeout(server, options), serve)).await {
         Ok(service) => Ok((service, process)),
         Err(err) => {
             process.shutdown.begin(options.shutdown_grace);
@@ -383,7 +392,12 @@ async fn connect_http(
     );
     let timeout = request_timeout(server, options);
     let failed = |e: InitFailure| e.into_error(&server.name, &redactor.get());
-    let err = match initialize(timeout, serve_streamable(&client, http, &handler)).await {
+    let err = match Box::pin(initialize(
+        timeout,
+        serve_streamable(&client, http, &handler),
+    ))
+    .await
+    {
         Ok(service) => return Ok((service, TransportKind::StreamableHttp)),
         Err(err) => err,
     };
@@ -391,9 +405,12 @@ async fn connect_http(
         oauth
             .login(Some(challenge.as_str()).filter(|c| !c.is_empty()))
             .await?;
-        let service = initialize(timeout, serve_streamable(&client, http, &handler))
-            .await
-            .map_err(failed)?;
+        let service = Box::pin(initialize(
+            timeout,
+            serve_streamable(&client, http, &handler),
+        ))
+        .await
+        .map_err(failed)?;
         return Ok((service, TransportKind::StreamableHttp));
     }
     if !wants_legacy(client.initialize_status()) {
@@ -407,7 +424,7 @@ async fn connect_http(
             message: e.to_string(),
         })?;
     let state = handler.state();
-    let service = initialize(timeout, handler.serve(tap(legacy, state)))
+    let service = Box::pin(initialize(timeout, handler.serve(tap(legacy, state))))
         .await
         .map_err(failed)?;
     Ok((service, TransportKind::LegacySse))

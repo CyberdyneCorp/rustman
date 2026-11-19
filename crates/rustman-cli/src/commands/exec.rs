@@ -3,7 +3,6 @@
 
 use std::io::IsTerminal;
 use std::path::Path;
-use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use clap::Args;
@@ -17,7 +16,7 @@ use rustman_core::snapshot::{CI_ENV, SnapshotMode};
 use rustman_core::vars::parse_overrides;
 use rustman_core::{ConfigError, Environment, Redactor, SecretBackend, SecretStore};
 use rustman_http::RequestError;
-use rustman_http::runner::{LoginMode, RunOptions};
+use rustman_http::runner::{FLUSH_WAIT, LoginMode, RunOptions, Runner};
 use tokio_util::sync::CancellationToken;
 
 /// Flags that change how requests are sent, shared by `send` and `run`.
@@ -36,6 +35,9 @@ pub struct SendFlags {
     /// Do not record the exchanges in history
     #[arg(long)]
     pub no_history: bool,
+    /// Send trace context (traceparent) even when no trace block enables it
+    #[arg(long)]
+    pub trace: bool,
     /// Overwrite snapshots that differ from the response (not in CI mode)
     #[arg(short = 'u', long)]
     pub update_snapshots: bool,
@@ -53,6 +55,7 @@ impl SendFlags {
             overrides: overrides(&self.vars)?,
             timeout: self.timeout,
             insecure: self.insecure,
+            trace: self.trace,
             login: login_mode(),
             snapshots: self.snapshot_mode()?,
             ..RunOptions::default()
@@ -66,6 +69,13 @@ impl SendFlags {
         SnapshotMode::detect(self.update_snapshots, self.ci, ci_env.as_deref())
             .map_err(|message| ConfigError::Usage(message.to_owned()))
     }
+}
+
+/// Send the client spans of the exchanges `runner` made (`[trace.export]`,
+/// waiting a few seconds at most) and print the export warnings.
+pub fn finish_spans(runner: &Runner<'_>) {
+    runner.flush_spans(FLUSH_WAIT);
+    super::print_warnings(&runner.export_warnings());
 }
 
 /// Print, on stderr, each snapshot a sent request recorded or updated, such
@@ -241,22 +251,8 @@ fn quit_interrupted() {
 /// Print the authorization URL and try to open it in the default browser.
 pub fn show_login_url(url: &str) {
     eprintln!("Open this URL in your browser to log in:\n  {url}");
-    let mut command = if cfg!(target_os = "macos") {
-        Command::new("open")
-    } else if cfg!(windows) {
-        let mut command = Command::new("rundll32");
-        command.arg("url.dll,FileProtocolHandler");
-        command
-    } else {
-        Command::new("xdg-open")
-    };
     // Without a browser the printed URL is the way in.
-    let _ = command
-        .arg(url)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
+    let _ = rustman_core::browser::open_browser(url);
 }
 
 #[cfg(test)]

@@ -10,6 +10,7 @@ use crate::error::{ConfigError, LoadError};
 use crate::format::{Located, from_yaml};
 use crate::model::Variables;
 use crate::paths;
+use crate::trace::TraceConfig;
 use crate::vars::template::is_variable_name;
 
 /// The folder, under the workspace root, holding one file per environment.
@@ -31,6 +32,8 @@ pub struct Environment {
     pub secrets: Vec<String>,
     /// `production: true`: the safety policy's production guard applies.
     pub production: bool,
+    /// `trace:`: trace propagation, over `rustman.toml [trace]`.
+    pub trace: TraceConfig,
 }
 
 impl Environment {
@@ -49,6 +52,8 @@ struct EnvironmentFile {
     secrets: Vec<Located<String>>,
     #[serde(default)]
     production: bool,
+    #[serde(default)]
+    trace: Option<Located<TraceConfig>>,
 }
 
 /// Whether `name` is a valid environment name: `[A-Za-z0-9_-]+`.
@@ -149,6 +154,11 @@ pub fn parse(file: &Path, name: &str, text: &str) -> Result<Environment, LoadErr
             ));
         }
     }
+    if let Some(trace) = &parsed.trace {
+        trace
+            .validate()
+            .map_err(|message| LoadError::new(file, trace.position(), message))?;
+    }
     Ok(Environment {
         name: name.to_owned(),
         variables: parsed.variables,
@@ -158,7 +168,33 @@ pub fn parse(file: &Path, name: &str, text: &str) -> Result<Environment, LoadErr
             .map(Located::into_inner)
             .collect(),
         production: parsed.production,
+        trace: parsed.trace.map(Located::into_inner).unwrap_or_default(),
     })
+}
+
+/// Check each environment's `trace:` block over `rustman.toml [trace]`
+/// (they merge key by key, so a preset's `link_base` may come from either
+/// file). Without environments, `[trace]` is checked on its own.
+pub(crate) fn check_merged_trace(
+    settings: &TraceConfig,
+    environments: &[Environment],
+) -> Vec<LoadError> {
+    if environments.is_empty() {
+        return settings
+            .check_merged()
+            .err()
+            .map(|message| LoadError::new(Path::new(crate::settings::SETTINGS_FILE), None, message))
+            .into_iter()
+            .collect();
+    }
+    environments
+        .iter()
+        .filter_map(|env| {
+            let message = env.trace.over(settings).check_merged().err()?;
+            let file = Path::new(ENVIRONMENTS_DIR).join(format!("{}{SUFFIX}", env.name));
+            Some(LoadError::new(&file, None, message))
+        })
+        .collect()
 }
 
 /// The name of the active environment: `--env`, else `RUSTMAN_ENV`, else the
@@ -348,6 +384,63 @@ mod tests {
         let info = crate::safety::EnvironmentInfo::from(&prod);
         assert_eq!(info.name, Some("local"));
         assert!(info.marked_production);
+    }
+
+    #[test]
+    fn the_trace_block_is_read_and_validated() {
+        let e = env("trace:\n  enabled: true\n  scope: run\n  formats: [w3c, b3multi]\n  baggage:\n    tenant: \"{{tenant_id}}\"\n  link: jaeger\n  link_base: http://localhost:16686\n").unwrap();
+        assert!(e.trace.is_enabled());
+        assert_eq!(e.trace.scope, Some(crate::trace::TraceScope::Run));
+        assert_eq!(
+            e.trace.formats,
+            Some(vec![
+                crate::trace::PropagationFormat::W3c,
+                crate::trace::PropagationFormat::B3Multi
+            ])
+        );
+        assert_eq!(e.trace.baggage.unwrap()["tenant"], "{{tenant_id}}");
+        assert_eq!(env("").unwrap().trace, TraceConfig::default());
+        let err = env("variables: {}\ntrace:\n  enabled: true\n  link: \"https://x/{traceid}\"\n")
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "environments/local.yaml:3: trace.link: unknown placeholder {traceid}"
+        );
+        assert!(env("trace:\n  formats: [zipkin]\n").is_err());
+        assert!(env("trace:\n  sample: true\n").is_err());
+    }
+
+    #[test]
+    fn a_preset_link_base_may_come_from_either_file() {
+        let preset = TraceConfig {
+            link: Some("jaeger".into()),
+            ..TraceConfig::default()
+        };
+        let base = TraceConfig {
+            link_base: Some("http://localhost:16686".into()),
+            ..TraceConfig::default()
+        };
+        let with = |trace: &TraceConfig| Environment {
+            name: "dev".into(),
+            trace: trace.clone(),
+            ..Environment::default()
+        };
+        assert!(check_merged_trace(&preset, &[with(&base)]).is_empty());
+        assert!(check_merged_trace(&base, &[with(&preset)]).is_empty());
+        assert!(check_merged_trace(&TraceConfig::default(), &[]).is_empty());
+        let errors = check_merged_trace(&preset, &[with(&base), with(&TraceConfig::default())]);
+        assert_eq!(
+            errors.iter().map(ToString::to_string).collect::<Vec<_>>(),
+            [format!(
+                "{}: trace.link: preset 'jaeger' needs trace.link_base",
+                Path::new("environments").join("dev.yaml").display()
+            )]
+        );
+        let alone = check_merged_trace(&preset, &[]);
+        assert_eq!(
+            alone[0].to_string(),
+            "rustman.toml: trace.link: preset 'jaeger' needs trace.link_base"
+        );
     }
 
     #[test]
