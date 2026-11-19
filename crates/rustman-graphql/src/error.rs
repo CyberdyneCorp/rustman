@@ -52,6 +52,10 @@ pub enum GraphqlError {
     /// A subscription that could not start or broke off; redacted.
     #[error("graphql: subscription: {0}")]
     Subscription(String),
+    /// A response body larger than `[http] max_body_bytes`, refused unread:
+    /// neither parsed nor recorded.
+    #[error("HTTP: the response body is larger than the {0} byte limit (max_body_bytes)")]
+    BodyTooLarge(u64),
     /// The transport failed; the message is redacted.
     #[error(transparent)]
     Transport(#[from] RequestError),

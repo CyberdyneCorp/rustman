@@ -442,3 +442,44 @@ document: 'subscription { onMessage { n } }'
     }
     assert!(completed(), "{:?}", server.sessions()[0].message_types());
 }
+
+/// Regression (#67): a result over `[http] max_body_bytes` was spilled to
+/// disk, read back whole, parsed and recorded. It is refused unread, and
+/// neither history nor the spill folder keeps any of it.
+#[tokio::test]
+async fn a_result_over_max_body_bytes_is_refused_and_not_recorded() {
+    const CANARY: &str = "oversized-graphql-body-canary";
+    let big = CANARY.repeat(64 * 1024 / CANARY.len());
+    let server =
+        GraphqlHttpServer::start(move |_| Reply::graphql(json!({"data": {"login": big}}))).await;
+    let dir = workspace(&server.url(""), &[("auth/login.rman.yaml", LOGIN)]);
+    let settings = fs::read_to_string(dir.path().join("rustman.toml")).unwrap();
+    write(
+        dir.path(),
+        "rustman.toml",
+        &format!("{settings}[http]\nmax_body_bytes = 4096\n"),
+    );
+    let records = run(dir.path()).await;
+    assert_eq!(
+        records[0].status,
+        RequestStatus::Errored,
+        "{:?}",
+        records[0]
+    );
+    assert_eq!(
+        records[0].error.as_deref(),
+        Some("HTTP: the response body is larger than the 4096 byte limit (max_body_bytes)")
+    );
+    assert_eq!(server.hits().len(), 1, "an oversized result is not resent");
+    let entries = history(dir.path());
+    assert_eq!(entries.len(), 1);
+    for file in walk(&dir.path().join(".rustman")) {
+        let bytes = fs::read(&file).unwrap_or_default();
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(
+            !text.contains(CANARY),
+            "{} keeps the oversized body",
+            file.display()
+        );
+    }
+}

@@ -141,6 +141,19 @@ The system SHALL parse GraphQL responses and present `data`, `errors` (message, 
 - **WHEN** it is rendered
 - **THEN** the raw body SHALL be shown with `graphql: response is not a GraphQL result`
 
+### Requirement: Response body limit over HTTP
+A GraphQL HTTP response body larger than `[http] max_body_bytes` (default 10 MiB) SHALL be refused as soon as the limit is passed, without being parsed, spilled to disk or stored, with the error `HTTP: the response body is larger than the <n> byte limit (max_body_bytes)` (exit-code class 3). The request SHALL NOT be sent again (no APQ retry), and history SHALL record the error without the body. A body of exactly `max_body_bytes` SHALL be accepted.
+
+#### Scenario: Oversized result refused
+- **GIVEN** `[http] max_body_bytes = 4096` and an endpoint answering with a 64 KiB GraphQL result
+- **WHEN** the operation is sent
+- **THEN** the request SHALL be errored with `HTTP: the response body is larger than the 4096 byte limit (max_body_bytes)`, only one request SHALL be sent, and neither the history entry nor `.rustman/bodies/` SHALL contain the body
+
+#### Scenario: Result at the limit accepted
+- **GIVEN** `[http] max_body_bytes` equal to the size of the response body
+- **WHEN** the operation is sent
+- **THEN** the result SHALL be parsed and shown
+
 ### Requirement: GraphQL assertions
 The `assertions` capability SHALL support graphql-specific checks: `no_errors`, `errors_count` (comparison), `error_message_contains`, `error_code` (`extensions.code`), and `data` JSONPath checks rooted at `data`. Captures SHALL be able to read from `data` paths.
 

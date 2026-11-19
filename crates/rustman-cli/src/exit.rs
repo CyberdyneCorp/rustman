@@ -128,6 +128,7 @@ fn graphql_code(err: &GraphqlError) -> u8 {
     match err {
         GraphqlError::IntrospectionFailed(_)
         | GraphqlError::Transport(_)
+        | GraphqlError::BodyTooLarge(_)
         | GraphqlError::Resolve(_)
         | GraphqlError::AckTimeout
         | GraphqlError::Subscription(_) => REQUEST,
@@ -321,6 +322,7 @@ mod tests {
         );
         let endpoint = GraphqlError::InvalidEndpoint("x".into());
         assert_eq!(CliError::from(endpoint).code(), 2);
+        assert_eq!(CliError::from(GraphqlError::BodyTooLarge(4096)).code(), 3);
     }
 
     #[test]
