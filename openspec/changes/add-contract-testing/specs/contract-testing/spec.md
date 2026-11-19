@@ -191,7 +191,7 @@ Provider verification SHALL send every request, including state-change calls, th
 #### Scenario: Mutating interaction blocked
 - **GIVEN** a Pact file with a `POST /users` interaction
 - **WHEN** verification runs without `--allow-mutations`
-- **THEN** that interaction SHALL be reported as `blocked: method POST requires --allow-mutations` and the exit code SHALL be 4
+- **THEN** that interaction SHALL be reported as `blocked: mutations not allowed` and the exit code SHALL be 4
 
 ### Requirement: Passive conformance of recorded traffic
 `rustman contract verify --spec <openapi> [--from history|--from <run-report.json>]` SHALL check recorded exchanges against the document and send no network request. History is the default source, filterable with `--since` and `--grep`. Each exchange SHALL be matched to an operation by method and path template. Its request and response SHALL be validated against the operation's parameters and schemas.

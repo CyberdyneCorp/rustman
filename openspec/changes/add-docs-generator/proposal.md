@@ -32,7 +32,7 @@ None. It reads `workspace`, `environments` (redaction, variable layers), `reques
 
 ## Impact
 
-- New crate `crates/rustman-docs` (page model, renderers, search index, templates). It depends on `rustman-core` and `rustman-report` (shared redaction helpers), and optionally reads the schema caches of the GraphQL and JSON-RPC crates.
+- New crate `crates/rustman-docs` (page model, renderers, search index, templates). It depends on `rustman-core` (redaction, workspace, history, snapshots), `rustman-http` (the shared snippet engine) and `rustman-explore` (import snapshots), and reads the schema caches of the GraphQL and JSON-RPC crates.
 - New CLI subcommands `rustman docs build` and `rustman docs serve` (the preview server uses `hyper`, bound to loopback).
 - New optional workspace keys: `[docs]` in `rustman.toml` (title, logo, base path, which examples are publishable, extra template dirs), and `docs:` in request files (`example: true`, `hidden: true`, extra Markdown description).
 - No new runtime dependency for readers of the output: the site is plain HTML, CSS and a small inline JS file.

@@ -35,5 +35,5 @@ None. This change uses `openapi-import` (parsing, `$ref` resolution, validation 
 - New crate `crates/rustman-contract` (diff engine, rule catalog, Pact model, conformance checker). It depends on `rustman-core`, `rustman-explore` (OpenAPI model and schema validation), `rustman-http` and `rustman-report`.
 - New CLI subcommand tree `rustman contract …` in `rustman-cli`.
 - New workspace files: `contracts/allowlist.yaml` and `contracts/pacts/*.json` (both meant to be committed).
-- `rustman.report/v1` gains the additive `kind: contract` and its sections. The published JSON Schema is updated, and older readers ignore the unknown kind.
+- `rustman.report/v1` gains the additive `kind: contract` and its sections. The published JSON Schema is updated; older readers refuse the unknown kind with exit 2 (`unknown report kind 'contract'`).
 - Documentation: a rule-catalog page listing every rule id, its classification and an example.

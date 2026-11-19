@@ -8,6 +8,16 @@ This change builds on three existing pieces:
 
 Stress testing combines them. It adds an adaptive load controller, input mutation, raw wire faults, and a recovery monitor. See proposal.md for the motivation.
 
+## Building on existing code
+
+- **Ordering**: `rustman-bench` and its executors come from `add-load-testing`, which is not implemented yet; this change lands after it and reuses its `Runner`-per-VU execution, `[bench]`-style caps, HDR metrics and live dashboard (see that design's "Building on existing code").
+- **Safety**: `SafetyPolicy`, `Permission`, `Blocked` and the production guard (`crates/rustman-core/src/safety/`), sent through `rustman_http::GovernedSender` (`crates/rustman-http/src/governed.rs`) via `RunOptions::gate`. `rustman_core::safety::Governor` halves its rate on every `429` (`Governor::observe`) and defaults to the explorer's `[safety]` limits (10 rps, concurrency 4, 2000 probes, 15 min), so stress builds its own `Limits` from `[stress]` and must not let the backoff hide `throttled` windows.
+- **Fuzz generators**: `rustman_explore::explore::fuzz` (`proptest` strategies from JSON Schema, `Mode::Valid`/`Mode::Boundary`, seeded ChaCha `TestRng`) and `rustman_explore::synth` (`Synthesizer`, seeded SplitMix64 picks in `synth/vary.rs`). The new schema-less `mutate` module sits beside them and shares that seeding.
+- **Findings, export and diff**: the exploration finding format is `crates/rustman-report/src/exploration.rs` (`ReportFinding`, `Severity`); `report diff` (`crates/rustman-report/src/diff.rs`) matches findings by rule id and operation for exploration reports only today; regression files are written by `crates/rustman-explore/src/explore/repro.rs` and `explore/export.rs` (`rustman explore export`).
+- **Raw connections**: `rustman-http` already opens TCP, proxy tunnels and TLS with a pinned ALPN for WebSocket handshakes (the private `connect` in `crates/rustman-http/src/websocket.rs`, over `connect::Connector` and `TlsSettings::client_config`). Exposing that as a public "raw stream" helper gives the wire writer the workspace's DNS, connect timeout, `ca_bundle` and client certificates instead of a second `tokio-rustls` setup. `crates/rustman-test-support/src/raw.rs` is a bare hyper client for tests, not a raw writer.
+- **Malformed bodies**: the runner has no `body_override`; `ResolvedRequest` bodies are typed (`ResolvedBody`), so raw bytes need a new body variant or an override on the send path. Gzip for `compression-bomb` is available through the workspace `async-compression` (`gzip` feature, as `rustman-http` enables it); `flate2` is only transitive.
+- **Config and reports**: `[stress]` must be added to `Settings` (`crates/rustman-core/src/settings.rs`), where unknown keys only warn and the test `unknown_keys_warn_without_failing` uses `[stress]` as its unknown section. `kind: stress` needs a `rustman_report::Report` variant like `kind: bench`. Viz needs `View::Stress` in `crates/rustman-viz-protocol/src/message.rs`.
+
 ## Goals / Non-Goals
 
 **Goals:**
@@ -75,7 +85,7 @@ Malformed bodies are raw `Bytes` sent through the normal executor with a `body_o
 `compression-bomb` and `large-body` above 1 MiB need opt-in in `[stress].families`, because they cost the target real memory.
 
 ### D6. Wire faults use a raw connection
-`hyper` correctly refuses to send invalid framing, so wire faults use a small raw writer: `tokio::net::TcpStream`, plus `tokio-rustls` for HTTPS with ALPN pinned to `http/1.1`. It writes hand-built requests and reads the status line with a 10 s timeout. The writer never parses responses beyond the status line and connection state, which keeps the "never hand-roll HTTP parsing" lesson intact for real traffic.
+`hyper` correctly refuses to send invalid framing, so wire faults use a small raw writer over a stream from `rustman-http`'s connector (TCP, plus TLS from `TlsSettings` with ALPN pinned to `http/1.1`, as WebSocket handshakes already do). It writes hand-built requests and reads the status line with a 10 s timeout. The writer never parses responses beyond the status line and connection state, which keeps the "never hand-roll HTTP parsing" lesson intact for real traffic.
 
 Wire faults run at a fixed low concurrency (`max_wire_connections`, default 20) regardless of mode. `slow-body` is bounded to 20 connections × 60 s, so it measures the server's slow-client timeouts without becoming a slowloris attack.
 - *Rejected:* patching `hyper`, or using a C client such as libcurl (violates the build constraint).
@@ -111,3 +121,9 @@ The report reuses the bench time series, the step table, `breakpoint`, `failure_
 - **Users stressing shared infrastructure.** Targets come from config only, production needs two opt-ins, and the kill switch and caps apply. The README warns that only systems you own or are authorized to test should be stressed.
 - **The client becomes the bottleneck.** A pre-flight check reads the file-descriptor limit and warns when it's below `max_rps × 2`. The report flags `client-saturated` when the client's own scheduler lags more than 100 ms, so a client limit isn't mistaken for a server break.
 - **Non-deterministic servers.** Seeds make the inputs reproducible, not the outcomes. The report keeps both the seed and the observed results.
+
+## Open Questions
+
+- Wire faults and proxies: an HTTP proxy would reject or normalize broken framing. Send wire faults only directly or through `CONNECT`/SOCKS5 tunnels, and refuse them when the target is reached through a forwarding HTTP proxy?
+- Malformed bodies: add a raw-bytes `ResolvedBody` variant (visible to history, snippets and redaction) or a send-path override that only stress uses?
+- `rustman.toml` unknown keys warn and never fail today. Should `[stress]` be stricter (an error for unknown keys, since it holds consent), or follow the warning rule?

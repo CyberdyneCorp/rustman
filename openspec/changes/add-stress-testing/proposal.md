@@ -56,8 +56,8 @@ It also reuses, without changing their requirements:
 ## Impact
 
 - New `stress` module in `rustman-bench` (mode controllers, SLO evaluator, breakpoint search, recovery monitor).
-- New `rustman-bench::wire` raw writer on `tokio` and `tokio-rustls`, used only for wire faults.
+- New `rustman-bench::wire` raw writer over a raw stream from `rustman-http`'s connector (TCP, tunnels, `TlsSettings` with ALPN `http/1.1`), used only for wire faults.
 - New `rustman-explore::mutate` module for schema-less mutations and the malformed families, sharing seeded RNG plumbing with the existing generators.
 - New `rustman.toml [stress]` table: allowed targets, caps, and the allowed fault families.
 - Report schema: new `kind: stress` and its fields.
-- No new heavy dependencies. Gzip bombs use `flate2`, which the HTTP stack already pulls in for decompression.
+- No new heavy dependencies. Gzip bombs use the workspace `async-compression` (`gzip`), which the HTTP stack already uses for decompression.
