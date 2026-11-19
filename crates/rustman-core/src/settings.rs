@@ -10,6 +10,7 @@ use crate::agent::AgentSettings;
 use crate::error::{ConfigError, LoadError, Position};
 use crate::model::Variables;
 use crate::safety::SafetySettings;
+use crate::trace::TraceConfig;
 
 pub const SETTINGS_FILE: &str = "rustman.toml";
 
@@ -71,6 +72,21 @@ const KNOWN_KEYS: &[(&str, &[&str])] = &[
     ("graphql", &["endpoints"]),
     // Read by rustman-jsonrpc (add-jsonrpc-client).
     ("jsonrpc", &["catalogs", "agent_read_only_methods"]),
+    // Trace propagation (add-trace-propagation).
+    (
+        "trace",
+        &[
+            "enabled",
+            "sampled",
+            "scope",
+            "formats",
+            "tracestate",
+            "baggage",
+            "link",
+            "link_base",
+            "export",
+        ],
+    ),
     (
         "agent",
         &[
@@ -104,6 +120,8 @@ pub struct Settings {
     pub jsonrpc: RpcSettings,
     #[serde(default)]
     pub agent: AgentSettings,
+    #[serde(default)]
+    pub trace: TraceConfig,
     #[serde(default)]
     pub variables: Variables,
 }
@@ -278,6 +296,14 @@ impl Settings {
         check_version(file, &table)?;
         let mut settings: Self = toml::from_str(text).map_err(|e| toml_error(file, text, &e))?;
         settings.http.positions = http_path_positions(text);
+        settings.trace.validate().map_err(|message| {
+            let export = message.starts_with("trace.export");
+            let position = export
+                .then(|| section_position(text, "trace.export"))
+                .flatten()
+                .or_else(|| section_position(text, "trace"));
+            ConfigError::from(LoadError::new(file, position, message))
+        })?;
         Ok((settings, unknown_keys(&table)))
     }
 
@@ -315,6 +341,21 @@ fn http_path_positions(text: &str) -> BTreeMap<&'static str, Position> {
             Some((key, position_at(text, span.start)))
         })
         .collect()
+}
+
+/// Where `[section]` starts, for messages about it.
+fn section_position(text: &str, section: &str) -> Option<Position> {
+    let header = format!("[{section}]");
+    let offset = text
+        .lines()
+        .scan(0, |start, line| {
+            let at = *start;
+            *start += line.len() + 1;
+            Some((at, line))
+        })
+        .find(|(_, line)| line.trim() == header)?
+        .0;
+    Some(position_at(text, offset))
 }
 
 /// Check `[workspace] version`. A value of the wrong type is left to the
@@ -536,6 +577,44 @@ base_url = "http://localhost"
         let text = "[workspace]\nname = \"a\"\nversion = 1\n[[webhook.verifiers]]\npath = \"/h\"\n";
         let (_, warnings) = parse(text).unwrap();
         assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    #[test]
+    fn the_trace_table_is_known_and_validated() {
+        let text = "[workspace]\nname = \"a\"\nversion = 1\n[trace]\nenabled = true\nsampled = false\nscope = \"run\"\nformats = [\"w3c\", \"b3\"]\nlink = \"tempo\"\nlink_base = \"http://localhost:3000\"\n[trace.tracestate]\nrojo = \"1\"\n[trace.baggage]\ntenant = \"{{tenant_id}}\"\n";
+        let (settings, warnings) = parse(text).unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert!(settings.trace.is_enabled());
+        assert_eq!(settings.trace.sampled, Some(false));
+        assert_eq!(settings.trace.link.as_deref(), Some("tempo"));
+        let (plain, _) = parse("[workspace]\nname = \"a\"\nversion = 1\n").unwrap();
+        assert_eq!(plain.trace, TraceConfig::default());
+        let bad =
+            "[workspace]\nname = \"a\"\nversion = 1\n\n[trace]\nlink = \"https://x/{traceid}\"\n";
+        assert_eq!(
+            parse(bad).unwrap_err().to_string(),
+            "rustman.toml:5: trace.link: unknown placeholder {traceid}"
+        );
+        // An environment may supply link_base: checked once merged.
+        let preset = "[workspace]\nname = \"a\"\nversion = 1\n[trace]\nlink = \"jaeger\"\n";
+        assert!(parse(preset).is_ok());
+        let unknown = "[workspace]\nname = \"a\"\nversion = 1\n[trace]\nenable = true\n";
+        assert!(parse(unknown).is_err());
+    }
+
+    #[test]
+    fn the_trace_export_table_is_known_and_needs_an_endpoint() {
+        let text = "[workspace]\nname = \"a\"\nversion = 1\n[trace.export]\nenabled = true\nendpoint = \"http://localhost:4317\"\nprotocol = \"grpc\"\nuse_env = false\nservice_name = \"api-tests\"\n";
+        let (settings, warnings) = parse(text).unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert!(settings.trace.is_exporting());
+        let missing = "[workspace]\nname = \"a\"\nversion = 1\n\n[trace.export]\nenabled = true\n";
+        assert_eq!(
+            parse(missing).unwrap_err().to_string(),
+            "rustman.toml:5: trace.export.endpoint is required when export is enabled"
+        );
+        let typo = "[workspace]\nname = \"a\"\nversion = 1\n[trace.export]\nendpiont = \"x\"\n";
+        assert!(parse(typo).is_err());
     }
 
     #[test]

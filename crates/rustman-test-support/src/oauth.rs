@@ -42,6 +42,8 @@ struct State {
     valid: Vec<String>,
     refresh: Vec<String>,
     issued: u32,
+    /// The path and headers of every request, in order.
+    requests: Vec<(String, http::HeaderMap)>,
 }
 
 pub struct OAuthServer {
@@ -93,6 +95,17 @@ impl OAuthServer {
         self.state.lock().unwrap().authorize.clone()
     }
 
+    /// The headers of every request to `path` so far.
+    pub fn headers(&self, path: &str) -> Vec<http::HeaderMap> {
+        let state = self.state.lock().unwrap();
+        state
+            .requests
+            .iter()
+            .filter(|(p, _)| p == path)
+            .map(|(_, headers)| headers.clone())
+            .collect()
+    }
+
     /// Issue tokens with this lifetime from now on.
     pub fn set_expires_in(&self, seconds: u64) {
         self.state.lock().unwrap().expires_in = seconds;
@@ -111,6 +124,8 @@ async fn handle(
     req: Request<Incoming>,
 ) -> Result<Response<Body>, Infallible> {
     let path = req.uri().path().to_owned();
+    let headers = req.headers().clone();
+    state.lock().unwrap().requests.push((path.clone(), headers));
     let response = match path.as_str() {
         "/authorize" => authorize(&state, req.uri().query().unwrap_or_default()),
         "/token" => {

@@ -335,6 +335,7 @@ mod tests {
             variables: vars(&[("base_url", "http://localhost:8080")]),
             secrets: Vec::new(),
             production: false,
+            trace: Default::default(),
         };
         let resolver = Resolver::new()
             .with(EnvironmentSource::new(&env, &NoSecrets))
@@ -355,6 +356,7 @@ mod tests {
             variables: vars(&[("token", "old")]),
             secrets: Vec::new(),
             production: false,
+            trace: Default::default(),
         };
         let resolver = Resolver::new()
             .with(EnvironmentSource::new(&env, &NoSecrets))
@@ -430,6 +432,7 @@ mod tests {
             variables: Variables::default(),
             secrets: vec!["api_token".into()],
             production: false,
+            trace: Default::default(),
         };
         let resolver = Resolver::new().with(EnvironmentSource::new(&env, &Store));
         let mut i = resolver.interpolator();
@@ -454,6 +457,7 @@ mod tests {
             variables: Variables::default(),
             secrets: vec!["api_token".into()],
             production: false,
+            trace: Default::default(),
         };
         let resolver = Resolver::new()
             .with(EnvironmentSource::new(&env, &NoSecrets))

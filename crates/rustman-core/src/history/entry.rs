@@ -6,6 +6,7 @@ use serde_json::Value;
 use super::replay::ReplayRequest;
 use super::ulid::new_ulid;
 use crate::run::{RequestRecord, SentRequest, now_rfc3339};
+use crate::trace::TraceRecord;
 
 /// The `schema` of every stored entry.
 pub const ENTRY_SCHEMA: &str = "rustman.history/v1";
@@ -73,10 +74,56 @@ impl Entry {
         }
     }
 
+    /// The trace context the exchange carried; `None` for entries recorded
+    /// without one, or before trace propagation existed.
+    pub fn trace(&self) -> Option<TraceRecord> {
+        let trace = self.record.get("trace")?;
+        serde_json::from_value(trace.clone()).ok()
+    }
+
     /// The redacted response body text (or its start, when spilled).
     pub fn response_body(&self) -> Option<&str> {
         self.record
             .pointer("/exchange/response/body")
             .and_then(Value::as_str)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(record: Value) -> Entry {
+        let json = serde_json::json!({
+            "schema": ENTRY_SCHEMA,
+            "id": "01JDQ3XG000000000000000000",
+            "timestamp": "2026-11-17T09:30:00.123Z",
+            "request": AD_HOC_REQUEST,
+            "environment": null,
+            "sent": {"method": "GET", "url": "http://x/", "headers": [], "body": null},
+            "status": 200,
+            "total_ms": 4.0,
+            "error": null,
+            "spill": null,
+            "record": record,
+            "replay": null,
+        });
+        serde_json::from_value(json).unwrap()
+    }
+
+    #[test]
+    fn old_entries_load_without_a_trace() {
+        let old = entry(serde_json::json!({"id": "a", "status": "passed"}));
+        assert_eq!(old.trace(), None);
+        let traced = entry(serde_json::json!({
+            "trace": {
+                "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+                "span_id": "00f067aa0ba902b7",
+                "sampled": true
+            }
+        }));
+        let trace = traced.trace().unwrap();
+        assert_eq!(trace.trace_id, "4bf92f3577b34da6a3ce929d0e0e4736");
+        assert_eq!(trace.link, None);
     }
 }

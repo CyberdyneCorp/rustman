@@ -3,12 +3,14 @@
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rustman_core::Redactor;
 use rustman_core::captures::CaptureResult;
 use rustman_core::run::{
     ExchangeRecord, HeaderRecord, RedirectRecord, ResponseRecord, SentRequest, TimingsRecord,
 };
+use rustman_core::trace::{ServerTiming, TRACERESPONSE, TraceLink, TraceRecord, server_timing};
 use rustman_core::vars::ResolvedRequest;
 
 use crate::exchange::Exchange;
@@ -33,7 +35,56 @@ pub fn exchange_record(
             })
             .collect(),
         insecure: exchange.insecure,
+        server_timings: server_timings(exchange, redactor),
     }
+}
+
+/// The response's `Server-Timing` metrics, descriptions redacted.
+fn server_timings(exchange: &Exchange, redactor: &Redactor) -> Vec<ServerTiming> {
+    let values = exchange
+        .headers
+        .get_all(server_timing::SERVER_TIMING)
+        .iter()
+        .filter_map(|v| v.to_str().ok());
+    let skipped = |metric: &str| {
+        let metric = redactor.text(metric);
+        tracing::debug!(metric = %metric, "ignoring a malformed Server-Timing metric");
+    };
+    let mut timings = server_timing::parse_with(values, skipped);
+    for timing in &mut timings {
+        timing.name = redactor.text(&timing.name).into_owned();
+        if let Some(desc) = &mut timing.desc {
+            *desc = redactor.text(desc).into_owned();
+        }
+    }
+    timings
+}
+
+/// The trace record of `exchange`, which just completed, with its link
+/// when `link` is configured: `None` when the request carried no trace
+/// context. `tracestate`, `baggage` and the link are redacted.
+pub fn trace_record(
+    exchange: &Exchange,
+    link: Option<&TraceLink>,
+    redactor: &Redactor,
+) -> Option<TraceRecord> {
+    let sent = exchange.trace.as_ref()?;
+    let traceresponse = exchange
+        .headers
+        .get(TRACERESPONSE)
+        .and_then(|v| v.to_str().ok());
+    let end = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or(Duration::ZERO);
+    let start = end.saturating_sub(exchange.timings.total);
+    let window = (unix_millis(start), unix_millis(end));
+    let mut record = TraceRecord::new(sent, traceresponse, window, redactor);
+    record.link = link.map(|link| redactor.text(&record.render(link)).into_owned());
+    Some(record)
+}
+
+fn unix_millis(since_epoch: Duration) -> u64 {
+    u64::try_from(since_epoch.as_millis()).unwrap_or(u64::MAX)
 }
 
 fn response_record(exchange: &Exchange, redactor: &Redactor) -> ResponseRecord {

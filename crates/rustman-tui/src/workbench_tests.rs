@@ -317,6 +317,39 @@ fn a_tab_in_flight_keeps_going_while_another_is_edited() {
     assert_eq!(b.editor.url().unwrap().text(), "{{base_url}}/users/42");
 }
 
+#[test]
+fn span_export_warnings_are_toasts_not_exchange_warnings() {
+    let (_tmp, mut state) = fixture(160, 45);
+    open(&mut state, "get-user");
+    let a = state.tabs.active().unwrap().id;
+    let (seq, _token) = state.tabs.get_mut(a).unwrap().start(state.now);
+    let record = rustman_core::run::RequestRecord::new(
+        "users/get-user".into(),
+        "Get user".into(),
+        "users/get-user.rman.yaml".into(),
+    );
+    let mut received = crate::response::Received::without_body(record);
+    let warning = "trace export to localhost:4317 failed: connection refused";
+    received.export_warnings = vec![warning.to_owned()];
+    update(
+        &mut state,
+        Action::SendFinished {
+            tab: a,
+            seq,
+            received: Box::new(received),
+        },
+    );
+    let toasts: Vec<_> = state
+        .notifications
+        .log()
+        .map(|e| e.message.clone())
+        .collect();
+    assert!(toasts.contains(&warning.to_owned()), "{toasts:?}");
+    let exchange = state.tabs.get(a).unwrap().exchange.as_ref().unwrap();
+    assert!(exchange.record.warnings.is_empty());
+    assert!(exchange.export_warnings.is_empty());
+}
+
 // ---- 4.3 dirty tracking, saving, prompts and changes on disk ---------------------
 
 #[test]

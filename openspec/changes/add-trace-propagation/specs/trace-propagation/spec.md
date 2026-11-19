@@ -5,7 +5,12 @@ Connects every Rustman exchange to the backend's distributed traces. Rustman inj
 ## ADDED Requirements
 
 ### Requirement: Off by default
-Trace propagation SHALL be disabled unless enabled in an environment's `trace:` block, in `rustman.toml [trace]`, or with `--trace` on a command. With propagation disabled, Rustman SHALL NOT add any tracing header.
+Trace propagation SHALL be disabled unless enabled in an environment's `trace:` block, in `rustman.toml [trace]`, or with `--trace` on a command, or turned on by an enabled `[trace.export]` (exported spans need the ids the requests carried). With propagation disabled, Rustman SHALL NOT add any tracing header.
+
+#### Scenario: Export turns propagation on
+- **GIVEN** `[trace.export] enabled = true` with an `endpoint`, and no `enabled` key in `[trace]` or the environment's `trace:` block
+- **WHEN** a request is sent
+- **THEN** it SHALL carry a `traceparent` header
 
 #### Scenario: Default request
 - **GIVEN** no trace configuration
@@ -41,6 +46,11 @@ If a request file or `--header` already sets `traceparent` (or a B3 header), Rus
 - **WHEN** it is sent with tracing enabled
 - **THEN** that exact header SHALL be sent and the exchange SHALL record trace id `4bf92f3577b34da6a3ce929d0e0e4736`
 
+#### Scenario: B3 sampling decision without ids
+- **GIVEN** a request with header `b3: 0`, or `X-B3-Sampled: 0` without `X-B3-TraceId` and `X-B3-SpanId`
+- **WHEN** it is sent with tracing enabled
+- **THEN** the header SHALL be sent unchanged, no trace header SHALL be added (so a deny decision is never overridden by a sampled context) and no warning SHALL be shown, since it is valid B3
+
 ### Requirement: Additional propagation formats
 `trace.formats` SHALL accept any combination of `w3c` (default), `b3` (single `b3` header) and `b3multi` (`X-B3-TraceId`, `X-B3-SpanId`, `X-B3-Sampled`). All emitted formats SHALL carry the same ids. `trace.tracestate` and `trace.baggage` (key/value maps, with variables resolved) SHALL add `tracestate` and `baggage` headers.
 
@@ -55,7 +65,7 @@ If a request file or `--header` already sets `traceparent` (or a B3 header), Rus
 - **THEN** the request SHALL carry `baggage: tenant=acme`
 
 ### Requirement: Protocol coverage
-Injection SHALL apply to every HTTP-based request kind present in the build: `http` and `graphql` (including the WebSocket upgrade request for subscriptions), `jsonrpc` over HTTP and WebSocket, and `grpc` as request metadata. Kinds without an HTTP layer SHALL be skipped silently.
+Injection SHALL apply to every HTTP-based request kind present in the build: `http` and `graphql` (including the WebSocket upgrade request for subscriptions), `jsonrpc` over HTTP and WebSocket, the realtime kinds `ws` (the WebSocket upgrade request) and `sse` (the stream request), and `grpc` as request metadata. Kinds without an HTTP layer SHALL be skipped silently.
 
 #### Scenario: GraphQL request
 - **GIVEN** tracing is enabled
@@ -71,7 +81,7 @@ Every exchange sent with tracing enabled, or carrying a user-supplied trace head
 - **THEN** each exchange in the report SHALL contain a `trace` object with `trace_id` and `span_id`
 
 ### Requirement: Trace link templates
-`[trace].link` (or an environment's `trace.link`) SHALL be a URL template using `{trace_id}`, `{span_id}`, `{start_ms}`, `{end_ms}` and any environment variable. Presets `jaeger`, `tempo`, `honeycomb` and `datadog` SHALL expand to documented templates that need a base URL (`trace.link_base`). An invalid template SHALL be reported when the workspace loads.
+`[trace].link` (or an environment's `trace.link`) SHALL be an absolute `http://` or `https://` URL template using `{trace_id}`, `{span_id}`, `{start_ms}`, `{end_ms}` and any environment variable. Presets `jaeger`, `tempo`, `honeycomb` and `datadog` SHALL expand to documented templates that need a base URL (`trace.link_base`), which MAY come from `rustman.toml` or the environment, since the two merge key by key. An invalid template SHALL be reported when the workspace loads.
 
 #### Scenario: Jaeger preset
 - **GIVEN** `trace: {enabled: true, link: jaeger, link_base: "http://localhost:16686"}`
@@ -82,6 +92,16 @@ Every exchange sent with tracing enabled, or carrying a user-supplied trace head
 - **GIVEN** `link: "https://x/{traceid}"`
 - **WHEN** the workspace loads
 - **THEN** loading SHALL report `trace.link: unknown placeholder {traceid}`
+
+#### Scenario: Preset base from the other file
+- **GIVEN** `rustman.toml` has `[trace] enabled = true` and `link = "jaeger"`, and the environment `dev` has `trace: {link_base: "http://localhost:16686"}`
+- **WHEN** a request is sent with `--env dev`
+- **THEN** the workspace SHALL load and the link SHALL start with `http://localhost:16686/trace/`
+
+#### Scenario: Not a web URL
+- **GIVEN** `link: "file:///tmp/x.command"`
+- **WHEN** the workspace loads
+- **THEN** loading SHALL report `trace.link: expected an http:// or https:// URL, got 'file:///tmp/x.command'`
 
 ### Requirement: Showing trace ids
 The TUI response view SHALL show the trace id, with the link when configured, and `Ctrl+O` SHALL open the link in the system browser. `rustman send` SHALL print `trace: <trace_id>` and the link on stderr. `rustman trace open <exchange-id>` SHALL open the link of a history exchange, or exit with code 2 when no link is configured.

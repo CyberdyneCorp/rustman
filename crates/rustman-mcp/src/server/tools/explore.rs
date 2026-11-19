@@ -10,7 +10,7 @@ use std::time::Duration;
 use rustman_core::safety::{Governor, Limits, PolicyError, SafetyPolicy};
 use rustman_explore::collection::collection_dir;
 use rustman_explore::explore::drive::{Drive, Finished, drive};
-use rustman_explore::explore::exec::{Context, Executor, Identity};
+use rustman_explore::explore::exec::{Context, Executor, Identity, exploration_send_options};
 use rustman_explore::explore::graph::Graph;
 use rustman_explore::explore::plan::{self, DEFAULT_FUZZ_CASES, Family, Plan};
 use rustman_explore::explore::rules::Severity;
@@ -18,7 +18,7 @@ use rustman_explore::explore::session::{RunState, Session, SessionError, Setting
 use rustman_explore::explore::setup::{self, NewExploration, PlanCounts, PolicySetupError};
 use rustman_explore::store::{Target as Collection, generate_for, write_import};
 use rustman_explore::{ImportError, ImportOptions, Imported, import, sync};
-use rustman_http::{GovernedSender, SendOptions};
+use rustman_http::GovernedSender;
 use rustman_report::exploration::SeverityCounts;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -573,6 +573,10 @@ async fn exploration_job(
     let graph = session.state.graph.clone();
     let target = session.state.target.clone();
     let model = &planned.imported.model;
+    let send = match exploration_send_options(&ws.settings, environment.as_ref(), ctx.secrets()) {
+        Ok(send) => send,
+        Err(e) => return job.finish(JobState::Failed, Some(e), None),
+    };
     let context = Context {
         model,
         graph: &graph,
@@ -585,7 +589,7 @@ async fn exploration_job(
         identity_b: None,
         scans: &planned.plan.scans,
         disabled_rules: &ws.settings.explore.disabled_rules,
-        send: SendOptions::default(),
+        send,
     };
     let executor = Executor::new(&sender, context);
     let options = Drive {

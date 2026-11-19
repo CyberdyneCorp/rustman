@@ -11,6 +11,7 @@ use http::{HeaderMap, Request, StatusCode};
 use http_body_util::Full;
 use rustman_core::model::{Auth, RequestSettings};
 use rustman_core::settings::{Defaults, Settings};
+use rustman_core::trace::{SentTrace, TracePropagation};
 use rustman_core::vars::ResolvedRequest;
 use rustman_core::{Redactor, Secret};
 
@@ -25,7 +26,7 @@ use crate::redirect::{self, RedirectHop};
 use crate::sigv4::Signer;
 use crate::tls::TlsSettings;
 use crate::transport::{PhaseProbe, Received, Transport, TransportKey};
-use crate::{auth, jwt, tunnel, wire};
+use crate::{auth, jwt, trace, tunnel, wire};
 
 /// The connect timeout when neither the request nor the caller sets one.
 pub const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -46,6 +47,8 @@ pub struct SendOptions {
     pub cookies: Option<CookieJar>,
     /// Decompression and the in-memory cap of response bodies.
     pub body: BodyOptions,
+    /// Trace headers added to every request; `None` (the default) adds none.
+    pub trace: Option<TracePropagation>,
 }
 
 impl Default for SendOptions {
@@ -78,6 +81,7 @@ impl SendOptions {
                 decompress: settings.decompress.unwrap_or(true),
                 ..BodyOptions::default()
             },
+            trace: None,
         }
     }
 
@@ -179,19 +183,28 @@ impl HttpEngine {
         options: &SendOptions,
         token: Option<&Secret<String>>,
     ) -> Result<Exchange, RequestError> {
-        let prepared = Self::prepare(request, token).await?;
+        let prepared = Self::prepare(request, options, token).await?;
         self.dispatch(request, prepared, options, &Ungated).await
     }
 
     /// The request as it leaves the process (before any hop), with the
-    /// warnings building it produced and the SigV4 signer of its hops.
-    /// `token` is the OAuth2 access token or the JWT; without one, a JWT
-    /// is signed here. Unredacted.
+    /// warnings building it produced, the trace headers of `options` (a
+    /// header the request sets wins) and the SigV4 signer of its hops,
+    /// which signs the trace headers too. `token` is the OAuth2 access
+    /// token or the JWT; without one, a JWT is signed here. Unredacted.
     pub(crate) async fn prepare(
         request: &ResolvedRequest,
+        options: &SendOptions,
         token: Option<&Secret<String>>,
     ) -> Result<Prepared, RequestError> {
-        let (mut outgoing, warnings) = wire::build(request).await?;
+        let (mut outgoing, mut warnings) = wire::build(request).await?;
+        let headers = outgoing.headers_mut();
+        warnings.extend(trace::invalid_context_warning(
+            headers,
+            options.trace.as_ref(),
+        ));
+        let trace = trace::inject(headers, options.trace.as_ref());
+        warnings.extend(trace.as_ref().and_then(trace::baggage_warning));
         let signed;
         let token = match (&request.auth, token) {
             (Some(Auth::Jwt(config)), None) => {
@@ -206,6 +219,7 @@ impl HttpEngine {
             outgoing,
             warnings,
             signer,
+            trace,
         })
     }
 
@@ -225,11 +239,12 @@ impl HttpEngine {
             transport: &transport,
             options,
             credentials: auth::credentials(request.auth.as_ref()),
-            secrets: Redactor::for_request(request),
+            secrets: Self::secrets(request, options),
             signer: prepared.signer.as_ref(),
             probe: &probe,
             gate,
         };
+        let trace = prepared.trace;
         let chain = hops.follow(prepared.outgoing);
         tokio::pin!(chain);
         // The phase is read while the request is still alive: dropping it
@@ -242,7 +257,7 @@ impl HttpEngine {
                 return Err(RequestError::Timeout { after, phase }.into());
             }
         };
-        let redactor = Redactor::for_request(request);
+        let redactor = Self::secrets(request, options);
         let mut all = prepared.warnings;
         all.append(&mut exchange.warnings);
         all.extend(
@@ -252,7 +267,18 @@ impl HttpEngine {
                 .and_then(|s| s.skew_hint(&exchange)),
         );
         exchange.warnings = all.iter().map(|w| redactor.text(w).into_owned()).collect();
+        exchange.trace = trace;
         Ok(exchange)
+    }
+
+    /// What a redirect hop and the warnings must not leak: the request's
+    /// secrets and those its trace headers carry.
+    pub(crate) fn secrets(request: &ResolvedRequest, options: &SendOptions) -> Redactor {
+        let mut redactor = Redactor::for_request(request);
+        for secret in options.trace.iter().flat_map(|t| &t.secrets) {
+            redactor.add(secret);
+        }
+        redactor
     }
 
     pub(crate) fn transport(&self, options: &SendOptions) -> Result<Arc<Transport>, RequestError> {
@@ -276,6 +302,8 @@ pub(crate) struct Prepared {
     pub warnings: Vec<String>,
     /// Signs every hop (`aws_sigv4`).
     pub signer: Option<Signer>,
+    /// The trace context sent: injected, or set by the request itself.
+    pub trace: Option<SentTrace>,
 }
 
 /// Decides, for a governed sender, whether each redirect hop may be sent,
@@ -478,6 +506,7 @@ fn exchange(
         insecure,
         warnings: received.body.warnings,
         credentials: Redactor::new(),
+        trace: None,
     }
 }
 

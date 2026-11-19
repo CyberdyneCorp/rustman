@@ -90,10 +90,12 @@ impl Runner<'_> {
         sent.record.duration_ms = millis(started.elapsed());
         let redactor = self.sink_redactor(&sent);
         redact_error(&mut sent.record, &redactor);
+        self.record_trace(&mut sent, &redactor);
         sent.redactor = redactor.clone();
         let kept = self.record_history(&mut sent, &redactor, file, cache_key);
         sent.discard_spill_unless(kept);
         log_record(&sent.record);
+        self.export.record(&sent.record);
         sent
     }
 }

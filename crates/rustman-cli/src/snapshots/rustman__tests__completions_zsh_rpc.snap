@@ -44,6 +44,7 @@ never\:"Never color"))' \
 '-k[Do not verify TLS certificates (exchanges are flagged insecure)]' \
 '--insecure[Do not verify TLS certificates (exchanges are flagged insecure)]' \
 '--no-history[Do not record the exchanges in history]' \
+'--trace[Send trace context (traceparent) even when no trace block enables it]' \
 '-u[Overwrite snapshots that differ from the response (not in CI mode)]' \
 '--update-snapshots[Overwrite snapshots that differ from the response (not in CI mode)]' \
 '--ci[CI mode\: never write snapshots, and fail on a missing one (also on when the CI variable is true or 1)]' \
@@ -72,6 +73,7 @@ never\:"Never color"))' \
 '-k[Do not verify TLS certificates (exchanges are flagged insecure)]' \
 '--insecure[Do not verify TLS certificates (exchanges are flagged insecure)]' \
 '--no-history[Do not record the exchanges in history]' \
+'--trace[Send trace context (traceparent) even when no trace block enables it]' \
 '-u[Overwrite snapshots that differ from the response (not in CI mode)]' \
 '--update-snapshots[Overwrite snapshots that differ from the response (not in CI mode)]' \
 '--ci[CI mode\: never write snapshots, and fail on a missing one (also on when the CI variable is true or 1)]' \
@@ -97,6 +99,7 @@ never\:"Never color"))' \
 '-k[Do not verify TLS certificates (exchanges are flagged insecure)]' \
 '--insecure[Do not verify TLS certificates (exchanges are flagged insecure)]' \
 '--no-history[Do not record the exchanges in history]' \
+'--trace[Send trace context (traceparent) even when no trace block enables it]' \
 '-u[Overwrite snapshots that differ from the response (not in CI mode)]' \
 '--update-snapshots[Overwrite snapshots that differ from the response (not in CI mode)]' \
 '--ci[CI mode\: never write snapshots, and fail on a missing one (also on when the CI variable is true or 1)]' \

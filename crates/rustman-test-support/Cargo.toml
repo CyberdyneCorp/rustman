@@ -48,4 +48,6 @@ protox = { workspace = true, optional = true }
 tokio-stream = { workspace = true, optional = true, features = ["net"] }
 
 [features]
+# The in-process OTLP collector (add-trace-propagation section 4).
+otlp = ["dep:prost"]
 grpc = ["dep:tonic", "dep:tonic-prost", "dep:tonic-web", "dep:tower-service", "dep:tonic-reflection", "dep:tonic-health", "dep:prost", "dep:prost-types", "dep:protox", "dep:tokio-stream"]

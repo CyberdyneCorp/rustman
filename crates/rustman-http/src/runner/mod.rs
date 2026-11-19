@@ -19,6 +19,7 @@
 //! decides whether it may be sent and sends it under a safety policy.
 
 mod execute;
+mod export;
 mod graphql;
 mod grpc;
 mod history;
@@ -43,10 +44,14 @@ use rustman_core::run::{
 };
 use rustman_core::settings::Settings;
 use rustman_core::snapshot::{SnapshotMode, SnapshotReview};
+use rustman_core::trace::{TraceLink, TracePropagation, WorkspaceScope};
 use rustman_core::vars::{ResolvedGrpc, ResolvedRequest};
 use rustman_core::{Environment, Redactor, SecretStore};
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
+
+use self::export::SpanExport;
+pub use self::export::{FLUSH_WAIT, OTLP_BUILT, export_host, flush_all_exports};
 
 use crate::HttpEngine;
 use crate::cookies::CookieJar;
@@ -139,6 +144,9 @@ pub struct RunOptions<'a> {
     /// Sends every request instead of the engine; `None` for the CLI and
     /// the TUI.
     pub gate: Option<&'a dyn SendGate>,
+    /// `--trace`: inject trace headers even when no `trace:` block
+    /// enables them.
+    pub trace: bool,
 }
 
 /// Admits and sends the requests of a run: the agent interface checks each
@@ -176,6 +184,7 @@ impl Default for RunOptions<'_> {
             realtime: None,
             gate: None,
             snapshots: SnapshotMode::Record,
+            trace: false,
         }
     }
 }
@@ -252,6 +261,13 @@ pub struct Runner<'a> {
     /// Whether `known` holds the secrets of the run's requests yet.
     seeded: AtomicBool,
     bailed: AtomicBool,
+    /// Trace propagation for the whole run; under `scope: run` it holds
+    /// the run's trace id.
+    trace: Option<TracePropagation>,
+    /// The trace link template recorded exchanges are linked with.
+    link: Option<TraceLink>,
+    /// `[trace.export]`: the client span of each exchange.
+    export: SpanExport,
 }
 
 impl<'a> Runner<'a> {
@@ -266,6 +282,18 @@ impl<'a> Runner<'a> {
         } else {
             (CookieJar::in_memory(), PersistedState::default())
         };
+        let scope = WorkspaceScope {
+            settings: ctx.settings,
+            environment: ctx.environment,
+            secrets: ctx.secrets,
+            overrides: &options.overrides,
+        };
+        let trace = scope
+            .propagation(options.trace)
+            .map_err(RequestError::Invalid)?;
+        let (trace, trace_secrets) = trace.unzip();
+        let (link, link_secrets) = trace_link(&scope).unzip();
+        let export = SpanExport::new(&scope.config());
         let runner = Self {
             engine: HttpEngine::new(),
             ctx,
@@ -276,7 +304,12 @@ impl<'a> Runner<'a> {
             known: Mutex::new(Redactor::new()),
             seeded: AtomicBool::new(false),
             bailed: AtomicBool::new(false),
+            trace,
+            link,
+            export,
         };
+        runner.remember(&trace_secrets.unwrap_or_default());
+        runner.remember(&link_secrets.unwrap_or_default());
         // Every secret column value is redacted from the first request on.
         if let Some(data) = &runner.options.data {
             runner.remember(&data.rows.secrets(&data.secret));
@@ -336,6 +369,18 @@ impl<'a> Runner<'a> {
         self.jar.save()
     }
 
+    /// Send the spans of this run's exchanges now, waiting at most `wait`
+    /// (`[trace.export]`); a no-op without export.
+    pub fn flush_spans(&self, wait: Duration) {
+        self.export.flush(wait);
+    }
+
+    /// Warnings about span export since the last call: a collector that
+    /// failed (at most one a minute), or a build without the `otlp` feature.
+    pub fn export_warnings(&self) -> Vec<String> {
+        self.export.take_warnings()
+    }
+
     async fn iteration(&self, plan: &Plan<'_>, iteration: u32) -> Vec<RequestRecord> {
         let parallel = self.options.parallel.max(1);
         let slots = Mutex::new(vec![None; plan.len()]);
@@ -366,4 +411,15 @@ impl<'a> Runner<'a> {
             slots[index] = Some(sent.record);
         }
     }
+}
+
+/// The configured trace link. A link that cannot be resolved (a missing
+/// variable) only loses the links: sending is unaffected.
+fn trace_link(
+    scope: &WorkspaceScope<'_>,
+) -> Option<(TraceLink, Vec<rustman_core::vars::UsedSecret>)> {
+    scope.link().unwrap_or_else(|e| {
+        tracing::warn!("{e}; exchanges are recorded without a trace link");
+        None
+    })
 }

@@ -185,6 +185,7 @@ mod tests {
             variables: Variables::new(vars),
             secrets: Vec::new(),
             production,
+            trace: Default::default(),
         }
     }
 

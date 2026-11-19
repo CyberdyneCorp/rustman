@@ -201,6 +201,7 @@ Rustman tracks which bytes of a request came from a secret, and also scans every
 - JSON string escapes (`\"`, `\\`, control characters), each with or without `\/` for `/` (PHP), with or without `\u0026`, `\u003c` and `\u003e` for `&`, `<` and `>` and `\u2028` and `\u2029` for U+2028 and U+2029 (Go), and with non-ASCII characters as is or as `\uXXXX` escapes in upper- or lowercase hex (Python, PHP);
 - Rust `Debug` escapes;
 - percent-encoding in upper- or lowercase hex: every byte but `A-Z a-z 0-9 - . _ ~` encoded, with a space as `%20` or as `+` (form encoding); the same leaving `/` as is (Python's `quote`); or leaving `!'()*` as is (JavaScript's `encodeURIComponent`);
+- W3C Baggage value encoding (space, `,`, `;`, `\`, `"` and `%` escaped, everything else printable kept), the form a `baggage` header carries;
 - HTML escapes of `&`, `<` and `>` as `&amp;`, `&lt;` and `&gt;`, with `"` and `'` as `&quot;` and `&#x27;` (Python), `&quot;` and `&#39;`, or `&#34;` and `&#39;` (Go); or every character but letters and digits as a decimal entity such as `&#47;`.
 
 A secret value longer than 8 KiB is redacted in output only as is, not in these encoded forms: building a matcher over the encoded forms of very long values would take memory out of proportion. Captures are still checked for it through decoding (below), so a captured echo of it in any of these forms is still treated as a secret: never persisted, and redacted wherever a later request uses it.

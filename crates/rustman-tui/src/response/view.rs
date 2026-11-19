@@ -15,7 +15,7 @@ use rustman_core::run::{RequestRecord, RequestStatus, SkipReason};
 use super::json_tree::{Kind, Scalar, TreeView};
 use super::received::{TREE_LIMIT, page_count};
 use super::text::{self, size_text};
-use super::timing::{ms_text, sparkline, waterfall};
+use super::timing::{ms_text, sparkline, trace_lines, waterfall};
 use super::{BodyKind, BoxKind, Received, ResponseTab, Viewer};
 use crate::config::UiOptions;
 use crate::focus::Pane;
@@ -469,9 +469,13 @@ fn captured_line(captured: &super::Captured, ui: &UiOptions) -> Line<'static> {
 
 fn timing_lines(received: &Received, width: usize, ui: &UiOptions) -> Vec<Line<'static>> {
     let mut lines = match &received.record.exchange {
-        Some(exchange) => waterfall(&exchange.timings, width, ui),
+        Some(exchange) => waterfall(&exchange.timings, &exchange.server_timings, width, ui),
         None => vec![hint("No timings: the request got no response.", ui)],
     };
+    if let Some(trace) = &received.record.trace {
+        lines.push(Line::default());
+        lines.extend(trace_lines(trace, width, ui));
+    }
     lines.push(Line::default());
     lines.extend(sparkline(&received.history, ui));
     lines

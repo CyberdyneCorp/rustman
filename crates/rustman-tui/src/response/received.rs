@@ -128,6 +128,9 @@ pub struct Received {
     pub grpc: Option<Box<super::grpc::GrpcView>>,
     /// The failed, missing and new snapshots, for the Snapshot tab.
     pub snapshots: crate::review::Reviews,
+    /// Span export warnings (`[trace.export]`) raised since the last send:
+    /// not about this exchange, shown as toasts only.
+    pub export_warnings: Vec<String>,
 }
 
 /// The redacted body as received.
@@ -154,6 +157,7 @@ impl Received {
             jsonrpc: None,
             grpc: None,
             snapshots: crate::review::Reviews::default(),
+            export_warnings: Vec::new(),
         }
     }
 
@@ -173,6 +177,7 @@ impl Received {
             jsonrpc: None,
             grpc: None,
             snapshots: crate::review::Reviews::default(),
+            export_warnings: Vec::new(),
         }
     }
 
@@ -351,6 +356,7 @@ pub(crate) mod fixtures {
             },
             redirects: Vec::new(),
             insecure: false,
+            server_timings: Vec::new(),
         });
         record
     }

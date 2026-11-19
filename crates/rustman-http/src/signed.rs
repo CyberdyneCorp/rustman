@@ -70,7 +70,7 @@ impl HttpEngine {
     ) -> Result<Exchange, RequestError> {
         check_replayable(&request.body)?;
         let started = Instant::now();
-        let prepared = Self::prepare(request, None).await?;
+        let prepared = Self::prepare(request, options, None).await?;
         if prepared
             .outgoing
             .headers()
@@ -175,6 +175,7 @@ fn copy(prepared: &Prepared) -> Prepared {
         outgoing: wire::duplicate(&prepared.outgoing),
         warnings: prepared.warnings.clone(),
         signer: None,
+        trace: prepared.trace.clone(),
     }
 }
 

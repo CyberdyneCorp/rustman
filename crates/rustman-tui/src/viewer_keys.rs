@@ -58,6 +58,7 @@ pub fn box_key(state: &mut State, chord: Chord) -> Option<Vec<Effect>> {
 pub fn run(state: &mut State, action: ActionId) -> Option<Vec<Effect>> {
     let effects = match action {
         ActionId::JsonCopy => copy(state),
+        ActionId::TraceOpen => crate::trace_link::open(state),
         ActionId::ResponseDiff => diff(state),
         ActionId::ResponseSaveBody => {
             prompt_save(state);
@@ -309,6 +310,7 @@ pub fn on_action(state: &mut State, action: Action) -> Vec<Effect> {
             Err(e) => state.notify(Severity::Error, format!("Cannot save the body: {e}")),
         },
         Action::Copied { text, tool } => on_copied(state, text, tool),
+        Action::UrlOpened { url, result } => crate::trace_link::on_opened(state, &url, result),
         Action::ReportWritten(result) => crate::response::html::on_written(state, result),
         _ => {}
     }

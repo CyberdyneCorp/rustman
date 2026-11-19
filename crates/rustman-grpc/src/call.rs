@@ -33,7 +33,7 @@ use crate::connect::{ConnectTimings, Remote};
 use crate::error::GrpcError;
 use crate::exchange::{Direction, GrpcExchange, GrpcTimings, StreamStop, TimelineEntry};
 use crate::json::{to_json, to_message};
-use crate::metadata::{MetadataEntry, entries, request_metadata};
+use crate::metadata::{MetadataEntry, entries, inject_trace, request_metadata};
 use crate::schema::Schema;
 use crate::status::{CANCELLED, DEADLINE_EXCEEDED, GrpcStatus};
 use crate::web;
@@ -224,6 +224,9 @@ impl PreparedCall {
         });
         let mut request = tonic::Request::new(stream);
         *request.metadata_mut() = request_metadata(&self.metadata)?;
+        if let Some(propagation) = &options.http.trace {
+            inject_trace(request.metadata_mut(), propagation);
+        }
         request.set_timeout(options.deadline);
         let path = PathAndQuery::try_from(format!("/{}", self.path()))
             .map_err(|e| GrpcError::Message(format!("invalid method path: {e}")))?;

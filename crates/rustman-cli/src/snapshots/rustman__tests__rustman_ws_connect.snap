@@ -44,6 +44,9 @@ Options:
       --no-history
           Do not record the exchanges in history
 
+      --trace
+          Send trace context (traceparent) even when no trace block enables it
+
   -u, --update-snapshots
           Overwrite snapshots that differ from the response (not in CI mode)
 

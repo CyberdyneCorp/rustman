@@ -1,0 +1,24 @@
+---
+source: crates/rustman-tui/src/response/view_tests.rs
+expression: screen
+---
+✔ 200 OK · 84 ms · 2 B
+Body  Headers  Timing  Assertions
+Total 84 ms
+DNS          2.0 ms   █
+Connect      3.0 ms    █
+TLS               —
+Waiting       65 ms     ███████████████████████████████
+db 53.2 ms            █████████████████████████ query
+app 12 ms             ██████
+Download     9.0 ms                                    ████
+
+Trace
+Trace id 4bf92f3577b34da6a3ce929d0e0e4736
+Span id  00f067aa0ba902b7
+Backend  0af7651916cd43dd8448eb211c80319c
+Link     http://localhost:16686/trace/0af7651916cd43dd8448eb21
+1c80319c
+
+Latency (last exchanges of this request)
+not enough history

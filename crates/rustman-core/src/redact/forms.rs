@@ -17,13 +17,15 @@
 //! - percent-encoding in upper- or lowercase hex: RFC 3986 with a space as
 //!   `%20` or `+` (form encoding), leaving `/` as is (Python's `quote`), or
 //!   leaving `!'()*` as is (JavaScript's `encodeURIComponent`);
+//! - W3C Baggage value encoding, which leaves `=`, `+`, `/` and most other
+//!   punctuation as is (the `baggage` header Rustman itself sends);
 //! - HTML escapes: `&amp;`, `&lt;`, `&gt;` with `"` and `'` as `&quot;` and
 //!   `&#x27;` (Python), `&quot;` and `&#39;`, or `&#34;` and `&#39;` (Go);
 //!   or every character but letters and digits as a decimal entity
 //!   (`&#47;`).
 
 /// The most forms one value can have.
-pub(super) const MAX_FORMS: usize = 29;
+pub(super) const MAX_FORMS: usize = 30;
 
 /// Values longer than this many bytes are matched as is only: their encoded
 /// forms would make the matcher take memory out of proportion (a 1 MiB
@@ -58,6 +60,7 @@ pub(super) fn encoded_forms(value: &str) -> Vec<String> {
         push(percent_encode(value, "%20", upper, b"/"));
         push(percent_encode(value, "%20", upper, b"!'()*"));
     }
+    push(crate::trace::baggage::encode_value(value));
     for (quot, apos) in [
         ("&quot;", "&#x27;"),
         ("&quot;", "&#39;"),
@@ -197,6 +200,22 @@ mod tests {
         has("a/b&amp;c&lt;d&gt;e&#x27;f&quot;g h!(i)*é");
         has("a/b&amp;c&lt;d&gt;e&#39;f&#34;g h!(i)*é");
         has("a&#47;b&#38;c&#60;d&#62;e&#39;f&#34;g&#32;h&#33;&#40;i&#41;&#42;é");
+    }
+
+    /// Regression: a secret `baggage` value with `=`, `+` or `/` beside a
+    /// space or `;` was written in a form no other encoder produces, so it
+    /// reached history unredacted.
+    #[test]
+    fn the_baggage_form_is_matched() {
+        for (secret, sent) in [
+            ("Zm9vYmFy/+== tok", "Zm9vYmFy/+==%20tok"),
+            ("longsecret;with=eq", "longsecret%3Bwith=eq"),
+            ("p@ss w0rd!", "p@ss%20w0rd!"),
+            ("sec ret,with=%20 chars", "sec%20ret%2Cwith=%2520%20chars"),
+        ] {
+            let forms = encoded_forms(secret);
+            assert!(forms.iter().any(|f| f == sent), "{sent} not in {forms:#?}");
+        }
     }
 
     /// A server that puts a JSON request body in a JSON string (Python's

@@ -75,7 +75,7 @@ impl HttpEngine {
         request: &ResolvedRequest,
         options: &SendOptions,
     ) -> Result<StreamedResponse, RequestError> {
-        let redactor = Redactor::for_request(request);
+        let redactor = Self::secrets(request, options);
         self.open_unredacted(request, options, &redactor, None)
             .await
             .map_err(|e| e.redacted(&redactor))
@@ -90,7 +90,7 @@ impl HttpEngine {
         options: &SendOptions,
         body: Bytes,
     ) -> Result<StreamedResponse, RequestError> {
-        let redactor = Redactor::for_request(request);
+        let redactor = Self::secrets(request, options);
         self.open_unredacted(request, options, &redactor, Some(body))
             .await
             .map_err(|e| e.redacted(&redactor))
@@ -103,7 +103,7 @@ impl HttpEngine {
         redactor: &Redactor,
         body: Option<Bytes>,
     ) -> Result<StreamedResponse, RequestError> {
-        let mut prepared = Self::prepare(request, None).await?;
+        let mut prepared = Self::prepare(request, options, None).await?;
         if let Some(body) = body {
             *prepared.outgoing.body_mut() = http_body_util::Full::new(body);
         }
@@ -158,7 +158,7 @@ pub async fn request_head(
     options: &SendOptions,
 ) -> Result<(Uri, HeaderMap), RequestError> {
     let head = async {
-        let prepared = HttpEngine::prepare(request, None).await?;
+        let prepared = HttpEngine::prepare(request, options, None).await?;
         let mut wire = on_the_wire(&prepared.outgoing, options);
         if let Some(signer) = &prepared.signer {
             signer.sign(&mut wire, SystemTime::now())?;
@@ -167,7 +167,7 @@ pub async fn request_head(
         Ok((parts.uri, parts.headers))
     };
     head.await
-        .map_err(|e: RequestError| e.redacted(&Redactor::for_request(request)))
+        .map_err(|e: RequestError| e.redacted(&HttpEngine::secrets(request, options)))
 }
 
 #[cfg(test)]

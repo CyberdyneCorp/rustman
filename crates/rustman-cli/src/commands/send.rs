@@ -179,6 +179,7 @@ fn send(
         cancel_on_ctrl_c(&cancel);
         runner.send(target, 1).await
     });
+    crate::commands::exec::finish_spans(&runner);
     if let Err(e) = runner.finish() {
         print_warnings(&[e.to_string()]);
     }
@@ -200,6 +201,9 @@ pub fn finish(args: &OutputFlags, sent: &Sent) -> Result<u8, CliError> {
     }
     if let Some(exchange) = &sent.exchange {
         print_response(args, record, exchange, &sent.redactor)?;
+    }
+    for line in record.trace.iter().flat_map(super::trace::lines) {
+        eprintln!("{line}");
     }
     for reason in failures(record) {
         eprintln!("{reason}");

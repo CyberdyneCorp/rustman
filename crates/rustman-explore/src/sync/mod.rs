@@ -429,6 +429,7 @@ fn merge_environment(
         variables: Variables::new(variables),
         secrets,
         production: local.production,
+        trace: Default::default(),
     };
     (merged != *local).then_some(merged)
 }
