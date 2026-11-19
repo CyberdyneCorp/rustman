@@ -338,15 +338,18 @@ mod tests {
     fn approvals_survive_a_reload() {
         let dir = Place::new();
         let mut store = dir.load().unwrap();
-        store.approve("mcp/files", "abc").unwrap();
+        store.approve("mcp/files", "secret-xyz").unwrap();
         store.save().unwrap();
         let text = fs::read_to_string(dir.path().join(TRUST_FILE)).unwrap();
         assert!(text.starts_with("mcp/files: "), "{text}");
-        assert!(!text.contains("abc"), "only the seal is written: {text}");
+        assert!(
+            !text.contains("secret-xyz"),
+            "only the seal is written; the value is not hex so it cannot show up by chance: {text}"
+        );
         let store = dir.load().unwrap();
-        assert!(store.is_trusted("mcp/files", "abc"));
+        assert!(store.is_trusted("mcp/files", "secret-xyz"));
         assert_eq!(store.state("mcp/files", "def"), TrustState::Changed);
-        assert_eq!(store.state("mcp/other", "abc"), TrustState::Unknown);
+        assert_eq!(store.state("mcp/other", "secret-xyz"), TrustState::Unknown);
     }
 
     #[test]
