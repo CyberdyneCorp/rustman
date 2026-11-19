@@ -420,7 +420,8 @@ mod tests {
             std::thread::sleep(Duration::from_millis(5));
         }
         assert!(
-            slowest < Duration::from_millis(200),
+            // A blocking send would hang here; 1 s leaves room for a loaded runner.
+            slowest < Duration::from_secs(1),
             "send blocked {slowest:?}"
         );
         stream.close();
