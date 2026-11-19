@@ -11,7 +11,8 @@ and the requirements stay in `openspec/changes/<id>/`. Change ids below are the 
 - **Done:** **v0.2 — Usable**: the TUI workbench (#49, #54, #57), importers for Postman, Insomnia, Bruno, HAR and `.http` (#55), and runner parity: `run --data`, Digest/SigV4/JWT auth, code snippets (#56). All three exit criteria pass. The TUI "Import…" and "Copy as…" actions followed in #62. Still open: SigV4 `unsigned_payload`, snippet `--placeholders` (waits on the docs generator), and the manual terminal matrix.
 - **Done:** **v0.3 — Autonomous**: the OpenAPI explorer (#58) and the agent MCP server (#63, `rustman mcp serve`, read-only by default). Both exit criteria pass in CI on Linux, macOS and Windows.
 - **Done:** **v0.4 — Multi-protocol**: the webhook inspector (#59), the GraphQL client (#61), snapshot testing (#65), the OpenAPI mock server (#66) and the MCP client (#71, with HMAC-sealed workspace trust). Follow-ups: snapshot assertions for `kind: jsonrpc` (#72), GraphQL introspection size limit (#70), Windows job objects for MCP server cleanup.
-- **In progress:** v0.5. Done: the JSON-RPC client (#68) and the gRPC client (#76). The realtime client (WebSocket, SSE) is being built. Open work is tracked in the [roadmap tracking issue](https://github.com/CyberdyneCorp/rustman/issues/46).
+- **Done:** **v0.5 — Protocols**: the JSON-RPC client (#68), the gRPC client (#76) and the realtime client for WebSocket and SSE (#80). Follow-ups: a bounded live feed for realtime sessions (#81) and shared SSE event ids (#82).
+- **In progress:** v0.6. Contract testing and trace propagation are being built. Open work is tracked in the [roadmap tracking issue](https://github.com/CyberdyneCorp/rustman/issues/46).
 - **CI:** fmt, clippy, tests on Linux/macOS/Windows, `cargo deny`, and `openspec validate --all --strict`.
 
 The order in `openspec/ROADMAP.md` follows the order the specs were written in. This roadmap reorders the work by
@@ -212,8 +213,8 @@ Fold them in during Phase 0 (item 0.7).
 | v0.2 | add-terminal-ui, add-importers, add-runner-parity | ✅ |
 | v0.3 | add-openapi-explorer, add-agent-mcp-server | ✅ |
 | v0.4 | add-graphql-client, add-mcp-client, add-webhook-inspector, add-snapshot-testing, add-openapi-mock-server | ✅ |
-| v0.5 | add-jsonrpc-client, add-grpc-client, add-realtime-client | 🚧 (jsonrpc and grpc done) |
-| v0.6 | add-contract-testing, add-trace-propagation, add-load-testing, add-docs-generator, add-stress-testing | ☐ |
+| v0.5 | add-jsonrpc-client, add-grpc-client, add-realtime-client | ✅ |
+| v0.6 | add-contract-testing, add-trace-propagation, add-load-testing, add-docs-generator, add-stress-testing | 🚧 |
 | v0.7 | add-secret-providers, add-scheduled-monitors, add-plugin-system, add-traffic-recorder, add-messaging-client | ☐ |
 | Side | add-raven-visualizer, add-evm-toolkit | ☐ |
 | v1.0 | stabilize | ☐ |
