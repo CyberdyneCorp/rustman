@@ -1,0 +1,138 @@
+openapi: 3.0.3
+info:
+  title: Pets
+  version: '1'
+servers:
+  - url: http://localhost:4010/api
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      responses:
+        '200':
+          description: The pets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Pet'
+    post:
+      operationId: createPet
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Pet'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+  /pets/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getPet
+      responses:
+        '200':
+          description: A pet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+              examples:
+                cat:
+                  value: {id: 1, name: Tom, kind: cat}
+                dog:
+                  value: {id: 2, name: Rex, kind: dog}
+        '404':
+          description: No such pet
+          content:
+            application/json:
+              examples:
+                notFound:
+                  value: {error: no such pet}
+  /users:
+    get:
+      operationId: listUsers
+      responses:
+        '200':
+          description: Users
+          content:
+            application/json:
+              example: []
+    post:
+      operationId: createUser
+      responses:
+        '201':
+          description: Created
+  /users/me:
+    get:
+      operationId: getMe
+      responses:
+        '200':
+          description: The caller
+          content:
+            application/json:
+              example: {id: me}
+  /users/{id}:
+    get:
+      operationId: getUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A user
+          content:
+            application/json:
+              example: {id: someone}
+  /things:
+    get:
+      operationId: listThings
+      responses:
+        '200':
+          description: Things, synthesized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Thing'
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [cat, dog]
+    Thing:
+      type: object
+      required: [name, count, active, created]
+      properties:
+        name:
+          type: string
+          maxLength: 32
+        count:
+          type: integer
+          minimum: 1
+          maximum: 500
+        active:
+          type: boolean
+        created:
+          type: string
+          format: date-time

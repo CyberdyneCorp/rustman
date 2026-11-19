@@ -76,6 +76,38 @@ pub fn number(schema: &Map<String, Value>) -> Value {
     Number::from_f64(value).map_or(Value::Null, Value::Number)
 }
 
+/// `value` (from [`integer`] or [`number`]) moved up by up to 99 steps
+/// (`multipleOf`, else 1), as `pick` says, without passing the upper bound.
+/// A fractional `multipleOf` leaves the value as it is.
+pub fn shift(schema: &Map<String, Value>, value: &Value, pick: u64) -> Value {
+    let bounds = Bounds::of(schema);
+    let step = bounds.multiple_of.unwrap_or(1.0);
+    let Some(base) = value.as_f64() else {
+        return value.clone();
+    };
+    // Fractional multiples would drift off the step in floating point.
+    if step.fract() != 0.0 {
+        return value.clone();
+    }
+    let room = bounds
+        .high(step)
+        .map_or(99.0, |high| ((high - base) / step).floor().clamp(0.0, 99.0));
+    // Exact: `room` is a whole number in 0..=99.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let steps = pick % (room as u64 + 1);
+    #[allow(clippy::cast_precision_loss)]
+    let shifted = base + steps as f64 * step;
+    match value.as_i64() {
+        Some(whole) => {
+            // Exact: at most 99 steps of a whole `multipleOf` from a whole value.
+            #[allow(clippy::cast_possible_truncation)]
+            let offset = (shifted - base).round() as i64;
+            Value::Number(Number::from(whole.saturating_add(offset)))
+        }
+        None => Number::from_f64(shifted).map_or_else(|| value.clone(), Value::Number),
+    }
+}
+
 /// Zero, raised to `low` or lowered to `high`.
 fn start(low: Option<f64>, high: Option<f64>) -> f64 {
     match (low, high) {
@@ -122,6 +154,22 @@ mod tests {
         assert_eq!(int(json!({"exclusiveMaximum": 0})), json!(-1));
         assert_eq!(int(json!({"minimum": 1, "multipleOf": 5})), json!(5));
         assert_eq!(int(json!({"minimum": 0.5})), json!(1));
+    }
+
+    #[test]
+    fn shifts_stay_under_the_upper_bound_and_on_the_step() {
+        let schema = json!({"minimum": 1, "maximum": 3});
+        let object = schema.as_object().unwrap();
+        for pick in 0..10 {
+            let shifted = shift(object, &json!(1), pick).as_i64().unwrap();
+            assert!((1..=3).contains(&shifted), "{shifted}");
+        }
+        let stepped = json!({"multipleOf": 5});
+        let shifted = shift(stepped.as_object().unwrap(), &json!(0), 7);
+        assert_eq!(shifted, json!(35));
+        let exclusive = json!({"exclusiveMaximum": 1.5});
+        let shifted = shift(exclusive.as_object().unwrap(), &json!(0.0), 3);
+        assert_eq!(shifted, json!(0.0));
     }
 
     #[test]

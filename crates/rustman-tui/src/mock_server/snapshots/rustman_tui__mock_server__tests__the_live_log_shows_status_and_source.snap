@@ -1,0 +1,24 @@
+---
+source: crates/rustman-tui/src/mock_server/tests.rs
+expression: screen(&mut state)
+---
+┌ Mock server ─────────────────────────────────────────────────────────────────────────────────────┐
+│ Serving api.yaml on http://127.0.0.1:4010                                                        │
+│ ┌ Requests ────────────────────────────────────────────────────────────────────────────────────┐ │
+│ │mock: serving 1 operation on http://127.0.0.1:4010                                            │ │
+│ │10:15:30 GET    200 example     /pets/1 getPet                                                │ │
+│ │10:15:30 POST   422 error       /pets createPet  body /name: 5 is not of type "string"        │ │
+│ │10:15:30 GET    200 override    /health health                                                │ │
+│ │mock: reloaded: 2 operations, 1 overrides                                                     │ │
+│ │                                                                                              │ │
+│ │                                                                                              │ │
+│ │                                                                                              │ │
+│ │                                                                                              │ │
+│ │                                                                                              │ │
+│ │                                                                                              │ │
+│ │                                                                                              │ │
+│ │                                                                                              │ │
+│ └──────────────────────────────────────────────────────────────────────────────────────────────┘ │
+│ s stop · c clear · Esc close                                                                     │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ Scratch session │ no environment │ TLS verified │ 0 in flight                          Ctrl+Q quit

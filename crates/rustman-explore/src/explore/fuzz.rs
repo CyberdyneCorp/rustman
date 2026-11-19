@@ -77,7 +77,7 @@ pub struct Fuzzer<'a> {
 impl<'a> Fuzzer<'a> {
     pub fn new(components: &'a Value) -> Self {
         Self {
-            synth: Synthesizer::new(components),
+            synth: Synthesizer::new(components).shallow(),
         }
     }
 

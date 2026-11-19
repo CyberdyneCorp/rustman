@@ -1,0 +1,74 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Serve an OpenAPI document as a mock server until Ctrl+C
+
+Usage: rustman mock serve [OPTIONS] <OPENAPI>
+
+Arguments:
+  <OPENAPI>
+          The OpenAPI 3.0/3.1 document: a file or an http(s) URL
+
+Options:
+      --host <HOST>
+          Address to bind: an IP address or localhost (default: [mock] host in rustman.toml, else 127.0.0.1)
+
+      --port <PORT>
+          Port to bind; 0 picks a free port (default: [mock] port in rustman.toml, else 4010)
+
+      --allow-remote
+          Allow binding an address reachable from the network
+
+      --allow-remote-refs
+          Fetch $refs to other http(s) documents
+
+      --seed <N>
+          Seed of synthesized bodies (default: [mock] seed, else 0)
+
+      --no-prefer
+          Ignore the Prefer request header
+
+      --no-validate
+          Do not validate requests against the document
+
+      --enforce-security
+          Answer 401 to requests without the credentials their operation declares
+
+      --stateful
+          Keep an in-memory store: POST creates, GET reads, PUT/PATCH update, DELETE removes
+
+      --env <NAME>
+          Environment holding the [mock.security] expected values and receiving the secrets of --record (default: RUSTMAN_ENV, else the workspace default)
+
+      --workspace <DIR>
+          Workspace whose rustman.toml holds [mock] (default: search from the current directory upwards; none means the defaults)
+
+      --cors
+          Add CORS headers and answer preflights (default: on for loopback)
+
+      --no-cors
+          Never add CORS headers; OPTIONS goes to the document
+
+      --jsonl
+          Log each request as one JSON object per line on stdout (the banner goes to stderr)
+
+      --history
+          Also record each exchange in history, tagged mock
+
+      --proxy-unmatched <URL>
+          Forward requests no operation or override matches to this upstream (only its origin is contacted)
+
+      --record <DIR>
+          Save each proxied exchange as a request file in DIR, inside the workspace, with secrets moved to the active environment
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

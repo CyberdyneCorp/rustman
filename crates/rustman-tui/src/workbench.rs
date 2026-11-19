@@ -270,9 +270,11 @@ pub fn decide(state: &mut State, decision: Decision) -> Vec<Effect> {
     match decision {
         Decision::Cancel => {
             crate::webhook::cancel_confirm(state);
+            crate::mock_server::cancel_confirm(state);
             Vec::new()
         }
         Decision::WebhookStart => crate::webhook::confirm_remote(state),
+        Decision::MockStart => crate::mock_server::confirm_remote(state),
         Decision::SaveAndClose(id) => {
             state.pending.close_after_save.push(id);
             save_tab(state, id)
@@ -350,6 +352,7 @@ pub fn input_key(state: &mut State, chord: crate::keymap::Chord) -> Vec<Effect> 
         Typed::Submit(text) => match input.purpose.clone() {
             Purpose::SaveBody { tab } => crate::viewer_keys::save_to(state, tab, &text),
             Purpose::Webhook(prompt) => crate::webhook::submit(state, prompt, &text),
+            Purpose::Mock(prompt) => crate::mock_server::submit(state, prompt, &text),
             purpose => submit(state, purpose, &text),
         },
     }
@@ -385,7 +388,7 @@ fn submit(state: &mut State, purpose: Purpose, text: &str) -> Vec<Effect> {
             }
             save_tab(state, tab)
         }
-        Purpose::SaveBody { .. } | Purpose::Webhook(_) => Vec::new(),
+        Purpose::SaveBody { .. } | Purpose::Webhook(_) | Purpose::Mock(_) => Vec::new(),
     }
 }
 

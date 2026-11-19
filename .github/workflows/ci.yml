@@ -115,6 +115,35 @@ jobs:
               "
             '
 
+  # add-openapi-mock-server task 7.3: the explorer's conformance probes find
+  # nothing against a mock of the same document (exit 0, zero findings).
+  mock-self-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p rustman-cli --locked
+      - name: Conformance probes against the mock of fixtures/petstore.yaml
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="$PWD/target/debug/rustman"
+          spec="$PWD/fixtures/petstore.yaml"
+          ws="$RUNNER_TEMP/selfcheck"
+          mkdir -p "$ws/environments"
+          printf '[workspace]\nname = "selfcheck"\nversion = 1\n' > "$ws/rustman.toml"
+          printf 'variables:\n  bearerAuth_token: mock-token\n  apiKey_key: mock-key\n' > "$ws/environments/ci.yaml"
+          cd "$ws"
+          "$bin" mock serve "$spec" --port 0 > banner.txt 2> mock.log &
+          mock=$!
+          trap 'kill -INT "$mock" || true' EXIT
+          for _ in $(seq 300); do grep -q "serving" banner.txt && break; sleep 0.1; done
+          url=$(sed -n 's/^mock: serving .* on //p' banner.txt)
+          "$bin" explore run --spec "$spec" --target "$url" --probes conformance \
+            --fail-on info --env ci --allow-destructive
+
   # add-raven-visualizer task 1.3: the viz protocol decoder never panics.
   fuzz-viz-protocol:
     runs-on: ubuntu-latest

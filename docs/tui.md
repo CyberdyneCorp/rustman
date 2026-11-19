@@ -204,6 +204,17 @@ Each ends with `Export HTML report: H`. `H` (response focused, or **Export HTML 
 
 `?` opens the help; other letters do nothing while the pane is shown. Quitting the TUI stops the listener.
 
+### Mock server pane
+
+`Alt+O` (or **Mock server** in the palette) shows the [mock server](mock.md) in place of the request and response panes; `Esc` or `Alt+O` hides it again, and the server keeps running while it is hidden. The pane shows the server's state and address, and the live request log: time, method, status, the [response source](mock.md#request-log) (`example`, `synthesized`, `prefer`, `override`, `stateful`, `proxy`, `cors` or `error`), the path, the operation or override that answered, and the first validation error. Reload notices appear in the log too. Entries are redacted by the server; credentials such as `Authorization` show as placeholders.
+
+| Key | Action |
+|-----|--------|
+| `s` | Start or stop the server. Starting asks for the OpenAPI document (a file, relative to the workspace root, or a URL; the last one is offered again). The server binds `[mock] host` and `port` from `rustman.toml` (default `127.0.0.1:4010`), answers with the overrides of the mocks directory and reloads both on change. An address reachable from the network asks for confirmation first (Cancel is preselected). |
+| `c` | Clear the log. |
+
+`?` opens the help; other letters do nothing while the pane is shown. Quitting the TUI stops the server.
+
 ## Mouse
 
 When the terminal reports mouse events, clicking focuses a pane, an editor field or a pane switcher label, selects a sidebar row, a request tab or an editor tab; the wheel scrolls the pane under the pointer; and dragging the sidebar's right border resizes it. Set `mouse = false` in `tui.toml` to leave the mouse to the terminal, so its own text selection works; the TUI then doesn't capture mouse events at all.
@@ -363,6 +374,7 @@ The table below is generated from the action registry; a test fails if it drifts
 | Save body… | `response.save_body` | `s` (response) |  |
 | Export HTML report | `report.html` | `H` (response) |  |
 | Webhook inspector | `webhook.open` | `Alt+W` |  |
+| Mock server | `mock.open` | `Alt+O` |  |
 | Refresh GraphQL schema | `graphql.refresh_schema` | `Ctrl+G` |  |
 | Start GraphQL subscription | `graphql.subscription_start` | `Alt+S` |  |
 | Stop GraphQL subscription | `graphql.subscription_stop` | `Alt+X` |  |

@@ -31,6 +31,7 @@ pub fn shell_key(state: &mut State, chord: Chord) -> Vec<Effect> {
         Some(Overlay::Import(_)) => import_dialog::key(state, chord),
         Some(Overlay::SnapshotQueue(_)) => review::queue_key(state, chord),
         _ => match crate::webhook::key(state, chord)
+            .or_else(|| crate::mock_server::key(state, chord))
             .or_else(|| viewer_keys::box_key(state, chord))
             .or_else(|| review::key(state, chord))
         {
@@ -259,6 +260,7 @@ pub fn run(state: &mut State, action: ActionId) -> Vec<Effect> {
         ActionId::VizOpen => return viz::start(state),
         ActionId::WebhookOpen => crate::webhook::toggle_pane(state),
         ActionId::SnapshotReview => review::open_queue(state),
+        ActionId::MockOpen => crate::mock_server::toggle_pane(state),
         ActionId::ReportHtml => return crate::response::html::start(state),
         ActionId::GraphqlRefreshSchema => return graphql::refresh(state),
         ActionId::GraphqlSubscriptionStart => return graphql::start_subscription(state),

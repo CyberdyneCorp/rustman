@@ -3,14 +3,17 @@
 //! and example bodies").
 //!
 //! The synthesizer fills required properties (every property when none is
-//! required), honors `type`, `format`, `enum`/`const`, length, item-count
-//! and numeric bounds, and stops nesting objects and arrays at
-//! [`MAX_DEPTH`], so circular schemas terminate. A value holds at most
+//! required), honors `type`, `format`, `pattern`, `enum`/`const`, length,
+//! item-count and numeric bounds, and stops nesting optional members at
+//! [`MAX_DEPTH`] and required ones at [`MAX_REQUIRED_DEPTH`], so circular
+//! schemas terminate. A value holds at most
 //! [`MAX_MEMBERS`] properties and items in all, so wide schemas stay small.
 
 mod example;
 mod number;
+mod pattern;
 mod string;
+mod vary;
 
 use std::cell::Cell;
 
@@ -18,8 +21,13 @@ use serde_json::{Map, Value};
 
 pub use example::{BodyExample, body_example, is_json_media_type};
 
-/// Objects and arrays nested deeper than this are synthesized empty.
+/// Objects nested this deep get only their required properties, and
+/// arrays only their `minItems` items.
 pub const MAX_DEPTH: usize = 3;
+
+/// Objects and arrays nested this deep are synthesized empty: a schema
+/// whose required properties recurse without end has no finite instance.
+pub const MAX_REQUIRED_DEPTH: usize = 10;
 
 /// Properties and items one synthesized value holds at most, in all.
 pub const MAX_MEMBERS: usize = 512;
@@ -35,11 +43,36 @@ static ANYTHING: Value = Value::Bool(true);
 #[derive(Clone, Copy, Debug)]
 pub struct Synthesizer<'a> {
     components: &'a Value,
+    seed: Option<u64>,
+    /// Objects and arrays nested this deep are synthesized empty.
+    cutoff: usize,
 }
 
 impl<'a> Synthesizer<'a> {
     pub fn new(components: &'a Value) -> Self {
-        Self { components }
+        Self {
+            components,
+            seed: None,
+            cutoff: MAX_REQUIRED_DEPTH,
+        }
+    }
+
+    /// Synthesize every object and array nested [`MAX_DEPTH`] deep empty,
+    /// required members or not: for callers that synthesize many nested
+    /// values one by one and must keep each one small.
+    #[must_use]
+    pub fn shallow(mut self) -> Self {
+        self.cutoff = MAX_DEPTH;
+        self
+    }
+
+    /// Vary free-form strings, numbers and booleans with `seed`, inside
+    /// the same constraints: the same seed gives the same value, another
+    /// seed (usually) another one. Without a seed values are fixed samples.
+    #[must_use]
+    pub fn seeded(mut self, seed: u64) -> Self {
+        self.seed = Some(seed);
+        self
     }
 
     /// A value for `schema`.
@@ -51,7 +84,11 @@ impl<'a> Synthesizer<'a> {
     /// stops at [`MAX_DEPTH`] counted from the outer value, so a caller
     /// that already nested does not multiply the size.
     pub fn value_at(&self, schema: &Value, depth: usize) -> Value {
-        self.at(schema, depth, MAX_HOPS, &Cell::new(MAX_MEMBERS))
+        let budget = Budget {
+            members: Cell::new(MAX_MEMBERS),
+            stream: self.seed.map(vary::Stream::new),
+        };
+        self.at(schema, depth, MAX_HOPS, &budget)
     }
 
     /// `schema` with its `$ref` chain followed (siblings of `$ref` are not
@@ -88,7 +125,7 @@ impl<'a> Synthesizer<'a> {
 
     /// A value for `schema` at nesting `depth`, with `hops` composition
     /// steps (`allOf`, `oneOf`, `anyOf`) left.
-    fn at(&self, schema: &Value, depth: usize, hops: usize, members: &Cell<usize>) -> Value {
+    fn at(&self, schema: &Value, depth: usize, hops: usize, budget: &Budget) -> Value {
         let schema = self.resolve(schema);
         let Some(object) = schema.as_object() else {
             return Value::Null;
@@ -102,35 +139,41 @@ impl<'a> Synthesizer<'a> {
         }
         if object.contains_key("allOf") {
             let merged = Value::Object(self.merge_all_of(object));
-            return self.at(&merged, depth, hops - 1, members);
+            return self.at(&merged, depth, hops - 1, budget);
         }
         if let Some(branch) = first_branch(object) {
-            return self.at(branch, depth, hops - 1, members);
+            return self.at(branch, depth, hops - 1, budget);
         }
-        match type_of(object) {
-            "object" => self.object(object, depth, members),
-            "array" => self.array(object, depth, members),
-            "string" => Value::String(string::synthesize(object)),
+        let value = match type_of(object) {
+            "object" => return self.object(object, depth, budget),
+            "array" => return self.array(object, depth, budget),
+            "string" => Value::String(string::synthesize_patterned(object, || {
+                budget.stream.as_ref().map_or(0, vary::Stream::next)
+            })),
             "integer" => number::integer(object),
             "number" => number::number(object),
             "boolean" => Value::Bool(true),
             _ => Value::Null,
+        };
+        match &budget.stream {
+            Some(stream) => vary::vary(object, value, stream),
+            None => value,
         }
     }
 
-    fn object(&self, schema: &Map<String, Value>, depth: usize, members: &Cell<usize>) -> Value {
+    fn object(&self, schema: &Map<String, Value>, depth: usize, budget: &Budget) -> Value {
         let mut out = Map::new();
-        if depth >= MAX_DEPTH {
+        if depth >= self.cutoff {
             return Value::Object(out);
         }
         let properties = schema.get("properties").and_then(Value::as_object);
-        for name in property_names(schema, properties) {
-            if !take(members) {
+        for name in property_names(schema, properties, depth >= MAX_DEPTH) {
+            if !budget.take() {
                 break;
             }
             let property = properties.and_then(|p| p.get(&name));
             let value = match property.or_else(|| schema.get("additionalProperties")) {
-                Some(s) if s.is_object() => self.at(s, depth + 1, MAX_HOPS, members),
+                Some(s) if s.is_object() => self.at(s, depth + 1, MAX_HOPS, budget),
                 _ => Value::String(String::new()),
             };
             out.insert(name, value);
@@ -138,16 +181,16 @@ impl<'a> Synthesizer<'a> {
         Value::Object(out)
     }
 
-    fn array(&self, schema: &Map<String, Value>, depth: usize, members: &Cell<usize>) -> Value {
-        if depth >= MAX_DEPTH {
+    fn array(&self, schema: &Map<String, Value>, depth: usize, budget: &Budget) -> Value {
+        if depth >= self.cutoff {
             return Value::Array(Vec::new());
         }
-        let count = item_count(schema);
+        let count = item_count(schema, depth >= MAX_DEPTH);
         let items = schema.get("items").unwrap_or(&Value::Bool(true));
         Value::Array(
             (0..count)
-                .take_while(|_| take(members))
-                .map(|_| self.at(items, depth + 1, MAX_HOPS, members))
+                .take_while(|_| budget.take())
+                .map(|_| self.at(items, depth + 1, MAX_HOPS, budget))
                 .collect(),
         )
     }
@@ -179,11 +222,20 @@ impl<'a> Synthesizer<'a> {
     }
 }
 
-/// Take one member from `members`; `false` when none is left.
-fn take(members: &Cell<usize>) -> bool {
-    let left = members.get();
-    members.set(left.saturating_sub(1));
-    left > 0
+/// What one synthesized value may still use: members, and the seeded
+/// stream of picks when the synthesizer is seeded.
+struct Budget {
+    members: Cell<usize>,
+    stream: Option<vary::Stream>,
+}
+
+impl Budget {
+    /// Take one member; `false` when none is left.
+    fn take(&self) -> bool {
+        let left = self.members.get();
+        self.members.set(left.saturating_sub(1));
+        left > 0
+    }
 }
 
 /// A value the schema itself documents: `const`, the first non-null `enum`
@@ -240,10 +292,11 @@ pub(crate) fn type_of(schema: &Map<String, Value>) -> &str {
 }
 
 /// The properties to fill: the required ones, or every declared property
-/// that is not `readOnly` when nothing is required.
+/// that is not `readOnly` when nothing is required (unless `required_only`).
 fn property_names(
     schema: &Map<String, Value>,
     properties: Option<&Map<String, Value>>,
+    required_only: bool,
 ) -> Vec<String> {
     let required: Vec<String> = schema
         .get("required")
@@ -255,7 +308,7 @@ fn property_names(
                 .collect()
         })
         .unwrap_or_default();
-    if !required.is_empty() {
+    if !required.is_empty() || required_only {
         return required;
     }
     let read_only = |s: &Value| s.get("readOnly").and_then(Value::as_bool) == Some(true);
@@ -269,12 +322,12 @@ fn property_names(
         .unwrap_or_default()
 }
 
-/// How many items an array gets: one, raised to `minItems` and lowered to
-/// `maxItems`.
-fn item_count(schema: &Map<String, Value>) -> u64 {
+/// How many items an array gets: one (none when `required_only`), raised
+/// to `minItems` and lowered to `maxItems`.
+fn item_count(schema: &Map<String, Value>, required_only: bool) -> u64 {
     let min = schema.get("minItems").and_then(Value::as_u64).unwrap_or(0);
     let max = schema.get("maxItems").and_then(Value::as_u64);
-    let count = min.max(1);
+    let count = if required_only { min } else { min.max(1) };
     max.map_or(count, |m| count.min(m))
 }
 
@@ -371,6 +424,39 @@ mod tests {
         let alias = json!({"schemas": {"A": {"$ref": "#/components/schemas/A"}}});
         let looped = Synthesizer::new(&alias).value(&json!({"$ref": "#/components/schemas/A"}));
         assert_eq!(looped, Value::Null);
+    }
+
+    #[test]
+    fn required_members_continue_past_the_depth_cap() {
+        let components = json!({"schemas": {"Leaf": {"type": "object", "required": ["id"], "properties": {
+            "id": {"type": "integer"},
+            "note": {"type": "string"},
+        }}}});
+        let leaf = json!({"$ref": "#/components/schemas/Leaf"});
+        let deep = json!({"properties": {"a": {"properties": {"b": {"properties": {
+            "leaf": leaf,
+            "list": {"type": "array", "minItems": 1, "items": leaf},
+        }}}}}});
+        let value = Synthesizer::new(&components).value(&deep);
+        assert_eq!(value["a"]["b"]["leaf"], json!({"id": 0}));
+        assert_eq!(value["a"]["b"]["list"], json!([{"id": 0}]));
+    }
+
+    #[test]
+    fn endlessly_required_recursion_stops_at_the_hard_cap() {
+        let components = json!({"schemas": {"Node": {"type": "object", "required": ["child", "name"],
+        "properties": {
+            "child": {"$ref": "#/components/schemas/Node"},
+            "name": {"type": "string"},
+        }}}});
+        let value =
+            Synthesizer::new(&components).value(&json!({"$ref": "#/components/schemas/Node"}));
+        let mut node = &value;
+        for _ in 0..MAX_REQUIRED_DEPTH {
+            assert_eq!(node["name"], json!("string"));
+            node = &node["child"];
+        }
+        assert_eq!(node, &json!({}));
     }
 
     fn members(value: &Value) -> usize {

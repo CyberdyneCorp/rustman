@@ -76,6 +76,9 @@ pub enum CliError {
     /// The webhook listener cannot start (address refused or in use).
     #[error(transparent)]
     Webhook(#[from] rustman_webhook::ListenError),
+    /// The mock server cannot start (address refused or in use).
+    #[error(transparent)]
+    Mock(#[from] rustman_mock::ServeError),
     /// A GraphQL schema that cannot be fetched, read or written.
     #[error(transparent)]
     Graphql(#[from] GraphqlError),
@@ -108,7 +111,8 @@ impl CliError {
             | Self::Policy(_)
             | Self::Exploration(_)
             | Self::ExportFindings(_)
-            | Self::Webhook(_) => CONFIG,
+            | Self::Webhook(_)
+            | Self::Mock(_) => CONFIG,
         }
     }
 

@@ -38,6 +38,7 @@ pub mod keymap;
 pub mod kv;
 pub mod launch;
 pub mod layout;
+pub mod mock_server;
 pub mod palette;
 pub mod pane;
 pub mod response;
