@@ -4,6 +4,14 @@
 
 See proposal.md for the motivation. `add-openapi-explorer` already provides an OpenAPI model, `$ref` resolution, schema validation of response bodies, and the `rustman.report/v1` renderers. `bootstrap-core-engine` provides request files, assertions, history and redaction. This change adds a comparison engine and two Pact adapters on top of them. No new transport is needed.
 
+## Building on existing code
+
+- **OpenAPI loading**: `rustman_explore::import` (`crates/rustman-explore/src/openapi/mod.rs`) reads a path or URL, bundles external `$ref` files into one document (`openapi/bundle.rs`), rewrites 3.0 schemas to 3.1 (`openapi/normalize.rs`: `nullable` → `null` type, boolean exclusive bounds), validates (`openapi/validate.rs`, diagnostics with JSON pointers, rendered by `openapi::diagnostic::render`) and lowers into `ApiModel` (`openapi/model.rs`). `Operation::parameters` already merges path-item and operation parameters, and every `Operation` carries its JSON `pointer`. Schemas stay raw with `$ref`s into `ApiModel::components`; D1 only adds cycle-aware inlining for comparison and template matching that ignores parameter names (`validate::template_names` extracts them).
+- **Matching exchanges to operations**: `rustman_mock::router::Router` (`crates/rustman-mock/src/router.rs`) is a path-template trie with server base paths stripped and literal-over-parameter precedence. Request parameter and body checks exist in `crates/rustman-mock/src/validate.rs` (`Checks`), and response checks in `crates/rustman-explore/src/explore/detect/conformance.rs` (`documented`, `schema_for`, `conformance`) on `openapi::schema::{validator, errors}`.
+- **Safety**: `SafetyPolicy`, `Permission::from_flags`, `Blocked` (`crates/rustman-core/src/safety/`) and `rustman_http::GovernedSender` (`crates/rustman-http/src/governed.rs`). Blocked requests read `blocked: mutations not allowed` / `blocked: destructive not allowed` / `blocked: host not allowed`; policy refusals map to exit 4 (`PolicyError::is_refusal`, `crates/rustman-cli/src/exit.rs`).
+- **Reports**: `rustman_report::Report` is a closed enum (`Run`, `Exploration`) and `Report::parse` refuses an unknown `kind` with `unknown report kind '<k>'` (`crates/rustman-report/src/report.rs`); the CLI maps that to exit 2. A new kind needs a variant, its schema part generated with `schemars` in `crates/rustman-report/src/schema.rs` (as `exploration` is), the regenerated `docs/schemas/report.schema.json`, and dispatch in `render/` (`junit.rs`, `sarif.rs`, Markdown/HTML templates). `--report <format>=<path>` parsing exists as `rustman_report::ReportTarget`.
+- **Workspace inputs**: request files and resolution (`rustman_core::vars::resolve_request`), redaction (`rustman_core::Redactor`, which matches secret values in their JSON-escaped and other encoded forms, `crates/rustman-core/src/redact/forms.rs`), history (`crates/rustman-core/src/history/`, entries `rustman.history/v1` with ULID ids and `history::query::Query` filters for `--since`/`--grep`), and YAML with line numbers through `rustman_core::format` (for `contracts/allowlist.yaml` errors).
+
 ## Goals / Non-Goals
 
 **Goals:**
@@ -49,13 +57,13 @@ We serialize Pact v3/v4 JSON with our own serde structs (a small, stable format)
 Secrets and `{{$dynamic}}` values become `regex` matchers whose example is the redacted placeholder (see spec).
 
 ### D6. Provider verification reuses `GovernedSender`
-Replays go through `GovernedSender` (from `add-openapi-explorer`), with an allowlist built from `--provider-url` and `--provider-states-url`. Method gating follows the existing flags. Exit code `4` follows the ROADMAP table.
+Replays go through `rustman_http::GovernedSender` (the explorer's sender, `crates/rustman-http/src/governed.rs`), with an allowlist built from `--provider-url` and `--provider-states-url`. Its `Governor` limits come from `[safety]` (`rate`, default 10/s; `concurrency`, default 4). Method gating follows the existing flags. Exit code `4` follows the ROADMAP table.
 
 ### D7. Passive conformance reads exchanges only
-`contract verify` takes exchanges from `request-history` (or from the exchanges inside a run report) and validates them with the same schema validator the explorer's conformance probes use. The crate has no access to `rustman-http`'s sender in this code path. A unit test builds the command with a sender that panics, so any accidental network use is caught.
+`contract verify` takes exchanges from `request-history` (or from the exchanges inside a run report) and validates them with the same schema validator the explorer's conformance probes use (`rustman_explore::openapi::schema`, via `explore::detect::conformance`). The crate has no access to `rustman-http`'s sender in this code path. A unit test builds the command with a sender that panics, so any accidental network use is caught.
 
 ### D8. Reports
-A new `kind: contract` with `mode: diff | pact-verify | conformance`, added to the report schema (additive, so it stays `v1`). Renderers in `rustman-report` get a contract section. SARIF uses one `reportingDescriptor` per rule id. JUnit maps each difference, interaction or exchange to a testcase.
+A new `kind: contract` with `mode: diff | pact-verify | conformance`, added to the report schema (additive, so it stays `v1`). Readers built before this change refuse it as an unknown kind (exit 2) rather than misreading it. Renderers in `rustman-report` get a contract section. SARIF uses one `reportingDescriptor` per rule id. JUnit maps each difference, interaction or exchange to a testcase.
 
 ## Risks / Trade-offs
 
@@ -66,8 +74,11 @@ A new `kind: contract` with `mode: diff | pact-verify | conformance`, added to t
 
 ## Migration Plan
 
-Additive. New subcommands and files only. Report readers built before this change ignore `kind: contract` as an unknown kind, per `test-reports` versioning.
+Additive. New subcommands and files only. Report readers built before this change (`Report::parse`) refuse `kind: contract` with `unknown report kind 'contract'` and exit 2; they never misread it.
 
 ## Open Questions
 
 - Whether to also accept a Pact Broker URL as a read-only source for `pact verify` in a later change (it doesn't affect v1 specs).
+- Where the shared route matching and request validation live: `rustman-contract` depending on `rustman-mock` (a server crate) for `Router` and `Checks`, or moving both into `rustman-explore::openapi` and having the mock server use them from there?
+- D3 picks `gix`, a new and sizeable dependency. The workspace already shells out to `git` (`crates/rustman-core/src/secrets/git.rs`, `git check-ignore`). Keep `gix` for Windows/no-git support, or run `git show <ref>:<path>` for consistency?
+- `--base` resolves relative `$ref`s at the same ref, but `openapi::bundle` reads `$ref` files through `openapi::source` (disk or HTTP). It needs a pluggable source for Git blobs.

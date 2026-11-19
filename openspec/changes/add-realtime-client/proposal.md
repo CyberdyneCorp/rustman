@@ -36,6 +36,7 @@ None. This builds on `workspace`, `environments`, `http-requests` (TLS, proxies,
 
 ## Impact
 
-- New crate `crates/rustman-realtime` (tokio-tungstenite with rustls, and an SSE parser on top of `rustman-http` streaming bodies).
+- New crate `crates/rustman-realtime` on top of `rustman-http`'s shared WebSocket helper (`open_websocket`, tokio-tungstenite framing over the engine's TLS and proxy connector) and streaming bodies (`open_stream`) with the SSE parser shared with GraphQL over SSE.
+- `rustman-core` gains the `ws`/`sse` request models, kinds, resolution, assertions and record parts.
 - `rustman-cli` gains the `ws` and `sse` subcommands; `rustman-tui` gains the realtime pane.
 - No new system libraries.

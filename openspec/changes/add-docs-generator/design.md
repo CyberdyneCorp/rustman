@@ -4,6 +4,15 @@
 
 See proposal.md for the motivation. Everything the docs need already exists as data in other capabilities: the workspace model and order (`workspace`), variable layers and the redaction step (`environments`), exchanges (`request-history`), the OpenAPI import snapshot (`openapi-import`), and optional schema caches (`graphql-requests`, `jsonrpc-requests`). This change is a read-only transformer from that data into files.
 
+## Building on existing code
+
+- **Code samples**: the snippet engine already exists in `crates/rustman-http/src/snippet/` (`rustman_http::snippet`, `Lang`, `SnippetOptions`). It has embedded `minijinja` templates for curl, HTTPie, wget, Python requests/httpx, JS fetch, Node axios, Go, Rust reqwest, PowerShell and C#, accepts the docs ids `fetch`, `python` and `rust` as aliases, has a placeholder mode (`SnippetOptions::placeholders` from `rustman_core::vars::resolve_placeholders`, as `rustman export snippet --placeholders` uses), and turns `graphql` and `jsonrpc`-over-HTTP requests into their HTTP request (`http_entry`; `mcp` and opaque kinds are `UnsupportedKind`). It takes a `ResolvedRequest`, so D7's separate `SampleRequest` is not needed. It has no user-template override, which `[docs].template_dirs` needs.
+- **Redaction**: `rustman_core::Redactor` (`crates/rustman-core/src/redact.rs`, `redact/forms.rs`) matches secret values in their raw and encoded forms (JSON escapes and others). The base64 forms used by the MCP server's second pass live in `crates/rustman-mcp/src/server/redact.rs`; D3's leak scan should use a `rustman-core` version, not depend on `rustman-mcp`. `rustman-report` has no redaction helpers of its own (reports are built from already-redacted records).
+- **Workspace data**: request models in `crates/rustman-core/src/model/` deserialize with `deny_unknown_fields`, so `docs:` must be added to each kind's model and to the writer (`crates/rustman-core/src/format/write/request.rs`); collection descriptions are `CollectionMeta::description` (`crates/rustman-core/src/collection.rs`); unknown kinds load as `OpaqueRequest` with `KindRegistry::with_opaque_fallback` (`model/kind.rs`); `[docs]` must be added to `Settings` (`crates/rustman-core/src/settings.rs`), which otherwise warns `unknown key 'docs' ignored`.
+- **OpenAPI enrichment**: import snapshots live under `.rustman/openapi/` (`rustman_explore::store::SNAPSHOT_DIR`), and imported request files carry `openapi:operationId=` / `openapi:path=` tags (`rustman_explore::collection::request::OPERATION_TAG`), already used to match requests to operations by `crates/rustman-explore/src/sync/local.rs`.
+- **Examples and references**: history in `crates/rustman-core/src/history/`; snapshots in `crates/rustman-core/src/snapshot/` (`store.rs`, `__snapshots__/`); the GraphQL schema cache `.rustman/graphql/schemas/<hash>.json` (`crates/rustman-graphql/src/cache.rs`); OpenRPC catalogs from `[jsonrpc.catalogs]` and `.rustman/cache/openrpc/` (`crates/rustman-jsonrpc/src/catalog.rs`).
+- **Preview server**: the debounced `notify` watcher pattern (200 ms quiet time) is in `crates/rustman-mock/src/watch.rs`; `hyper`, `axum`, `notify` and `minijinja` are in `[workspace.dependencies]`. No CommonMark renderer is (`pulldown-cmark` would be new).
+
 ## Goals / Non-Goals
 
 **Goals:**
@@ -26,7 +35,7 @@ Code samples, and the page layout overrides, use `minijinja` (pure Rust, Jinja2 
 *Alternatives rejected:* `tera` (larger, with unnecessary features) and `handlebars` (logic-less, which makes multi-language code samples awkward).
 
 ### D3. Post-build leak scan as a second line of defense
-After writing, the builder scans every output file for each known secret value and its base64 and URL-encoded forms, reusing the scanner from `agent-mcp-interface`'s second redaction pass if it's present, or the same algorithm from `rustman-core`. Any hit fails the build (exit 1) and deletes the offending file. This covers custom templates that bypass the model, for example by printing environment variables passed through a future extension.
+After writing, the builder scans every output file for each known secret value and its base64 and URL-encoded forms, using `rustman_core::Redactor`'s encoded forms plus the base64 forms that the MCP server's second pass (`crates/rustman-mcp/src/server/redact.rs`) adds today, moved into `rustman-core` so both share them. Any hit fails the build (exit 1) and deletes the offending file. This covers custom templates that bypass the model, for example by printing environment variables passed through a future extension.
 
 ### D4. Search: prebuilt index, tiny inline engine
 At build time we produce `search-index.json` (tokenized names, paths, descriptions, parameter names) plus a small dependency-free JS file (under 10 KB) doing prefix and fuzzy matching. 2,000 endpoints produce an index of roughly 300 KB.
@@ -46,7 +55,7 @@ A golden test builds a fixture workspace twice, and on Linux and Windows in CI, 
 *Alternative rejected:* WebSocket reload. SSE is simpler with hyper and needs no extra crate.
 
 ### D7. Code-sample generation
-Samples come from the shared snippet engine in `rustman-http` (from `add-runner-parity`), called in placeholder mode, so docs and `rustman export snippet` never drift. A single neutral `SampleRequest` (method, URL template, headers, body by type) feeds every template. Variables stay as `{{name}}` in curl and HTTPie, and become language-appropriate placeholders in code (`BASE_URL` constants), consistently across languages. Multipart and file bodies render with each language's idiomatic file API.
+Samples come from the shared snippet engine in `rustman-http` (from `add-runner-parity`), called in placeholder mode, so docs and `rustman export snippet` never drift. Every template is fed the same `ResolvedRequest` (through `http_entry` for GraphQL and JSON-RPC), so no separate sample model is needed. Variables stay as `{{name}}` in curl and HTTPie, and become language-appropriate placeholders in code (`BASE_URL` constants), consistently across languages. Multipart and file bodies render with each language's idiomatic file API.
 
 ### D8. Markdown flavor
 GitHub-flavored Markdown with tables and fenced code. Long bodies go into a `<details>` block so the tables stay readable on GitHub.
@@ -64,3 +73,6 @@ Additive: new subcommands and optional config keys only.
 ## Open Questions
 
 - Whether to offer an OpenAPI export (`rustman docs openapi`) generated from the workspace in a later change. It reuses the page model and doesn't affect these specs.
+- `[docs].template_dirs` overrides need a hook in the shared snippet engine. Should overrides also apply to `rustman export snippet` (keeps the byte-for-byte parity of runner-parity task 4.5), or to docs only?
+- CommonMark rendering of descriptions needs a new dependency (`pulldown-cmark` is the usual pure-Rust choice). Confirm it, or render descriptions as escaped preformatted text in v1?
+- Reading the GraphQL schema cache and OpenRPC catalogs: depend on `rustman-graphql`/`rustman-jsonrpc` for their readers, or read the cache files directly to keep `rustman-docs` light?

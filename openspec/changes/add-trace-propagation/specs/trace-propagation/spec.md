@@ -92,7 +92,7 @@ The TUI response view SHALL show the trace id, with the link when configured, an
 - **THEN** stderr SHALL contain `trace: <32 hex>` and the Tempo URL
 
 #### Scenario: No link configured
-- **WHEN** the user runs `rustman trace open 42` and no link template is configured
+- **WHEN** the user runs `rustman trace open 01JDQ3XG` (a history exchange id prefix) and no link template is configured
 - **THEN** the command SHALL exit with code 2 and `trace: no link template configured ([trace].link)`
 
 ### Requirement: Server timing and traceresponse
