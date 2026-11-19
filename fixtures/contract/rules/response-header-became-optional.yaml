@@ -1,0 +1,18 @@
+# X-Rate-Limit is no longer required (names ignore case)
+expect: [response-header-became-optional]
+old:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            headers: {X-Rate-Limit: {required: true, schema: {type: integer}}}
+new:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            headers: {x-rate-limit: {schema: {type: integer}}}

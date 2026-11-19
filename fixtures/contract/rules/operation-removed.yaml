@@ -1,0 +1,11 @@
+# v2 drops DELETE /users/{id}
+expect: [operation-removed]
+old:
+  paths:
+    /users/{id}:
+      get: {responses: {'200': {description: ok}}}
+      delete: {responses: {'200': {description: ok}}}
+new:
+  paths:
+    /users/{id}:
+      get: {responses: {'200': {description: ok}}}

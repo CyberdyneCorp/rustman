@@ -1,0 +1,26 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Contract testing: classify OpenAPI changes as breaking or not, Pact contracts and passive conformance
+
+Usage: rustman contract [OPTIONS] <COMMAND>
+
+Commands:
+  diff    Compare two OpenAPI documents and classify every difference as breaking, non-breaking or unknown; exits 1 on a breaking difference
+  rules   List the rule catalog the diff classifies differences with
+  pact    Generate Pact contracts from a collection, and verify them against a provider
+  verify  Check recorded exchanges (history or a run report) against an OpenAPI document without sending any request
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

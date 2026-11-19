@@ -1,0 +1,14 @@
+# x-rate-limit goes from 100 to 50
+expect: [vendor-extension-changed]
+old:
+  paths:
+    /users:
+      get:
+        x-rate-limit: 100
+        responses: {'200': {description: ok}}
+new:
+  paths:
+    /users:
+      get:
+        x-rate-limit: 50
+        responses: {'200': {description: ok}}

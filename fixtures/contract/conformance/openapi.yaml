@@ -1,0 +1,109 @@
+openapi: 3.1.0
+info:
+  title: Users
+  version: 1.0.0
+paths:
+  /users:
+    get:
+      parameters:
+        - name: limit
+          in: query
+          schema: {type: integer, maximum: 100}
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: "#/components/schemas/User"}
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/NewUser"}
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/User"}
+  /users/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: integer}
+    get:
+      responses:
+        "200":
+          description: A user
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/User"}
+        "404":
+          description: Not found
+    put:
+      responses:
+        "200":
+          description: Updated
+    delete:
+      responses:
+        "204":
+          description: Deleted
+  /users/{id}/orders:
+    get:
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        "200":
+          description: Orders
+    post:
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        "201":
+          description: Created
+  /orders/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+    get:
+      responses:
+        "200":
+          description: An order
+    delete:
+      responses:
+        "204":
+          description: Deleted
+  /health:
+    get:
+      responses:
+        "200":
+          description: Up
+  /pets:
+    get:
+      responses:
+        "200":
+          description: Pets
+  /pets/{id}:
+    get:
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: A pet
+components:
+  schemas:
+    User:
+      type: object
+      required: [id, email]
+      properties:
+        id: {type: integer}
+        email: {type: string}
+        token: {type: string}
+    NewUser:
+      type: object
+      required: [email]
+      properties:
+        email: {type: string}

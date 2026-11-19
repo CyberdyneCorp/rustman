@@ -26,6 +26,7 @@ rustman-realtime.workspace = true
 rustman-tui.workspace = true
 rustman-webhook.workspace = true
 rustman-mock.workspace = true
+rustman-contract.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
 anstream.workspace = true

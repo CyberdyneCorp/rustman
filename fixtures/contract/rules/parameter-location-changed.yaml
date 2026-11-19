@@ -1,0 +1,14 @@
+# api_key moves from a query parameter to a header (spec scenario)
+expect: [parameter-location-changed]
+old:
+  paths:
+    /users:
+      get:
+        parameters: [{name: api_key, in: query, schema: {type: string}}]
+        responses: {'200': {description: ok}}
+new:
+  paths:
+    /users:
+      get:
+        parameters: [{name: api_key, in: header, schema: {type: string}}]
+        responses: {'200': {description: ok}}

@@ -1,0 +1,35 @@
+catalog version 2
+3 breaking, 5 non-breaking, 3 unknown
+breaking request-constraint-tightened | GET /pets | query parameter 'limit': maximum 100 -> 50
+    old: /components/parameters/Limit/schema
+    new: /components/parameters/Limit/schema
+unknown response-enum-widened | GET /pets | response 200 (application/json) $[].status: enum values added: [pending]
+    old: /components/schemas/NewPet/properties/status
+    new: /components/schemas/NewPet/properties/status
+non-breaking response-field-added | GET /pets | response default (application/json) $.details: added
+    old: /components/schemas/Error/properties
+    new: /components/schemas/Error/properties/details
+non-breaking request-enum-widened | POST /pets | request body (application/json) $.status: enum values added: [pending]
+    old: /components/schemas/NewPet/properties/status
+    new: /components/schemas/NewPet/properties/status
+unknown response-enum-widened | POST /pets | response 201 (application/json) $.status: enum values added: [pending]
+    old: /components/schemas/NewPet/properties/status
+    new: /components/schemas/NewPet/properties/status
+non-breaking path-parameter-renamed | GET /pets/{id} | path parameter renamed: {petId} -> {id}
+    old: /paths/~1pets~1{petId}
+    new: /paths/~1pets~1{id}
+unknown response-enum-widened | GET /pets/{id} | response 200 (application/json) $.status: enum values added: [pending]
+    old: /components/schemas/NewPet/properties/status
+    new: /components/schemas/NewPet/properties/status
+non-breaking response-field-added | GET /pets/{id} | response default (application/json) $.details: added
+    old: /components/schemas/Error/properties
+    new: /components/schemas/Error/properties/details
+breaking operation-removed | DELETE /pets/{petId} | operation removed
+    old: /paths/~1pets~1{petId}/delete
+    new: /paths/~1pets~1{id}
+breaking parameter-location-changed | GET /store/inventory | API key 'api_key' (security scheme 'apiKey'): moved from header 'X-API-Key' to query 'api_key'
+    old: /components/securitySchemes/apiKey
+    new: /components/securitySchemes/apiKey
+non-breaking operation-added | GET /pets/{id}/owner | operation added
+    old: /paths
+    new: /paths/~1pets~1{id}~1owner/get

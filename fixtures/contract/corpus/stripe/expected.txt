@@ -1,0 +1,38 @@
+catalog version 2
+0 breaking, 7 non-breaking, 5 unknown
+non-breaking request-optional-parameter-added | GET /v1/customers | query parameter 'created': added, optional
+    old: /paths/~1v1~1customers/get
+    new: /paths/~1v1~1customers/get/parameters/1
+non-breaking response-field-added | GET /v1/customers | response 200 (application/json) $.data[].preferred_locales: added
+    old: /components/schemas/customer/properties
+    new: /components/schemas/customer/properties/preferred_locales
+non-breaking response-field-added | GET /v1/customers | response default (application/json) $.error.request_log_url: added
+    old: /components/schemas/error/properties/error/properties
+    new: /components/schemas/error/properties/error/properties/request_log_url
+unknown security-alternative-removed | GET /v1/customers | security: no longer accepts basicAuth
+    old: /security
+    new: /security
+non-breaking docs-changed | POST /v1/customers | operation: description changed
+    old: /paths/~1v1~1customers/post
+    new: /paths/~1v1~1customers/post
+non-breaking request-optional-field-added | POST /v1/customers | request body (application/x-www-form-urlencoded) $.preferred_locales: added, optional
+    old: /paths/~1v1~1customers/post/requestBody/content/application~1x-www-form-urlencoded/schema/properties
+    new: /paths/~1v1~1customers/post/requestBody/content/application~1x-www-form-urlencoded/schema/properties/preferred_locales
+non-breaking response-field-added | POST /v1/customers | response 200 (application/json) $.preferred_locales: added
+    old: /components/schemas/customer/properties
+    new: /components/schemas/customer/properties/preferred_locales
+non-breaking response-field-added | POST /v1/customers | response default (application/json) $.error.request_log_url: added
+    old: /components/schemas/error/properties/error/properties
+    new: /components/schemas/error/properties/error/properties/request_log_url
+unknown security-alternative-removed | POST /v1/customers | security: no longer accepts basicAuth
+    old: /security
+    new: /security
+unknown composition-changed | GET /v1/customers/{customer} | response 200 (application/json): anyOf changed (2 schemas)
+    old: /paths/~1v1~1customers~1{customer}/get/responses/200/content/application~1json/schema
+    new: /paths/~1v1~1customers~1{customer}/get/responses/200/content/application~1json/schema
+unknown security-alternative-removed | GET /v1/customers/{customer} | security: no longer accepts basicAuth
+    old: /security
+    new: /security
+unknown security-alternative-removed | DELETE /v1/customers/{customer} | security: no longer accepts basicAuth
+    old: /security
+    new: /security

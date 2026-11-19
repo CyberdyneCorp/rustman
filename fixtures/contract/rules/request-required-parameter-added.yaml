@@ -1,0 +1,13 @@
+# a required query parameter appears
+expect: [request-required-parameter-added]
+old:
+  paths:
+    /users:
+      get:
+        responses: {'200': {description: ok}}
+new:
+  paths:
+    /users:
+      get:
+        parameters: [{name: tenant, in: query, required: true, schema: {type: string}}]
+        responses: {'200': {description: ok}}

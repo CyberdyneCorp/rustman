@@ -60,12 +60,25 @@ pub struct Diff {
     pub assertions: Vec<AssertionChange>,
 }
 
-/// Two reports of different kinds cannot be compared.
+/// Two reports of different kinds, or of a kind `report diff` does not
+/// compare (contract reports), cannot be compared.
 #[derive(Debug, thiserror::Error)]
-#[error("cannot compare {} report with {} report", article(self.old), article(self.new))]
+#[error("{}", mismatch(self.old, self.new))]
 pub struct KindMismatch {
     pub old: &'static str,
     pub new: &'static str,
+}
+
+fn mismatch(old: &str, new: &str) -> String {
+    if old == new {
+        format!("cannot compare {old} reports (report diff compares runs and explorations)")
+    } else {
+        format!(
+            "cannot compare {} report with {} report",
+            article(old),
+            article(new)
+        )
+    }
 }
 
 /// `kind` with its indefinite article: `a run`, `an exploration`.
@@ -288,6 +301,10 @@ mod tests {
         assert_eq!(
             mismatch("run", "exploration"),
             "cannot compare a run report with an exploration report"
+        );
+        assert_eq!(
+            mismatch("contract", "contract"),
+            "cannot compare contract reports (report diff compares runs and explorations)"
         );
     }
 }

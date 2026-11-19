@@ -1,0 +1,22 @@
+# $.nickname is no longer nullable
+expect: [response-type-narrowed]
+old:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            content:
+              application/json:
+                schema: {type: object, properties: {nickname: {type: [string, 'null']}}}
+new:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            content:
+              application/json:
+                schema: {type: object, properties: {nickname: {type: string}}}

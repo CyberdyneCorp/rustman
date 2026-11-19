@@ -1,0 +1,22 @@
+# $.name maxLength 50 -> 100 in a response
+expect: [response-constraint-loosened]
+old:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            content:
+              application/json:
+                schema: {type: object, properties: {name: {type: string, maxLength: 50}}}
+new:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            content:
+              application/json:
+                schema: {type: object, properties: {name: {type: string, maxLength: 100}}}

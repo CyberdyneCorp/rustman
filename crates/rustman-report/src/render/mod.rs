@@ -110,6 +110,8 @@ pub fn render(report: &Report, format: RenderFormat, options: &RenderOptions) ->
         }
         (RenderFormat::Sarif, Report::Run(r)) => sarif::run_sarif(r),
         (RenderFormat::Sarif, Report::Exploration(r)) => sarif::exploration_sarif(r, options),
+        (RenderFormat::Junit, Report::Contract(r)) => junit::contract_junit(r),
+        (RenderFormat::Sarif, Report::Contract(r)) => sarif::contract_sarif(r, options),
         (RenderFormat::Markdown, _) => human::markdown(report, options),
         (RenderFormat::Html, _) => human::html(report, options),
     }

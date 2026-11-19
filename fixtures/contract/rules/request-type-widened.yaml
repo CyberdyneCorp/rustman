@@ -1,0 +1,20 @@
+# $.age also accepts strings
+expect: [request-type-widened]
+old:
+  paths:
+    /users:
+      post:
+        requestBody:
+          content:
+            application/json:
+              schema: {type: object, properties: {age: {type: integer}}}
+        responses: {'200': {description: ok}}
+new:
+  paths:
+    /users:
+      post:
+        requestBody:
+          content:
+            application/json:
+              schema: {type: object, properties: {age: {type: [integer, string]}}}
+        responses: {'200': {description: ok}}

@@ -1,0 +1,38 @@
+# A recursive schema: the change in Node is reported once, and the walk
+# stops where Node refers to itself.
+expect: [response-field-removed]
+old:
+  components:
+    schemas:
+      Node:
+        type: object
+        properties:
+          name: {type: string}
+          label: {type: string}
+          children: {type: array, items: {$ref: '#/components/schemas/Node'}}
+  paths:
+    /tree:
+      get:
+        responses:
+          '200':
+            description: ok
+            content:
+              application/json:
+                schema: {$ref: '#/components/schemas/Node'}
+new:
+  components:
+    schemas:
+      Node:
+        type: object
+        properties:
+          name: {type: string}
+          children: {type: array, items: {$ref: '#/components/schemas/Node'}}
+  paths:
+    /tree:
+      get:
+        responses:
+          '200':
+            description: ok
+            content:
+              application/json:
+                schema: {$ref: '#/components/schemas/Node'}

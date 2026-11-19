@@ -1,0 +1,146 @@
+# A hand-trimmed excerpt in the shape of Stripe's public OpenAPI document
+# (github.com/stripe/openapi): the customers endpoints of an older API
+# version. Not a verbatim copy; see fixtures/contract/README.md.
+openapi: 3.0.0
+info:
+  title: Stripe API (excerpt)
+  version: '2023-10-16'
+servers:
+  - url: https://api.stripe.com/
+security:
+  - basicAuth: []
+  - bearerAuth: []
+paths:
+  /v1/customers:
+    get:
+      description: <p>Returns a list of your customers.</p>
+      operationId: GetCustomers
+      parameters:
+        - name: email
+          in: query
+          required: false
+          schema: {type: string, maxLength: 512}
+        - name: limit
+          in: query
+          required: false
+          schema: {type: integer}
+        - name: starting_after
+          in: query
+          required: false
+          schema: {type: string, maxLength: 5000}
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, has_more, object, url]
+                properties:
+                  data:
+                    type: array
+                    items: {$ref: '#/components/schemas/customer'}
+                  has_more: {type: boolean}
+                  object: {type: string, enum: [list]}
+                  url: {type: string, maxLength: 5000, pattern: ^/v1/customers}
+        default:
+          description: Error response.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/error'}
+    post:
+      description: <p>Creates a new customer object.</p>
+      operationId: PostCustomers
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                description: {type: string, maxLength: 5000}
+                email: {type: string, maxLength: 512}
+                metadata:
+                  anyOf:
+                    - type: object
+                      additionalProperties: {type: string}
+                    - type: string
+                      enum: ['']
+                name: {type: string, maxLength: 256}
+                tax_exempt: {type: string, enum: ['', exempt, none, reverse]}
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/customer'}
+        default:
+          description: Error response.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/error'}
+  /v1/customers/{customer}:
+    get:
+      operationId: GetCustomersCustomer
+      parameters:
+        - name: customer
+          in: path
+          required: true
+          schema: {type: string, maxLength: 5000}
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/customer'
+                  - $ref: '#/components/schemas/deleted_customer'
+    delete:
+      operationId: DeleteCustomersCustomer
+      parameters:
+        - name: customer
+          in: path
+          required: true
+          schema: {type: string, maxLength: 5000}
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/deleted_customer'}
+components:
+  securitySchemes:
+    basicAuth: {type: http, scheme: basic}
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: auth-scheme}
+  schemas:
+    customer:
+      type: object
+      required: [created, id, livemode, object]
+      properties:
+        balance: {type: integer}
+        created: {type: integer, format: unix-time}
+        email: {type: string, maxLength: 5000, nullable: true}
+        id: {type: string, maxLength: 5000}
+        livemode: {type: boolean}
+        name: {type: string, maxLength: 5000, nullable: true}
+        object: {type: string, enum: [customer]}
+        tax_exempt: {type: string, enum: [exempt, none, reverse], nullable: true}
+    deleted_customer:
+      type: object
+      required: [deleted, id, object]
+      properties:
+        deleted: {type: boolean, enum: [true]}
+        id: {type: string, maxLength: 5000}
+        object: {type: string, enum: [customer]}
+    error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [type]
+          properties:
+            code: {type: string, maxLength: 5000}
+            message: {type: string, maxLength: 40000}
+            type: {type: string, enum: [api_error, card_error, idempotency_error, invalid_request_error]}

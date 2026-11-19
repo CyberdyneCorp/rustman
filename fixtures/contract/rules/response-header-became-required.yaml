@@ -1,0 +1,18 @@
+# X-Request-Id becomes required
+expect: [response-header-became-required]
+old:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            headers: {X-Request-Id: {schema: {type: string}}}
+new:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            headers: {X-Request-Id: {required: true, schema: {type: string}}}

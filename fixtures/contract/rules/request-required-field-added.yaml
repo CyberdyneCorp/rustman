@@ -1,0 +1,20 @@
+# email joins the required list of the POST /users body (spec scenario)
+expect: [request-required-field-added]
+old:
+  paths:
+    /users:
+      post:
+        requestBody:
+          content:
+            application/json:
+              schema: {type: object, required: [name], properties: {name: {type: string}, email: {type: string}}}
+        responses: {'200': {description: ok}}
+new:
+  paths:
+    /users:
+      post:
+        requestBody:
+          content:
+            application/json:
+              schema: {type: object, required: [name, email], properties: {name: {type: string}, email: {type: string}}}
+        responses: {'200': {description: ok}}

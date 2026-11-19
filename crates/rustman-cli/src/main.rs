@@ -83,6 +83,9 @@ enum Command {
     Ws(commands::realtime::WsArgs),
     /// Listen to Server-Sent Events streams and print their events
     Sse(commands::realtime::SseArgs),
+    /// Contract testing: classify OpenAPI changes as breaking or not, Pact
+    /// contracts and passive conformance
+    Contract(commands::contract::ContractArgs),
 }
 
 fn main() -> ExitCode {
@@ -141,6 +144,7 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
         Command::Mock(args) => commands::mock::run(&args),
         Command::Ws(args) => commands::realtime::run_ws(&args),
         Command::Sse(args) => commands::realtime::run_sse(&args),
+        Command::Contract(args) => commands::contract::run(&args),
     }
 }
 

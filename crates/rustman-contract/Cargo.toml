@@ -1,0 +1,34 @@
+[package]
+name = "rustman-contract"
+description = "Contract testing for Rustman: OpenAPI breaking-change detection with a versioned rule catalog, Pact contracts and passive conformance"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+rustman-core.workspace = true
+rustman-explore.workspace = true
+rustman-http.workspace = true
+rustman-mock.workspace = true
+rustman-report.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+dunce.workspace = true
+time.workspace = true
+bytes.workspace = true
+form_urlencoded.workspace = true
+http.workspace = true
+regex.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
+jsonschema.workspace = true
+tempfile.workspace = true
+rustman-test-support.workspace = true

@@ -1,0 +1,14 @@
+# the body is no longer required
+expect: [request-body-became-optional]
+old:
+  paths:
+    /users:
+      post:
+        requestBody: {required: true, content: {application/json: {schema: {type: object}}}}
+        responses: {'200': {description: ok}}
+new:
+  paths:
+    /users:
+      post:
+        requestBody: {content: {application/json: {schema: {type: object}}}}
+        responses: {'200': {description: ok}}

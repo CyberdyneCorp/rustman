@@ -1,0 +1,16 @@
+# apiKey is also accepted
+expect: [security-alternative-added]
+old:
+  components: {securitySchemes: {bearerAuth: {type: http, scheme: bearer}, apiKey: {type: apiKey, name: X-Key, in: header}}}
+  paths:
+    /users:
+      get:
+        security: [{bearerAuth: []}]
+        responses: {'200': {description: ok}}
+new:
+  components: {securitySchemes: {bearerAuth: {type: http, scheme: bearer}, apiKey: {type: apiKey, name: X-Key, in: header}}}
+  paths:
+    /users:
+      get:
+        security: [{bearerAuth: []}, {apiKey: []}]
+        responses: {'200': {description: ok}}

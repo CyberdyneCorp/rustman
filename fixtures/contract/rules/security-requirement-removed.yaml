@@ -1,0 +1,16 @@
+# basicAuth is replaced by bearerAuth
+expect: [security-requirement-removed, security-alternative-added]
+old:
+  components: {securitySchemes: {basicAuth: {type: http, scheme: basic}, bearerAuth: {type: http, scheme: bearer}}}
+  paths:
+    /users:
+      get:
+        security: [{basicAuth: []}]
+        responses: {'200': {description: ok}}
+new:
+  components: {securitySchemes: {basicAuth: {type: http, scheme: basic}, bearerAuth: {type: http, scheme: bearer}}}
+  paths:
+    /users:
+      get:
+        security: [{bearerAuth: []}]
+        responses: {'200': {description: ok}}

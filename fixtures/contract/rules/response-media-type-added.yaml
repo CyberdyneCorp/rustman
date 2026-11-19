@@ -1,0 +1,18 @@
+# the 200 response adds application/xml
+expect: [response-media-type-added]
+old:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            content: {application/json: {schema: {type: object}}}
+new:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            content: {application/json: {schema: {type: object}}, application/xml: {schema: {type: object}}}

@@ -17,12 +17,12 @@
 ### Requirement: Breaking rule catalog
 The catalog SHALL classify at least these as `breaking`:
 - an operation is removed;
-- a response status is removed;
+- a response status is removed (no range or `default` covers it);
 - a response field is removed or renamed;
 - a response field's type changes;
 - a new required request parameter or body field appears;
 - an enum is narrowed;
-- a constraint gets stricter (`maxLength`, `maximum`, `pattern`, `minItems`);
+- a request constraint gets stricter (`maxLength`, `pattern`, `additionalProperties`);
 - a parameter moves location;
 - every alternative of a security requirement is removed.
 
@@ -36,6 +36,16 @@ The catalog SHALL classify at least these as `breaking`:
 - **WHEN** the diff runs
 - **THEN** `response-enum-narrowed` SHALL be reported as `breaking`
 
+#### Scenario: Request schema closed
+- **GIVEN** the `POST /users` request body schema gains `additionalProperties: false`
+- **WHEN** the diff runs
+- **THEN** `request-constraint-tightened` SHALL be reported as `breaking`
+
+#### Scenario: Status replaced by its range
+- **GIVEN** `GET /users` declares `200` in v1 and `2XX` with the same content in v2
+- **WHEN** the diff runs
+- **THEN** no `response-status-removed` difference SHALL be reported
+
 #### Scenario: Parameter location change
 - **GIVEN** `api_key` moves from a query parameter to a header
 - **WHEN** the diff runs
@@ -47,14 +57,18 @@ These SHALL be classified as `non-breaking`:
 - an optional request field is added;
 - a response field is added (unless the response schema sets `additionalProperties: false`);
 - an enum is widened in a request;
-- a constraint gets looser;
+- a request constraint gets looser, or a response one stricter;
 - descriptions or examples change.
 
-Changes the catalog can't decide, such as edits to `oneOf`/`anyOf` composition or vendor extensions, SHALL be `unknown`.
+Changes the catalog can't decide, such as `oneOf`/`anyOf` edits, vendor extensions or a looser response constraint, SHALL be `unknown`.
 
 #### Scenario: Added optional field
 - **GIVEN** v2 adds an optional `nickname` to the `POST /users` body
 - **THEN** `request-optional-field-added` SHALL be reported as `non-breaking`
+
+#### Scenario: Looser response constraint
+- **GIVEN** a response schema drops `additionalProperties: false`
+- **THEN** `response-constraint-loosened` SHALL be reported as `unknown`
 
 #### Scenario: Composition change
 - **GIVEN** a response schema changes from `oneOf: [A, B]` to `oneOf: [A, B, C]`

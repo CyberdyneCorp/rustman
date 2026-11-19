@@ -1,0 +1,20 @@
+# the description and an example are reworded
+expect: [docs-changed, docs-changed, docs-changed]
+old:
+  paths:
+    /users:
+      get:
+        description: Lists users.
+        responses:
+          '200':
+            description: ok
+            content: {application/json: {schema: {type: object, description: A user.}, example: {id: 1}}}
+new:
+  paths:
+    /users:
+      get:
+        description: Lists every user.
+        responses:
+          '200':
+            description: ok
+            content: {application/json: {schema: {type: object, description: One user.}, example: {id: 2}}}

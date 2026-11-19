@@ -1,0 +1,44 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Write a Pact file from a collection's http requests and their assertions
+
+Usage: rustman contract pact generate [OPTIONS] --consumer <NAME> --provider <NAME> [COLLECTION]...
+
+Arguments:
+  [COLLECTION]...
+          Collection folders or request files (default: the whole workspace)
+
+Options:
+      --consumer <NAME>
+          The consumer's name
+
+      --provider <NAME>
+          The provider's name
+
+      --pact-version <VERSION>
+          The Pact Specification version to write
+          
+          [default: 4]
+          [possible values: 3, 4]
+
+      --output <FILE>
+          The file to write (default: contracts/pacts/<consumer>-<provider>.json in the workspace)
+
+      --env <NAME>
+          Environment (default: RUSTMAN_ENV, then default_environment)
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

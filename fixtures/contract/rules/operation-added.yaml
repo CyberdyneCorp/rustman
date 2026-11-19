@@ -1,0 +1,13 @@
+# v2 adds GET /health
+expect: [operation-added]
+old:
+  paths:
+    /users:
+      get:
+        responses: {'200': {description: ok}}
+new:
+  paths:
+    /users:
+      get: {responses: {'200': {description: ok}}}
+    /health:
+      get: {responses: {'200': {description: ok}}}

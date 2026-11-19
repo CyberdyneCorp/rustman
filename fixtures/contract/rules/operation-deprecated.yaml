@@ -1,0 +1,13 @@
+# GET /users is deprecated
+expect: [operation-deprecated]
+old:
+  paths:
+    /users:
+      get:
+        responses: {'200': {description: ok}}
+new:
+  paths:
+    /users:
+      get:
+        deprecated: true
+        responses: {'200': {description: ok}}

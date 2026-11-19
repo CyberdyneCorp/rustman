@@ -1,0 +1,18 @@
+# X-Request-Id appears in the 200 response
+expect: [response-header-added]
+old:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            headers: {}
+new:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            headers: {X-Request-Id: {schema: {type: string}}}

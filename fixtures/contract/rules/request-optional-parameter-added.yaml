@@ -1,0 +1,13 @@
+# an optional page parameter appears
+expect: [request-optional-parameter-added]
+old:
+  paths:
+    /users:
+      get:
+        responses: {'200': {description: ok}}
+new:
+  paths:
+    /users:
+      get:
+        parameters: [{name: page, in: query, schema: {type: integer}}]
+        responses: {'200': {description: ok}}
