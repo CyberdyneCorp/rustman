@@ -156,6 +156,13 @@ impl<'a> VarScope<'a> {
         }
     }
 
+    /// `text` with its variables replaced; `None` when one is missing or
+    /// a secret (secrets are never read here).
+    pub fn resolve(&self, text: &str) -> Option<String> {
+        let resolved = self.resolver.as_ref()?.resolve(text).ok()?;
+        resolved.secret_spans.is_empty().then_some(resolved.text)
+    }
+
     pub fn info(&self, name: &str) -> Info {
         if name.starts_with('$') {
             return Info::Dynamic;

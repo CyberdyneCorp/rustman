@@ -13,7 +13,9 @@ use crate::shell::{self, Command};
 use crate::status::VimMode;
 use crate::toast::Severity;
 use crate::tree::{self, Filter};
-use crate::{copy_as, graphql, import_dialog, reveal, review, send, viewer_keys, viz, workbench};
+use crate::{
+    copy_as, graphql, import_dialog, jsonrpc, reveal, review, send, viewer_keys, viz, workbench,
+};
 
 /// Handle a key while the shell is showing.
 pub fn shell_key(state: &mut State, chord: Chord) -> Vec<Effect> {
@@ -236,7 +238,10 @@ fn help_key(state: &mut State, chord: Chord) -> Vec<Effect> {
 pub fn run(state: &mut State, action: ActionId) -> Vec<Effect> {
     // `Esc` cancels the request in flight before it dismisses anything
     // (spec: Cancel in-flight request).
-    if action == ActionId::Escape && state.overlay.is_none() && send::cancel(state) {
+    if action == ActionId::Escape
+        && state.overlay.is_none()
+        && (jsonrpc::stop_subscription(state) || send::cancel(state))
+    {
         return Vec::new();
     }
     if let Some(effects) = request_action(state, action) {
@@ -267,6 +272,7 @@ pub fn run(state: &mut State, action: ActionId) -> Vec<Effect> {
         ActionId::GraphqlSubscriptionStop => {
             graphql::stop_subscription(state);
         }
+        ActionId::EditorComplete if jsonrpc::is_active(state) => jsonrpc::complete(state),
         ActionId::EditorComplete => graphql::complete(state),
         ActionId::PaneLeft => pane_step(state, false),
         ActionId::PaneRight => pane_step(state, true),

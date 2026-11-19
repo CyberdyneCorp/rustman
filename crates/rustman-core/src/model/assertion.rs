@@ -30,6 +30,9 @@ pub enum Assertion {
     ErrorCode(String),
     /// `data: {path, <op>: value}`: a JSONPath check rooted at `data`.
     Data(Box<Checked<JsonAssertion>>),
+    /// `rpc_error: {code, message_contains}` or `rpc_error: none`: how a
+    /// JSON-RPC call ended (add-jsonrpc-client).
+    RpcError(RpcErrorExpectation),
     /// `snapshot` or `snapshot: {...}`: compare with a stored snapshot.
     Snapshot(Box<Checked<SnapshotAssertion>>),
 }
@@ -49,6 +52,7 @@ enum AssertionKey {
     ErrorMessageContains,
     ErrorCode,
     Data,
+    RpcError,
     Snapshot,
 }
 
@@ -98,6 +102,7 @@ impl<'de> Visitor<'de> for AssertionVisitor {
             }
             AssertionKey::ErrorCode => Assertion::ErrorCode(map.next_value()?),
             AssertionKey::Data => Assertion::Data(map.next_value()?),
+            AssertionKey::RpcError => Assertion::RpcError(map.next_value()?),
             AssertionKey::Snapshot => Assertion::Snapshot(map.next_value()?),
         };
         if let Some(extra) = map.next_key::<String>()? {
@@ -124,6 +129,7 @@ impl AssertionKey {
             Self::ErrorMessageContains => "error_message_contains",
             Self::ErrorCode => "error_code",
             Self::Data => "data",
+            Self::RpcError => "rpc_error",
             Self::Snapshot => "snapshot",
         }
     }
@@ -428,6 +434,59 @@ impl<'de> Visitor<'de> for CountVisitor {
         checked
             .expectation()
             .ok_or_else(|| de::Error::custom("errors_count needs a comparison"))
+    }
+}
+
+/// `rpc_error: {code: -32602, message_contains: text}` (the call failed
+/// with that error) or `rpc_error: none` (the call succeeded).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RpcErrorExpectation {
+    None,
+    Code {
+        code: i64,
+        message_contains: Option<String>,
+    },
+}
+
+/// The mapping form of `rpc_error`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RpcErrorFields {
+    code: i64,
+    message_contains: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for RpcErrorExpectation {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(RpcErrorVisitor)
+    }
+}
+
+struct RpcErrorVisitor;
+
+impl<'de> Visitor<'de> for RpcErrorVisitor {
+    type Value = RpcErrorExpectation;
+
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("`none` or a map with `code` (and optionally `message_contains`)")
+    }
+
+    fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+        if v == "none" {
+            return Ok(RpcErrorExpectation::None);
+        }
+        Err(E::custom(format!(
+            "invalid rpc_error '{v}' (expected `none` or {{code: <int>}})"
+        )))
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Self::Value, A::Error> {
+        let fields: RpcErrorFields =
+            Deserialize::deserialize(de::value::MapAccessDeserializer::new(map))?;
+        Ok(RpcErrorExpectation::Code {
+            code: fields.code,
+            message_contains: fields.message_contains,
+        })
     }
 }
 

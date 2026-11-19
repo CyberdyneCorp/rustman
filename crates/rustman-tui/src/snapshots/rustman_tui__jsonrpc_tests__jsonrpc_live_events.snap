@@ -1,0 +1,28 @@
+---
+source: crates/rustman-tui/src/jsonrpc_tests.rs
+expression: live
+---
+┌ Sidebar ─────────────────┐┌ ⠋ heads ─────────────────────────────────────────────┐┌ › Response ──────────────────────────────────────────┐
+│ ▾ chain                  ││ SUB      {{ws}}                                      ││ ⠋ Subscribed: 3 events · 0.0 s  (Esc unsubscribes)   │
+│   RPC    guarded         ││ Call  Batch  Headers  Auth  Assertions               ││ #1   +10 ms {"jsonrpc":"2.0","method":"eth_subscript │
+│   RPC    head            ││ No catalog: run rustman rpc discover <endpoint> to co││ #2   +20 ms {"jsonrpc":"2.0","method":"eth_subscript │
+│   RPC    heads           ││ Method  eth_subscribe (the subscription's subscribe m││ #3   +30 ms {"jsonrpc":"2.0","method":"eth_subscript │
+│                          ││ Params (JSON)                                        ││                                                      │
+│                          ││ [                                                    ││                                                      │
+│                          ││   "newHeads",                                        ││                                                      │
+│                          ││   "{{api_key}}"                                      ││                                                      │
+│                          ││ ]                                                    ││                                                      │
+│                          ││                                                      ││                                                      │
+│                          ││                                                      ││                                                      │
+│                          ││                                                      ││                                                      │
+│                          ││                                                      ││                                                      │
+│                          ││                                                      ││                                                      │
+│                          ││                                                      ││                                                      │
+│                          ││                                                      ││                                                      │
+│                          ││                                                      ││                                                      │
+│                          ││                                                      ││                                                      │
+│                          ││                                                      ││                                                      │
+│                          ││                                                      ││                                                      │
+│                          ││                                                      ││                                                      │
+└──────────────────────────┘└──────────────────────────────────────────────────────┘└──────────────────────────────────────────────────────┘
+ demo │ env: local │ TLS verified │ 1 in flight                                                                                 Ctrl+Q quit

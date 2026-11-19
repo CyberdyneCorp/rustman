@@ -122,6 +122,8 @@ pub struct Received {
     pub history: Vec<f64>,
     /// The GraphQL result, for a GraphQL exchange.
     pub graphql: Option<Box<super::graphql::GraphqlView>>,
+    /// The JSON-RPC result, for a JSON-RPC exchange.
+    pub jsonrpc: Option<Box<super::jsonrpc::RpcView>>,
     /// The failed, missing and new snapshots, for the Snapshot tab.
     pub snapshots: crate::review::Reviews,
 }
@@ -147,6 +149,7 @@ impl Received {
             captured: Vec::new(),
             history: Vec::new(),
             graphql: None,
+            jsonrpc: None,
             snapshots: crate::review::Reviews::default(),
         }
     }
@@ -164,6 +167,7 @@ impl Received {
             captured: Vec::new(),
             history: Vec::new(),
             graphql: None,
+            jsonrpc: None,
             snapshots: crate::review::Reviews::default(),
         }
     }

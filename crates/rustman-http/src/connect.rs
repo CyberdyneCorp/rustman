@@ -348,6 +348,14 @@ pub(crate) struct TimedConn {
     fresh: FreshConnection,
 }
 
+impl TimedConn {
+    /// The underlying stream, for protocols that take over the connection
+    /// (WebSocket).
+    pub(crate) fn into_io(self) -> BoxIo {
+        self.io.into_inner()
+    }
+}
+
 impl Connection for TimedConn {
     fn connected(&self) -> Connected {
         let connected = Connected::new()

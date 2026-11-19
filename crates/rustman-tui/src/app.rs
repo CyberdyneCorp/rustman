@@ -470,6 +470,7 @@ impl State {
 pub fn update(state: &mut State, action: Action) -> Vec<Effect> {
     let mut effects = dispatch(state, action);
     effects.extend(graphql::pending_loads(state));
+    crate::jsonrpc::pending_catalogs(state);
     workbench::ask_conflict(state);
     state.status.tls_insecure = tls_insecure(state);
     effects

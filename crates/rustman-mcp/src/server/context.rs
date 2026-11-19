@@ -22,7 +22,7 @@ use super::confirm::{Confirm, Confirmation, question};
 use super::error::{ErrorCode, ToolError};
 use super::jobs::{JobPool, Jobs};
 use super::limits::{BodyStore, BodyView, check_size};
-use super::policy::{check_method, session_sender};
+use super::policy::{check_method, rpc_sender, session_sender};
 use super::redact::OutputRedactor;
 
 /// What a tool returns on success: its structured result and a one-line
@@ -80,6 +80,9 @@ pub struct JobCaller {
 struct SessionState {
     environment: Option<Environment>,
     sender: Result<Arc<GovernedSender>, String>,
+    /// The sender of `rpc_call` (POSTs allowed; methods are gated by
+    /// `agent_read_only_methods`).
+    rpc_sender: Result<Arc<GovernedSender>, String>,
     redactor: OutputRedactor,
 }
 
@@ -194,6 +197,11 @@ impl AgentContext {
     /// rate limit and concurrency apply across them.
     pub fn sender(&self) -> Result<Arc<GovernedSender>, ToolError> {
         self.read().sender.clone().map_err(ToolError::blocked)
+    }
+
+    /// The sender of the `rpc_call` tool, with the session's allowlist.
+    pub fn rpc_sender(&self) -> Result<Arc<GovernedSender>, ToolError> {
+        self.read().rpc_sender.clone().map_err(ToolError::blocked)
     }
 
     /// Redact what `redactor` knows for the rest of the session: a secret
@@ -433,6 +441,17 @@ fn session_state(
     let settings = &workspace.settings;
     let sender =
         session_sender(&settings.safety, &settings.agent, environment.as_ref()).map(Arc::new);
+    let rpc_sender = sender
+        .clone()
+        .and_then(|session| {
+            rpc_sender(
+                &session,
+                &settings.safety,
+                &settings.agent,
+                environment.as_ref(),
+            )
+        })
+        .map(Arc::new);
     let mut redactor = OutputRedactor::new();
     redactor.add_workspace_literals(workspace);
     if let Some(env) = &environment {
@@ -447,6 +466,7 @@ fn session_state(
     SessionState {
         environment,
         sender,
+        rpc_sender,
         redactor,
     }
 }

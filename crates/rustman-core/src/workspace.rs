@@ -197,6 +197,7 @@ impl<'a> RequestRef<'a> {
         let own = match self.request() {
             Request::Http(http) => http.headers.as_deref(),
             Request::Graphql(graphql) => graphql.headers.as_deref(),
+            Request::Jsonrpc(jsonrpc) => jsonrpc.headers.as_deref(),
             Request::Opaque(_) => None,
         };
         let mut merged: Vec<NameValue> = Vec::new();
@@ -214,6 +215,7 @@ impl<'a> RequestRef<'a> {
         let own = match self.request() {
             Request::Http(http) => http.auth.as_ref(),
             Request::Graphql(graphql) => graphql.auth.as_ref(),
+            Request::Jsonrpc(jsonrpc) => jsonrpc.auth.as_ref(),
             Request::Opaque(_) => None,
         };
         own.or_else(|| {
@@ -394,6 +396,7 @@ fn request_path_errors(
     let paths = match request {
         Request::Http(http) => http.file_paths(),
         Request::Graphql(graphql) => graphql.file_paths(),
+        Request::Jsonrpc(jsonrpc) => jsonrpc.file_paths(),
         Request::Opaque(_) => return Vec::new(),
     };
     paths

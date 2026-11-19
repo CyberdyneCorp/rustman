@@ -7,13 +7,14 @@ pub mod capture;
 pub mod common;
 pub mod graphql;
 pub mod http;
+pub mod jsonrpc;
 pub mod kind;
 pub mod signed_auth;
 pub mod snapshot;
 
 pub use assertion::{
     Assertion, BodyAssertion, CountExpectation, CountOp, HeaderAssertion, JsonAssertion,
-    LatencyAssertion, SchemaAssertion, StatusExpectation,
+    LatencyAssertion, RpcErrorExpectation, SchemaAssertion, StatusExpectation,
 };
 pub use auth::{ApiKeyLocation, Auth, OAuth2, OAuth2Grant};
 pub use body::{Body, JsonContent, Part, PartSource};
@@ -24,6 +25,10 @@ pub use graphql::{
     GraphqlMethod, GraphqlRequest, GraphqlTransport, WsProtocol, graphql_as_http,
 };
 pub use http::{HttpRequest, Method, RequestSettings};
+pub use jsonrpc::{
+    BatchCall, CallFields, EndpointScheme, JsonrpcRequest, JsonrpcSettings, MAX_BATCH_CALLS,
+    RetrySettings, SubscriptionSpec, jsonrpc_as_http, unlocated,
+};
 pub use kind::{KindLoader, KindRegistry, OpaqueRequest, REQUEST_VERSION, Request};
 pub use signed_auth::{AwsCredentials, AwsSigV4, Jwt, JwtAlgorithm};
 pub use snapshot::{

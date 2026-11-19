@@ -59,7 +59,7 @@ Every request file has these fields, in this order:
 | Field | Required | Meaning |
 |-------|----------|---------|
 | `version` | yes | Always `1`. |
-| `kind` | yes | The request kind: `http`, `graphql` or `mcp`. |
+| `kind` | yes | The request kind: `http`, `graphql`, `jsonrpc` or `mcp`. |
 | `name` | yes | The name shown in reports and used by `rustman send <name>`. |
 | `description` | no | Free text. |
 | `tags` | no | A list of strings. |
@@ -67,7 +67,7 @@ Every request file has these fields, in this order:
 | `assertions` | no | Checks on the response (see [assertions.md](assertions.md)). |
 | `captures` | no | Values extracted from the response for later requests. |
 
-`graphql` files have their own fields (see [GraphQL requests](#graphql-requests)); their `variables` are GraphQL variables sent with the operation, not a layer of Rustman variables. `mcp` files are parsed and listed. `rustman run` reports both kinds as skipped with `request kind '<kind>' is not supported by this build` until runner support for them lands.
+`graphql` files have their own fields (see [GraphQL requests](#graphql-requests)); their `variables` are GraphQL variables sent with the operation, not a layer of Rustman variables. `jsonrpc` files have their own fields too (see [JSON-RPC requests](#json-rpc-requests)); `rustman run` skips them with `request kind 'jsonrpc' is not supported by this build` until runner support lands. `mcp` files are parsed and listed. `rustman run` reports both kinds as skipped with `request kind '<kind>' is not supported by this build` until runner support for them lands.
 
 ## HTTP requests
 
@@ -381,6 +381,89 @@ headers:
     value: rustman
 ```
 
+## JSON-RPC requests
+
+A `kind: jsonrpc` file sends JSON-RPC 2.0 to an `endpoint` (`http`, `https`, `ws` or `wss`; `{{variables}}` work). It is chain-agnostic: method names are not interpreted and results are shown exactly as received, so hex quantities stay hex. [jsonrpc.md](jsonrpc.md) describes ids, batches, errors, retries, WebSocket and subscriptions.
+
+| Field | Meaning |
+|---|---|
+| `method` | The method of a single call. Required unless the file has a `batch` (or a `subscription`, which defaults it to `subscription.subscribe`). |
+| `params` | A list (sent as a JSON array) or a map (sent as a JSON object). Left out of the envelope when absent; a scalar fails to load with `params must be a list or a map`. `{{variables}}` are interpolated in string values only. |
+| `id` | A string or an integer, sent unchanged. Without it, ids are sequential from 1 per connection. |
+| `notification` | `true` sends no `id` and expects no answer. Assertions on `$.result` fail to load. |
+| `batch` | 1 to 100 calls (`method`, `params`, `id`, `notification`, `assertions`, `captures` each), sent as one JSON array instead of `method`. |
+| `subscription` | `{subscribe, unsubscribe, notification}` method names, plus optional `notification_id_path` (default `$.params.subscription`), `max_events` (default 10) and `max_duration_ms` (default 30000). WebSocket endpoints only. |
+| `idempotent` | `true` allows `settings.retry`; calls are never retried otherwise. |
+| `headers`, `auth`, `variables`, `assertions`, `captures` | As for `kind: http`. Status and header assertions fail to load for `ws://` and `wss://` endpoints. |
+| `settings` | The `kind: http` settings, plus `retry: {attempts, backoff_ms}` (defaults 0 and 500) and `validate`. |
+
+Quote hex values (`'0x10'`): YAML reads an unquoted `0x10` as the number 16.
+
+An Ethereum read, retried when the node rate-limits it:
+
+```yaml
+# eth/block-number.rman.yaml
+version: 1
+kind: jsonrpc
+name: Block number
+endpoint: '{{rpc_url}}'
+method: eth_blockNumber
+idempotent: true
+settings:
+  timeout_ms: 5000
+  retry: {attempts: 2, backoff_ms: 500}
+captures:
+  - {var: head, from: json, path: $.result}
+```
+
+A Bitcoin Core batch with Basic auth:
+
+```yaml
+# btc/tip.rman.yaml
+version: 1
+kind: jsonrpc
+name: Chain tip
+endpoint: http://127.0.0.1:8332
+auth:
+  type: basic
+  username: '{{btc_user}}'
+  password: '{{btc_password}}'
+batch:
+  - method: getblockcount
+  - method: getblockhash
+    params: [800000]
+  - method: getblockchaininfo
+    id: info
+```
+
+A Solana call with named params, and an Ethereum `newHeads` subscription over WebSocket:
+
+```yaml
+# solana/balance.rman.yaml
+version: 1
+kind: jsonrpc
+name: Balance
+endpoint: https://api.devnet.solana.com
+method: getBalance
+params: ['{{wallet}}', {commitment: finalized}]
+```
+
+```yaml
+# eth/new-heads.rman.yaml
+version: 1
+kind: jsonrpc
+name: New heads
+endpoint: wss://{{node_host}}/ws
+params: [newHeads]
+subscription:
+  subscribe: eth_subscribe
+  unsubscribe: eth_unsubscribe
+  notification: eth_subscription
+  max_events: 3
+assertions:
+  - json: {path: $.events, length: 3}
+```
+
 ## Collections
 
 Every folder under the workspace root is a collection, except `environments/`, folders whose name starts with `.` or `_` (such as `.rustman/`, `__snapshots__/` or `_removed/`), and folders with no request file at any depth (such as `mocks/`). Symlinked folders are not followed.
@@ -425,7 +508,7 @@ Paths containing `{{variables}}` are checked after the variables are resolved, b
 Load errors name the file and line, and Rustman reports every broken file at once:
 
 ```text
-legacy/soap.rman.yaml:2: unknown request kind 'soap' (expected one of: http, graphql, mcp)
+legacy/soap.rman.yaml:2: unknown request kind 'soap' (expected one of: http, graphql, jsonrpc, mcp)
 users/list.rman.yaml:5: unknown field `header`, expected one of version, kind, name, description, tags, method, url, query, headers, body, auth, settings, variables, assertions, captures
 ```
 

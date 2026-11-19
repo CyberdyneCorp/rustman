@@ -6,7 +6,7 @@
 //! `429`.
 
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use bytes::Bytes;
 use http::header::RETRY_AFTER;
@@ -58,7 +58,7 @@ impl GovernedError {
 pub struct GovernedSender {
     engine: HttpEngine,
     policy: SafetyPolicy,
-    governor: Governor,
+    governor: Arc<Governor>,
     backoffs: AtomicU64,
 }
 
@@ -73,6 +73,16 @@ impl std::fmt::Debug for GovernedSender {
 
 impl GovernedSender {
     pub fn new(policy: SafetyPolicy, governor: Governor) -> Self {
+        Self::governed_by(policy, Arc::new(governor))
+    }
+
+    /// A sender under `policy` that shares this sender's governor: the
+    /// requests of both count against one rate and concurrency limit.
+    pub fn with_policy(&self, policy: SafetyPolicy) -> Self {
+        Self::governed_by(policy, self.governor.clone())
+    }
+
+    fn governed_by(policy: SafetyPolicy, governor: Arc<Governor>) -> Self {
         Self {
             engine: HttpEngine::new(),
             policy,

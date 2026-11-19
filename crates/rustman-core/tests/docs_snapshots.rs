@@ -82,7 +82,7 @@ fn snapshot_spec<'r>(request: &'r Request, name: &str) -> &'r SnapshotAssertion 
     let assertions = match request {
         Request::Http(http) => http.assertions.as_deref(),
         Request::Graphql(graphql) => graphql.assertions.as_deref(),
-        Request::Opaque(_) => None,
+        Request::Jsonrpc(_) | Request::Opaque(_) => None,
     };
     assertions
         .into_iter()

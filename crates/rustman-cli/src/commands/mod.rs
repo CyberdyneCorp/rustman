@@ -14,6 +14,7 @@ pub mod init;
 pub mod mcp;
 pub mod mock;
 pub mod report;
+pub mod rpc;
 pub mod run;
 pub mod secret;
 pub mod send;

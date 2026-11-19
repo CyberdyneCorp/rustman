@@ -156,6 +156,27 @@ fn without_a_workspace_serve_exits_2_before_the_handshake() {
     assert!(stderr.contains("no rustman workspace found"), "{stderr}");
 }
 
+/// Scenario "Unknown preset" (add-jsonrpc-client "Allowlist presets").
+#[test]
+fn an_unknown_method_preset_exits_2_when_the_server_starts() {
+    let ws = workspace();
+    write(
+        ws.path(),
+        "rustman.toml",
+        "[workspace]\nname = \"t\"\nversion = 1\n\n[jsonrpc]\nagent_read_only_methods = [\"@solana-read\"]\n",
+    );
+    let mut child = spawn(ws.path(), &["mcp", "serve"], &[]);
+    drop(child.stdin.take());
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("unknown method preset '@solana-read' (registered: "),
+        "{stderr}"
+    );
+}
+
 #[test]
 fn a_non_loopback_http_address_needs_allow_remote() {
     let ws = workspace();

@@ -76,6 +76,9 @@ impl Runner<'_> {
         if let Some(graphql) = sent.record.graphql.take() {
             sent.record.graphql = Some(graphql.redacted(&redactor));
         }
+        if let Some(jsonrpc) = sent.record.jsonrpc.take() {
+            sent.record.jsonrpc = Some(jsonrpc.redacted(&redactor));
+        }
         sent.redactor = redactor.clone();
         let kept = self.record_history(&mut sent, &redactor, file, Some(cache_key(request)));
         sent.discard_spill_unless(kept);
@@ -107,6 +110,11 @@ impl Runner<'_> {
             Request::Graphql(graphql) => {
                 return self
                     .execute_graphql(request, graphql, record, iteration)
+                    .await;
+            }
+            Request::Jsonrpc(jsonrpc) => {
+                return self
+                    .execute_jsonrpc(request, jsonrpc, record, iteration)
                     .await;
             }
             Request::Opaque(_) => return Sent::skipped(record, SkipReason::UnsupportedKind),
@@ -286,7 +294,7 @@ impl Runner<'_> {
     /// Apply captures and add the values to the run's scope. A captured
     /// value holding a known secret becomes a secret; `redactor` and the
     /// run learn every captured secret.
-    fn capture(
+    pub(super) fn capture(
         &self,
         captures: &[rustman_core::model::Checked<rustman_core::model::Capture>],
         view: &rustman_core::assertions::ResponseView<'_>,

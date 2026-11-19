@@ -1,8 +1,8 @@
-//! Subscriptions over WebSocket (design D3): `tokio-tungstenite` for the
-//! handshake and framing over our own TCP connection, with TLS from the
-//! request's `rustman-http` settings (`ca_bundle`, client certificate,
-//! `verify_tls`). The handshake carries the request's headers, auth helpers
-//! and cookies, as `rustman-http` builds them. Proxies are not used.
+//! Subscriptions over WebSocket (design D3), on the WebSocket stack that
+//! `rustman-http` shares between protocol clients
+//! ([`rustman_http::open_websocket`]): its connector, proxies and TLS
+//! settings (`ca_bundle`, client certificate, `verify_tls`), and the
+//! request's headers, auth helpers and cookies in the handshake.
 //!
 //! Events are held in memory, so a message (and a frame) may not be larger
 //! than the in-memory body cap, `[http] max_body_bytes`. Headless, the
@@ -12,22 +12,15 @@
 //! `graphql-transport-ws` first; a server that only speaks the legacy
 //! `graphql-ws` picks that one and the legacy protocol is used.
 
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
-use http::{HeaderMap, HeaderValue, Uri};
-use rustls_pki_types::ServerName;
 use rustman_core::model::WsProtocol;
-use rustman_core::vars::{Resolved, ResolvedBody, ResolvedGraphql, ResolvedRequest};
-use rustman_http::{RequestError, SendOptions, request_head};
-use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::net::TcpStream;
-use tokio_rustls::TlsConnector;
-use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use rustman_core::vars::{ResolvedGraphql, ResolvedRequest};
+use rustman_http::{SendOptions, WebSocket, WebSocketError, open_websocket};
 use tokio_tungstenite::tungstenite::error::CapacityError;
-use tokio_tungstenite::tungstenite::handshake::client::{Request, Response};
-use tokio_tungstenite::tungstenite::protocol::{CloseFrame, WebSocketConfig};
+use tokio_tungstenite::tungstenite::handshake::client::Response;
+use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 use tokio_tungstenite::tungstenite::{Error as WsError, Message};
 
 use super::protocol::{Incoming, WireProtocol, error_result};
@@ -41,25 +34,6 @@ const OPERATION_ID: &str = "1";
 /// How long telling the server the client stopped may take: a server that
 /// stops reading must not hold a headless run past its limits.
 const TEARDOWN_TIMEOUT: Duration = Duration::from_secs(2);
-
-/// Handshake headers the WebSocket client sets itself, or that do not
-/// belong in a handshake.
-const NOT_FORWARDED: &[&str] = &[
-    "host",
-    "connection",
-    "upgrade",
-    "content-length",
-    "content-type",
-    "sec-websocket-key",
-    "sec-websocket-version",
-    "sec-websocket-protocol",
-    "sec-websocket-extensions",
-];
-
-/// A byte stream the handshake can run over: TCP, or TLS over TCP.
-trait Io: AsyncRead + AsyncWrite + Unpin + Send {}
-
-impl<T: AsyncRead + AsyncWrite + Unpin + Send> Io for T {}
 
 /// Run `operation` as a subscription over a WebSocket to the endpoint of
 /// `target` (`http(s)://` endpoints become `ws(s)://`), speaking
@@ -94,8 +68,6 @@ pub async fn subscribe_ws(
     })
 }
 
-type Socket = tokio_tungstenite::WebSocketStream<Box<dyn Io>>;
-
 /// Connect and shake hands. Returns the socket, the server's handshake
 /// response and the handshake request as recorded.
 async fn open(
@@ -104,84 +76,20 @@ async fn open(
     send_options: &SendOptions,
     options: &SubscribeOptions,
     started: Instant,
-) -> Result<(Socket, Response, ResolvedRequest), GraphqlError> {
-    let mut handshake = target.http.clone();
-    handshake.method = "GET".to_owned();
-    handshake.body = ResolvedBody::None;
-    handshake.url = Resolved {
-        text: with_scheme(&handshake.url.text, Scheme::Http),
-        ..handshake.url
-    };
-    let (uri, headers) = request_head(&handshake, send_options).await?;
-    let ws_url = with_scheme(&uri.to_string(), Scheme::Ws);
-    let request = client_request(&ws_url, &headers, preferred)?;
+) -> Result<(WebSocket, Response, ResolvedRequest), GraphqlError> {
     let limit = options.within(started, send_options.connect_timeout);
-    let config = config(send_options.body.max_in_memory);
-    let shake = async {
-        let stream = connect(&uri, send_options).await?;
-        tokio_tungstenite::client_async_with_config(request, stream, Some(config))
-            .await
-            .map_err(handshake_error)
-    };
-    let (socket, response) = tokio::time::timeout(limit, shake).await.map_err(|_| {
-        GraphqlError::Subscription(format!(
-            "WebSocket handshake timed out after {} ms",
-            limit.as_millis()
-        ))
-    })??;
-    handshake.url.text = with_scheme(&handshake.url.text, Scheme::Ws);
-    Ok((socket, response, handshake))
-}
-
-/// Messages and frames up to `max_bytes` (saturating on 32-bit targets).
-fn config(max_bytes: u64) -> WebSocketConfig {
-    let max = usize::try_from(max_bytes).unwrap_or(usize::MAX);
-    WebSocketConfig::default()
-        .max_message_size(Some(max))
-        .max_frame_size(Some(max))
-}
-
-#[derive(Clone, Copy)]
-enum Scheme {
-    Http,
-    Ws,
-}
-
-/// `url` with its scheme as `http(s)` or `ws(s)`; other schemes are kept.
-fn with_scheme(url: &str, scheme: Scheme) -> String {
-    let pairs = [("ws://", "http://"), ("wss://", "https://")];
-    for (ws, http) in pairs {
-        let (from, to) = match scheme {
-            Scheme::Http => (ws, http),
-            Scheme::Ws => (http, ws),
-        };
-        if let Some(rest) = url.strip_prefix(from) {
-            return format!("{to}{rest}");
-        }
-    }
-    url.to_owned()
-}
-
-/// The handshake request: the WebSocket headers, the subprotocols to offer
-/// and the request's own headers.
-fn client_request(
-    url: &str,
-    headers: &HeaderMap,
-    preferred: WsProtocol,
-) -> Result<Request, GraphqlError> {
-    let mut request = url
-        .into_client_request()
-        .map_err(|e| GraphqlError::Subscription(format!("invalid WebSocket URL: {e}")))?;
-    for (name, value) in headers {
-        if !NOT_FORWARDED.contains(&name.as_str()) {
-            request.headers_mut().append(name.clone(), value.clone());
-        }
-    }
-    let offer = HeaderValue::from_static(offered(preferred));
-    request
-        .headers_mut()
-        .insert("sec-websocket-protocol", offer);
-    Ok(request)
+    let offer = Some(offered(preferred));
+    let opened = open_websocket(&target.http, send_options, offer, limit)
+        .await
+        .map_err(|e| match e {
+            WebSocketError::Transport(e) => GraphqlError::Transport(e),
+            WebSocketError::Handshake(message) => GraphqlError::Subscription(message),
+            WebSocketError::TimedOut(limit) => GraphqlError::Subscription(format!(
+                "WebSocket handshake timed out after {} ms",
+                limit.as_millis()
+            )),
+        })?;
+    Ok((opened.socket, opened.response, opened.request))
 }
 
 /// The `Sec-WebSocket-Protocol` offer for `preferred`.
@@ -191,41 +99,6 @@ fn offered(preferred: WsProtocol) -> &'static str {
         WsProtocol::GraphqlTransportWs => "graphql-transport-ws",
         WsProtocol::GraphqlWs => "graphql-ws",
     }
-}
-
-/// A TCP connection to the host of `uri`, with TLS for `https`.
-async fn connect(uri: &Uri, send_options: &SendOptions) -> Result<Box<dyn Io>, GraphqlError> {
-    let tls = uri.scheme_str() == Some("https");
-    let host = uri.host().unwrap_or_default();
-    let host = host.trim_start_matches('[').trim_end_matches(']');
-    let port = uri.port_u16().unwrap_or(if tls { 443 } else { 80 });
-    let tcp = TcpStream::connect((host, port)).await.map_err(|e| {
-        RequestError::Network(format!("network: cannot connect to {host}:{port}: {e}"))
-    })?;
-    let _ = tcp.set_nodelay(true);
-    if !tls {
-        return Ok(Box::new(tcp));
-    }
-    let config = send_options.tls.client_config(&[b"http/1.1"])?;
-    let name = ServerName::try_from(host.to_owned())
-        .map_err(|_| RequestError::Tls(format!("tls: invalid server name '{host}'")))?;
-    let stream = TlsConnector::from(Arc::new(config))
-        .connect(name, tcp)
-        .await
-        .map_err(|e| RequestError::Tls(format!("tls: {e}")))?;
-    Ok(Box::new(stream))
-}
-
-fn handshake_error(err: WsError) -> GraphqlError {
-    let message = match err {
-        WsError::Http(response) => format!(
-            "WebSocket handshake failed: HTTP {}",
-            response.status().as_u16()
-        ),
-        WsError::Protocol(e) => format!("WebSocket handshake failed: {e}"),
-        other => format!("WebSocket: {other}"),
-    };
-    GraphqlError::Subscription(message)
 }
 
 /// The protocol the server chose. Without a choice, a forced protocol is
@@ -471,34 +344,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn endpoints_switch_between_http_and_websocket_schemes() {
+    fn subprotocol_offers_follow_the_preference() {
         assert_eq!(
-            with_scheme("ws://h/graphql", Scheme::Http),
-            "http://h/graphql"
-        );
-        assert_eq!(with_scheme("wss://h/g", Scheme::Http), "https://h/g");
-        assert_eq!(with_scheme("https://h/g", Scheme::Ws), "wss://h/g");
-        assert_eq!(with_scheme("http://h/g", Scheme::Ws), "ws://h/g");
-        assert_eq!(with_scheme("http://h/g", Scheme::Http), "http://h/g");
-    }
-
-    #[test]
-    fn the_handshake_keeps_the_request_headers_and_offers_subprotocols() {
-        let mut headers = HeaderMap::new();
-        headers.insert("authorization", HeaderValue::from_static("Bearer t"));
-        headers.insert("host", HeaderValue::from_static("other"));
-        headers.insert("content-type", HeaderValue::from_static("application/json"));
-        let request = client_request("ws://h:1/graphql", &headers, WsProtocol::Auto).unwrap();
-        let h = request.headers();
-        assert_eq!(h["authorization"], "Bearer t");
-        assert_eq!(h["host"], "h:1");
-        assert!(h.get("content-type").is_none());
-        assert_eq!(
-            h["sec-websocket-protocol"],
+            offered(WsProtocol::Auto),
             "graphql-transport-ws, graphql-ws"
         );
-        let forced = client_request("ws://h/", &HeaderMap::new(), WsProtocol::GraphqlWs).unwrap();
-        assert_eq!(forced.headers()["sec-websocket-protocol"], "graphql-ws");
+        assert_eq!(offered(WsProtocol::GraphqlWs), "graphql-ws");
+        assert_eq!(
+            offered(WsProtocol::GraphqlTransportWs),
+            "graphql-transport-ws"
+        );
     }
 
     #[test]

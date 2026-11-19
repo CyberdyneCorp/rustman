@@ -69,6 +69,8 @@ const KNOWN_KEYS: &[(&str, &[&str])] = &[
         ],
     ),
     ("graphql", &["endpoints"]),
+    // Read by rustman-jsonrpc (add-jsonrpc-client).
+    ("jsonrpc", &["catalogs", "agent_read_only_methods"]),
     (
         "agent",
         &[
@@ -99,9 +101,25 @@ pub struct Settings {
     #[serde(default)]
     pub graphql: GraphqlSettings,
     #[serde(default)]
+    pub jsonrpc: RpcSettings,
+    #[serde(default)]
     pub agent: AgentSettings,
     #[serde(default)]
     pub variables: Variables,
+}
+
+/// `[jsonrpc]`: settings of the JSON-RPC client. Not `JsonrpcSettings`:
+/// that name is the per-request `settings:` block of a `kind: jsonrpc`
+/// file ([`crate::model::JsonrpcSettings`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct RpcSettings {
+    /// `[jsonrpc.catalogs]`: endpoint URL (as a request writes it, or
+    /// resolved) to an OpenRPC document, relative to the workspace root.
+    pub catalogs: BTreeMap<String, String>,
+    /// Method globs agents may call through `rpc_call`; `@name` entries
+    /// are presets other capabilities register. Empty: none.
+    pub agent_read_only_methods: Vec<String>,
 }
 
 /// `[graphql]`: settings of the GraphQL client.
@@ -376,6 +394,20 @@ mod tests {
         assert!(
             parse("[workspace]\nname = \"a\"\nversion = 1\n[explore]\nproducer = {}\n").is_err()
         );
+    }
+
+    #[test]
+    fn the_jsonrpc_table_is_read() {
+        let text = "[workspace]\nname = \"a\"\nversion = 1\n\n[jsonrpc]\nagent_read_only_methods = [\"getblock*\"]\n\n[jsonrpc.catalogs]\n\"{{rpc_url}}\" = \"openrpc/node.json\"\n";
+        let (settings, warnings) = parse(text).unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(settings.jsonrpc.agent_read_only_methods, ["getblock*"]);
+        assert_eq!(
+            settings.jsonrpc.catalogs["{{rpc_url}}"],
+            "openrpc/node.json"
+        );
+        let unknown = "[workspace]\nname = \"a\"\nversion = 1\n[jsonrpc]\ncatalog = \"x\"\n";
+        assert!(parse(unknown).is_err());
     }
 
     #[test]

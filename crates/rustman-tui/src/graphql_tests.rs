@@ -285,7 +285,7 @@ fn the_help_overlay_lists_the_graphql_keys() {
     assert!(matches!(state.overlay, Some(Overlay::Help { .. })));
     let screen = text(&state);
     for line in [
-        "Ctrl+Space               Show GraphQL completions",
+        "Ctrl+Space               Show completions",
         "Ctrl+G                   Refresh GraphQL schema",
         "Alt+S                    Start GraphQL subscription",
         "Alt+X                    Stop GraphQL subscription",

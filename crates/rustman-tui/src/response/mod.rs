@@ -12,6 +12,7 @@ pub mod find;
 pub mod graphql;
 pub mod html;
 pub mod json_tree;
+pub mod jsonrpc;
 pub mod picker;
 pub mod received;
 pub mod text;
@@ -44,8 +45,12 @@ pub enum ResponseTab {
     Errors,
     /// GraphQL: `extensions`.
     Extensions,
-    /// GraphQL: a subscription's events.
+    /// GraphQL and JSON-RPC: a subscription's events.
     Events,
+    /// JSON-RPC: each call's `result`.
+    Result,
+    /// JSON-RPC: each call's error code, message and data.
+    Error,
     /// A failed, missing or new snapshot and its review.
     Snapshot,
 }
@@ -59,6 +64,17 @@ impl ResponseTab {
         Self::Data,
         Self::Errors,
         Self::Extensions,
+        Self::Events,
+        Self::Body,
+        Self::Headers,
+        Self::Timing,
+        Self::Assertions,
+    ];
+
+    /// The tabs of a JSON-RPC exchange.
+    pub const JSONRPC: [Self; 7] = [
+        Self::Result,
+        Self::Error,
         Self::Events,
         Self::Body,
         Self::Headers,
@@ -98,6 +114,8 @@ impl ResponseTab {
             Self::Errors => "Errors",
             Self::Extensions => "Extensions",
             Self::Events => "Events",
+            Self::Result => "Result",
+            Self::Error => "Error",
             Self::Snapshot => "Snapshot",
         }
     }
@@ -243,6 +261,8 @@ pub struct Viewer {
     search_job: Option<(u64, CancellationToken)>,
     /// The exchange is a GraphQL one: its result has tabs of its own.
     pub graphql: bool,
+    /// The exchange is a JSON-RPC one: its result has tabs of its own.
+    pub jsonrpc: bool,
     /// The exchange has a snapshot to review: the Snapshot tab is shown.
     pub snapshot: bool,
 }
@@ -259,22 +279,28 @@ impl Viewer {
             ..Page::default()
         });
         let graphql = received.graphql.is_some();
+        let jsonrpc = received.jsonrpc.is_some();
+        let tab = match (graphql, jsonrpc) {
+            (true, _) => ResponseTab::Data,
+            (_, true) => ResponseTab::Result,
+            _ => ResponseTab::Body,
+        };
         Self {
             tree,
             page,
             graphql,
+            jsonrpc,
             snapshot: !received.snapshots.is_empty(),
-            tab: if graphql {
-                ResponseTab::Data
-            } else {
-                ResponseTab::Body
-            },
+            tab,
             ..Self::default()
         }
     }
 
     /// The tabs this exchange has.
     pub fn tabs(&self) -> &'static [ResponseTab] {
+        if self.jsonrpc {
+            return &ResponseTab::JSONRPC;
+        }
         match (self.graphql, self.snapshot) {
             (true, false) => &ResponseTab::GRAPHQL,
             (true, true) => &ResponseTab::GRAPHQL_WITH_SNAPSHOT,

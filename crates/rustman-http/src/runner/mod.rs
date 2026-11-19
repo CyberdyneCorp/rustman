@@ -21,6 +21,7 @@
 mod execute;
 mod graphql;
 mod history;
+mod jsonrpc;
 mod record;
 mod seed;
 mod snapshots;
@@ -52,6 +53,7 @@ use crate::exchange::Exchange;
 use crate::timing::millis;
 
 pub use graphql::{GraphqlCall, GraphqlExecutor, GraphqlFuture, GraphqlOutcome};
+pub use jsonrpc::{JsonrpcCall, JsonrpcCallCheck, JsonrpcExecutor, JsonrpcFuture, JsonrpcOutcome};
 pub use record::{exchange_record, timings_record};
 
 /// Where requests run: the workspace (or, for an ad-hoc request outside
@@ -110,6 +112,9 @@ pub struct RunOptions<'a> {
     /// Sends `kind: graphql` requests; without one they are skipped as an
     /// unsupported kind.
     pub graphql: Option<&'a dyn GraphqlExecutor>,
+    /// Sends `kind: jsonrpc` requests; without one they are skipped as an
+    /// unsupported kind.
+    pub jsonrpc: Option<&'a dyn JsonrpcExecutor>,
     /// How `snapshot` assertions treat their files: record, update
     /// (`--update-snapshots`) or CI (`--ci`, `CI=true`).
     pub snapshots: SnapshotMode,
@@ -147,6 +152,7 @@ impl Default for RunOptions<'_> {
             history: None,
             ad_hoc: false,
             graphql: None,
+            jsonrpc: None,
             gate: None,
             snapshots: SnapshotMode::Record,
         }
@@ -181,6 +187,12 @@ pub struct Sent {
 }
 
 impl Sent {
+    /// The request as resolved, once resolution succeeded. It holds secret
+    /// values: never print or record it.
+    pub fn resolved(&self) -> Option<&ResolvedRequest> {
+        self.resolved.as_ref()
+    }
+
     /// Delete the response's spill file once this result is dropped (after
     /// `rustman send` printed it), unless a history entry keeps it.
     fn discard_spill_unless(&mut self, kept: bool) {

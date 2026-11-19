@@ -268,7 +268,7 @@ assertions:
 
 ### WebSocket
 
-With `transport: ws`, an `http://` or `https://` endpoint is reached as `ws://` or `wss://` (a `ws(s)://` endpoint is used as is). The handshake carries the request's headers, auth helper and cookies, and uses its TLS settings (`ca_bundle`, client certificates, `verify_tls`, `--insecure`); proxies are not used for WebSockets.
+With `transport: ws`, an `http://` or `https://` endpoint is reached as `ws://` or `wss://` (a `ws(s)://` endpoint is used as is). The handshake carries the request's headers, auth helper and cookies, and uses its TLS settings (`ca_bundle`, client certificates, `verify_tls`, `--insecure`) and proxies (an HTTP proxy always tunnels with `CONNECT`); the WebSocket stack is shared with [JSON-RPC](jsonrpc.md#websocket).
 
 Rustman speaks [`graphql-transport-ws`](https://github.com/enisdenjo/graphql-ws/blob/master/PROTOCOL.md): it sends `connection_init` with `connection_params` as its payload, waits for `connection_ack`, sends `subscribe`, records each `next`, answers `ping` with `pong`, and sends `complete` when it stops the subscription. A server that does not acknowledge the connection within 10 seconds (or, headless, within what is left of `duration`; the handshake is bounded the same way) stops the subscription with:
 

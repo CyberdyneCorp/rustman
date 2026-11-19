@@ -28,6 +28,7 @@ mod timing;
 mod tls;
 mod transport;
 mod tunnel;
+mod websocket;
 mod wire;
 
 pub use body::{
@@ -54,4 +55,7 @@ pub use snippet::{Lang, Snippet, SnippetError, SnippetOptions, snippet};
 pub use stream::{StreamedResponse, request_head};
 pub use timing::{Timings, millis};
 pub use tls::{ALPN_HTTP, TlsSettings};
+pub use websocket::{
+    OpenedWebSocket, UrlScheme, WebSocket, WebSocketError, WsIo, open_websocket, with_scheme,
+};
 pub use wire::USER_AGENT_VALUE;

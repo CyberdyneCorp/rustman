@@ -69,6 +69,7 @@ pub fn badge(request: &Request) -> Badge {
             (method, token)
         }
         Request::Graphql(_) => ("GQL".to_owned(), Token::Info),
+        Request::Jsonrpc(_) => ("RPC".to_owned(), Token::Info),
         Request::Opaque(opaque) => {
             let text = match opaque.kind.as_str() {
                 "graphql" => "GQL".to_owned(),

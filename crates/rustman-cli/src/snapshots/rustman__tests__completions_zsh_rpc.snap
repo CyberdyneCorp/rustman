@@ -1,0 +1,330 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: "&script[start..end]"
+---
+(rpc)
+_arguments "${_arguments_options[@]}" : \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_rustman__subcmd__rpc_commands" \
+"*::: :->rpc" \
+&& ret=0
+
+    case $state in
+    (rpc)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rustman-rpc-command-$line[1]:"
+        case $line[1] in
+            (call)
+_arguments "${_arguments_options[@]}" : \
+'*-H+[Add a header (repeatable)\: --header "Authorization\: Basic {{auth}}"]:NAME: VALUE:_default' \
+'*--header=[Add a header (repeatable)\: --header "Authorization\: Basic {{auth}}"]:NAME: VALUE:_default' \
+'(--notify)--id=[Send this id instead of 1 (an integer, or else a string)]:ID:_default' \
+'--subscribe=[Subscribe\: METHOD is the subscribe method and this the notification method (needs --unsubscribe and a ws\:// or wss\:// endpoint)]:NOTIFICATION:_default' \
+'--unsubscribe=[The method that ends a subscription]:METHOD:_default' \
+'--max-events=[Subscriptions stop after N events (default\: the request'\''s max_events, else 10)]:N:_default' \
+'--duration=[Subscriptions stop after this long (default\: the request'\''s max_duration_ms, else 30s)]:DURATION:_default' \
+'--env=[Environment (default\: RUSTMAN_ENV, then default_environment)]:NAME:_default' \
+'--workspace=[Workspace directory (default\: search from the current directory upwards)]:DIR:_files' \
+'*--var=[Set a variable, above every other source (repeatable)\: --var k=v]:K=V:_default' \
+'--timeout=[Total timeout per request, replacing settings.timeout_ms\: 500ms, 5s, 2m, or a number of milliseconds]:DURATION:_default' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'--notify[Send a notification\: no id, no response expected]' \
+'--no-validate[Send even when the call does not match the endpoint'\''s OpenRPC catalog]' \
+'(--json)--raw[Print the response envelopes as received (redacted)]' \
+'--json[Print the whole exchange as one JSON object]' \
+'-k[Do not verify TLS certificates (exchanges are flagged insecure)]' \
+'--insecure[Do not verify TLS certificates (exchanges are flagged insecure)]' \
+'--no-history[Do not record the exchanges in history]' \
+'-u[Overwrite snapshots that differ from the response (not in CI mode)]' \
+'--update-snapshots[Overwrite snapshots that differ from the response (not in CI mode)]' \
+'--ci[CI mode\: never write snapshots, and fail on a missing one (also on when the CI variable is true or 1)]' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':target -- An endpoint URL (http, https, ws, wss, or a {{variable}}), or a jsonrpc request file, its id or its name:_default' \
+'::method -- The method to call (with an endpoint):_default' \
+'::params -- The params, as a JSON array or object:_default' \
+&& ret=0
+;;
+(batch)
+_arguments "${_arguments_options[@]}" : \
+'*-H+[Add a header (repeatable)\: --header "Authorization\: Bearer {{token}}"]:NAME: VALUE:_default' \
+'*--header=[Add a header (repeatable)\: --header "Authorization\: Bearer {{token}}"]:NAME: VALUE:_default' \
+'--env=[Environment (default\: RUSTMAN_ENV, then default_environment)]:NAME:_default' \
+'--workspace=[Workspace directory (default\: search from the current directory upwards)]:DIR:_files' \
+'*--var=[Set a variable, above every other source (repeatable)\: --var k=v]:K=V:_default' \
+'--timeout=[Total timeout per request, replacing settings.timeout_ms\: 500ms, 5s, 2m, or a number of milliseconds]:DURATION:_default' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'--no-validate[Send even when the calls do not match the endpoint'\''s OpenRPC catalog]' \
+'--json[Print every result as one JSON array]' \
+'-k[Do not verify TLS certificates (exchanges are flagged insecure)]' \
+'--insecure[Do not verify TLS certificates (exchanges are flagged insecure)]' \
+'--no-history[Do not record the exchanges in history]' \
+'-u[Overwrite snapshots that differ from the response (not in CI mode)]' \
+'--update-snapshots[Overwrite snapshots that differ from the response (not in CI mode)]' \
+'--ci[CI mode\: never write snapshots, and fail on a missing one (also on when the CI variable is true or 1)]' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':endpoint -- The endpoint URL (or a {{variable}} holding one):_default' \
+':file -- The calls\: a JSON array, a YAML list or JSON lines; - reads stdin:_default' \
+&& ret=0
+;;
+(discover)
+_arguments "${_arguments_options[@]}" : \
+'*-H+[Add a header (repeatable)\: --header "Authorization\: Bearer {{token}}"]:NAME: VALUE:_default' \
+'*--header=[Add a header (repeatable)\: --header "Authorization\: Bearer {{token}}"]:NAME: VALUE:_default' \
+'--env=[Environment (default\: RUSTMAN_ENV, then default_environment)]:NAME:_default' \
+'--workspace=[Workspace directory (default\: search from the current directory upwards)]:DIR:_files' \
+'*--var=[Set a variable, above every other source (repeatable)\: --var k=v]:K=V:_default' \
+'--timeout=[Total timeout per request, replacing settings.timeout_ms\: 500ms, 5s, 2m, or a number of milliseconds]:DURATION:_default' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'-k[Do not verify TLS certificates (exchanges are flagged insecure)]' \
+'--insecure[Do not verify TLS certificates (exchanges are flagged insecure)]' \
+'--no-history[Do not record the exchanges in history]' \
+'-u[Overwrite snapshots that differ from the response (not in CI mode)]' \
+'--update-snapshots[Overwrite snapshots that differ from the response (not in CI mode)]' \
+'--ci[CI mode\: never write snapshots, and fail on a missing one (also on when the CI variable is true or 1)]' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':endpoint -- The endpoint URL (or a {{variable}} holding one):_default' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_rustman__subcmd__rpc__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rustman-rpc-help-command-$line[1]:"
+        case $line[1] in
+            (call)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(batch)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(discover)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(history)
+_arguments "${_arguments_options[@]}" : \
+'--workspace=[Workspace directory (default\: search from the current directory upwards; outside any workspace, the ad-hoc history)]:DIR:_files' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_rustman__subcmd__history_commands" \
+"*::: :->history" \
+&& ret=0
+
+    case $state in
+    (history)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rustman-history-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" : \
+'--status=[Only exchanges with this status code (404) or class (5xx)]:CODE|CLASS:_default' \
+'--method=[Only exchanges with this method]:METHOD:_default' \
+'--grep=[Only exchanges whose URL, request body or response body contains TEXT (ignoring case)]:TEXT:_default' \
+'--since=[Only exchanges from the last DURATION\: 30s, 15m, 1h, 2d or 1w]:DURATION:_default' \
+'--limit=[Show at most N exchanges (at least 1)]:N:_default' \
+'--workspace=[Workspace directory (default\: search from the current directory upwards; outside any workspace, the ad-hoc history)]:DIR:_files' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'--json[Print a JSON array instead of one line per exchange]' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" : \
+'--workspace=[Workspace directory (default\: search from the current directory upwards; outside any workspace, the ad-hoc history)]:DIR:_files' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'--json[Print the stored JSON entry]' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':id -- The exchange id (or a unique prefix of it):_default' \
+&& ret=0
+;;
+(replay)
+_arguments "${_arguments_options[@]}" : \
+'-o+[Write the response body, byte for byte, to FILE instead of stdout]:FILE:_files' \
+'--output=[Write the response body, byte for byte, to FILE instead of stdout]:FILE:_files' \
+'--workspace=[Workspace directory (default\: search from the current directory upwards; outside any workspace, the ad-hoc history)]:DIR:_files' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'--no-history[Do not record the replayed exchange]' \
+'--body-only[Print only the response body, redacted (as received with --show-secrets)]' \
+'--show-secrets[Print secret values and credential headers as they are, on this terminal only (history and reports stay redacted)]' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':id -- The exchange id (or a unique prefix of it):_default' \
+&& ret=0
+;;
+(clear)
+_arguments "${_arguments_options[@]}" : \
+'--workspace=[Workspace directory (default\: search from the current directory upwards; outside any workspace, the ad-hoc history)]:DIR:_files' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_rustman__subcmd__history__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rustman-history-help-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(replay)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(clear)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(mcp)
+_arguments "${_arguments_options[@]}" : \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_rustman__subcmd__mcp_commands" \
+"*::: :->mcp" \
+&& ret=0
+
+    case $state in
+    (mcp)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rustman-mcp-command-$line[1]:"
+        case $line[1] in
+            (serve)
+_arguments "${_arguments_options[@]}" : \
+'--http=[Serve Streamable HTTP at /mcp instead of stdio, on ADDR (default 127.0.0.1\:8765)]::ADDR:_default' \
+'--token-file=[Read the HTTP bearer token from FILE (default\: generate one and print it on stderr)]:FILE:_files' \
+'--env=[Environment (default\: RUSTMAN_ENV, then default_environment)]:NAME:_default' \
+'--workspace=[Workspace directory (default\: search from the current directory upwards)]:DIR:_files' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'--allow-remote[Allow --http on a non-loopback address]' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_rustman__subcmd__mcp__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rustman-mcp-help-command-$line[1]:"
+        case $line[1] in
+            (serve)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;

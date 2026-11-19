@@ -21,7 +21,7 @@ use minijinja::value::Serde;
 use minijinja::{Environment, UndefinedBehavior, Value};
 use rustman_core::RequestRef;
 use rustman_core::collection::RequestEntry;
-use rustman_core::model::{Auth, Request, graphql_as_http};
+use rustman_core::model::{Auth, Request, graphql_as_http, jsonrpc_as_http};
 pub use rustman_core::vars::resolve_placeholders;
 use rustman_core::vars::{PlaceholderVar, ResolvedRequest};
 
@@ -163,27 +163,30 @@ pub enum SnippetError {
     UnknownLanguage(String),
     #[error("snippet: kind '{0}' has no snippet export")]
     UnsupportedKind(String),
-    /// A `kind: graphql` file that cannot be read as a POST.
+    /// A `kind: graphql` or `kind: jsonrpc` file that cannot be read as a
+    /// POST.
     #[error("{0}")]
     Invalid(String),
 }
 
 /// The HTTP request a snippet of `target` is made from: `None` for a
-/// `kind: http` request (use it as it is), its POST for `kind: graphql`.
-/// Other kinds have no snippet export.
+/// `kind: http` request (use it as it is), its POST for `kind: graphql` and
+/// for `kind: jsonrpc` calls over HTTP. Other kinds have no snippet export.
 pub fn http_entry(target: &RequestRef<'_>) -> Result<Option<RequestEntry>, SnippetError> {
-    let graphql = match target.request() {
+    let file = target.root.join(&target.entry.path);
+    let http = match target.request() {
         Request::Http(_) => return Ok(None),
-        Request::Graphql(graphql) => graphql,
+        Request::Graphql(graphql) => {
+            let read = |raw: &str| {
+                let path = target.contain_file(raw).map_err(|e| e.to_string())?;
+                std::fs::read_to_string(&path).map_err(|e| format!("cannot read {raw}: {e}"))
+            };
+            graphql_as_http(&file, graphql, read)
+        }
+        Request::Jsonrpc(jsonrpc) => jsonrpc_as_http(&file, jsonrpc),
         Request::Opaque(other) => return Err(SnippetError::UnsupportedKind(other.kind.clone())),
     };
-    let read = |raw: &str| {
-        let path = target.contain_file(raw).map_err(|e| e.to_string())?;
-        std::fs::read_to_string(&path).map_err(|e| format!("cannot read {raw}: {e}"))
-    };
-    let file = target.root.join(&target.entry.path);
-    let http =
-        graphql_as_http(&file, graphql, read).map_err(|e| SnippetError::Invalid(e.to_string()))?;
+    let http = http.map_err(|e| SnippetError::Invalid(e.to_string()))?;
     Ok(Some(RequestEntry {
         path: target.entry.path.clone(),
         request: Request::Http(Box::new(http)),

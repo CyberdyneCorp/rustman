@@ -322,7 +322,7 @@ impl ResolvedRequest {
     }
 }
 
-fn tls_files(settings: &RequestSettings) -> TlsFiles {
+pub(super) fn tls_files(settings: &RequestSettings) -> TlsFiles {
     let file =
         |p: &Option<Located<String>>| p.as_ref().map(|p| ResolvedFile::unchecked(p.get().clone()));
     TlsFiles {
@@ -486,7 +486,10 @@ fn oauth2(i: &mut Interpolator<'_, '_>, oauth: &OAuth2) -> OAuth2 {
     }
 }
 
-fn settings(i: &mut Interpolator<'_, '_>, settings: Option<&RequestSettings>) -> RequestSettings {
+pub(super) fn settings(
+    i: &mut Interpolator<'_, '_>,
+    settings: Option<&RequestSettings>,
+) -> RequestSettings {
     let Some(settings) = settings else {
         return RequestSettings::default();
     };

@@ -19,6 +19,7 @@ rustman-import.workspace = true
 rustman-report.workspace = true
 rustman-explore.workspace = true
 rustman-graphql.workspace = true
+rustman-jsonrpc.workspace = true
 rustman-mcp.workspace = true
 rustman-tui.workspace = true
 rustman-webhook.workspace = true

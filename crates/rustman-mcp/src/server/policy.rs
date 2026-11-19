@@ -78,6 +78,35 @@ pub fn session_sender(
     agent: &AgentSettings,
     environment: Option<&Environment>,
 ) -> Result<GovernedSender, String> {
+    let policy = policy_with(safety, agent, environment, agent.permission())?;
+    Ok(GovernedSender::new(
+        policy,
+        Governor::new(session_limits(safety)),
+    ))
+}
+
+/// The sender of the `rpc_call` tool: the session's allowlist and
+/// production rule, and the governor of `session` (one rate and
+/// concurrency limit for every request of the session), but every
+/// JSON-RPC call is a `POST`, so the method rule is
+/// `agent_read_only_methods` (checked by the tool) instead of the HTTP
+/// method (add-jsonrpc-client design D7).
+pub fn rpc_sender(
+    session: &GovernedSender,
+    safety: &SafetySettings,
+    agent: &AgentSettings,
+    environment: Option<&Environment>,
+) -> Result<GovernedSender, String> {
+    let policy = policy_with(safety, agent, environment, Permission::Mutations)?;
+    Ok(session.with_policy(policy))
+}
+
+fn policy_with(
+    safety: &SafetySettings,
+    agent: &AgentSettings,
+    environment: Option<&Environment>,
+    permission: Permission,
+) -> Result<SafetyPolicy, String> {
     let origins = allowlist(agent, environment);
     let Some((first, rest)) = origins.split_first() else {
         return Err("host not allowed".to_owned());
@@ -85,17 +114,13 @@ pub fn session_sender(
     let target = first.to_string();
     let options = PolicyOptions {
         target: &target,
-        permission: agent.permission(),
+        permission,
         allow_hosts: rest,
         production: None,
         environment: environment.map(EnvironmentInfo::from).unwrap_or_default(),
     };
     let settings = agent_safety(safety, &[]);
-    let policy = SafetyPolicy::new(&settings, options).map_err(|e| e.to_string())?;
-    Ok(GovernedSender::new(
-        policy,
-        Governor::new(session_limits(safety)),
-    ))
+    SafetyPolicy::new(&settings, options).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -199,6 +224,24 @@ mod tests {
         assert_eq!(refused.reason(), "host not allowed");
         assert!(policy.check("POST", "http://127.0.0.1:8080/users").is_err());
         assert_eq!(sender.governor().limits().max_probes, u64::MAX);
+    }
+
+    #[test]
+    fn rpc_call_shares_the_session_governor() {
+        // Regression: `rpc_call` had its own governor, so a session got the
+        // `[safety]` rate and concurrency twice.
+        let local = env("local", &[("base_url", "http://127.0.0.1:8080")], false);
+        let (safety, agent) = (SafetySettings::default(), AgentSettings::default());
+        let session = session_sender(&safety, &agent, Some(&local)).unwrap();
+        let rpc = rpc_sender(&session, &safety, &agent, Some(&local)).unwrap();
+        assert!(std::ptr::eq(session.governor(), rpc.governor()));
+        assert!(rpc.policy().check("POST", "http://127.0.0.1:8080/").is_ok());
+        assert!(
+            session
+                .policy()
+                .check("POST", "http://127.0.0.1:8080/")
+                .is_err()
+        );
     }
 
     #[test]

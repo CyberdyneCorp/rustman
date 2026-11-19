@@ -143,7 +143,7 @@ A constant takes the variable's value in the selected environment, or `{{name}}`
 
 ## Request kinds
 
-`kind: http` and `kind: graphql` requests have snippets. A GraphQL request exports as the HTTP POST it sends: `{"query", "operationName", "variables"}` as JSON, with `Accept: application/graphql-response+json, application/json`. The document is never interpolated; its `variables` are. Any other kind exits with code 2:
+`kind: http`, `kind: graphql` and `kind: jsonrpc` requests have snippets. A GraphQL request exports as the HTTP POST it sends: `{"query", "operationName", "variables"}` as JSON, with `Accept: application/graphql-response+json, application/json`. The document is never interpolated; its `variables` are. A [JSON-RPC](jsonrpc.md) call or batch to an `http(s)` endpoint exports as its POST: the envelope (or the batch array) with explicit ids as written and sequential ids for the rest; a `ws(s)` endpoint or a subscription exits with code 2. Any other kind exits with code 2:
 
 ```text
 error: snippet: kind 'mcp' has no snippet export

@@ -24,9 +24,7 @@ url.workspace = true
 bytes.workspace = true
 futures-util = { workspace = true, features = ["sink"] }
 http.workspace = true
-rustls-pki-types.workspace = true
 tokio = { workspace = true, features = ["macros", "net", "sync", "time"] }
-tokio-rustls.workspace = true
 tokio-tungstenite.workspace = true
 tokio-util.workspace = true
 

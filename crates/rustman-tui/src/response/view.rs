@@ -102,7 +102,13 @@ pub fn content_height(rect: Rect, viewer: &Viewer) -> usize {
 pub fn summary_line(tab: &Tab, ctx: &Ctx) -> Line<'static> {
     let ui = ctx.ui;
     if let Some(flight) = &tab.in_flight {
-        return sending_line(flight, ctx);
+        // `Esc` unsubscribes a JSON-RPC subscription (and keeps its events).
+        let keys = if tab.editor.jsonrpc().is_some() {
+            "Esc unsubscribes"
+        } else {
+            "Alt+X stops, Esc cancels"
+        };
+        return sending_line(flight, keys, ctx);
     }
     match tab.exchange.as_deref() {
         None => {
@@ -113,14 +119,14 @@ pub fn summary_line(tab: &Tab, ctx: &Ctx) -> Line<'static> {
     }
 }
 
-fn sending_line(flight: &InFlight, ctx: &Ctx) -> Line<'static> {
+fn sending_line(flight: &InFlight, keys: &str, ctx: &Ctx) -> Line<'static> {
     let elapsed = ctx.now.saturating_duration_since(flight.started);
     let frames = ctx.ui.glyphs.spinner;
     let frame = usize::try_from(elapsed.as_millis() / 100).unwrap_or(0) % frames.len();
     let events = flight.live_count();
     let text = if events > 0 {
         format!(
-            "{} Subscribed: {events} events {} {:.1} s  (Alt+X stops, Esc cancels)",
+            "{} Subscribed: {events} events {} {:.1} s  ({keys})",
             frames[frame],
             ctx.ui.glyphs.dot,
             elapsed.as_secs_f64()
@@ -315,10 +321,23 @@ pub fn tab_lines(
         ResponseTab::Assertions => assertion_lines(&received.record, ui),
         ResponseTab::Snapshot => crate::review::lines(&received.snapshots, ui),
         ResponseTab::Body => Vec::new(),
-        tab => match &received.graphql {
+        tab => rpc_lines(received, tab, ui).unwrap_or_else(|| match &received.graphql {
             Some(view) => super::graphql::lines(view, tab.label(), ui),
             None => vec![hint("Not a GraphQL exchange.", ui)],
-        },
+        }),
+    }
+}
+
+/// The lines of a JSON-RPC tab; `None` for a GraphQL one.
+fn rpc_lines(received: &Received, tab: ResponseTab, ui: &UiOptions) -> Option<Vec<Line<'static>>> {
+    match (received.jsonrpc.as_deref(), tab) {
+        (Some(view), ResponseTab::Result | ResponseTab::Error | ResponseTab::Events) => {
+            Some(super::jsonrpc::lines(view, tab.label(), ui))
+        }
+        (None, ResponseTab::Result | ResponseTab::Error) => {
+            Some(vec![hint("Not a JSON-RPC exchange.", ui)])
+        }
+        _ => None,
     }
 }
 

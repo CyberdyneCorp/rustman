@@ -470,3 +470,73 @@ fn results_serialize_for_reports() {
 fn no_assertions_means_no_failures() {
     assert!(run("[]\n", &response(500, "")).is_empty());
 }
+
+#[test]
+fn rpc_error_expected_error_passes() {
+    let error = response(
+        200,
+        r#"{"jsonrpc":"2.0","id":1,"error":{"code":-32602,"message":"invalid params: bad hex"}}"#,
+    );
+    assert!(run("- rpc_error: {code: -32602}\n", &error)[0].passed());
+    let with_text = "- rpc_error: {code: -32602, message_contains: bad hex}\n";
+    assert!(run(with_text, &error)[0].passed());
+    assert_eq!(
+        shown(
+            "- rpc_error: {code: -32602, message_contains: nope}\n",
+            &error
+        ),
+        r#"rpc_error: expected a message containing "nope", got "invalid params: bad hex""#
+    );
+}
+
+#[test]
+fn rpc_error_unexpected_success_and_wrong_code() {
+    let result = response(200, r#"{"jsonrpc":"2.0","id":1,"result":"0x10"}"#);
+    assert_eq!(
+        shown("- rpc_error: {code: -32602}\n", &result),
+        "rpc_error: expected code -32602, got result"
+    );
+    let other = response(
+        200,
+        r#"{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"Method not found"}}"#,
+    );
+    assert_eq!(
+        shown("- rpc_error: {code: -32602}\n", &other),
+        "rpc_error: expected code -32602, got code -32601"
+    );
+}
+
+#[test]
+fn rpc_error_none_asserts_success() {
+    let result = response(200, r#"{"jsonrpc":"2.0","id":1,"result":null}"#);
+    assert!(run("- rpc_error: none\n", &result)[0].passed());
+    let error = response(
+        200,
+        r#"{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"x"}}"#,
+    );
+    assert_eq!(
+        shown("- rpc_error: none\n", &error),
+        "rpc_error: expected none, got code -32000"
+    );
+    assert_eq!(
+        shown("- rpc_error: none\n", &response(200, "<html>")),
+        "error: rpc_error: response is not a JSON-RPC response"
+    );
+}
+
+#[test]
+fn rpc_error_forms_are_checked_at_load() {
+    let err =
+        crate::format::from_yaml::<Vec<Assertion>>(Path::new("a.yaml"), "- rpc_error: some\n")
+            .unwrap_err();
+    assert!(
+        err.to_string().contains("invalid rpc_error 'some'"),
+        "{err}"
+    );
+    let err = crate::format::from_yaml::<Vec<Assertion>>(
+        Path::new("a.yaml"),
+        "- rpc_error: {message_contains: x}\n",
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("code"), "{err}");
+}

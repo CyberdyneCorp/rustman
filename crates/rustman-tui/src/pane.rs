@@ -19,6 +19,7 @@ use crate::config::UiOptions;
 use crate::focus::Focus;
 use crate::graphql_pane::{GraphqlEditor, GraphqlPane};
 use crate::http_pane::HttpPane;
+use crate::jsonrpc_pane::{JsonrpcEditor, JsonrpcPane};
 use crate::keymap::{Chord, Keymap};
 use crate::theme::Token;
 use crate::vars_view::VarScope;
@@ -80,6 +81,13 @@ pub trait PaneEditor: fmt::Debug + Send {
     fn graphql_mut(&mut self) -> Option<&mut GraphqlEditor> {
         None
     }
+    /// The JSON-RPC editor, for its catalog, completion and subscriptions.
+    fn jsonrpc(&self) -> Option<&JsonrpcEditor> {
+        None
+    }
+    fn jsonrpc_mut(&mut self) -> Option<&mut JsonrpcEditor> {
+        None
+    }
 }
 
 /// A pane registered for one request kind.
@@ -95,10 +103,10 @@ pub struct Registry {
 }
 
 impl Registry {
-    /// The panes shipped here: `http` and `graphql`.
+    /// The panes shipped here: `http`, `graphql` and `jsonrpc`.
     pub fn builtin() -> Self {
         Self {
-            panes: vec![&HttpPane, &GraphqlPane],
+            panes: vec![&HttpPane, &GraphqlPane, &JsonrpcPane],
         }
     }
 
@@ -217,7 +225,7 @@ mod tests {
     #[test]
     fn http_has_a_pane_and_unknown_kinds_open_read_only() {
         let registry = Registry::builtin();
-        assert_eq!(registry.kinds(), ["http", "graphql"]);
+        assert_eq!(registry.kinds(), ["http", "graphql", "jsonrpc"]);
         let http = load("version: 1\nkind: http\nname: A\nurl: http://x/\n");
         let editor = registry.open(&http);
         assert_eq!(editor.kind(), "http");

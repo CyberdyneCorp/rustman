@@ -70,10 +70,10 @@ Options:
           Also render the report as json, junit, markdown, html or sarif, written to a file or stdout, as in html=out/report.html (repeatable)
 
       --max-events <N>
-          GraphQL subscriptions stop after N events (default: each request's max_events, else 10)
+          GraphQL and JSON-RPC subscriptions stop after N events (default: each request's max_events, else 10)
 
       --duration <DURATION>
-          GraphQL subscriptions stop after this long (default: each request's duration, else 30s)
+          GraphQL and JSON-RPC subscriptions stop after this long (default: each request's duration or max_duration_ms, else 30s)
 
       --color <WHEN>
           Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never

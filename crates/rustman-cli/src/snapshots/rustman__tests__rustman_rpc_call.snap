@@ -1,0 +1,83 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Send one JSON-RPC call (an endpoint with a method, or a request file) and print its result or error object
+
+Usage: rustman rpc call [OPTIONS] <ENDPOINT|REQUEST> [METHOD] [PARAMS_JSON]
+
+Arguments:
+  <ENDPOINT|REQUEST>
+          An endpoint URL (http, https, ws, wss, or a {{variable}}), or a jsonrpc request file, its id or its name
+
+  [METHOD]
+          The method to call (with an endpoint)
+
+  [PARAMS_JSON]
+          The params, as a JSON array or object
+
+Options:
+  -H, --header <NAME: VALUE>
+          Add a header (repeatable): --header "Authorization: Basic {{auth}}"
+
+      --id <ID>
+          Send this id instead of 1 (an integer, or else a string)
+
+      --notify
+          Send a notification: no id, no response expected
+
+      --subscribe <NOTIFICATION>
+          Subscribe: METHOD is the subscribe method and this the notification method (needs --unsubscribe and a ws:// or wss:// endpoint)
+
+      --unsubscribe <METHOD>
+          The method that ends a subscription
+
+      --max-events <N>
+          Subscriptions stop after N events (default: the request's max_events, else 10)
+
+      --duration <DURATION>
+          Subscriptions stop after this long (default: the request's max_duration_ms, else 30s)
+
+      --no-validate
+          Send even when the call does not match the endpoint's OpenRPC catalog
+
+      --raw
+          Print the response envelopes as received (redacted)
+
+      --json
+          Print the whole exchange as one JSON object
+
+      --env <NAME>
+          Environment (default: RUSTMAN_ENV, then default_environment)
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --var <K=V>
+          Set a variable, above every other source (repeatable): --var k=v
+
+      --timeout <DURATION>
+          Total timeout per request, replacing settings.timeout_ms: 500ms, 5s, 2m, or a number of milliseconds
+
+  -k, --insecure
+          Do not verify TLS certificates (exchanges are flagged insecure)
+
+      --no-history
+          Do not record the exchanges in history
+
+  -u, --update-snapshots
+          Overwrite snapshots that differ from the response (not in CI mode)
+
+      --ci
+          CI mode: never write snapshots, and fail on a missing one (also on when the CI variable is true or 1)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help
