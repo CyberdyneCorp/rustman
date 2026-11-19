@@ -11,7 +11,7 @@ use rustman_core::vars::{
     Resolved, ResolvedBody, ResolvedFile, ResolvedGraphql, ResolvedPair, ResolvedPart,
     ResolvedPartSource, ResolvedRequest,
 };
-use rustman_http::{Exchange, HttpEngine, SendOptions};
+use rustman_http::{Exchange, HttpEngine, RequestError, SendOptions};
 use serde_json::{Map, Value, json};
 
 use crate::error::GraphqlError;
@@ -232,7 +232,8 @@ pub struct HttpResult {
 /// first and the full document follows once on `PersistedQueryNotFound`,
 /// or on `PersistedQueryNotSupported`, which registers nothing.
 /// A first answer that is not a GraphQL result tells neither hit nor miss:
-/// its `apq` is `None`.
+/// its `apq` is `None`. A response body larger than `[http] max_body_bytes`
+/// fails with [`GraphqlError::BodyTooLarge`] as soon as the limit is passed.
 pub async fn execute_http(
     engine: &HttpEngine,
     options: &SendOptions,
@@ -274,13 +275,18 @@ async fn send(
     requests: usize,
 ) -> Result<HttpResult, GraphqlError> {
     let request = operation.http_request(target, with_query);
-    let exchange = engine.send(&request, options).await?;
-    let body = exchange.view(true).map_err(|e| {
-        let message = format!("cannot read the response body: {e}");
-        rustman_http::RequestError::Io(exchange.redactor(&request).text(&message).into_owned())
-    })?;
-    let response = GraphqlResponse::parse(&body.body);
-    drop(body);
+    let limit = options.body.max_in_memory;
+    let exchange = match engine.send(&request, &capped(options)).await {
+        Ok(exchange) => exchange,
+        Err(e) if over_limit(&e, limit) => return Err(GraphqlError::BodyTooLarge(limit)),
+        Err(e) => return Err(e.into()),
+    };
+    if let Some(spill) = &exchange.spill {
+        // Not expected under the cap; never read it back.
+        let _ = std::fs::remove_file(spill);
+        return Err(GraphqlError::BodyTooLarge(limit));
+    }
+    let response = GraphqlResponse::parse(&exchange.body);
     Ok(HttpResult {
         request,
         exchange,
@@ -288,4 +294,52 @@ async fn send(
         apq: None,
         requests,
     })
+}
+
+/// `options` with the body download stopped at the in-memory cap
+/// (`[http] max_body_bytes`): a result is parsed whole and recorded, so it
+/// is never spilled to disk, read back or stored past that cap.
+fn capped(options: &SendOptions) -> SendOptions {
+    let mut capped = options.clone();
+    let limit = options.body.max_in_memory;
+    capped.body.max_download = limit;
+    capped.body.max_decoded = limit;
+    capped
+}
+
+/// Whether `error` is the body reader stopping at `limit` bytes (as
+/// received or decompressed).
+fn over_limit(error: &RequestError, limit: u64) -> bool {
+    let RequestError::Network(message) = error else {
+        return false;
+    };
+    message.starts_with("network: the ")
+        && message.ends_with(&format!("response body is larger than {limit} bytes"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_the_body_limit_of_the_cap_is_over_limit() {
+        let raw =
+            RequestError::Network("network: the response body is larger than 64 bytes".into());
+        let decoded = RequestError::Network(
+            "network: the decompressed response body is larger than 64 bytes".into(),
+        );
+        assert!(over_limit(&raw, 64) && over_limit(&decoded, 64));
+        assert!(!over_limit(&raw, 65));
+        assert!(!over_limit(
+            &RequestError::Network("network: reset".into()),
+            64
+        ));
+        assert!(!over_limit(
+            &RequestError::Io("the response body is larger than 64 bytes".into()),
+            64
+        ));
+        let options = capped(&SendOptions::default());
+        assert_eq!(options.body.max_download, options.body.max_in_memory);
+        assert_eq!(options.body.max_decoded, options.body.max_in_memory);
+    }
 }

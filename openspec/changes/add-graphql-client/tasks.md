@@ -27,6 +27,7 @@
 - [x] 4.2 Response parsing into data/errors/extensions with `ok`/`partial`/`errors` status and non-GraphQL body detection; tests for partial data and HTML 502.
 - [x] 4.3 Multipart uploads per graphql-multipart-request-spec with files read at send time by the shared `rustman-http` encoder (streaming deferred, design D5) and missing-file error; test asserts `operations`, `map` and part MIME type.
 - [x] 4.4 APQ hash-first with single retry on `PersistedQueryNotFound`; test counts two requests and the `APQ miss (registered)` marker.
+- [x] 4.5 Refuse a response body over `[http] max_body_bytes` unread (download capped at the limit, never spilled or read back), without an APQ retry or recording its body. Verify: execute tests with a 4096-byte limit and a body of exactly the limit; a runner test showing an errored record and no body in history or `.rustman/bodies/`.
 
 ## 5. Subscriptions
 

@@ -83,6 +83,11 @@ fn resolve(ws: &Workspace) -> (RequestRef<'_>, ResolvedGraphql) {
 
 /// Prepare and send the fixture's request.
 async fn run(f: &Fixture) -> Result<HttpResult, GraphqlError> {
+    run_with(f, &SendOptions::default()).await
+}
+
+/// [`run`] with `options`.
+async fn run_with(f: &Fixture, options: &SendOptions) -> Result<HttpResult, GraphqlError> {
     let ws = f.workspace();
     let (request, resolved) = resolve(&ws);
     let Request::Graphql(graphql) = request.request() else {
@@ -91,7 +96,7 @@ async fn run(f: &Fixture) -> Result<HttpResult, GraphqlError> {
     let document = load_document(&request, graphql)?;
     let operation = HttpOperation::for_request(&request, graphql, document, &resolved)?;
     let engine = HttpEngine::new();
-    execute_http(&engine, &SendOptions::default(), &resolved, &operation).await
+    execute_http(&engine, options, &resolved, &operation).await
 }
 
 async fn ok_server() -> GraphqlHttpServer {
@@ -400,4 +405,45 @@ async fn secrets_in_variables_and_headers_stay_redacted() {
     assert!(message.contains(SECRET), "the server echoed it");
     assert!(!redactor.text(message).contains(SECRET));
     assert!(!format!("{:?}", result.request).contains(SECRET));
+}
+
+/// Options whose in-memory body cap (`[http] max_body_bytes`) is `limit`.
+fn capped(limit: u64) -> SendOptions {
+    let mut options = SendOptions::default();
+    options.body.max_in_memory = limit;
+    options
+}
+
+#[tokio::test]
+async fn a_result_over_max_body_bytes_is_refused() {
+    let big = "y".repeat(64 * 1024);
+    let server =
+        GraphqlHttpServer::start(move |_| Reply::graphql(json!({"data": {"user": big}}))).await;
+    let f = Fixture::new(&server.url(""));
+    f.request("document: '{ user }'\napq: true\n");
+    let err = run_with(&f, &capped(4096)).await.unwrap_err();
+    assert_eq!(err, GraphqlError::BodyTooLarge(4096));
+    assert_eq!(
+        err.to_string(),
+        "HTTP: the response body is larger than the 4096 byte limit (max_body_bytes)"
+    );
+    assert_eq!(server.hits().len(), 1, "an oversized answer is not resent");
+}
+
+#[tokio::test]
+async fn a_result_of_exactly_max_body_bytes_is_read() {
+    let reply = json!({"data": {"user": "z".repeat(1000)}}).to_string();
+    let size = reply.len() as u64;
+    let served = reply.clone();
+    let server =
+        GraphqlHttpServer::start(move |_| Reply::raw(200, "application/json", &served)).await;
+    let f = Fixture::new(&server.url(""));
+    f.request("document: '{ user }'\n");
+    let result = run_with(&f, &capped(size)).await.unwrap();
+    assert_eq!(result.exchange.body.as_ref(), reply.as_bytes());
+    assert!(result.exchange.spill.is_none());
+    let response = result.response.unwrap();
+    assert_eq!(response.status, ResultStatus::Ok);
+    let err = run_with(&f, &capped(size - 1)).await.unwrap_err();
+    assert_eq!(err, GraphqlError::BodyTooLarge(size - 1));
 }

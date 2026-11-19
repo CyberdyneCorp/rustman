@@ -199,6 +199,14 @@ Error paths are shown joined with dots: `["user", "email"]` is `user.email`, `["
 graphql: response is not a GraphQL result
 ```
 
+A result is parsed whole, so its body may be at most `rustman.toml [http] max_body_bytes` (10 MiB by default, see [HTTP](http.md)), not the `max_download_bytes` limit of plain HTTP requests. A larger body is refused as soon as the limit is passed, without being parsed, spilled to disk or stored:
+
+```text
+HTTP: the response body is larger than the <n> byte limit (max_body_bytes)
+```
+
+The request is `errored` (exit code 3) and is not sent again (with `apq: true`, the full document is not sent after an oversized first answer). History records the error but none of the body.
+
 ### File uploads
 
 A variable value `{ "$file": "path" }` uploads that file, following the [GraphQL multipart request specification](https://github.com/jaydenseric/graphql-multipart-request-spec). The path is relative to the request file and must stay inside the workspace:
@@ -413,5 +421,5 @@ errors:
 | 0 | No errors (and the request's assertions passed). |
 | 1 | `errors` is not empty, the response is not a GraphQL result, or an assertion failed. |
 | 2 | Usage or configuration error (no workspace, unknown request, not a graphql request). |
-| 3 | No response (network, TLS, timeout, unresolved variable, `connection_ack` timeout) or the document failed validation. |
+| 3 | No response (network, TLS, timeout, unresolved variable, `connection_ack` timeout, a body over `max_body_bytes`) or the document failed validation. |
 | 130 | Interrupted by Ctrl+C. |
