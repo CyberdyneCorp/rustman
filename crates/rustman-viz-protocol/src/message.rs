@@ -132,7 +132,8 @@ pub struct ExchangeCompleted {
     pub duration_ms: u64,
     #[serde(default)]
     pub assertions: Assertions,
-    /// The transport error category (`dns`, `connect`, `tls`, ...).
+    /// Why the request errored (a transport error such as `dns`,
+    /// `connect` or `tls`, with its message), redacted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

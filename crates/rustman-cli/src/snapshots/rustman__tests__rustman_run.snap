@@ -81,6 +81,9 @@ Options:
       --trust
           Spawn the workspace's stdio MCP servers that are not trusted yet, and record the approvals
 
+      --viz
+          Show the run live in the graphical viz companion (rustman-viz); the run continues without it when it is not installed
+
       --color <WHEN>
           Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
           

@@ -93,6 +93,8 @@ enum Command {
     Contract(commands::contract::ContractArgs),
     /// Open the trace link of a past exchange in the browser
     Trace(commands::trace::TraceArgs),
+    /// Open a run or exploration report in the graphical viz companion (rustman-viz)
+    Viz(commands::viz::VizArgs),
 }
 
 fn main() -> ExitCode {
@@ -155,6 +157,7 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
         Command::Sse(args) => commands::realtime::run_sse(&args),
         Command::Contract(args) => commands::contract::run(&args),
         Command::Trace(args) => commands::trace::run(&args),
+        Command::Viz(args) => commands::viz::run(&args),
     }
 }
 

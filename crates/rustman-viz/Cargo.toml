@@ -1,0 +1,49 @@
+[package]
+name = "rustman-viz"
+description = "Optional graphical companion of Rustman: dashboards on the Raven GUI library"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/CyberdyneCorp/rustman"
+publish = false
+
+# Its own workspace: it links a C library the rest of Rustman must never
+# need (see the root Cargo.toml).
+[workspace]
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "rustman-viz"
+path = "src/main.rs"
+# Without the Raven library there is nothing to show: the default build
+# makes the library (models, protocol handling) only.
+required-features = ["raven"]
+
+[features]
+raven = ["dep:raven", "dep:png"]
+
+[dependencies]
+rustman-viz-protocol = { path = "../rustman-viz-protocol" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+serde_json_path = "0.7.2"
+# Raven 0.3.0 (Apache-2.0), pinned to the commit of its v0.3.0 tag. The
+# bindings are not on crates.io (the `raven-gui` name there is an unrelated
+# crate). They link the C library found in RAVEN_LIB_DIR.
+raven = { package = "raven-gui", git = "https://github.com/oscar-soirey/Raven", rev = "c34466db536219f5ed0e026c4286a1ce27887b57", optional = true }
+
+# Screenshots (--capture): Raven 0.3.0 reads pixels back but has no PNG
+# writer in its bindings yet.
+png = { version = "0.18", optional = true }
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }

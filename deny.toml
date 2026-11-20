@@ -73,3 +73,7 @@ deny = [
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# The Raven bindings (add-raven-visualizer D4) are not on crates.io: the
+# `raven-gui` name there is another project. Only the excluded
+# crates/rustman-viz workspace uses them, pinned to a commit.
+allow-git = ["https://github.com/oscar-soirey/Raven"]

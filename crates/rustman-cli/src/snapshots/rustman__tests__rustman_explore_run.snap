@@ -73,6 +73,9 @@ Options:
       --report <FORMAT[=PATH]>
           Also render the report as json, junit, markdown, html or sarif, written to a file or stdout, as in sarif=out/r.sarif (repeatable)
 
+      --viz
+          Show the exploration live in the graphical viz companion (rustman-viz); it continues without it when it is not installed
+
       --color <WHEN>
           Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
           

@@ -147,7 +147,15 @@ pub struct RunOptions<'a> {
     /// `--trace`: inject trace headers even when no `trace:` block
     /// enables them.
     pub trace: bool,
+    /// Called by [`Runner::run`] as each request finishes, with its record
+    /// (already redacted) and every secret of the run so far, so a live
+    /// view (`rustman run --viz`) can follow the run. Called from the run's
+    /// tasks: it must not block.
+    pub observer: Option<&'a RunObserver<'a>>,
 }
+
+/// See [`RunOptions::observer`].
+pub type RunObserver<'a> = dyn Fn(&RequestRecord, &Redactor) + Send + Sync + 'a;
 
 /// Admits and sends the requests of a run: the agent interface checks each
 /// one against the agent permissions, asks the human when needed and sends
@@ -185,6 +193,7 @@ impl Default for RunOptions<'_> {
             gate: None,
             snapshots: SnapshotMode::Record,
             trace: false,
+            observer: None,
         }
     }
 }
@@ -412,6 +421,9 @@ impl<'a> Runner<'a> {
         let _permit = semaphore.acquire().await.ok();
         for &index in unit {
             let sent = self.send(&plan.requests[index], iteration).await;
+            if let Some(observer) = self.options.observer {
+                observer(&sent.record, &sent.redactor);
+            }
             let mut slots = slots.lock().unwrap_or_else(PoisonError::into_inner);
             slots[index] = Some(sent.record);
         }

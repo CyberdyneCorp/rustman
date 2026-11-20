@@ -1754,6 +1754,34 @@
       ],
       "description": "One documented operation: how reports group and locate it."
     },
+    "Dependency": {
+      "type": "object",
+      "properties": {
+        "producer": {
+          "type": "string",
+          "description": "`METHOD /path` of the operation whose response provides the value."
+        },
+        "consumer": {
+          "type": "string",
+          "description": "`METHOD /path` of the operation that uses it."
+        },
+        "parameter": {
+          "type": "string",
+          "description": "The consumer's parameter, e.g. `id`."
+        },
+        "pointer": {
+          "type": "string",
+          "description": "A JSON pointer into the producer's response body, e.g. `/id`."
+        }
+      },
+      "required": [
+        "producer",
+        "consumer",
+        "parameter",
+        "pointer"
+      ],
+      "description": "A value one operation's response provides to another's parameter."
+    },
     "exploration_report": {
       "type": "object",
       "properties": {
@@ -1843,6 +1871,13 @@
           },
           "description": "The documented operations, in document order.",
           "default": []
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Dependency"
+          },
+          "description": "Data dependencies between operations: a value from one operation's\nresponse used as a parameter of another (the API graph of the viz\ncompanion). Added in 0.1; absent in older reports."
         }
       },
       "required": [

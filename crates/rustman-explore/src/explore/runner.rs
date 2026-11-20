@@ -10,7 +10,7 @@
 use std::collections::{BTreeSet, HashSet};
 use std::io;
 use std::pin::pin;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use futures_util::future::{Either, select};
 use futures_util::stream::{self, StreamExt};
@@ -36,7 +36,13 @@ pub struct RunOptions<'a> {
     pub drain: Duration,
     /// Called with the progress before the first probe and after each one.
     pub progress: &'a mut dyn FnMut(&Progress),
+    /// Called with each probe's outcome (redacted, as journaled) and how
+    /// long it ran, as it finishes (`explore run --viz`).
+    pub probe: Option<&'a mut ProbeObserver<'a>>,
 }
+
+/// See [`RunOptions::probe`].
+pub type ProbeObserver<'a> = dyn FnMut(&Outcome, Duration) + 'a;
 
 /// What execution left in the journal.
 #[derive(Debug)]
@@ -67,6 +73,7 @@ pub async fn execute(
         tally: Tally::new(plan.probes.len(), &entries),
         entries,
         progress: options.progress,
+        probe: options.probe,
     };
     (run.progress)(&run.tally.progress);
     let finished = run
@@ -90,6 +97,7 @@ struct Run<'j, 'p> {
     entries: Vec<Entry>,
     tally: Tally,
     progress: &'p mut dyn FnMut(&Progress),
+    probe: Option<&'p mut ProbeObserver<'p>>,
 }
 
 impl Run<'_, '_> {
@@ -105,7 +113,11 @@ impl Run<'_, '_> {
         let mut outcomes = pin!(
             stream::iter(pending)
                 .take_until(cancel.clone().cancelled_owned())
-                .map(|probe| executor.run(probe))
+                .map(|probe| async move {
+                    let started = Instant::now();
+                    let outcome = executor.run(probe).await;
+                    (outcome, started.elapsed())
+                })
                 .buffer_unordered(concurrency.max(1))
         );
         let mut deadline = pin!(async {
@@ -113,9 +125,12 @@ impl Run<'_, '_> {
             tokio::time::sleep(drain).await;
         });
         let mut finished = 0;
-        while let Either::Left((Some(outcome), _)) =
+        while let Either::Left((Some((outcome, took)), _)) =
             select(outcomes.next(), deadline.as_mut()).await
         {
+            if let Some(probe) = self.probe.as_mut() {
+                probe(&outcome, took);
+            }
             self.record(outcome)?;
             finished += 1;
         }

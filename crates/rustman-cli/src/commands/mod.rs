@@ -28,6 +28,7 @@ pub mod snapshot;
 pub mod stress;
 pub mod trace;
 pub mod tui;
+pub mod viz;
 pub mod webhook;
 
 use std::path::{Path, PathBuf};

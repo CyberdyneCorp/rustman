@@ -15,13 +15,14 @@ use rustman_core::settings::Settings as WorkspaceSettings;
 use rustman_core::{ConfigError, Environment, Workspace};
 use rustman_explore::explore::drive::{Drive, Finished, drive};
 use rustman_explore::explore::exec::{
-    Context, Executor, Identity, exploration_export_warning, exploration_send_options,
+    Context, Executor, Identity, Outcome, exploration_export_warning, exploration_send_options,
 };
 use rustman_explore::explore::graph::Graph;
 use rustman_explore::explore::journal::{self, requests_sent};
 use rustman_explore::explore::plan::{self, Disposition, Plan};
 use rustman_explore::explore::report::ExplorationReport;
 use rustman_explore::explore::rules::Severity;
+use rustman_explore::explore::runner::ProbeObserver;
 use rustman_explore::explore::session::{Progress, RunState, Session};
 use rustman_explore::explore::setup::{self, NewExploration};
 use rustman_explore::store::sha256;
@@ -32,6 +33,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::{ExploreFlags, RootArgs, identity_b, optional_workspace, plan_options, policy};
 use crate::commands::exec::{cancel_on_ctrl_c, parse_duration, runtime, secret_store};
+use crate::commands::viz::ExploreViz;
 use crate::commands::{current_dir, print_warnings};
 use crate::exit::{self, CliError};
 
@@ -59,6 +61,10 @@ pub struct RunArgs {
     /// written to a file or stdout, as in sarif=out/r.sarif (repeatable)
     #[arg(long = "report", value_name = "FORMAT[=PATH]")]
     report: Vec<ReportTarget>,
+    /// Show the exploration live in the graphical viz companion
+    /// (rustman-viz); it continues without it when it is not installed
+    #[arg(long)]
+    viz: bool,
 }
 
 #[derive(Debug, Args)]
@@ -67,6 +73,10 @@ pub struct ResumeArgs {
     id: String,
     #[command(flatten)]
     root: RootArgs,
+    /// Show the rest of the exploration live in the graphical viz
+    /// companion (rustman-viz)
+    #[arg(long)]
+    viz: bool,
 }
 
 /// Everything the execute and report phases need.
@@ -82,6 +92,8 @@ struct Execution<'a> {
     plan: &'a Plan,
     /// `--report` renderings of the finished report.
     targets: &'a [ReportTarget],
+    /// `--viz`: stream the probes to the companion.
+    viz: bool,
 }
 
 pub fn run_command(args: &RunArgs) -> Result<u8, CliError> {
@@ -158,6 +170,7 @@ pub fn run_command(args: &RunArgs) -> Result<u8, CliError> {
             model,
             plan: &planned,
             targets: &args.report,
+            viz: args.viz,
         },
     )
 }
@@ -213,6 +226,7 @@ pub fn resume_command(args: &ResumeArgs) -> Result<u8, CliError> {
             model: &imported.model,
             plan: &planned,
             targets: &[],
+            viz: args.viz,
         },
     )
 }
@@ -230,6 +244,7 @@ fn execute(runtime: &tokio::runtime::Runtime, execution: Execution<'_>) -> Resul
         model,
         plan,
         targets,
+        viz,
     } = execution;
     let ws_settings = workspace_settings(workspace);
     let secrets = secret_store(root)?;
@@ -260,6 +275,18 @@ fn execute(runtime: &tokio::runtime::Runtime, execution: Execution<'_>) -> Resul
     let cancel = CancellationToken::new();
     let mut printer = Printer::default();
     let fail_on = session.state.settings.fail_on;
+    let mut viz = if viz {
+        let title = session.state.spec.clone();
+        ExploreViz::start(&title, root, plan, model.operations.len(), &target)
+    } else {
+        None
+    };
+    let live = viz.is_some();
+    let mut on_probe = |outcome: &Outcome, took: Duration| {
+        if let Some(viz) = viz.as_mut() {
+            viz.probe(outcome, took);
+        }
+    };
     let finished = runtime.block_on(async {
         cancel_on_ctrl_c(&cancel);
         let options = Drive {
@@ -268,9 +295,16 @@ fn execute(runtime: &tokio::runtime::Runtime, execution: Execution<'_>) -> Resul
             concurrency: usize::try_from(limits.concurrency.get()).unwrap_or(1),
             cancel: cancel.clone(),
             progress: &mut |p, elapsed| printer.print(p, elapsed),
+            probe: live.then_some(&mut on_probe as &mut ProbeObserver<'_>),
         };
         drive(&mut session, &executor, options).await
     })?;
+    if let Some(viz) = viz {
+        viz.finish(match &finished {
+            Finished::Completed(report) => Some(report),
+            Finished::Interrupted(_) => None,
+        });
+    }
     match finished {
         Finished::Interrupted(progress) => {
             eprintln!(

@@ -51,6 +51,7 @@ Probe requests are templates: a path parameter whose value is in the active envi
 | `--max-probes <n>` | Probe budget: at most this many requests (default 2000) |
 | `--max-duration <duration>` | Time budget: `90s`, `15m`, or milliseconds (default `15m`) |
 | `--fail-on <severity>` | Exit 1 when a finding is at or above it: `critical`, `high` (default), `medium`, `low` or `info` |
+| `--viz` | Show the exploration live in the [viz companion](cli.md#viz-companion): probes, findings and coverage as they come. Without one it continues without visuals, with the same exit code. Also on `explore resume`. |
 
 ```text
 $ rustman explore run --spec api.yaml --target https://staging.example.com --env staging --allow-mutations
@@ -137,6 +138,7 @@ Findings on the same rule and operation are reported once, with the number of `o
 | `left_behind` | Created resources that were not deleted |
 | `cleanup` | Each delete of a created resource and the status it got |
 | `operations` | The documented operations in document order, with their `operation_id` and `tags` (JUnit groups by the first tag) |
+| `dependencies` | The data dependencies discovery found: each `producer` operation whose response provides a `parameter` of a `consumer` operation, and the JSON `pointer` it is read from (the [API graph](viz.md#api-graph) draws them). Absent when there are none. |
 
 ## Reproducing findings
 

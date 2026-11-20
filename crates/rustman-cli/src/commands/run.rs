@@ -8,9 +8,10 @@ use std::time::Duration;
 use clap::{Args, ValueEnum};
 use rustman_core::data_rows::DataRows;
 use rustman_core::run::{
-    DataRun, Filter, Plan, RpcRefusal, RunRecord, collection_data, plan, secret_columns,
+    DataRun, Filter, Plan, RequestRecord, RpcRefusal, RunRecord, collection_data, plan,
+    secret_columns,
 };
-use rustman_core::{ConfigError, Workspace};
+use rustman_core::{ConfigError, Redactor, Workspace};
 use rustman_graphql::GraphqlRunner;
 use rustman_grpc::GrpcRunner;
 use rustman_http::runner::{BailScope, RunContext, Runner};
@@ -22,6 +23,7 @@ use rustman_report::{Report, ReportTarget, Reporter, RunReport};
 use super::exec::{
     SendFlags, cancel_on_ctrl_c, history_store, parse_duration, runtime, secret_store,
 };
+use super::viz::RunViz;
 use super::{EnvSelection, current_dir, print_warnings};
 use crate::exit::{CliError, REQUEST, SAFETY, run_code};
 
@@ -88,6 +90,10 @@ pub struct RunArgs {
     /// record the approvals
     #[arg(long)]
     trust: bool,
+    /// Show the run live in the graphical viz companion (rustman-viz); the
+    /// run continues without it when it is not installed
+    #[arg(long)]
+    viz: bool,
 }
 
 pub fn run(args: &RunArgs) -> Result<u8, CliError> {
@@ -107,6 +113,23 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
     }
     let data = data_run(args, &ws, &cwd, &scopes, &plan)?;
     let store = std::sync::Arc::new(secret_store(&ws.root)?);
+    let viz = if args.viz {
+        let iterations = data
+            .as_ref()
+            .map_or(args.iterations.unwrap_or(1), DataRun::total);
+        let planned = plan
+            .len()
+            .saturating_mul(usize::try_from(iterations).unwrap_or(usize::MAX));
+        let environment = env.map(|e| e.name.clone());
+        RunViz::start(&viz_title(&args.paths), &ws.root, environment, planned)
+    } else {
+        None
+    };
+    let observe = |record: &RequestRecord, redactor: &Redactor| {
+        if let Some(viz) = &viz {
+            viz.exchange(record, redactor);
+        }
+    };
     let mut options = args.flags.options()?;
     options.bail = args.bail.is_some();
     options.bail_scope = match args.bail {
@@ -138,6 +161,9 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
     options.grpc = Some(&grpc);
     let realtime = RealtimeRunner::default();
     options.realtime = Some(&realtime);
+    if viz.is_some() {
+        options.observer = Some(&observe);
+    }
     let cancel = options.cancel.clone();
     let ctx = RunContext {
         root: &ws.root,
@@ -159,8 +185,20 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
         print_warnings(&[e.to_string()]);
     }
     print_warnings(&store.take_warnings());
+    if let Some(viz) = viz {
+        viz.finish(&record);
+    }
     write_reports(&args.reporter, &args.report, &record)?;
     Ok(exit_code(&record))
+}
+
+/// The dashboard title: the run paths, as typed.
+fn viz_title(paths: &[PathBuf]) -> String {
+    if paths.is_empty() {
+        return ".".to_owned();
+    }
+    let shown: Vec<String> = paths.iter().map(|p| p.display().to_string()).collect();
+    shown.join(" ")
 }
 
 /// The run's exit code; a run whose errors include a call a method guard

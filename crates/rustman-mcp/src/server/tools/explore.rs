@@ -598,6 +598,7 @@ async fn exploration_job(
         concurrency: usize::try_from(limits.concurrency.get()).unwrap_or(1),
         cancel: job.cancel_token(),
         progress: &mut |p, _| job.set_progress(p.done, p.total),
+        probe: None,
     };
     match drive(&mut session, &executor, options).await {
         Ok(Finished::Completed(_)) => job.finish(JobState::Completed, None, None),
