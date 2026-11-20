@@ -19,6 +19,7 @@ mod oauth2;
 #[cfg(feature = "otlp")]
 mod otlp;
 mod proxy;
+mod raw_stream;
 mod redirect;
 pub mod runner;
 mod shown;
@@ -45,7 +46,7 @@ pub use curl::{
     COMPRESSED_ACCEPT_ENCODING, CurlError, Exported, Imported, export_curl, import_curl,
     import_curl_words,
 };
-pub use engine::{DEFAULT_CONNECT_TIMEOUT, HttpEngine, SendOptions, header_pairs};
+pub use engine::{BodyOverride, DEFAULT_CONNECT_TIMEOUT, HttpEngine, SendOptions, header_pairs};
 pub use error::{Phase, RequestError};
 pub use exchange::{Exchange, HttpVersion};
 pub use governed::{GovernedError, GovernedSender};
@@ -55,6 +56,7 @@ pub use oauth2::{
     login_warnings as oauth2_login_warnings,
 };
 pub use proxy::{NoProxy, ProxyKind, ProxySettings, ProxyUrl};
+pub use raw_stream::{ALPN_HTTP1, RawStream, open_raw_stream};
 pub use redirect::RedirectHop;
 pub use snippet::{Lang, Snippet, SnippetError, SnippetOptions, snippet};
 pub use sse::{EVENT_STREAM, SseEvent, SseParser, SseTooLarge, is_event_stream};

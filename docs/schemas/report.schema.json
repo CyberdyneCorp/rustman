@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/CyberdyneCorp/rustman/docs/schemas/report.schema.json",
   "title": "rustman.report/v1",
-  "description": "A Rustman report: a run (kind: run), an exploration (kind: exploration), a contract check (kind: contract) or a load test (kind: bench). Every text field is redacted: secret values appear as «redacted:<name>».",
+  "description": "A Rustman report: a run (kind: run), an exploration (kind: exploration), a contract check (kind: contract), a load test (kind: bench) or a stress test (kind: stress). Every text field is redacted: secret values appear as «redacted:<name>».",
   "oneOf": [
     {
       "$ref": "#/$defs/run_report"
@@ -15,6 +15,9 @@
     },
     {
       "$ref": "#/$defs/bench_report"
+    },
+    {
+      "$ref": "#/$defs/stress_report"
     }
   ],
   "$defs": {
@@ -2782,6 +2785,783 @@
         "error_samples"
       ],
       "description": "A bench report."
+    },
+    "StressProfile": {
+      "type": "object",
+      "properties": {
+        "settings": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "format": "double"
+          },
+          "description": "Every value of the mode, such as `start_rps`, `step_factor`,\n`step_duration_ms`, `refine`, `rps`, `duration_ms`."
+        },
+        "fuzz_ratio": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "description": "`--fuzz-ratio`, when the run fuzzed."
+        },
+        "malformed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "wire": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "health": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The health request file."
+        }
+      },
+      "required": [
+        "settings"
+      ],
+      "description": "The profile, as the flags gave it."
+    },
+    "StressStep": {
+      "type": "object",
+      "properties": {
+        "offered_rps": {
+          "type": "number",
+          "format": "double",
+          "description": "Requests per second offered."
+        },
+        "achieved_rps": {
+          "type": "number",
+          "format": "double"
+        },
+        "p50_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "p95_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "p99_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "error_rate": {
+          "type": "number",
+          "format": "double"
+        },
+        "errors": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "description": "Errors by class (`5xx`, `timeout`, `connect`, ...)."
+        },
+        "verdict": {
+          "type": "string",
+          "description": "`ok`, `broken`, `rate-limited`, `client-saturated` or `unfinished`."
+        },
+        "failure_mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "start_ms": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "Since load started, in milliseconds."
+        },
+        "end_ms": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "offered_rps",
+        "achieved_rps",
+        "p50_ms",
+        "p95_ms",
+        "p99_ms",
+        "error_rate",
+        "errors",
+        "verdict",
+        "start_ms",
+        "end_ms"
+      ],
+      "description": "One row of the step table."
+    },
+    "BreakpointSection": {
+      "type": "object",
+      "properties": {
+        "max_sustainable_rps": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "description": "The highest rate that held, in requests per second."
+        },
+        "breaking_rps": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "description": "The lowest rate that broke."
+        },
+        "failure_mode": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "How the `breaking_rps` step broke."
+        },
+        "first_failing_endpoint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FailingEndpoint"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The request file that degraded first in that step."
+        },
+        "stop": {
+          "type": "string",
+          "description": "`refined`, `cap-reached`, `broke-at-start`, `client-saturated`,\n`max-duration`, `interrupted` or `killed`."
+        },
+        "max_rps": {
+          "type": "number",
+          "format": "double",
+          "description": "The `max_rps` cap."
+        }
+      },
+      "required": [
+        "stop",
+        "max_rps"
+      ],
+      "description": "A breakpoint run's result."
+    },
+    "FailingEndpoint": {
+      "type": "object",
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "p95_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "error_rate": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "file",
+        "p95_ms",
+        "error_rate"
+      ]
+    },
+    "Killed": {
+      "type": "object",
+      "properties": {
+        "rps": {
+          "type": "number",
+          "format": "double",
+          "description": "The offered rate when the target went down."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Why it was declared down."
+        },
+        "message": {
+          "type": "string",
+          "description": "`killed: target down at <rps> req/s (<reason>)`."
+        }
+      },
+      "required": [
+        "rps",
+        "reason",
+        "message"
+      ],
+      "description": "The kill switch stopped the load."
+    },
+    "RecoverySection": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "description": "`recovered`, `not-recovered`, `skipped` or `cancelled`."
+        },
+        "after_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0,
+          "description": "From the end of load to the first answer of the good streak."
+        },
+        "baseline_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "description": "The health request's pre-stress latency."
+        },
+        "health": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Why it was skipped."
+        },
+        "last_status": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "last_latency_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "timeline": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RecoveryProbe"
+          },
+          "description": "Every health request, in order."
+        }
+      },
+      "required": [
+        "status",
+        "timeline"
+      ],
+      "description": "The recovery check after the load."
+    },
+    "RecoveryProbe": {
+      "type": "object",
+      "properties": {
+        "offset_ms": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "Since load stopped."
+        },
+        "status": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "latency_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "good": {
+          "type": "boolean",
+          "description": "It counted toward recovery."
+        }
+      },
+      "required": [
+        "offset_ms",
+        "latency_ms",
+        "good"
+      ]
+    },
+    "SpikeSection": {
+      "type": "object",
+      "properties": {
+        "baseline_p95_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "spike_requests": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "spike_errors": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "peak_p95_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "recovered_after_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "baseline_p95_ms",
+        "spike_requests",
+        "spike_errors",
+        "peak_p95_ms"
+      ]
+    },
+    "SoakSection": {
+      "type": "object",
+      "properties": {
+        "p95_ms": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "double"
+          },
+          "description": "One per trend bucket (a minute)."
+        },
+        "error_rates": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "baseline_p95_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "p95_slope": {
+          "type": "number",
+          "format": "double",
+          "description": "Milliseconds per hour."
+        },
+        "error_slope": {
+          "type": "number",
+          "format": "double",
+          "description": "Error-rate change per hour."
+        }
+      },
+      "required": [
+        "p95_ms",
+        "error_rates",
+        "baseline_p95_ms",
+        "p95_slope",
+        "error_slope"
+      ]
+    },
+    "WireSection": {
+      "type": "object",
+      "properties": {
+        "family": {
+          "type": "string"
+        },
+        "outcomes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "What each request got: a status, or what happened instead."
+        }
+      },
+      "required": [
+        "family",
+        "outcomes"
+      ]
+    },
+    "StressSummary": {
+      "type": "object",
+      "properties": {
+        "findings": {
+          "$ref": "#/$defs/SeverityCounts",
+          "description": "Distinct findings by severity."
+        },
+        "requests": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "fuzzed_requests": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "duration_ms": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "findings",
+        "requests",
+        "fuzzed_requests",
+        "duration_ms"
+      ]
+    },
+    "StressFinding": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "`f001`, `f002`, ... by severity."
+        },
+        "rule": {
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "operation": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "remediation": {
+          "type": "string",
+          "description": "How to fix it, from the rule registry."
+        },
+        "message": {
+          "type": "string",
+          "description": "The first occurrence's message."
+        },
+        "occurrences": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "probes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The probes it occurred in, in plan order."
+        },
+        "instance_pointer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "schema_pointer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "evidence": {
+          "$ref": "#/$defs/Evidence",
+          "description": "The first occurrence's exchange."
+        },
+        "reproduction": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Reproduction"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "family": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The fuzz source or fault family."
+        },
+        "minimized": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MinimizedInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What replaying the input alone found."
+        }
+      },
+      "required": [
+        "id",
+        "rule",
+        "severity",
+        "operation",
+        "description",
+        "message",
+        "occurrences",
+        "probes",
+        "evidence"
+      ],
+      "description": "A finding: the exploration finding (its `operation` is the request\nfile, or `wire <family>`), plus what stress adds."
+    },
+    "MinimizedInput": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The smallest body that still failed (redacted); absent when the\ninput could not be reduced."
+        },
+        "content_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "replays": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "load_dependent": {
+          "type": "boolean",
+          "description": "It did not fail alone: only under load."
+        }
+      },
+      "required": [
+        "replays",
+        "load_dependent"
+      ],
+      "description": "The minimized input of a crash-like finding."
+    },
+    "stress_report": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "rustman.report/v1"
+        },
+        "kind": {
+          "const": "stress"
+        },
+        "rustman_version": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string",
+          "description": "`str-<date>-<hex>`: what `rustman stress export` takes."
+        },
+        "started_at": {
+          "type": "string",
+          "description": "RFC 3339."
+        },
+        "finished_at": {
+          "type": "string",
+          "description": "RFC 3339."
+        },
+        "target": {
+          "type": "string",
+          "description": "The `--target` origin."
+        },
+        "environment": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mode": {
+          "type": "string",
+          "description": "`breakpoint`, `spike`, `soak` or `fuzz`."
+        },
+        "profile": {
+          "$ref": "#/$defs/StressProfile"
+        },
+        "seed": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "The seed of fuzzed slots and variants."
+        },
+        "slos": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The SLOs in force, as written."
+        },
+        "overall": {
+          "$ref": "#/$defs/StatsSummary",
+          "description": "Valid traffic, every request file together."
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FileSummary"
+          },
+          "description": "Valid traffic per request file, in collection order."
+        },
+        "fuzzed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StatsSummary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Fuzzed traffic, measured apart; absent without fuzzing."
+        },
+        "series": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BenchSecond"
+          },
+          "description": "Valid traffic, one point per tick (a second)."
+        },
+        "fuzzed_series": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BenchSecond"
+          },
+          "description": "Fuzzed traffic, one point per tick."
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StressStep"
+          },
+          "description": "The steps (a breakpoint's, or stretches at one rate)."
+        },
+        "breakpoint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BreakpointSection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A breakpoint run's result; absent for the other modes."
+        },
+        "rate_limited_at": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "description": "The first rate, in requests per second, where the target\nthrottled without breaking."
+        },
+        "killed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Killed"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Set when the kill switch stopped the load."
+        },
+        "recovery": {
+          "$ref": "#/$defs/RecoverySection"
+        },
+        "spike": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpikeSection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "soak": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SoakSection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "wire": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WireSection"
+          },
+          "description": "What each wire-fault family got back."
+        },
+        "summary": {
+          "$ref": "#/$defs/StressSummary"
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StressFinding"
+          },
+          "description": "By severity, then rule."
+        },
+        "client_saturated": {
+          "type": "boolean",
+          "description": "Windows where the client lagged behind its schedule.",
+          "default": false
+        },
+        "interrupted": {
+          "type": "boolean",
+          "default": false
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "schema",
+        "kind",
+        "rustman_version",
+        "id",
+        "started_at",
+        "finished_at",
+        "target",
+        "mode",
+        "profile",
+        "seed",
+        "slos",
+        "overall",
+        "files",
+        "series",
+        "steps",
+        "recovery",
+        "summary",
+        "findings"
+      ],
+      "description": "A stress report."
     }
   }
 }

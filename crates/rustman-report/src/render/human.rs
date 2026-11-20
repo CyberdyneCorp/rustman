@@ -10,17 +10,19 @@ use minijinja::{AutoEscape, Environment, Value};
 use serde::Serialize;
 
 use super::RenderOptions;
-use super::chart::{Chart, line_chart};
+use super::chart::{Chart, line_chart, xy_chart};
 use crate::bench::{BenchReport, ErrorSample, StatsSummary};
 use crate::contract::{ContractItem, ContractMode, ContractReport};
 use crate::exploration::{Evidence, ExplorationReport, ReportFinding, Severity};
 use crate::report::Report;
 use crate::run::{RunReport, RunRequest, Status};
+use crate::stress::{StressFinding, StressReport, StressStep};
 
 const BENCH_MD: &str = include_str!("templates/bench.md.jinja");
 const CONTRACT_MD: &str = include_str!("templates/contract.md.jinja");
 const EXPLORATION_MD: &str = include_str!("templates/exploration.md.jinja");
 const RUN_MD: &str = include_str!("templates/run.md.jinja");
+const STRESS_MD: &str = include_str!("templates/stress.md.jinja");
 const HTML: &str = include_str!("templates/report.html.jinja");
 const CSS: &str = include_str!("templates/report.css");
 const JS: &str = include_str!("templates/report.js");
@@ -32,6 +34,7 @@ pub fn markdown(report: &Report, options: &RenderOptions) -> String {
         Report::Exploration(_) => ("exploration.md", EXPLORATION_MD),
         Report::Contract(_) => ("contract.md", CONTRACT_MD),
         Report::Bench(_) => ("bench.md", BENCH_MD),
+        Report::Stress(_) => ("stress.md", STRESS_MD),
     };
     finish(tidy(&render(name, source, context(report, options))))
 }
@@ -145,7 +148,161 @@ fn context(report: &Report, options: &RenderOptions) -> Value {
         Report::Exploration(r) => Value::from(Serde(exploration_view(r, options))),
         Report::Contract(r) => Value::from(Serde(contract_view(r))),
         Report::Bench(r) => Value::from(Serde(bench_view(r))),
+        Report::Stress(r) => Value::from(Serde(stress_view(r))),
     }
+}
+
+#[derive(Serialize)]
+struct StressView<'a> {
+    kind: &'static str,
+    title: &'static str,
+    r: &'a StressReport,
+    duration: String,
+    /// Each request file, then `overall`.
+    rows: Vec<BenchRow<'a>>,
+    steps: Vec<StepRow<'a>>,
+    /// `max_sustainable_rps: 40`, `breaking_rps: 48 (latency; ...)`.
+    breakpoint: Vec<String>,
+    /// `recovered 3s after load stopped`, ...
+    recovery: String,
+    /// Latency then errors against offered load, then the recovery
+    /// timeline (when there is one).
+    charts: Vec<TitledChart>,
+    findings: Vec<&'a StressFinding>,
+    counts: String,
+    css: &'static str,
+}
+
+#[derive(Serialize)]
+struct StepRow<'a> {
+    s: &'a StressStep,
+    error_rate: String,
+    errors: String,
+}
+
+fn stress_view(r: &StressReport) -> StressView<'_> {
+    let rows = r
+        .files
+        .iter()
+        .map(|f| bench_row(&f.file, &f.stats))
+        .chain(std::iter::once(bench_row("overall", &r.overall)))
+        .collect();
+    let steps = r
+        .steps
+        .iter()
+        .map(|s| {
+            let errors: Vec<String> = s.errors.iter().map(|(c, n)| format!("{c} {n}")).collect();
+            StepRow {
+                s,
+                error_rate: format!("{:.2}%", s.error_rate * 100.0),
+                errors: errors.join(", "),
+            }
+        })
+        .collect();
+    StressView {
+        kind: "stress",
+        title: "Stress report",
+        r,
+        duration: seconds(r.summary.duration_ms as f64),
+        rows,
+        steps,
+        breakpoint: breakpoint_lines(r),
+        recovery: recovery_line(r),
+        charts: stress_charts(r),
+        findings: r.findings.iter().collect(),
+        counts: r.summary.findings.to_string(),
+        css: CSS,
+    }
+}
+
+fn breakpoint_lines(r: &StressReport) -> Vec<String> {
+    let Some(bp) = &r.breakpoint else {
+        return Vec::new();
+    };
+    let rate = |v: Option<f64>| v.map_or_else(|| "none".to_owned(), |v| format!("{v:.2}"));
+    let mut breaking = format!("breaking_rps: {}", rate(bp.breaking_rps));
+    if let Some(mode) = &bp.failure_mode {
+        breaking.push_str(&format!(" ({mode}"));
+        if let Some(first) = &bp.first_failing_endpoint {
+            breaking.push_str(&format!(
+                "; first failing endpoint: {}, p95 {:.0}ms, errors {:.2}%",
+                first.file,
+                first.p95_ms,
+                first.error_rate * 100.0
+            ));
+        }
+        breaking.push(')');
+    }
+    vec![
+        format!("max_sustainable_rps: {}", rate(bp.max_sustainable_rps)),
+        breaking,
+        format!("stopped: {} (max_rps {:.0})", bp.stop, bp.max_rps),
+    ]
+}
+
+fn recovery_line(r: &StressReport) -> String {
+    let rec = &r.recovery;
+    match rec.status.as_str() {
+        "recovered" => format!(
+            "recovered {:.0}s after load stopped",
+            rec.after_ms.unwrap_or_default() as f64 / 1000.0
+        ),
+        "not-recovered" => {
+            let last = match (rec.last_status, rec.last_latency_ms) {
+                (Some(s), Some(ms)) => format!("{s} in {ms:.0}ms"),
+                (None, Some(ms)) => format!("no answer after {ms:.0}ms"),
+                _ => "nothing".to_owned(),
+            };
+            format!("not recovered (last health request: {last})")
+        }
+        "skipped" => format!(
+            "not checked ({})",
+            rec.reason.as_deref().unwrap_or("no health request")
+        ),
+        other => other.to_owned(),
+    }
+}
+
+/// Latency and errors against offered load, with the breakpoint marked,
+/// then the recovery timeline.
+fn stress_charts(r: &StressReport) -> Vec<TitledChart> {
+    let xs: Vec<f64> = r.steps.iter().map(|s| s.offered_rps).collect();
+    let column = |f: fn(&StressStep) -> f64| r.steps.iter().map(f).collect::<Vec<f64>>();
+    let marker = r.breakpoint.as_ref().and_then(|b| b.breaking_rps);
+    let mut charts = vec![
+        TitledChart {
+            title: "Latency against offered load".into(),
+            chart: xy_chart(
+                &xs,
+                &[
+                    ("p50", column(|s| s.p50_ms)),
+                    ("p95", column(|s| s.p95_ms)),
+                    ("p99", column(|s| s.p99_ms)),
+                ],
+                "ms",
+                "req/s",
+                marker,
+            ),
+        },
+        TitledChart {
+            title: "Errors against offered load".into(),
+            chart: xy_chart(
+                &xs,
+                &[("errors", column(|s| s.error_rate * 100.0))],
+                "%",
+                "req/s",
+                marker,
+            ),
+        },
+    ];
+    if !r.recovery.timeline.is_empty() {
+        let latency = r.recovery.timeline.iter().map(|p| p.latency_ms).collect();
+        charts.push(TitledChart {
+            title: format!("Recovery timeline ({})", recovery_line(r)),
+            chart: line_chart(&[("latency", latency)], "ms"),
+        });
+    }
+    charts
 }
 
 #[derive(Serialize)]

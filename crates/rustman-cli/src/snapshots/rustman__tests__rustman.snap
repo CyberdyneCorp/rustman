@@ -19,6 +19,7 @@ Commands:
   send         Send one request (a file, id or name, or an ad-hoc METHOD URL) and print the response
   run          Run the requests under files or folders and report the results
   bench        Load test request files and collections against one target origin
+  stress       Find where a target listed in rustman.toml [stress] breaks, how, and whether it recovers
   graphql      Introspect GraphQL schemas and send GraphQL operations
   grpc         List and describe gRPC services, call methods and check health
   rpc          Send JSON-RPC calls and batches, and fetch OpenRPC catalogs

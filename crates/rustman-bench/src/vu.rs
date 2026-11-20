@@ -89,7 +89,7 @@ impl Vu<'_> {
 
 /// The transport time of an exchange, else (no response) the time the
 /// runner took.
-fn service_time(record: &RequestRecord, elapsed: Duration) -> Duration {
+pub(crate) fn service_time(record: &RequestRecord, elapsed: Duration) -> Duration {
     record
         .exchange
         .as_ref()

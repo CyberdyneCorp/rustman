@@ -32,6 +32,34 @@ use crate::companion::{Companion, Discovery, connect, detach, write_message};
 /// The warning when the companion cannot show a bench.
 pub const NO_BENCH_VIEW: &str = "viz companion has no bench view";
 
+/// An open stream and the seconds already sent to it: what a live thread
+/// (`rustman bench`, `rustman stress`) feeds once per frame.
+pub(crate) struct VizFeed {
+    pub stream: BenchViz,
+    sent: usize,
+}
+
+impl VizFeed {
+    pub fn new(stream: BenchViz) -> Self {
+        Self { stream, sent: 0 }
+    }
+
+    /// Send the seconds closed since the last call: `seconds_since(n)`
+    /// gives those after the first `n`, `remaining` the time left at a
+    /// second's end.
+    pub fn send_new(
+        &mut self,
+        seconds_since: impl Fn(usize) -> Vec<BenchSecond>,
+        remaining: impl Fn(Duration) -> Option<Duration>,
+    ) {
+        for second in seconds_since(self.sent) {
+            let elapsed = Duration::from_secs(u64::from(second.second));
+            self.stream.tick(&second, remaining(elapsed));
+            self.sent += 1;
+        }
+    }
+}
+
 /// Messages waiting for the writer; more ticks than this are dropped.
 const QUEUE: usize = 16;
 
@@ -51,17 +79,28 @@ pub struct BenchViz {
 /// Start the companion and open its `bench` view titled `title`. The error
 /// is the warning to show (once), and the bench goes on without viz.
 pub fn start(discovery: &Discovery, title: &str) -> Result<BenchViz, String> {
+    start_view(discovery, title, View::Bench, NO_BENCH_VIEW)
+}
+
+/// Start the companion and open `view` titled `title`; without that view
+/// in its `hello_ack`, the error is `missing`.
+pub fn start_view(
+    discovery: &Discovery,
+    title: &str,
+    view: View,
+    missing: &str,
+) -> Result<BenchViz, String> {
     let Companion {
         child,
         mut stdin,
         ack,
         ..
     } = connect(discovery).map_err(|e| format!("--viz: {e}"))?;
-    if !ack.views.contains(&View::Bench) {
+    if !ack.views.contains(&view) {
         let _ = write_message(&mut stdin, &Message::Close(Close::default()));
         drop(stdin);
         detach(child);
-        return Err(NO_BENCH_VIEW.to_owned());
+        return Err(missing.to_owned());
     }
     let (queue, inbox) = mpsc::sync_channel::<Message>(QUEUE);
     let writer = std::thread::spawn(move || {
@@ -73,7 +112,7 @@ pub fn start(discovery: &Discovery, title: &str) -> Result<BenchViz, String> {
         }
     });
     let open = OpenView {
-        view: View::Bench,
+        view,
         title: Some(title.to_owned()),
     };
     let _ = queue.try_send(Message::OpenView(open));

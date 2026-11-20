@@ -1,0 +1,327 @@
+---
+source: crates/rustman-report/tests/stress.rs
+expression: rendered(format)
+---
+{
+  "schema": "rustman.report/v1",
+  "kind": "stress",
+  "rustman_version": "0.1.0",
+  "id": "str-20261120-abc123",
+  "started_at": "2026-11-20T10:00:00Z",
+  "finished_at": "2026-11-20T10:03:00Z",
+  "target": "https://staging.example.com",
+  "environment": "staging",
+  "mode": "breakpoint",
+  "profile": {
+    "settings": {
+      "start_rps": 10.0,
+      "step_factor": 1.5
+    },
+    "fuzz_ratio": 0.1,
+    "health": "api/health.rman.yaml"
+  },
+  "seed": 42,
+  "slos": [
+    "p95<300ms",
+    "error_rate<1%"
+  ],
+  "overall": {
+    "requests": 4000,
+    "errors": {
+      "5xx": 20
+    },
+    "error_rate": 0.005,
+    "latency": {
+      "min_ms": 1.0,
+      "avg_ms": 90.0,
+      "p50_ms": 90.0,
+      "p90_ms": 162.0,
+      "p95_ms": 180.0,
+      "p99_ms": 270.0,
+      "max_ms": 360.0
+    },
+    "checks": {
+      "passed": 4000,
+      "failed": 0
+    },
+    "phases": {},
+    "bytes_sent": 0,
+    "bytes_received": 0
+  },
+  "files": [
+    {
+      "file": "api/orders.rman.yaml",
+      "requests": 4000,
+      "errors": {
+        "5xx": 20
+      },
+      "error_rate": 0.005,
+      "latency": {
+        "min_ms": 1.0,
+        "avg_ms": 90.0,
+        "p50_ms": 90.0,
+        "p90_ms": 162.0,
+        "p95_ms": 180.0,
+        "p99_ms": 270.0,
+        "max_ms": 360.0
+      },
+      "checks": {
+        "passed": 4000,
+        "failed": 0
+      },
+      "phases": {},
+      "bytes_sent": 0,
+      "bytes_received": 0
+    }
+  ],
+  "fuzzed": {
+    "requests": 400,
+    "errors": {
+      "5xx": 100
+    },
+    "error_rate": 0.25,
+    "latency": {
+      "min_ms": 1.0,
+      "avg_ms": 45.0,
+      "p50_ms": 45.0,
+      "p90_ms": 81.0,
+      "p95_ms": 90.0,
+      "p99_ms": 135.0,
+      "max_ms": 180.0
+    },
+    "checks": {
+      "passed": 400,
+      "failed": 0
+    },
+    "phases": {},
+    "bytes_sent": 0,
+    "bytes_received": 0
+  },
+  "series": [
+    {
+      "second": 1,
+      "requests": 10,
+      "errors": 0,
+      "rps": 10.0,
+      "p50_ms": 10.0,
+      "p95_ms": 20.0,
+      "p99_ms": 30.0,
+      "active_vus": 2
+    }
+  ],
+  "steps": [
+    {
+      "offered_rps": 10.0,
+      "achieved_rps": 9.9,
+      "p50_ms": 10.0,
+      "p95_ms": 20.0,
+      "p99_ms": 30.0,
+      "error_rate": 0.0,
+      "errors": {},
+      "verdict": "ok",
+      "start_ms": 0,
+      "end_ms": 30000
+    },
+    {
+      "offered_rps": 15.0,
+      "achieved_rps": 14.85,
+      "p50_ms": 12.5,
+      "p95_ms": 25.0,
+      "p99_ms": 37.5,
+      "error_rate": 0.0,
+      "errors": {},
+      "verdict": "ok",
+      "start_ms": 30000,
+      "end_ms": 60000
+    },
+    {
+      "offered_rps": 22.5,
+      "achieved_rps": 22.275,
+      "p50_ms": 205.0,
+      "p95_ms": 410.0,
+      "p99_ms": 615.0,
+      "error_rate": 0.02,
+      "errors": {},
+      "verdict": "broken",
+      "failure_mode": "latency",
+      "start_ms": 60000,
+      "end_ms": 90000
+    },
+    {
+      "offered_rps": 18.75,
+      "achieved_rps": 18.5625,
+      "p50_ms": 30.0,
+      "p95_ms": 60.0,
+      "p99_ms": 90.0,
+      "error_rate": 0.0,
+      "errors": {},
+      "verdict": "ok",
+      "start_ms": 90000,
+      "end_ms": 120000
+    }
+  ],
+  "breakpoint": {
+    "max_sustainable_rps": 18.75,
+    "breaking_rps": 22.5,
+    "failure_mode": "latency",
+    "first_failing_endpoint": {
+      "file": "api/orders.rman.yaml",
+      "p95_ms": 410.0,
+      "error_rate": 0.02
+    },
+    "stop": "refined",
+    "max_rps": 500.0
+  },
+  "rate_limited_at": null,
+  "killed": null,
+  "recovery": {
+    "status": "recovered",
+    "after_ms": 4000,
+    "baseline_ms": 12.0,
+    "health": "api/health.rman.yaml",
+    "last_status": 200,
+    "last_latency_ms": 13.0,
+    "timeline": [
+      {
+        "offset_ms": 0,
+        "status": 503,
+        "latency_ms": 900.0,
+        "good": false
+      },
+      {
+        "offset_ms": 1000,
+        "status": 503,
+        "latency_ms": 900.0,
+        "good": false
+      },
+      {
+        "offset_ms": 2000,
+        "status": 503,
+        "latency_ms": 900.0,
+        "good": false
+      },
+      {
+        "offset_ms": 3000,
+        "status": 503,
+        "latency_ms": 900.0,
+        "good": false
+      },
+      {
+        "offset_ms": 4000,
+        "status": 200,
+        "latency_ms": 13.0,
+        "good": true
+      },
+      {
+        "offset_ms": 5000,
+        "status": 200,
+        "latency_ms": 13.0,
+        "good": true
+      },
+      {
+        "offset_ms": 6000,
+        "status": 200,
+        "latency_ms": 13.0,
+        "good": true
+      },
+      {
+        "offset_ms": 7000,
+        "status": 200,
+        "latency_ms": 13.0,
+        "good": true
+      },
+      {
+        "offset_ms": 8000,
+        "status": 200,
+        "latency_ms": 13.0,
+        "good": true
+      },
+      {
+        "offset_ms": 9000,
+        "status": 200,
+        "latency_ms": 13.0,
+        "good": true
+      },
+      {
+        "offset_ms": 10000,
+        "status": 200,
+        "latency_ms": 13.0,
+        "good": true
+      },
+      {
+        "offset_ms": 11000,
+        "status": 200,
+        "latency_ms": 13.0,
+        "good": true
+      },
+      {
+        "offset_ms": 12000,
+        "status": 200,
+        "latency_ms": 13.0,
+        "good": true
+      },
+      {
+        "offset_ms": 13000,
+        "status": 200,
+        "latency_ms": 13.0,
+        "good": true
+      }
+    ]
+  },
+  "summary": {
+    "findings": {
+      "critical": 0,
+      "high": 1,
+      "medium": 0,
+      "low": 0,
+      "info": 0
+    },
+    "requests": 4000,
+    "fuzzed_requests": 400,
+    "duration_ms": 180000
+  },
+  "findings": [
+    {
+      "id": "f001",
+      "rule": "server-error-on-malformed-input",
+      "severity": "high",
+      "operation": "api/orders.rman.yaml",
+      "description": "A malformed or mutated input made the server fail with a 5xx.",
+      "remediation": "Validate input and answer 4xx instead of failing.",
+      "message": "mutation input on api/orders.rman.yaml answered 500 (3 times)",
+      "occurrences": 1,
+      "probes": [
+        "mutation"
+      ],
+      "evidence": {
+        "method": "POST",
+        "url": "https://staging.example.com/orders",
+        "request_headers": [
+          [
+            "Authorization",
+            "Bearer «redacted:api_token»"
+          ]
+        ],
+        "request_body": "{\"qty\":\"2\",\"note\":\"<b>hi</b>\"}",
+        "status": 500,
+        "response_headers": [],
+        "body": "500",
+        "truncated": false
+      },
+      "reproduction": {
+        "curl": "",
+        "request": "version: 1\n"
+      },
+      "family": "mutation",
+      "minimized": {
+        "body": "{\"qty\":\"2\"}",
+        "content_type": "application/json",
+        "replays": 7,
+        "load_dependent": false
+      }
+    }
+  ],
+  "client_saturated": false,
+  "interrupted": false,
+  "warnings": []
+}

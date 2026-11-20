@@ -1,0 +1,22 @@
+---
+source: crates/rustman-tui/src/stress_view.rs
+expression: draw(&snapshot())
+---
+┌ rustman stress breakpoint ─────────────────────────────────────────────────────────────────────────────────┐
+│mode breakpoint   phase load   step 4   elapsed 1m35s                                                       │
+│offered 33.75 req/s   achieved 33.5 req/s   errors 5xx 3                                                    │
+│kill switch armed: connection 10%, timeouts 0% (trips above 50% for 5s), health failures 0/3                │
+│traffic  p50      p95      p99      requests errors                                                         │
+│valid    20ms     41ms     62ms     168      0.00%                                                          │
+│fuzzed   60ms     120ms    180ms    42       25.00%                                                         │
+│                                                                                                            │
+│window offered        p95       errors   SLOs              failed                                           │
+│17     33.75 req/s    41ms      0.00%    ok                                                                 │
+│18     33.75 req/s    1400ms    2.00%    failed            p95<300ms                                        │
+│                                                                                                            │
+│findings                                                                                                    │
+│high server-error-on-malformed-input: deep-nesting                                                          │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘

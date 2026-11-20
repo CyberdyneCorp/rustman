@@ -10,6 +10,7 @@ use serde::Serialize;
 use crate::exploration::{ExplorationReport, Ratio, ReportFinding, Severity};
 use crate::report::Report;
 use crate::run::RunReport;
+use crate::stress::StressReport;
 
 /// One finding on either side, as a diff lists it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -71,7 +72,9 @@ pub struct KindMismatch {
 
 fn mismatch(old: &str, new: &str) -> String {
     if old == new {
-        format!("cannot compare {old} reports (report diff compares runs and explorations)")
+        format!(
+            "cannot compare {old} reports (report diff compares runs, explorations and stress runs)"
+        )
     } else {
         format!(
             "cannot compare {} report with {} report",
@@ -170,6 +173,7 @@ pub fn diff(old: &Report, new: &Report) -> Result<Diff, KindMismatch> {
     match (old, new) {
         (Report::Exploration(o), Report::Exploration(n)) => Ok(explorations(o, n)),
         (Report::Run(o), Report::Run(n)) => Ok(runs(o, n)),
+        (Report::Stress(o), Report::Stress(n)) => Ok(stresses(o, n)),
         _ => Err(KindMismatch {
             old: old.kind(),
             new: new.kind(),
@@ -187,7 +191,27 @@ fn by_key(findings: &[ReportFinding]) -> BTreeMap<Key<'_>, &ReportFinding> {
 }
 
 fn explorations(old: &ExplorationReport, new: &ExplorationReport) -> Diff {
-    let (before, after) = (by_key(&old.findings), by_key(&new.findings));
+    Diff {
+        coverage: Some(CoverageDelta {
+            operations: delta(old.coverage.operations, new.coverage.operations),
+            statuses: delta(old.coverage.statuses, new.coverage.statuses),
+        }),
+        ..findings("exploration", &old.findings, &new.findings)
+    }
+}
+
+/// Stress findings match by rule and operation (the request file) like
+/// exploration findings; there is no coverage.
+fn stresses(old: &StressReport, new: &StressReport) -> Diff {
+    let base = |r: &StressReport| -> Vec<ReportFinding> {
+        r.findings.iter().map(|f| f.finding.clone()).collect()
+    };
+    findings("stress", &base(old), &base(new))
+}
+
+/// New, fixed and unchanged findings between `old` and `new`.
+fn findings(kind: &'static str, old: &[ReportFinding], new: &[ReportFinding]) -> Diff {
+    let (before, after) = (by_key(old), by_key(new));
     let pick = |from: &BTreeMap<Key, &ReportFinding>,
                 other: &BTreeMap<Key, &ReportFinding>,
                 present: bool| {
@@ -202,14 +226,11 @@ fn explorations(old: &ExplorationReport, new: &ExplorationReport) -> Diff {
         list
     };
     Diff {
-        kind: "exploration",
+        kind,
         new: pick(&after, &before, false),
         fixed: pick(&before, &after, false),
         unchanged: pick(&after, &before, true),
-        coverage: Some(CoverageDelta {
-            operations: delta(old.coverage.operations, new.coverage.operations),
-            statuses: delta(old.coverage.statuses, new.coverage.statuses),
-        }),
+        coverage: None,
         assertions: Vec::new(),
     }
 }
@@ -304,7 +325,7 @@ mod tests {
         );
         assert_eq!(
             mismatch("contract", "contract"),
-            "cannot compare contract reports (report diff compares runs and explorations)"
+            "cannot compare contract reports (report diff compares runs, explorations and stress runs)"
         );
     }
 }

@@ -329,6 +329,49 @@ mod tests {
         assert!(grpc_tools().is_empty());
     }
 
+    /// stress-testing "Agents cannot start stress runs": no tool starts a
+    /// stress run or sends malformed or wire-fault traffic. Agents read
+    /// stress reports through the report tools instead.
+    #[test]
+    fn no_tool_starts_a_stress_run_or_sends_faults() {
+        let words = [
+            "stress",
+            "breakpoint",
+            "soak",
+            "spike",
+            "malformed",
+            "wire fault",
+            "wire-fault",
+            "kill switch",
+        ];
+        for tool in catalog() {
+            let name = tool.name.to_lowercase();
+            let description = tool
+                .description
+                .as_deref()
+                .unwrap_or_default()
+                .to_lowercase();
+            for word in words {
+                assert!(
+                    !name.contains(word) && !description.contains(word),
+                    "{name} mentions {word}: {description}"
+                );
+            }
+            let schema = serde_json::to_string(&tool.input_schema)
+                .unwrap()
+                .to_lowercase();
+            for field in [
+                "\"fuzz_ratio\"",
+                "\"malformed\"",
+                "\"wire\"",
+                "\"allow_wire_faults\"",
+                "\"slo\"",
+            ] {
+                assert!(!schema.contains(field), "{name} takes {field}");
+            }
+        }
+    }
+
     /// load-testing "Agents cannot start a bench": no tool generates load.
     /// Agents read bench reports through the report tools instead.
     #[test]

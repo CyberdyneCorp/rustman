@@ -58,6 +58,9 @@ enum Command {
     Run(commands::run::RunArgs),
     /// Load test request files and collections against one target origin
     Bench(commands::bench::BenchArgs),
+    /// Find where a target listed in rustman.toml [stress] breaks, how,
+    /// and whether it recovers
+    Stress(Box<commands::stress::StressArgs>),
     /// Introspect GraphQL schemas and send GraphQL operations
     Graphql(commands::graphql::GraphqlArgs),
     /// List and describe gRPC services, call methods and check health
@@ -133,6 +136,7 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
         Command::Send(args) => commands::send::run(&args),
         Command::Run(args) => commands::run::run(&args),
         Command::Bench(args) => commands::bench::run(&args),
+        Command::Stress(args) => commands::stress::run(&args),
         Command::Graphql(args) => commands::graphql::run(&args),
         Command::Grpc(args) => commands::grpc::run(&args),
         Command::Rpc(args) => commands::rpc::run(&args),

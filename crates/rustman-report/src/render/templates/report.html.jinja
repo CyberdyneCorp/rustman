@@ -160,6 +160,79 @@
 {% endfor -%}
 </ul>
 {%- endif %}
+{%- elif kind == "stress" -%}
+<dl class="meta">
+<dt>Target</dt><dd><code>{{ r.target }}</code></dd>
+<dt>Environment</dt><dd>{{ r.environment or "none" }}</dd>
+<dt>Mode</dt><dd>{{ r.mode }}</dd>
+<dt>Seed</dt><dd>{{ r.seed }}</dd>
+<dt>SLOs</dt><dd>{% for s in r.slos %}<code>{{ s }}</code>{% if not loop.last %}, {% endif %}{% else %}none{% endfor %}</dd>
+<dt>Started</dt><dd>{{ r.started_at }}</dd>
+<dt>Duration</dt><dd>{{ duration }}</dd>
+{% if r.killed %}<dt>Killed</dt><dd class="status-failed">{{ r.killed.message }}</dd>{% endif %}
+<dt>Recovery</dt><dd>{{ recovery }}</dd>
+</dl>
+
+<h2>Summary</h2>
+<p>{{ r.summary.requests }} valid requests, {{ r.summary.fuzzed_requests }} fuzzed. Findings by severity: {{ counts }}.</p>
+{% if breakpoint -%}
+<ul class="thresholds">
+{% for line in breakpoint %}<li>{{ line }}</li>
+{% endfor -%}
+</ul>
+{%- endif %}
+{% if r.rate_limited_at %}<p>Rate limited at {{ "%.2f" | format(r.rate_limited_at) }} req/s.</p>{% endif %}
+
+{% for c in charts -%}
+<h2>{{ c.title }}</h2>
+<figure class="chart">
+<svg viewBox="-4 -4 {{ c.chart.width + 8 }} {{ c.chart.height + 8 }}" preserveAspectRatio="none" role="img" aria-label="{% for l in c.chart.lines %}{{ l.name }}{% if not loop.last %}, {% endif %}{% endfor %}">
+<line class="axis" x1="0" y1="{{ c.chart.height }}" x2="{{ c.chart.width }}" y2="{{ c.chart.height }}"/>
+{% if c.chart.marker is not none %}<line class="marker" x1="{{ c.chart.marker }}" y1="0" x2="{{ c.chart.marker }}" y2="{{ c.chart.height }}"><title>breaking_rps</title></line>
+{% endif -%}
+{% for l in c.chart.lines -%}
+<polyline class="line line-{{ l.name }}" points="{{ l.points }}"/>
+{% endfor -%}
+</svg>
+<figcaption><span class="muted">top {{ c.chart.top }}, up to {{ c.chart.end }}</span>{% for l in c.chart.lines %} <span class="key line-{{ l.name }}">{{ l.name }}</span>{% endfor %}{% if c.chart.marker is not none %} <span class="key line-errors">breakpoint</span>{% endif %}</figcaption>
+</figure>
+{% endfor %}
+
+{% if steps -%}
+<h2>Steps</h2>
+<table>
+<thead><tr><th class="n">Offered</th><th class="n">Achieved</th><th class="n">p50</th><th class="n">p95</th><th class="n">p99</th><th>Errors</th><th>Verdict</th></tr></thead>
+<tbody>
+{% for row in steps -%}
+<tr><td class="n">{{ "%.2f" | format(row.s.offered_rps) }}</td><td class="n">{{ "%.2f" | format(row.s.achieved_rps) }}</td><td class="n">{{ "%.2f" | format(row.s.p50_ms) }}</td><td class="n">{{ "%.2f" | format(row.s.p95_ms) }}</td><td class="n">{{ "%.2f" | format(row.s.p99_ms) }}</td><td>{{ row.error_rate }}{% if row.errors %} <span class="muted">({{ row.errors }})</span>{% endif %}</td><td>{{ row.s.verdict }}{% if row.s.failure_mode %} ({{ row.s.failure_mode }}){% endif %}</td></tr>
+{% endfor -%}
+</tbody>
+</table>
+{%- endif %}
+
+<h2>Findings</h2>
+{% for f in findings -%}
+<details class="finding">
+<summary><span class="sev sev-{{ f.severity }}">{{ f.severity }}</span> <span>{{ f.id }}</span> <strong>{{ f.rule }}</strong> <span class="op">{{ f.operation }}</span></summary>
+<div>
+<p>{{ f.message }}</p>
+{% if f.minimized %}<p>{% if f.minimized.load_dependent %}Load-dependent: the input did not fail alone.{% elif f.minimized.body %}Minimized ({{ f.minimized.replays }} replays): <code>{{ f.minimized.body }}</code>{% endif %}</p>{% endif %}
+<pre>{{ f.evidence.method }} {{ f.evidence.url }}
+{% for h in f.evidence.request_headers %}{{ h[0] }}: {{ h[1] }}
+{% endfor %}{% if f.evidence.request_body %}
+{{ f.evidence.request_body }}{% endif %}</pre>
+</div>
+</details>
+{% else -%}
+<p>No findings.</p>
+{% endfor -%}
+{% if r.warnings -%}
+<h2>Warnings</h2>
+<ul>
+{% for w in r.warnings %}<li>{{ w }}</li>
+{% endfor -%}
+</ul>
+{%- endif %}
 {%- else -%}
 <dl class="meta">
 <dt>Started</dt><dd>{{ r.started_at }}</dd>

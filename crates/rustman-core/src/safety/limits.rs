@@ -127,6 +127,10 @@ pub struct Governor {
     /// one through, so a sender could wait for a whole run.
     turn: AsyncMutex<()>,
     pace: Mutex<Pace>,
+    /// Whether a `429` halves the rate and `Retry-After` pauses sending.
+    backoff: bool,
+    /// Requests that may go out back to back after a late one.
+    burst: NonZeroU32,
 }
 
 impl std::fmt::Debug for Governor {
@@ -152,12 +156,37 @@ impl Governor {
             turn: AsyncMutex::new(()),
             pace: Mutex::new(Pace {
                 rate: limits.rate,
-                limiter: Arc::new(limiter(limits.rate)),
+                limiter: Arc::new(limiter(limits.rate, NonZeroU32::MIN)),
                 generation: 0,
                 resume_at: None,
                 halted: false,
             }),
+            backoff: true,
+            burst: NonZeroU32::MIN,
         }
+    }
+
+    /// Let up to `burst` requests go out back to back, while the average
+    /// still never exceeds the rate. For a sender that paces itself (a
+    /// stress scheduler at exactly the rate): with no burst, every request
+    /// that arrives a little early waits, a late one earns nothing back,
+    /// and the throughput falls below the rate.
+    #[must_use]
+    pub fn with_burst(mut self, burst: NonZeroU32) -> Self {
+        self.burst = burst;
+        let pace = self.pace.get_mut().unwrap_or_else(PoisonError::into_inner);
+        pace.limiter = Arc::new(limiter(pace.rate, burst));
+        self
+    }
+
+    /// A governor that never backs off: a `429` neither lowers the rate
+    /// nor pauses sending. For stress runs, whose controller measures
+    /// throttling instead of hiding it; the rate and concurrency limits
+    /// still apply.
+    #[must_use]
+    pub fn without_backoff(mut self) -> Self {
+        self.backoff = false;
+        self
     }
 
     pub fn limits(&self) -> Limits {
@@ -243,14 +272,14 @@ impl Governor {
     /// rate don't halve it again) and pauses sending for its `Retry-After`.
     /// A pause that ends after the time budget stops sending for good.
     pub fn observe(&self, paced: Paced, status: u16, retry_after: Option<&str>) -> Option<Backoff> {
-        if status != TOO_MANY_REQUESTS {
+        if status != TOO_MANY_REQUESTS || !self.backoff {
             return None;
         }
         let pause = retry_after.and_then(|value| parse_retry_after(value, SystemTime::now()));
         let mut pace = self.state();
         if paced.generation == pace.generation {
             pace.rate = halved(pace.rate);
-            pace.limiter = Arc::new(limiter(pace.rate));
+            pace.limiter = Arc::new(limiter(pace.rate, self.burst.min(pace.rate)));
             // The next request waits a full interval at the new rate.
             let _ = pace.limiter.check();
             pace.generation += 1;
@@ -315,9 +344,10 @@ impl Governor {
     }
 }
 
-/// Evenly spaced requests: no bursts, even right after a backoff.
-fn limiter(rate: NonZeroU32) -> DefaultDirectRateLimiter {
-    RateLimiter::direct(Quota::per_second(rate).allow_burst(NonZeroU32::MIN))
+/// Evenly spaced requests, at most `burst` back to back (by default one:
+/// no bursts, even right after a backoff).
+fn limiter(rate: NonZeroU32, burst: NonZeroU32) -> DefaultDirectRateLimiter {
+    RateLimiter::direct(Quota::per_second(rate).allow_burst(burst))
 }
 
 /// Half the rate, rounding down, but at least 1 request per second.
@@ -458,6 +488,29 @@ mod tests {
         let c = block_on(governor.pace()).unwrap();
         assert_eq!(governor.observe(c, 429, None).unwrap().rate.get(), 2);
         assert_eq!(governor.rate().get(), 2);
+    }
+
+    #[test]
+    fn a_burst_lets_requests_go_back_to_back_but_not_past_it() {
+        // 1 request per second: a wait would be a whole second.
+        let governor =
+            Governor::new(limits(1, 4, 10, HOUR)).with_burst(NonZeroU32::new(2).unwrap());
+        let started = Instant::now();
+        block_on(governor.pace()).unwrap();
+        block_on(governor.pace()).unwrap();
+        assert!(started.elapsed() < Duration::from_millis(900));
+        let state = governor.state();
+        assert!(state.limiter.check().is_err(), "a third waits");
+    }
+
+    #[test]
+    fn without_backoff_a_429_changes_nothing() {
+        let governor = Governor::new(limits(10, 4, 10, HOUR)).without_backoff();
+        let a = block_on(governor.pace()).unwrap();
+        assert_eq!(governor.observe(a, 429, Some("3600")), None);
+        assert_eq!(governor.rate().get(), 10);
+        assert!(governor.pause_left().is_none());
+        assert!(block_on(governor.pace()).is_ok());
     }
 
     #[test]

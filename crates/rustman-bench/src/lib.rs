@@ -26,6 +26,9 @@
 //! - **Generator lag** ([`lag`]): a warning when the generator itself is
 //!   the bottleneck.
 //! - **Reports** ([`report`]): the `kind: bench` report of a run.
+//! - **Stress testing** ([`stress`]): `rustman stress`, modes that search
+//!   for the target's limit over the same metrics, with stricter safety
+//!   rules and caps of their own.
 //! - **Live view** ([`live`]): snapshots of the run so far for the TTY
 //!   dashboard, the non-TTY progress lines and the viz companion, read
 //!   without slowing the VUs ([`Bench::live`]).
@@ -49,6 +52,7 @@ mod open;
 pub mod profile;
 pub mod report;
 pub mod safety;
+pub mod stress;
 pub mod summary;
 pub mod threshold;
 mod vu;

@@ -19,6 +19,7 @@ use crate::bench::BenchReport;
 use crate::contract::{ContractItem, ContractReport};
 use crate::exploration::{ExplorationReport, ReportFinding, Severity};
 use crate::run::{RunReport, RunRequest, Status};
+use crate::stress::StressReport;
 
 const SCHEMA: &str = "https://json.schemastore.org/sarif-2.1.0.json";
 const VERSION: &str = "2.1.0";
@@ -377,6 +378,31 @@ pub fn bench_sarif(report: &BenchReport) -> String {
             results,
             automation_details: Some(Automation {
                 id: "rustman/bench".to_owned(),
+            }),
+        }],
+    })
+}
+
+/// A stress run as a SARIF log: one result per finding, located in the
+/// request file it concerns.
+pub fn stress_sarif(report: &StressReport) -> String {
+    let mut rules: Vec<Descriptor> = Vec::new();
+    let results = report
+        .findings
+        .iter()
+        .map(|f| {
+            let index = rule_index(&mut rules, &f.finding);
+            finding_result(&f.finding, index, &f.finding.operation, String::new(), None)
+        })
+        .collect();
+    to_text(&Log {
+        schema: SCHEMA,
+        version: VERSION,
+        runs: vec![Run {
+            tool: tool(rules),
+            results,
+            automation_details: Some(Automation {
+                id: format!("rustman/stress/{}", report.id),
             }),
         }],
     })

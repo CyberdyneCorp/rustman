@@ -4253,15 +4253,22 @@ dependencies = [
 name = "rustman-bench"
 version = "0.1.0"
 dependencies = [
+ "async-compression",
+ "bytes",
  "criterion",
  "futures-util",
  "hdrhistogram",
+ "http",
+ "insta",
  "rand 0.10.4",
+ "rustix",
  "rustman-core",
+ "rustman-explore",
  "rustman-http",
  "rustman-report",
  "rustman-test-support",
  "serde",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",

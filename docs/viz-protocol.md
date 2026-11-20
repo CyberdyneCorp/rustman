@@ -27,7 +27,7 @@ The producer opens every session with `hello`. The companion answers with `hello
 
 ## Messages
 
-Opening a view, and loading a saved report (`kind` is `run`, `exploration` or `bench`; `view` is optional, e.g. `api_graph` for `--view graph`):
+Opening a view, and loading a saved report (`kind` is `run`, `exploration`, `bench` or `stress`; `view` is optional, e.g. `api_graph` for `--view graph`):
 
 ```json
 {"type":"open_view","view":"run_dashboard","title":"smoke/"}
@@ -59,6 +59,9 @@ A bench (`rustman bench --viz`, see [Load testing](bench.md)) opens the `bench` 
 {"type":"bench_tick","second":3,"elapsed_ms":3000,"remaining_ms":27000,"active_vus":10,"requests":412,"errors":2,"rps":412.0,"p50_ms":18.2,"p95_ms":61.0,"p99_ms":120.4}
 {"type":"bench_finished","state":"completed","duration_ms":30000,"iterations":4100,"requests":12300,"errors":41,"rps":410.0,"p50_ms":18.0,"p95_ms":64.3,"p99_ms":130.1,"thresholds":[{"expression":"p95<300ms","passed":true,"actual":"64.3ms"}]}
 ```
+
+A stress run (`rustman stress --viz`, see [Stress testing](stress.md)) opens the `stress` view and streams the same `bench_tick` per second for valid traffic, then `close`. A companion whose `hello_ack` lacks `stress` gets no stream, and the run warns `viz companion has no stress view` once.
+
 
 A response for the inspector, inline or by reference. Header values and bodies are redacted by the producer before they are written (secrets appear as `«redacted:name»`); the companion has no reveal function:
 

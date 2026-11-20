@@ -13,7 +13,7 @@ A report has a top-level `schema` (`rustman.report/v1`) and a `kind`:
 | `contract` | `rustman contract diff --report json` | What a contract command checked, as one list of items, with a `mode` (`diff`, `pact-verify` or `conformance`); see [Contract reports](#contract-reports) |
 | `bench` | `rustman bench --report json=<file>` | The load profile, the target, latency and error statistics per request file and overall, a per-second time series, the threshold results and error samples; see [Bench reports](#bench-reports) |
 
-`rustman report schema` prints the JSON Schema (draft 2020-12) that every kind validates against. The same file is published at [`schemas/report.schema.json`](schemas/report.schema.json). Its `kind: run` part is the contract the first reporters published, kept as is; its `kind: exploration`, `kind: contract` and `kind: bench` parts are generated from the Rust types with `schemars`, and a test fails if the published file drifts from them.
+`rustman report schema` prints the JSON Schema (draft 2020-12) that every kind validates against. The same file is published at [`schemas/report.schema.json`](schemas/report.schema.json). Its `kind: run` part is the contract the first reporters published, kept as is; its `kind: exploration`, `kind: contract`, `kind: bench` and `kind: stress` parts are generated from the Rust types with `schemars`, and a test fails if the published file drifts from them.
 
 A reader built before a kind existed refuses it instead of misreading it: `rustman report render` exits 2 with `unknown report kind '<kind>'`.
 
@@ -153,6 +153,16 @@ A `kind: bench` report ([`rustman bench`](bench.md#reports)) has the `target`, t
 - **SARIF**: one `error` result per breached threshold (rule `bench-threshold`), without a location.
 
 `report diff` does not compare bench reports (exit 2).
+
+### Stress reports
+
+A `kind: stress` report ([`rustman stress`](stress.md#reports-and-the-live-view)) has its `id`, the `target`, the `environment`, the `mode`, the `profile` (the mode's `settings`, `fuzz_ratio`, `malformed` and `wire` families and the `health` request), the `seed`, the `slos`, the `overall` and per-file statistics of valid traffic, the `fuzzed` statistics apart, the per-second `series`, the `steps` (offered and achieved rate, p50/p95/p99, error rate and classes, verdict and failure mode), `breakpoint` (`max_sustainable_rps`, `breaking_rps`, `failure_mode`, `first_failing_endpoint`, why the search stopped and `max_rps`), `rate_limited_at`, `killed`, `recovery` (`status`, the time to recover, the baseline, the last answer and the timeline of health requests), the `spike`, `soak` and `wire` results, and the `findings` in the exploration format, each with its `family` and, for a crash-like finding, its `minimized` input (redacted) or `load_dependent`. A finding's `evidence` is the exchange as it happened: `request_body` is the body sent (not the minimized one), `status` and `body` the response's status and the start of its body; without a response, `status` is 0 and `body` says what happened instead.
+
+- **Markdown** and **HTML**: the run, the breakpoint, the recovery, the step table, latency per file and the findings with their minimized inputs. The HTML page adds inline SVG charts of latency and errors against offered load, with the breakpoint marked, and the recovery timeline; it works offline.
+- **JUnit XML**: one `<testsuite>` named `stress` with one `<testcase>` per finding, a `<failure>` (of the rule's type) at or above `high`.
+- **SARIF**: one result per finding, located in its request file.
+
+`report diff` compares two stress reports like explorations: findings match by rule and operation (the request file), so a `no-recovery` only in the later report is new and exits 1. A reader from before `kind: stress` refuses such a report with `unknown report kind 'stress'` (exit 2) without crashing.
 
 ## Comparing reports
 

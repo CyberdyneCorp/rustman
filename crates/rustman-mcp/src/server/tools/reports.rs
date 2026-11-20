@@ -1,8 +1,9 @@
 //! Report tools (spec "OpenAPI and exploration tools", `test-reports`):
 //! `get_report` and `list_findings`, over exploration reports on disk, the
 //! run reports of this session's jobs, and report files of the workspace
-//! (such as a `rustman bench --report json=...` report: agents read bench
-//! reports, they never start a bench).
+//! (such as a `rustman bench --report json=...` or `rustman stress --report
+//! json=...` report: agents read bench and stress reports, they never
+//! start a bench or a stress run).
 
 use std::io::Read;
 
@@ -10,6 +11,7 @@ use rustman_explore::explore::session::Session;
 use rustman_report::bench::BenchReport;
 use rustman_report::exploration::{ExplorationReport, ReportFinding, Severity};
 use rustman_report::run::Status;
+use rustman_report::stress::StressReport;
 use rustman_report::{RenderFormat, RenderOptions, Report, RunReport};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -38,7 +40,7 @@ pub struct GetReportArgs {
 pub struct ReportResult {
     /// The report's id: an exploration id, or a run's job id.
     pub id: String,
-    /// `run`, `exploration`, `contract` or `bench`.
+    /// `run`, `exploration`, `contract`, `bench` or `stress`.
     pub kind: String,
     pub format: String,
     /// The whole report, also readable as a resource.
@@ -185,9 +187,9 @@ pub fn exploration_report(ctx: &AgentContext, id: &str) -> Result<ExplorationRep
     })?;
     match Report::parse(&text) {
         Ok(Report::Exploration(report)) => Ok(*report),
-        Ok(Report::Run(_) | Report::Contract(_) | Report::Bench(_)) => Err(ToolError::internal(
-            format!("{} is not an exploration report", path.display()),
-        )),
+        Ok(Report::Run(_) | Report::Contract(_) | Report::Bench(_) | Report::Stress(_)) => Err(
+            ToolError::internal(format!("{} is not an exploration report", path.display())),
+        ),
         Err(err) => Err(ToolError::internal(err.to_string())),
     }
 }
@@ -233,6 +235,39 @@ fn bench_summary(report: &BenchReport) -> Value {
     })
 }
 
+/// A stress report (agents read them; they never start a stress run).
+fn stress_summary(report: &StressReport) -> Value {
+    let findings: Vec<Value> = report
+        .findings
+        .iter()
+        .map(|f| {
+            json!({
+                "id": f.finding.id,
+                "rule": f.finding.rule,
+                "severity": f.finding.severity,
+                "operation": f.finding.operation,
+                "load_dependent": f.minimized.as_ref().is_some_and(|m| m.load_dependent),
+            })
+        })
+        .collect();
+    json!({
+        "target": report.target,
+        "environment": report.environment,
+        "mode": report.mode,
+        "seed": report.seed,
+        "slos": report.slos,
+        "breakpoint": report.breakpoint,
+        "rate_limited_at": report.rate_limited_at,
+        "killed": report.killed,
+        "recovery": {
+            "status": report.recovery.status,
+            "after_ms": report.recovery.after_ms,
+        },
+        "summary": report.summary,
+        "findings": findings,
+    })
+}
+
 fn run_summary(report: &RunReport) -> Value {
     let problems: Vec<Value> = report
         .requests
@@ -258,6 +293,7 @@ pub fn get_report(call: &Call) -> Result<ToolOutput, ToolError> {
             Report::Exploration(r) => exploration_summary(r),
             Report::Contract(r) => json!({ "mode": r.mode, "summary": r.summary }),
             Report::Bench(r) => bench_summary(r),
+            Report::Stress(r) => stress_summary(r),
         };
         (Some(summary), None)
     } else {

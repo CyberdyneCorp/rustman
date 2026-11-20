@@ -115,6 +115,10 @@ pub fn render(report: &Report, format: RenderFormat, options: &RenderOptions) ->
         (RenderFormat::Sarif, Report::Contract(r)) => sarif::contract_sarif(r, options),
         (RenderFormat::Junit, Report::Bench(r)) => junit::bench_junit(r),
         (RenderFormat::Sarif, Report::Bench(r)) => sarif::bench_sarif(r),
+        (RenderFormat::Junit, Report::Stress(r)) => {
+            junit::stress_junit(r, options.fail_on.unwrap_or(Severity::High))
+        }
+        (RenderFormat::Sarif, Report::Stress(r)) => sarif::stress_sarif(r),
         (RenderFormat::Markdown, _) => human::markdown(report, options),
         (RenderFormat::Html, _) => human::html(report, options),
     }

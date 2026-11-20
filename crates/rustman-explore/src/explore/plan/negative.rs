@@ -10,7 +10,7 @@ use super::single::probe;
 use super::{AuthMode, Check, Family, Probe, Step, escape, escape_json};
 use crate::openapi::model::{Operation, ParameterLocation};
 use crate::openapi::schema::validator;
-use crate::synth::type_of;
+use crate::synth::{Synthesizer, type_of};
 
 /// At most this many negative-input probes per operation.
 const MAX_VARIANTS: usize = 20;
@@ -95,7 +95,7 @@ fn body_variants(inputs: &Inputs<'_>, op: &Operation) -> Vec<Variant> {
     }
     let properties = object.get("properties").and_then(Value::as_object);
     for (name, property) in properties.into_iter().flatten() {
-        for (what, value) in invalid_values(inputs, property, false) {
+        for (what, value) in invalid_values(&inputs.synth, property, false) {
             let mut body = base.clone();
             body.insert(name.clone(), value);
             out.push(body_variant(format!("{what} for field '{name}'"), body));
@@ -179,13 +179,13 @@ fn param_values(inputs: &Inputs<'_>, schema: Option<&Value>) -> Vec<(&'static st
     let Ok(check) = validator(schema, &inputs.model.components) else {
         return Vec::new();
     };
-    invalid_values(inputs, schema, true)
+    invalid_values(&inputs.synth, schema, true)
         .into_iter()
         .filter(|(_, v)| !check.is_valid(v))
         .collect()
 }
 
-fn required(object: &Map<String, Value>) -> Vec<String> {
+pub(crate) fn required(object: &Map<String, Value>) -> Vec<String> {
     object
         .get("required")
         .and_then(Value::as_array)
@@ -199,12 +199,12 @@ fn required(object: &Map<String, Value>) -> Vec<String> {
 }
 
 /// Candidate invalid values for `schema`, each with what it violates.
-fn invalid_values(
-    inputs: &Inputs<'_>,
+pub(crate) fn invalid_values(
+    synth: &Synthesizer<'_>,
     schema: &Value,
     as_text: bool,
 ) -> Vec<(&'static str, Value)> {
-    let Some(object) = inputs.synth.object_view(schema) else {
+    let Some(object) = synth.object_view(schema) else {
         return Vec::new();
     };
     let kind = type_of(&object).to_owned();
@@ -244,9 +244,7 @@ fn invalid_values(
         out.push(("pattern mismatch", json!("!~ not matching ~!")));
     }
     if let Some(max) = length("maxItems") {
-        let item = object
-            .get("items")
-            .map_or(Value::Null, |i| inputs.synth.value(i));
+        let item = object.get("items").map_or(Value::Null, |i| synth.value(i));
         out.push(("more than maxItems", Value::Array(vec![item; max + 1])));
     }
     if length("minItems").is_some_and(|n| n > 0) {

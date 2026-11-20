@@ -1,0 +1,49 @@
+---
+source: crates/rustman-report/tests/stress.rs
+expression: rendered(format)
+---
+# Stress report
+
+| | |
+|---|---|
+| Target | `https://staging.example.com` |
+| Environment | staging |
+| Mode | breakpoint |
+| Seed | 42 |
+| SLOs | `p95<300ms`, `error_rate<1%` |
+| Started | 2026-11-20T10:00:00Z |
+| Duration | 180.0 s |
+
+**Summary:** 4000 valid requests, 400 fuzzed. Findings by severity: 0 critical, 1 high, 0 medium, 0 low, 0 info.
+
+## Breakpoint
+
+- max\_sustainable\_rps: 18.75
+- breaking\_rps: 22.50 \(latency; first failing endpoint: api/orders.rman.yaml, p95 410ms, errors 2.00%\)
+- stopped: refined \(max\_rps 500\)
+
+## Recovery
+
+recovered 4s after load stopped
+
+## Steps
+
+| Offered | Achieved | p50 | p95 | p99 | Errors | Verdict |
+|---|---|---|---|---|---|---|
+| 10.00 | 9.90 | 10.00 | 20.00 | 30.00 | 0.00% | ok |
+| 15.00 | 14.85 | 12.50 | 25.00 | 37.50 | 0.00% | ok |
+| 22.50 | 22.27 | 205.00 | 410.00 | 615.00 | 2.00% | broken (latency) |
+| 18.75 | 18.56 | 30.00 | 60.00 | 90.00 | 0.00% | ok |
+
+## Latency (valid traffic, ms)
+
+| File | p50 | p95 | p99 | max | Requests | Errors |
+|---|---|---|---|---|---|---|
+| `api/orders.rman.yaml` | 90.00 | 180.00 | 270.00 | 360.00 | 4000 | 0.50% (5xx 20) |
+| `overall` | 90.00 | 180.00 | 270.00 | 360.00 | 4000 | 0.50% (5xx 20) |
+
+## Findings
+
+| ID | Severity | Rule | Operation | Message |
+|---|---|---|---|---|
+| f001 | high | `server-error-on-malformed-input` | `api/orders.rman.yaml` | mutation input on api/orders.rman.yaml answered 500 \(3 times\) (minimized: `{"qty":"2"}`) |

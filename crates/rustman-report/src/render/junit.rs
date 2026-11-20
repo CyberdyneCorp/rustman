@@ -24,6 +24,7 @@ use crate::bench::{BenchReport, ThresholdResult};
 use crate::contract::{ContractItem, ContractReport};
 use crate::exploration::{ExplorationReport, ReportFinding, Severity};
 use crate::run::{RunReport, RunRequest, Status};
+use crate::stress::{StressFinding, StressReport};
 
 /// The name of the report and of a run's one test suite.
 const SUITE: &str = "rustman";
@@ -125,6 +126,43 @@ pub fn bench_junit(report: &BenchReport) -> String {
     ));
     junit.add_test_suite(suite);
     finish(&junit)
+}
+
+/// A stress report as a JUnit XML document, ending in a newline: one test
+/// case per finding, a `<failure>` at or above `fail_on`; a run without
+/// findings is one passing case.
+pub fn stress_junit(report: &StressReport, fail_on: Severity) -> String {
+    let mut suite = TestSuite::new("stress");
+    suite.add_property(Property::new("target", report.target.as_str()));
+    suite.add_property(Property::new("mode", report.mode.as_str()));
+    suite.add_property(Property::new("seed", report.seed.to_string()));
+    if report.findings.is_empty() {
+        suite.add_test_case(TestCase::new("stress run", TestCaseStatus::success()));
+    }
+    suite.add_test_cases(report.findings.iter().map(|f| stress_case(f, fail_on)));
+    let mut junit = Report::new(SUITE);
+    junit.set_time(duration(report.summary.duration_ms as f64));
+    junit.add_test_suite(suite);
+    finish(&junit)
+}
+
+fn stress_case(finding: &StressFinding, fail_on: Severity) -> TestCase {
+    let f = &finding.finding;
+    let failing = f.severity <= fail_on;
+    let status = if failing {
+        let mut status = TestCaseStatus::non_success(NonSuccessKind::Failure);
+        status.set_type(f.rule.as_str());
+        status.set_message(finding_line(f));
+        status
+    } else {
+        TestCaseStatus::success()
+    };
+    let mut case = TestCase::new(format!("{} {}", f.rule, f.operation), status);
+    case.set_classname(f.operation.as_str());
+    if !failing {
+        case.set_system_out(finding_line(f));
+    }
+    case
 }
 
 fn threshold_case(result: &ThresholdResult) -> TestCase {

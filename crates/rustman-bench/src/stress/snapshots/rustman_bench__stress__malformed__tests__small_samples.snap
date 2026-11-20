@@ -1,0 +1,36 @@
+---
+source: crates/rustman-bench/src/stress/malformed.rs
+expression: "lines.join(\"\\n\")"
+---
+json-syntax[0] application/json  (10 bytes): {\"qty\":2,\"
+json-syntax[1] application/json  (21 bytes): {\"qty\":2,\"sku\":\"A1\"},
+json-syntax[2] application/json  (10 bytes): {\"id\": 1,}
+json-syntax[3] application/json  (7 bytes): {id: 1}
+deep-nesting[0] application/json depth=16 (32 bytes): [[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+deep-nesting[1] application/json depth=128 (256 bytes): [[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[
+deep-nesting[2] application/json depth=1024 (2048 bytes): [[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[
+deep-nesting[3] application/json depth=5000 (10000 bytes): [[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[
+large-body[0] application/json bytes=20000 (20000 bytes): {\"data\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+large-body[1] application/json bytes=20000 (20000 bytes): {\"data\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+large-body[2] application/json bytes=20000 (20000 bytes): {\"data\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+large-body[3] application/json bytes=20000 (20000 bytes): {\"data\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+wide[0] application/json keys=1000 (8891 bytes): {\"k0\":0,\"k1\":0,\"k2\":0,\"k3\":0,\"k4\":0,\"k5\":0,\"k6\
+wide[1] application/json keys=1000 (8891 bytes): {\"k0\":0,\"k1\":0,\"k2\":0,\"k3\":0,\"k4\":0,\"k5\":0,\"k6\
+wide[2] application/json keys=1000 (8891 bytes): {\"k0\":0,\"k1\":0,\"k2\":0,\"k3\":0,\"k4\":0,\"k5\":0,\"k6\
+wide[3] application/json keys=1000 (8891 bytes): {\"k0\":0,\"k1\":0,\"k2\":0,\"k3\":0,\"k4\":0,\"k5\":0,\"k6\
+encoding[0] application/json  (13 bytes): {\"name\":\"��\"}
+encoding[1] application/json  (14 bytes): {\"name\":\"a\0b\"}
+encoding[2] application/json  (13 bytes): {\"name\":\"��\"}
+encoding[3] application/json  (17 bytes): {\"name\":\"\\ud800\"}
+content-type-mismatch[0] application/xml  (20 bytes): {\"qty\":2,\"sku\":\"A1\"}
+content-type-mismatch[1] application/json  (27 bytes): <order><qty>2</qty></order>
+content-type-mismatch[2] application/json  (12 bytes): qty=2&sku=A1
+content-type-mismatch[3] application/xml  (20 bytes): {\"qty\":2,\"sku\":\"A1\"}
+duplicate-keys[0] application/json  (30 bytes): {\"qty\":2,\"qty\":\"2\",\"sku\":\"A1\"}
+duplicate-keys[1] application/json  (30 bytes): {\"qty\":2,\"qty\":\"2\",\"sku\":\"A1\"}
+duplicate-keys[2] application/json  (30 bytes): {\"qty\":2,\"qty\":\"2\",\"sku\":\"A1\"}
+duplicate-keys[3] application/json  (30 bytes): {\"qty\":2,\"qty\":\"2\",\"sku\":\"A1\"}
+numbers[0] application/json  (24 bytes): {\"qty\":1e400,\"sku\":\"A1\"}
+numbers[1] application/json  (59 bytes): {\"qty\":1234567890123456789012345678901234567890,\"sku\":\"
+numbers[2] application/json  (21 bytes): {\"qty\":-0,\"sku\":\"A1\"}
+numbers[3] application/json  (25 bytes): {\"qty\":1e-400,\"sku\":\"A1\"}

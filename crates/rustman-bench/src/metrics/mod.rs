@@ -33,8 +33,9 @@ pub use rustman_report::bench::{
 use serde::Serialize;
 
 pub use class::{ErrorClass, describe};
+pub(crate) use stats::Window;
+use stats::ratio;
 pub use stats::{MAX_LATENCY_US, Phases, SIGNIFICANT_DIGITS, histogram, latency_summary};
-use stats::{Window, ratio};
 
 /// The most points the time series keeps: 24 hours of seconds.
 pub const MAX_SERIES: usize = 86_400;

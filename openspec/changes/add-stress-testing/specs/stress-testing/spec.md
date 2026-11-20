@@ -33,7 +33,7 @@ A production target, as defined by the `api-exploration` production guard, SHALL
 - **THEN** it SHALL exit with code 4 and `stress: fuzzing and malformed input are never sent to production`
 
 ### Requirement: Stress caps
-Stress SHALL cap load at `max_rps = 500`, `max_duration = 10m` (`max_soak_duration = 2h` for soak) and `max_body = 10 MiB` by default. Caps SHALL be raised only in `rustman.toml [stress]`. Method gating SHALL follow the safety policy, with `--allow-mutations` and `--allow-destructive`.
+Stress SHALL cap load at `max_rps = 500`, `max_duration = 10m` (`max_soak_duration = 2h` for soak), `max_body = 10 MiB` and `max_vus = 1000` by default. Caps SHALL be raised only in `rustman.toml [stress]`. Method gating SHALL follow the safety policy, with `--allow-mutations` and `--allow-destructive`.
 
 #### Scenario: Breakpoint reaches the cap
 - **GIVEN** the target holds every SLO up to 500 req/s
@@ -107,12 +107,17 @@ Spike SHALL run `--baseline-rps` for `--baseline` (default 30s), jump to `--spik
 - **THEN** the report SHALL state `recovered in 14s`
 
 ### Requirement: Soak mode
-Soak SHALL hold `--rps` for `--duration`. It SHALL fit a linear trend to per-minute p95 and error rate. A p95 slope above `--drift-threshold` (default 5% of the first 10-minute median per hour) SHALL produce a `medium` finding `latency-drift`. A rising error trend SHALL produce `error-drift`.
+Soak SHALL hold `--rps` for `--duration`. It SHALL fit a linear trend to per-minute p95 and error rate. With fewer than three per-minute points, the summary SHALL say the trend is not available (too little data) instead of showing a slope. A p95 slope above `--drift-threshold` (default 5% of the first 10-minute median per hour) SHALL produce a `medium` finding `latency-drift`. A rising error trend SHALL produce `error-drift`.
 
 #### Scenario: Leak-like drift
 - **GIVEN** a 2-hour soak where p95 grows from 80 ms to 140 ms
 - **WHEN** the soak finishes
 - **THEN** the report SHALL contain `latency-drift` with the slope in ms per hour
+
+#### Scenario: Too short for a trend
+- **GIVEN** a soak of 30 s
+- **WHEN** the soak finishes
+- **THEN** the summary SHALL state `p95 trend not available: too little data` and no slope
 
 ### Requirement: Fuzz mode and fuzz mixing
 Fuzz mode SHALL hold `--rps` with `--fuzz-ratio` (default 0.2). In every mode, `--fuzz-ratio r` SHALL replace each request with a mutated variant with probability `r`, without changing offered load. Valid and fuzzed exchanges SHALL be measured separately. Ratios outside `0 < r ≤ 1` SHALL be a usage error.
@@ -139,12 +144,17 @@ Every run SHALL use a seed, printed at start and stored in the report. `--seed <
 - **THEN** the sequence of fuzzed slot indexes and variant bodies SHALL be identical
 
 ### Requirement: Valid-traffic impact
-Any mode with fuzzing SHALL first run a clean baseline phase (`--baseline`, default 30s) at the same rate. If valid-traffic p95 rises over 50% above baseline, or valid error rate rises over 1 point, the system SHALL record a `high` finding `fuzz-degrades-valid-traffic`.
+Any mode with fuzzing SHALL first run a clean baseline phase (`--baseline`, default 30s) at the same rate. If valid-traffic p95 rises over 50% above baseline (and by more than 10 ms, so a fast target's jitter does not count), or valid error rate rises over 1 point, the system SHALL record a `high` finding `fuzz-degrades-valid-traffic`. It SHALL NOT be recorded when no request was fuzzed; the summary SHALL then warn that no request was fuzzed instead of stating the share replaced.
 
 #### Scenario: Bad clients hurt good clients
 - **GIVEN** a baseline valid p95 of 100 ms
 - **WHEN** with `--fuzz-ratio 0.2` the valid p95 becomes 260 ms
 - **THEN** `fuzz-degrades-valid-traffic` SHALL be reported with both values
+
+#### Scenario: Nothing to fuzz
+- **GIVEN** a plan of `GET` requests only (no JSON body to mutate) and `--fuzz-ratio 0.2`
+- **WHEN** valid p95 rises above the baseline during the run
+- **THEN** `fuzz-degrades-valid-traffic` SHALL NOT be reported, and the summary SHALL warn that no request was fuzzed
 
 ### Requirement: Malformed payload families
 `--malformed <families>` SHALL add raw-byte variants to the fuzz pool: `json-syntax`, `deep-nesting` (depth up to 10 000), `large-body` (up to `max_body`), `wide` (up to 100 000 keys or items), `encoding`, `content-type-mismatch`, `duplicate-keys`, `numbers` and `compression-bomb`. Auth, cookies and timing SHALL be applied as for normal requests.
@@ -219,7 +229,7 @@ Before load starts, the system SHALL warn when the file-descriptor limit is belo
 - **THEN** the step SHALL be reported as `client-saturated` and SHALL NOT set `breaking_rps`
 
 ### Requirement: Finding minimization
-After load ends and recovery succeeds, each crash-like finding (a 5xx, timeout or reset caused by a mutated input) SHALL be minimized by delta debugging, with at most 50 replays per finding at 2 req/s. If a finding doesn't reproduce in isolation, it SHALL be marked `load-dependent`.
+After load ends and recovery succeeds, each crash-like finding (a 5xx, timeout or reset caused by a mutated input) SHALL be minimized by delta debugging, with at most 50 replays per finding at 2 req/s. If a finding doesn't reproduce in isolation, it SHALL be marked `load-dependent`. No replay SHALL be sent after the first Ctrl+C, whether it came during load or during the recovery check.
 
 #### Scenario: Minimized payload
 - **GIVEN** a 4 KiB fuzzed body that causes a 500
@@ -231,6 +241,11 @@ After load ends and recovery succeeds, each crash-like finding (a 5xx, timeout o
 - **WHEN** minimization runs
 - **THEN** the finding SHALL be marked `load-dependent`
 
+#### Scenario: Ctrl+C during the recovery check
+- **GIVEN** a crash-like finding
+- **WHEN** the user presses Ctrl+C while the recovery check runs
+- **THEN** no minimization replay SHALL be sent and the finding SHALL carry no minimized input
+
 ### Requirement: Regression export
 `rustman stress export <id> --findings <ids|all> --into <collection>` SHALL write one request file per finding: the minimized input plus an assertion encoding the expected correct behavior (`status: "4xx"` for malformed input, `status: 431` for oversized headers, `status: 400` for ambiguous framing). Wire faults SHALL be exported as comments, because request files can't express them.
 
@@ -238,6 +253,11 @@ After load ends and recovery succeeds, each crash-like finding (a 5xx, timeout o
 - **GIVEN** finding `server-error-on-malformed-input` on `POST /orders`
 - **WHEN** the user exports it into `regressions/`
 - **THEN** a request file SHALL be written with the minimized body and `status: "4xx"`
+
+#### Scenario: Export keeps the sent Content-Type
+- **GIVEN** an `accepted-malformed-input` finding of family `json-syntax`, sent as `application/json`
+- **WHEN** the user exports it
+- **THEN** the request file SHALL send `Content-Type: application/json` (else the request's own), so the regression still reaches the JSON parser
 
 ### Requirement: Stress exit codes
 Exit code 0 SHALL mean the run completed with no finding at or above `--fail-on` (default `high`), and `max_sustainable_rps` at or above `--require-rps` when given. Exit code 1 SHALL mean either condition failed. A broken breakpoint alone SHALL NOT fail the run. Safety refusals SHALL exit 4, and Ctrl+C 130 after a recovery check.

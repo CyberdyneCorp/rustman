@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, SystemTime};
 
 use bytes::Bytes;
-use http::header::{COOKIE, PROXY_AUTHORIZATION};
-use http::{HeaderMap, Request, StatusCode};
+use http::header::{CONTENT_ENCODING, CONTENT_TYPE, COOKIE, PROXY_AUTHORIZATION};
+use http::{HeaderMap, HeaderValue, Request, StatusCode};
 use http_body_util::Full;
 use rustman_core::model::{Auth, RequestSettings};
 use rustman_core::settings::{Defaults, Settings};
@@ -49,6 +49,52 @@ pub struct SendOptions {
     pub body: BodyOptions,
     /// Trace headers added to every request; `None` (the default) adds none.
     pub trace: Option<TracePropagation>,
+    /// Replaces the body of the request as sent; `None` (the default) sends
+    /// the request's own.
+    pub body_override: Option<BodyOverride>,
+}
+
+/// Raw bytes sent in place of a request's body (stress testing's malformed
+/// payloads), with the `Content-Type` and `Content-Encoding` they need.
+/// Headers, auth, cookies and timing apply as for the request's own body;
+/// `Content-Length` follows the new bytes.
+#[derive(Clone, PartialEq, Eq)]
+pub struct BodyOverride {
+    pub bytes: Bytes,
+    /// Replaces the request's `Content-Type` when set.
+    pub content_type: Option<String>,
+    /// Sets `Content-Encoding` when set.
+    pub content_encoding: Option<String>,
+}
+
+impl std::fmt::Debug for BodyOverride {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BodyOverride")
+            .field("bytes", &self.bytes.len())
+            .field("content_type", &self.content_type)
+            .field("content_encoding", &self.content_encoding)
+            .finish()
+    }
+}
+
+impl BodyOverride {
+    fn apply(&self, request: &mut Request<Full<Bytes>>) -> Result<(), RequestError> {
+        let headers = request.headers_mut();
+        let pairs = [
+            (CONTENT_TYPE, &self.content_type),
+            (CONTENT_ENCODING, &self.content_encoding),
+        ];
+        for (name, value) in pairs {
+            if let Some(value) = value {
+                let value = HeaderValue::try_from(value.as_str()).map_err(|_| {
+                    RequestError::Invalid(format!("invalid {name} in a body override"))
+                })?;
+                headers.insert(name, value);
+            }
+        }
+        *request.body_mut() = Full::new(self.bytes.clone());
+        Ok(())
+    }
 }
 
 impl Default for SendOptions {
@@ -82,6 +128,7 @@ impl SendOptions {
                 ..BodyOptions::default()
             },
             trace: None,
+            body_override: None,
         }
     }
 
@@ -198,6 +245,9 @@ impl HttpEngine {
         token: Option<&Secret<String>>,
     ) -> Result<Prepared, RequestError> {
         let (mut outgoing, mut warnings) = wire::build(request).await?;
+        if let Some(body) = &options.body_override {
+            body.apply(&mut outgoing)?;
+        }
         let headers = outgoing.headers_mut();
         warnings.extend(trace::invalid_context_warning(
             headers,
@@ -565,6 +615,39 @@ mod tests {
             tls,
             secrets: Vec::new(),
         }
+    }
+
+    #[tokio::test]
+    async fn a_body_override_replaces_the_body_and_keeps_headers_and_auth() {
+        let mut request = request(RequestSettings::default(), Default::default());
+        request.method = "POST".into();
+        request.body = rustman_core::vars::ResolvedBody::Json(serde_json::json!({"qty": 2}));
+        request.headers = vec![rustman_core::vars::ResolvedPair {
+            name: rustman_core::vars::Resolved::literal("x-keep"),
+            value: rustman_core::vars::Resolved::literal("yes"),
+        }];
+        request.auth = Some(Auth::Bearer {
+            token: "t0ken".into(),
+        });
+        let options = SendOptions {
+            body_override: Some(BodyOverride {
+                bytes: Bytes::from_static(b"{\"qty\":"),
+                content_type: Some("text/xml".into()),
+                content_encoding: Some("gzip".into()),
+            }),
+            ..SendOptions::default()
+        };
+        let prepared = HttpEngine::prepare(&request, &options, None).await.unwrap();
+        let headers = prepared.outgoing.headers();
+        assert_eq!(headers["content-type"], "text/xml");
+        assert_eq!(headers["content-encoding"], "gzip");
+        assert_eq!(headers["x-keep"], "yes");
+        assert_eq!(headers["authorization"], "Bearer t0ken");
+        let body = http_body_util::BodyExt::collect(prepared.outgoing.into_body())
+            .await
+            .unwrap()
+            .to_bytes();
+        assert_eq!(&body[..], b"{\"qty\":");
     }
 
     fn workspace(extra: &str) -> Settings {

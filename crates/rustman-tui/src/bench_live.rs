@@ -17,16 +17,12 @@ use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use crossterm::cursor::{Hide, Show};
-use crossterm::execute;
-use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
 use rustman_bench::live::{FRAME, PROGRESS_EVERY, progress_line};
 use rustman_bench::{BenchOutcome, Live};
 
 use crate::bench_view;
-use crate::bench_viz::BenchViz;
+use crate::bench_viz::{BenchViz, VizFeed};
+use crate::live_screen::LiveScreen;
 
 /// How the run is shown while it goes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,23 +60,11 @@ pub struct LiveOptions {
 /// The running live thread.
 pub struct LiveHandle {
     stop: mpsc::Sender<()>,
-    thread: JoinHandle<Option<Viz>>,
+    thread: JoinHandle<Option<VizFeed>>,
 }
 
-/// An open viz stream and the seconds already sent to it.
-struct Viz {
-    stream: BenchViz,
-    sent: usize,
-}
-
-impl Viz {
-    fn send_new(&mut self, live: &Live) {
-        for second in live.seconds_since(self.sent) {
-            let elapsed = Duration::from_secs(u64::from(second.second));
-            self.stream.tick(&second, live.remaining(elapsed));
-            self.sent += 1;
-        }
-    }
+fn send_new(viz: &mut VizFeed, live: &Live) {
+    viz.send_new(|n| live.seconds_since(n), |elapsed| live.remaining(elapsed));
 }
 
 /// Start showing `live`.
@@ -99,19 +83,19 @@ impl LiveHandle {
         let Ok(Some(mut viz)) = self.thread.join() else {
             return;
         };
-        viz.send_new(live);
+        send_new(&mut viz, live);
         viz.stream.finish(outcome);
     }
 }
 
-fn run(live: &Live, options: LiveOptions, stopped: &mpsc::Receiver<()>) -> Option<Viz> {
+fn run(live: &Live, options: LiveOptions, stopped: &mpsc::Receiver<()>) -> Option<VizFeed> {
     let LiveOptions {
         display,
         title,
         mut lines,
         viz,
     } = options;
-    let mut viz = viz.map(|stream| Viz { stream, sent: 0 });
+    let mut viz = viz.map(VizFeed::new);
     let mut screen = match display {
         Display::Dashboard => Screen::open(),
         Display::Lines { .. } => None,
@@ -127,7 +111,7 @@ fn run(live: &Live, options: LiveOptions, stopped: &mpsc::Receiver<()>) -> Optio
     // Until finish() (or a dropped handle) ends the wait early.
     while let Err(RecvTimeoutError::Timeout) = stopped.recv_timeout(tick) {
         if let Some(viz) = &mut viz {
-            viz.send_new(live);
+            send_new(viz, live);
         }
         if let Some(screen) = &mut screen {
             screen.draw(live, &title);
@@ -141,36 +125,18 @@ fn run(live: &Live, options: LiveOptions, stopped: &mpsc::Receiver<()>) -> Optio
     viz
 }
 
-/// The dashboard's terminal: the alternate screen of stdout, left when
-/// dropped.
-struct Screen {
-    terminal: Terminal<CrosstermBackend<std::io::Stdout>>,
-}
+/// The dashboard's terminal, drawing `live`'s snapshot.
+struct Screen(LiveScreen);
 
 impl Screen {
     fn open() -> Option<Self> {
-        let mut stdout = std::io::stdout();
-        execute!(stdout, EnterAlternateScreen, Hide).ok()?;
-        match Terminal::new(CrosstermBackend::new(stdout)) {
-            Ok(terminal) => Some(Self { terminal }),
-            Err(_) => {
-                let _ = execute!(std::io::stdout(), LeaveAlternateScreen, Show);
-                None
-            }
-        }
+        LiveScreen::open().map(Self)
     }
 
     fn draw(&mut self, live: &Live, title: &str) {
         let snapshot = live.snapshot();
-        let _ = self.terminal.draw(|frame| {
-            bench_view::render(frame, frame.area(), &snapshot, title);
-        });
-    }
-}
-
-impl Drop for Screen {
-    fn drop(&mut self) {
-        let _ = execute!(self.terminal.backend_mut(), LeaveAlternateScreen, Show);
+        self.0
+            .draw(|frame| bench_view::render(frame, frame.area(), &snapshot, title));
     }
 }
 
