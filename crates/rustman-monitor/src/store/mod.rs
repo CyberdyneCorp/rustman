@@ -219,8 +219,11 @@ fn append_line<T: Serialize>(path: &Path, value: &T) -> Result<(), StoreError> {
     }
     let mut line = serde_json::to_string(value).expect("results serialize");
     line.push('\n');
+    // Read access too: Windows refuses to lock an append-only handle
+    // (`LockFileEx` needs read or write access, and append mode drops it).
     let mut file = OpenOptions::new()
         .create(true)
+        .read(true)
         .append(true)
         .open(path)
         .map_err(io_error(path))?;
