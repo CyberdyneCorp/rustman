@@ -3,7 +3,7 @@
 > A fast, local-first API workbench for the terminal. It speaks **REST, GraphQL, MCP, gRPC, WebSocket/SSE, JSON-RPC, Kafka/MQTT/AMQP and Ethereum**, it can **test a backend on its own from an OpenAPI spec**, and **AI agents can drive it over MCP**. Written entirely in Rust.
 
 > [!NOTE]
-> **Status: pre-1.0, under active development.** Releases v0.1 to v0.5 of the [roadmap](#roadmap) are implemented: the HTTP engine and CLI runner, the terminal UI, importers, the OpenAPI explorer, the agent MCP server, GraphQL, the MCP client, the webhook inspector, snapshot tests and the mock server. v0.5 added the JSON-RPC, gRPC and WebSocket/SSE clients. Sections marked _Planned_ below describe behavior that is specified in the [OpenSpec](https://github.com/Fission-AI/OpenSpec) changes in [`openspec/`](openspec/) but not built yet. Commands and file formats may still change before v1.
+> **Status: pre-1.0, under active development.** Releases v0.1 to v0.6 of the [roadmap](#roadmap) are implemented: the HTTP engine and CLI runner, the terminal UI, importers, the OpenAPI explorer, the agent MCP server, GraphQL, the MCP client, the webhook inspector, snapshot tests, the mock server, and the JSON-RPC, gRPC and WebSocket/SSE clients. v0.6 added contract testing (`rustman contract`), trace propagation, load testing (`rustman bench`), stress testing (`rustman stress`) and generated API docs (`rustman docs`). Sections marked _Planned_ below describe behavior that is specified in the [OpenSpec](https://github.com/Fission-AI/OpenSpec) changes in [`openspec/`](openspec/) but not built yet. Commands and file formats may still change before v1.
 
 <p align="center"><img src="docs/images/demo.gif" alt="Rustman's terminal UI sending requests to a local todo API: the environment switcher with the token masked, a JSON response tree, a 201 with a captured id, the timing waterfall and passed assertions, then rustman run passing every request" width="100%"></p>
 <p align="center"><sub>The TUI and <code>rustman run</code> against a small local todo API. Regenerate it with <a href="examples/demo/"><code>examples/demo/render.sh</code></a>.</sub></p>
@@ -52,13 +52,13 @@ rustman                                # open the terminal UI (or: rustman tui)
 | AI agents can't use your API client | **Built-in MCP server.** Agents use the same engine you do, under the same safety rules. |
 | Great GUI or great automation, rarely both | **Three front-ends, one engine:** a TUI for humans, a CLI for CI, MCP for agents. An optional GUI shows charts. |
 
-Some of these answers are still planned (message brokers, the Ethereum console, `rustman stress`, load and contract testing, monitors, docs, the GUI); the [feature map](#feature-map) shows what is available today.
+Some of these answers are still planned (message brokers, the Ethereum console, monitors); the [feature map](#feature-map) shows what is available today.
 
 ---
 
 ## Feature map
 
-**Available today** (v0.1 to v0.5):
+**Available today** (v0.1 to v0.6):
 
 ```mermaid
 mindmap
@@ -95,6 +95,17 @@ mindmap
       Snapshot testing
       Headless CI runner
       Data-driven runs from CSV or JSON
+      Load testing
+        Closed and open executors
+        Thresholds as CI gates
+      Stress testing
+        Breakpoint, spike, soak, fuzz
+        Malformed input and wire faults
+        Kill switch and recovery check
+      Contract testing
+        Breaking change diff
+        Pact generate and verify
+        Passive conformance
     OpenAPI Explorer
       Dependency discovery
       Conformance probes
@@ -104,6 +115,8 @@ mindmap
     Tooling
       Mock server
       Webhook inspector
+      API docs generator
+      Trace propagation and OTLP export
     Faces
       TUI for humans
       CLI for scripts and CI
@@ -115,7 +128,7 @@ mindmap
       Audit log
 ```
 
-**Planned** (specified for v0.6, v0.7 and the side tracks):
+**Planned** (specified for v0.7 and the side tracks):
 
 ```mermaid
 mindmap
@@ -136,23 +149,12 @@ mindmap
       Secret providers
         1Password, Vault, SOPS
         AWS, GCP, Azure
-    Testing
-      Load testing
-      Stress testing
-        Breaking point search
-        Fuzz and malformed input under load
-        Spike, soak and recovery
-      Contract testing
-        Breaking change diff
-        Pact contracts
     Tooling
       Traffic recorder
       Scheduled monitors
-      API docs generator
-      OpenTelemetry tracing
       WASM plugins
     Faces
-      Raven visual dashboards
+      Raven bench and stress dashboards
 ```
 
 ---
@@ -491,62 +493,60 @@ Point an app or CLI at the proxy and Rustman captures its traffic. Saving dedupl
 
 ### 16. Load-test with the requests you already have
 
-_Planned (v0.6)._
-
 ```bash
-rustman bench api/ --target https://staging.example.com --vus 20 --viz
+rustman bench api/ --target https://staging.example.com --vus 20 --duration 1m
+rustman bench api/ --target https://staging.example.com --executor ramping-vus --stage 30s:20 --stage 1m:20 --stage 30s:0
+rustman bench api/ --target https://staging.example.com --executor constant-arrival-rate --rate 50 --max-vus 20 \
+  --threshold "p95<300ms" --threshold "error_rate<1%" --report html=out/bench.html
 ```
 
-You can run a fixed number of virtual users, ramp them in stages, or hold a constant arrival rate. Latency percentiles are accurate even when the server falls behind and requests queue up. Thresholds such as `p95 < 300ms` make the command exit with 1 when breached. A live dashboard runs in the TUI, or in the viz companion with `--viz`. Load tests are capped by default (50 VUs, 5 minutes, 200 rps), stay on the single target host, and AI agents can't start them.
+You can run a fixed number of virtual users (`constant-vus`), ramp them in stages (`ramping-vus`), or hold a constant arrival rate (`constant-arrival-rate`). Each VU has its own variables, captures and cookies, and `--data` feeds rows from a CSV or JSON file. In the open model, latency counts from each iteration's scheduled start, so queuing in a server that falls behind shows up in the percentiles. Thresholds such as `p95<300ms` make the command exit with 1 when breached (a trailing `!` stops the bench at once), and reports come as JSON, HTML, Markdown, JUnit or SARIF. On a terminal a live dashboard shows progress; in CI, one line every 10 seconds. `--viz` streams per-second metrics to the viz companion, which has no bench dashboard yet, so today it only prints a warning. Load tests are capped by default (50 VUs, 5 minutes, 200 rps; only `rustman.toml [bench]` raises them), stay on the single `--target` origin, need `--allow-mutations` for writes, and AI agents can't start them. See [`docs/bench.md`](docs/bench.md).
 
 ### 17. Find where your backend breaks
 
-_Planned (v0.6)._
-
 ```bash
 rustman stress breakpoint api/catalog --target https://staging.example.com \
-  --slo "p95<300ms" --slo "error_rate<1%" --fuzz-ratio 0.1 --malformed json-syntax,deep-nesting
+  --slo "p95<300ms" --slo "error_rate<1%" --require-rps 100 --report html=out/stress.html
 rustman stress spike api/ --target https://staging.example.com --baseline-rps 20 --spike-factor 10
 rustman stress soak api/ --target https://staging.example.com --rps 50 --duration 2h
-rustman stress export <run-id> --findings all --into regressions/
+rustman stress fuzz api/orders --target https://staging.example.com --rps 20 --allow-mutations \
+  --malformed json-syntax,deep-nesting --seed 42
+rustman stress export str-20261120-3fa9c1 --findings all --into regressions/stress
 ```
 
 Load tests check the load you choose. Stress runs **search for the limit**:
 
-- **Breakpoint:** the request rate climbs in steps until an SLO breaks, then narrows down the limit. The report gives the highest rate that held, the rate that broke, how it broke (latency, 5xx, timeouts, connection errors, saturation), and which endpoint failed first. A `429` from your rate limiter is reported as "rate limited", not as broken.
-- **Spike:** a sudden 10x jump, measuring how long the service takes to recover.
+- **Breakpoint:** the request rate climbs in steps until an SLO breaks in two consecutive 5-second windows, then bisects to narrow down the limit. The report gives the highest rate that held (`max_sustainable_rps`), the rate that broke, how it broke (latency, server errors, timeouts, connection errors, saturation), and which endpoint failed first. A `429` from your rate limiter is reported as "rate limited", not as broken.
+- **Spike:** a baseline, a sudden jump (10x by default), then the baseline again, measuring errors during the spike and how long the service takes to recover.
 - **Soak:** hours of steady load, flagging latency or error drift that hints at a leak.
-- **Bad data under load:** `--fuzz-ratio` swaps a share of real requests for mutated ones, compared against a clean baseline, so you see whether bad clients slow down good ones.
+- **Fuzz, or bad data under any mode:** `--fuzz-ratio` swaps a share of real requests for mutated ones (or, with `--spec`, ones that break one schema constraint), measured apart from valid traffic and compared against a clean baseline, so you see whether bad clients slow down good ones.
 - **Malformed input:** broken JSON, 10 000-deep nesting, huge or very wide bodies, invalid UTF-8, duplicate keys, extreme numbers, and opt-in compression bombs.
-- **HTTP framing faults** (needs `--allow-wire-faults`): conflicting `Content-Length`/`Transfer-Encoding`, invalid chunked encoding, oversized headers and slow clients.
+- **HTTP framing faults** (`--wire`, needs `--allow-wire-faults`): conflicting `Content-Length`/`Transfer-Encoding`, invalid chunked encoding, oversized headers and slow clients, sent as raw HTTP/1.1 after the load.
 
-Every crash-like finding is shrunk to a minimal input that still triggers it, and can be exported as a regression request. Runs are seeded, so `--seed` reproduces the exact inputs. `--require-rps 100` turns a capacity target into a CI gate.
+Every crash-like finding is shrunk to a minimal input that still triggers it, and `rustman stress export` writes it as a regression request for `rustman run`. Runs are seeded, so `--seed` reproduces the exact inputs. `--require-rps 100` turns a capacity target into a CI gate. Every report is kept under `.rustman/stress/<id>/`, and `--report` also writes JSON, HTML, Markdown, JUnit or SARIF. See [`docs/stress.md`](docs/stress.md).
 
-> **Only stress systems you own or are authorized to test.** Stress targets must be listed in `rustman.toml [stress]`; no CLI flag can add one. Production needs a second opt-in, and fuzzing, malformed input and framing faults are never sent to production. A kill switch stops the load the moment the target stops answering, then a recovery monitor checks it comes back. AI agents can't start stress runs.
+> **Only stress systems you own or are authorized to test.** Stress targets must be listed in `rustman.toml [stress] targets`; no CLI flag can add one. Production needs a second opt-in (`[stress] allow_production` and `--production`), and fuzzing, malformed input and wire faults are never sent to production. A kill switch stops the load the moment the target stops answering, then a recovery check confirms it comes back. AI agents can't start stress runs.
 
 ### 18. Catch breaking API changes before they merge
 
-_Planned (v0.6)._
-
 ```bash
-rustman contract diff --base origin/main openapi.yaml    # Markdown output ready for a PR comment
-rustman contract pact generate api/ --consumer web --provider users
-rustman contract pact verify pacts/*.json --provider-url http://localhost:8080
-rustman contract verify --spec openapi.yaml               # check recorded traffic, sends nothing
+rustman contract diff old.yaml new.yaml                  # exit 1 on a breaking change
+rustman contract diff --base origin/main openapi.yaml --report markdown=out/contract.md   # for a PR comment
+rustman contract pact generate api/ --consumer web --provider users   # contracts/pacts/web-users.json
+rustman contract pact verify contracts/pacts/web-users.json --provider-url http://localhost:8080
+rustman contract verify --spec openapi.yaml --since 7d    # check recorded traffic, sends nothing
 ```
 
-Changes are classified as breaking, non-breaking or unknown using a versioned rule catalog. Request and response schemas follow opposite rules, so a stricter request is breaking while a response that adds fields is not. Pact v3/v4 contracts are supported for consumer-driven testing.
+Changes are classified as breaking, non-breaking or unknown using a versioned [rule catalog](docs/contract-rules.md) (`rustman contract rules` lists it). Request and response schemas follow opposite rules, so a stricter request is breaking while a response that adds fields is not. Accepted changes go in `contracts/allowlist.yaml`, each with a justification and an optional expiry. Pact v3/v4 contracts are generated from a collection's requests and assertions, with secrets redacted, and verified against a provider under the safety policy. `rustman contract verify` checks history or a run report against the spec and opens no network connection. See [`docs/contract.md`](docs/contract.md).
 
 ### 19. Generate API docs from your collections
 
-_Planned (v0.6)._
-
 ```bash
-rustman docs build --out site/      # self-contained offline HTML, or --format markdown
-rustman docs serve                  # local preview with live reload
+rustman docs build --out site/      # self-contained offline HTML; --format markdown or both
+rustman docs serve                  # preview on 127.0.0.1:4000 with live reload
 ```
 
-Docs include request tables, OpenAPI descriptions, code samples (curl, httpie, fetch, Python, Rust) and client-side search. Real examples appear only for requests that opt in, are always redacted, and the build fails if a secret would leak. The output is deterministic, so it diffs cleanly in Git.
+Docs include request tables, OpenAPI descriptions, code samples (curl, httpie, fetch, Python, Rust, or any `rustman export snippet` language), GraphQL schema and JSON-RPC method references, and client-side search. Real examples appear only for requests that opt in, are always redacted, and the build fails if a secret would leak. The output is deterministic, so it diffs cleanly in Git and publishes as is to GitHub Pages. See [`docs/api-docs.md`](docs/api-docs.md).
 
 ### 20. Monitor your APIs on a schedule
 
@@ -578,9 +578,21 @@ Alerts go to desktop notifications, Slack, Discord, webhooks or email. They're d
 
 ### 21. Follow a request into your backend traces
 
-_Planned (v0.6)._
+```yaml
+# environments/staging.yaml
+trace:
+  enabled: true
+  formats: [w3c, b3multi]
+  link: jaeger
+  link_base: http://localhost:16686
+```
 
-Turn on trace propagation and Rustman adds a W3C `traceparent` header (or B3) to every request. Each exchange records its trace id, and `rustman trace open 42` opens it in Jaeger, Tempo, Honeycomb or Datadog. Rustman also parses `Server-Timing` headers, and can export its own client spans over OTLP if you configure an endpoint. It's off by default and stays local-first.
+```bash
+rustman send users/get-user --trace      # prints the trace id and link on stderr
+rustman trace open 01JD3W6Q              # open a history exchange's trace (id or unique prefix)
+```
+
+Turn on trace propagation (`trace:` in an environment, `[trace]` in `rustman.toml`, or `--trace`) and Rustman adds a W3C `traceparent` header (or B3) to every request, plus optional `tracestate` and `baggage`. With `scope: run`, a whole `rustman run` shares one trace. Each exchange records its trace id in history and run reports, and `rustman trace open` (or `Ctrl+O` in the TUI's Timing tab) opens it in Jaeger, Tempo, Honeycomb, Datadog or a custom link. Rustman also parses `Server-Timing` headers, and a build with the `otlp` feature can export its own client spans over OTLP to an endpoint you configure. It's off by default and stays local-first. See [`docs/tracing.md`](docs/tracing.md).
 
 ### 22. Extend it with plugins and external secret stores
 
@@ -604,13 +616,16 @@ Today, `rustman secret set|rm|list` manages the OS keychain (or `.rustman/secret
 | Postman / Newman | Rustman |
 |---|---|
 | Collections, folders, environments, globals | Folders of `*.rman.yaml` files, `_collection.yaml`, `environments/*.yaml`, `rustman.toml` defaults |
-| Secret variables, Vault integration | OS keychain today; 1Password, Vault, SOPS and cloud secret managers planned |
+| Secret variables, Vault integration | OS keychain today; 1Password, Vault, SOPS and cloud secret managers in progress |
 | `pm.test` / pre-request scripts | Declarative assertions and captures (WASM plugins for custom logic are planned). Scripts are converted on import where possible. |
 | `newman run -d data.csv -r junit` | `rustman run --data data.csv --reporter junit:out.xml` |
 | Auth: Basic, Bearer, API key, OAuth2, Digest, AWS SigV4, JWT | Built in |
 | Auth: NTLM, Hawk, OAuth 1.0, Akamai EdgeGrid | Via plugins (planned) |
 | Code button (snippets) | `rustman export snippet`, or `Alt+C` in the TUI |
-| Mock servers, monitors, API docs | `rustman mock`, all local; `rustman monitor` and `rustman docs` are planned |
+| Mock servers, API docs | `rustman mock` and `rustman docs`, all local |
+| Monitors | `rustman monitor` (in progress) |
+| Performance testing | `rustman bench` for load, `rustman stress` for breaking points |
+| API governance, contract tests | `rustman contract diff` for breaking changes, Pact generate and verify |
 | Interceptor / proxy capture | `rustman record`, with a local CA (planned) |
 | Visualizer | Raven dashboards (`rustman-viz`, optional companion) |
 | GraphQL, gRPC, WebSocket, Socket.IO, MQTT | GraphQL, gRPC, JSON-RPC, WebSocket and SSE today; Kafka, MQTT and AMQP planned. Socket.IO via plugins. |
@@ -621,7 +636,8 @@ Today, `rustman secret set|rm|list` manages the OS keychain (or `.rustman/secret
 **What you gain:**
 - OpenAPI-driven exploration
 - an MCP server for agents
-- snapshot testing (contract and load testing planned)
+- snapshot, contract, load and stress testing
+- generated API docs and trace propagation
 - an Ethereum console (planned)
 - a single native binary
 
@@ -649,7 +665,7 @@ graph TD
     CORE --> RPC["JSON-RPC client"]
     RPC --> EVM["EVM toolkit"]
     EVM --> GATE["Signing gate"]
-    CORE --> TOOLS["Mock, recorder, bench, monitors"]
+    CORE --> TOOLS["Mock, bench, stress, contract, docs, recorder, monitors"]
     CORE --> PLUG["WASM plugins"]
     CORE --> REP["Reports"]
     REP --> VIZ["rustman-viz - Raven GUI, optional"]
@@ -683,7 +699,9 @@ graph TD
 | `rustman-realtime` | WebSocket and SSE sessions |
 | `rustman-messaging` | _Planned:_ Kafka, MQTT and AMQP clients (pure Rust) |
 | `rustman-proxy` | _Planned:_ traffic recorder |
-| `rustman-bench` | _Planned:_ load-testing engine |
+| `rustman-bench` | Load testing (VUs, executors, caps, HDR metrics, thresholds, bench reports) and the `stress` module (breakpoint, spike, soak and fuzz modes, malformed payloads, wire faults, kill switch, recovery, minimization) |
+| `rustman-contract` | Contract testing: OpenAPI breaking-change diff with a versioned rule catalog, Pact generate and verify, passive conformance |
+| `rustman-docs` | Static API docs (HTML and Markdown) generated from a workspace, with the `docs serve` preview |
 | `rustman-plugin` | _Planned:_ WASM plugin host (wasmtime) |
 
 **Build principles**
@@ -696,7 +714,7 @@ graph TD
 
 ## Roadmap
 
-All 26 changes are specified in OpenSpec. v0.1 (headless core), v0.2 (usable), v0.3 (autonomous), v0.4 (multi-protocol) and v0.5 (protocols) are done; open work is tracked in the [roadmap tracking issue](https://github.com/CyberdyneCorp/rustman/issues/46). Releases are ordered by dependency, user value and risk. The full delivery plan, with exit criteria, shared enablers and risks, is in [`ROADMAP.md`](ROADMAP.md).
+All 26 changes are specified in OpenSpec. v0.1 (headless core), v0.2 (usable), v0.3 (autonomous), v0.4 (multi-protocol), v0.5 (protocols) and v0.6 (pro testing) are done, and v0.7 (operate & extend) is in progress; open work is tracked in the [roadmap tracking issue](https://github.com/CyberdyneCorp/rustman/issues/46). Releases are ordered by dependency, user value and risk. The full delivery plan, with exit criteria, shared enablers and risks, is in [`ROADMAP.md`](ROADMAP.md).
 
 | Release | Changes | You get | Status |
 |---|---|---|---|
@@ -706,8 +724,8 @@ All 26 changes are specified in OpenSpec. v0.1 (headless core), v0.2 (usable), v
 | **v0.3 - Autonomous** | `add-openapi-explorer`, `add-agent-mcp-server` | OpenAPI import and exploration, HTML/SARIF reports, agent interface | ✅ done |
 | **v0.4 - Multi-protocol** | `add-graphql-client`, `add-mcp-client`, `add-webhook-inspector`, `add-snapshot-testing`, `add-openapi-mock-server` | GraphQL, MCP client, webhooks, snapshot tests, mock server | ✅ done |
 | **v0.5 - Protocols** | `add-jsonrpc-client`, `add-grpc-client`, `add-realtime-client` | JSON-RPC, gRPC, WebSocket and SSE | ✅ done |
-| **v0.6 - Pro testing** | `add-contract-testing`, `add-trace-propagation`, `add-load-testing`, `add-docs-generator`, `add-stress-testing` | Breaking-change checks, tracing, load and stress tests, generated docs | 🚧 in progress (contract testing and trace propagation being built) |
-| **v0.7 - Operate & extend** | `add-secret-providers`, `add-scheduled-monitors`, `add-plugin-system`, `add-traffic-recorder`, `add-messaging-client` | Secret providers, monitors, plugins, traffic recorder, message brokers | planned |
+| **v0.6 - Pro testing** | `add-contract-testing`, `add-trace-propagation`, `add-load-testing`, `add-docs-generator`, `add-stress-testing` | Breaking-change checks, tracing, load and stress tests, generated docs | ✅ done |
+| **v0.7 - Operate & extend** | `add-secret-providers`, `add-scheduled-monitors`, `add-plugin-system`, `add-traffic-recorder`, `add-messaging-client` | Secret providers, monitors, plugins, traffic recorder, message brokers | 🚧 in progress (secret providers and scheduled monitors in review) |
 | **Side tracks** | `add-raven-visualizer`, `add-evm-toolkit` | Raven dashboards, Ethereum console (never block a release) | — |
 | **v1.0 - Stable** | — | Frozen request-file, report, viz and plugin formats; signed release artifacts | — |
 
