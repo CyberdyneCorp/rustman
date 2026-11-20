@@ -6,7 +6,7 @@
 rustman bench checkout/ --target https://staging.example.com --env staging --vus 5 --duration 30s
 ```
 
-The behavior is specified in [`openspec/changes/add-load-testing`](../openspec/changes/add-load-testing/). Live dashboards are not available yet; a bench prints a summary at the end and can write JSON and HTML reports.
+The behavior is specified in [`openspec/changes/add-load-testing`](../openspec/changes/add-load-testing/). On a terminal a bench draws a live dashboard (see [Live progress](#live-progress)), prints a summary at the end and can write JSON and HTML reports. The viz companion has no bench view yet.
 
 ## Iterations and virtual users
 

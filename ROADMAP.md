@@ -12,7 +12,8 @@ and the requirements stay in `openspec/changes/<id>/`. Change ids below are the 
 - **Done:** **v0.3 — Autonomous**: the OpenAPI explorer (#58) and the agent MCP server (#63, `rustman mcp serve`, read-only by default). Both exit criteria pass in CI on Linux, macOS and Windows.
 - **Done:** **v0.4 — Multi-protocol**: the webhook inspector (#59), the GraphQL client (#61), snapshot testing (#65), the OpenAPI mock server (#66) and the MCP client (#71, with HMAC-sealed workspace trust). Follow-ups: snapshot assertions for `kind: jsonrpc` (#72), GraphQL introspection size limit (#70), Windows job objects for MCP server cleanup.
 - **Done:** **v0.5 — Protocols**: the JSON-RPC client (#68), the gRPC client (#76) and the realtime client for WebSocket and SSE (#80). Follow-ups: a bounded live feed for realtime sessions (#81) and shared SSE event ids (#82).
-- **In progress:** v0.6. Contract testing and trace propagation are being built. Open work is tracked in the [roadmap tracking issue](https://github.com/CyberdyneCorp/rustman/issues/46).
+- **Done:** **v0.6 — Pro testing**: contract testing (#86, OpenAPI breaking-change diff, Pact generate/verify, passive conformance), trace propagation (#88, W3C/B3 context, trace links, OTLP export), load testing (#91, `rustman bench`), the docs generator (#92, `rustman docs build/serve`) and stress testing (#94, `rustman stress` breakpoint/spike/soak/fuzz with wire faults, kill switch, recovery and minimization). On the side track, the viz producer (#85, `--viz`, `rustman viz`) and the `rustman-viz` companion on Raven (#89) landed, plus the README demo GIF (#90). Follow-ups: trace ids for WebSocket, MCP-session and native gRPC exchanges, client-span export for explorations, and the Jaeger end-to-end CI job (trace-propagation 3.7, 4.5, 5.1); a bench dashboard in the companion and the bench end-to-end job (load-testing 6.3, 7.1); the companion has no stress view either, so `--viz` on `bench` and `stress` only warns.
+- **In progress:** **v0.7 — Operate & extend**: secret providers (#98) and scheduled monitors (#97) are in review; the plugin system is being built. The traffic recorder and the messaging client are not done yet. Open work is tracked in the [roadmap tracking issue](https://github.com/CyberdyneCorp/rustman/issues/46).
 - **CI:** fmt, clippy, tests on Linux/macOS/Windows, `cargo deny`, and `openspec validate --all --strict`.
 
 The order in `openspec/ROADMAP.md` follows the order the specs were written in. This roadmap reorders the work by
@@ -130,7 +131,7 @@ These five changes are independent of each other and can run in parallel.
 |--------|------|-------|
 | `add-contract-testing` | M (22) | High value in PR pipelines. |
 | `add-trace-propagation` | S (17) | |
-| `add-load-testing` | M (24) | Live charts degrade to the TUI until the companion ships. |
+| `add-load-testing` | M (24) | Live progress is a terminal dashboard; the companion has no bench view yet (task 6.3). |
 | `add-docs-generator` | S (18) | Uses the snippet engine from v0.2. |
 | `add-stress-testing` | L (33) | Comes last in this release, because it builds on load testing. Its wire-fault writer is the one place raw HTTP is allowed, so review it carefully. |
 
@@ -214,7 +215,7 @@ Fold them in during Phase 0 (item 0.7).
 | v0.3 | add-openapi-explorer, add-agent-mcp-server | ✅ |
 | v0.4 | add-graphql-client, add-mcp-client, add-webhook-inspector, add-snapshot-testing, add-openapi-mock-server | ✅ |
 | v0.5 | add-jsonrpc-client, add-grpc-client, add-realtime-client | ✅ |
-| v0.6 | add-contract-testing, add-trace-propagation, add-load-testing, add-docs-generator, add-stress-testing | 🚧 |
-| v0.7 | add-secret-providers, add-scheduled-monitors, add-plugin-system, add-traffic-recorder, add-messaging-client | ☐ |
+| v0.6 | add-contract-testing, add-trace-propagation, add-load-testing, add-docs-generator, add-stress-testing | ✅ |
+| v0.7 | add-secret-providers, add-scheduled-monitors, add-plugin-system, add-traffic-recorder, add-messaging-client | 🚧 |
 | Side | add-raven-visualizer, add-evm-toolkit | ☐ |
 | v1.0 | stabilize | ☐ |
