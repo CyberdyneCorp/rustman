@@ -27,8 +27,9 @@ impl ViewKind {
             View::ExplorationDashboard => Some(Self::Exploration),
             View::ApiGraph => Some(Self::Graph),
             View::ResponseInspector => Some(Self::Inspector),
-            // No bench or stress dashboard yet: the companion does not advertise them.
-            View::Bench | View::Stress | View::Unknown => None,
+            // No bench, stress or monitor trend view yet: the companion
+            // does not advertise them, and producers fall back.
+            View::Bench | View::Stress | View::MonitorTrend | View::Unknown => None,
         }
     }
 

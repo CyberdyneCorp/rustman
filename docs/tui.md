@@ -250,6 +250,10 @@ Each ends with `Export HTML report: H`. `H` (response focused, or **Export HTML 
 
 `?` opens the help; other letters do nothing while the pane is shown. Quitting the TUI stops the server.
 
+### Monitors view
+
+**Monitors** in the palette (`monitors.open`) lists the workspace's [monitors](monitors.md#the-tui-monitors-view): last outcome, 24-hour uptime, a latency sparkline and whether a rule is firing, with the selected monitor's firing rules and latest results. `j`/`k` select, `r` runs the selected monitor now in the background (through the monitor policy, the store and its alerts; the list refreshes when it finishes), `v` opens the monitors' trends in the viz companion (or says why it cannot), and `Esc` closes.
+
 ## Mouse
 
 When the terminal reports mouse events, clicking focuses a pane, an editor field or a pane switcher label, selects a sidebar row, a request tab or an editor tab; the wheel scrolls the pane under the pointer; and dragging the sidebar's right border resizes it. Set `mouse = false` in `tui.toml` to leave the mouse to the terminal, so its own text selection works; the TUI then doesn't capture mouse events at all.
@@ -418,6 +422,7 @@ The table below is generated from the action registry; a test fails if it drifts
 | Copy as… | `request.copy_as` | `Alt+C` |  |
 | Import… | `import.open` |  |  |
 | Review snapshots | `snapshot.review` | `Alt+A` |  |
+| Monitors | `monitors.open` |  |  |
 | Open trace link | `trace.open` | `Ctrl+O` |  |
 | Quit | `app.quit` | `Ctrl+Q` |  |
 

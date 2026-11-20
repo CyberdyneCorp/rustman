@@ -55,6 +55,10 @@ pub mod layout;
 mod live_screen;
 pub mod mcp;
 pub mod mock_server;
+pub mod monitor_viz;
+pub mod monitors;
+#[cfg(test)]
+mod monitors_tests;
 pub mod palette;
 pub mod pane;
 pub mod realtime;

@@ -1,0 +1,39 @@
+[package]
+name = "rustman-monitor"
+description = "Scheduled monitors for Rustman: monitor files, schedules, governed runs over the request runner, and the local result store"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[features]
+# Email alerts over SMTP (lettre on rustls).
+smtp = ["dep:lettre"]
+
+[dependencies]
+rustman-core.workspace = true
+rustman-http.workspace = true
+croner.workspace = true
+jiff.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "time"] }
+tokio-util.workspace = true
+futures-util.workspace = true
+url.workspace = true
+minijinja.workspace = true
+lettre = { workspace = true, optional = true }
+
+[dev-dependencies]
+rustman-test-support.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "time", "net", "io-util", "test-util"] }
+tokio-rustls.workspace = true
+base64.workspace = true
+insta.workspace = true

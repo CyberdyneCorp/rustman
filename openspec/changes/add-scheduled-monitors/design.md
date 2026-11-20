@@ -18,15 +18,18 @@ See proposal.md for the motivation. `cli-runner` already executes collections wi
 ## Decisions
 
 ### D1. Run engine reuse
-A monitor run is a `cli-runner` run (same loader, variable resolution, assertions and captures) whose sender is a `GovernedSender` built from the monitor's policy. The policy is: allowlist from the environment's hosts, read-only unless `allow_mutations`, and DELETE always denied. The per-run `timeout` is a deadline around the whole run, and the per-request timeouts still apply.
+A monitor run is a `cli-runner` run (same loader, variable resolution, assertions and captures) whose sender is a `GovernedSender` built from the monitor's policy. The policy is: an allowlist of the origins of the environment's URL-valued variables and of the target requests' URLs as resolved before the run (a URL written in a target request is part of what the monitor checks, so it is allowed; redirects and capture-built URLs to other origins are blocked), read-only unless `allow_mutations`, and DELETE always denied. The per-run `timeout` is a deadline around the whole run, and the per-request timeouts still apply.
 
 ### D2. Scheduling with `croner` and a tokio timer wheel
 `croner` parses cron expressions, including `@daily`-style macros and timezones through `chrono-tz`. The daemon keeps a min-heap of next-due instants and sleeps until the earliest one. Each monitor has a "running" flag that implements the overlap skip.
 *Alternatives rejected:* `tokio-cron-scheduler`, which hides the overlap policy and pulls in its own store, and the `cron` crate, which has weaker macro and timezone support.
+*Implementation note:* the daemon keeps each monitor's next due time and finds the earliest by scanning them (a workspace has a handful), which behaves as the min-heap would and keeps reloads simple; the scheduling loop takes its clock and run function as arguments, so overlap, reload and drain are tested on tokio's paused clock.
+*Implementation note:* croner 4 runs on its `jiff` backend instead of `chrono` + `chrono-tz` (chrono is flagged unmaintained, RUSTSEC-2026-0543). jiff resolves IANA names and DST from the OS database and bundles it where the OS has none (Windows).
 
 ### D3. Store: append-only JSON Lines per day, plus an aggregate file
 Layout: `.rustman/monitors/<name>/raw/YYYY-MM-DD.jsonl`, `.rustman/monitors/<name>/hourly.jsonl` and `.rustman/monitors/<name>/state.json` (alert state, last run). Appends hold an advisory file lock (`fs4`) and write one line with a single write. `state.json` is replaced atomically. Compaction rewrites the files for one day into hourly aggregates and then removes them.
 *Alternatives rejected:* SQLite (a bundled C build, against the build constraint) and `redb`/`sled` (opaque binary formats users can't inspect or `grep`). JSONL stays readable, which suits a local-first tool.
+*Implementation note:* the advisory locks are the standard library's `File::lock`/`lock_shared` (stable since Rust 1.89, below the MSRV), the same `flock`/`LockFileEx` calls `fs4` wraps, so no dependency is added.
 
 ### D4. Alert state machine
 Per rule: `ok → firing` (notify), `firing → firing` (notify only if `now - last_notified >= cooldown`), `firing → ok` (send recovery with the duration since `firing_since`). The state lives in `state.json`, so one-shot runs under cron share it with the daemon. A unit-tested pure function `evaluate(rules, history_window, prev_state) -> (new_state, notifications)` holds the whole policy.
@@ -38,11 +41,14 @@ Per rule: `ok → firing` (notify), `firing → firing` (notify only if `now - l
 
 Notifier sends have a 10 s timeout and one retry. Failures are logged and never block other channels or future runs.
 
+*Implementation note:* the desktop channel runs the system's own tool (`osascript` on macOS, `notify-send` on Linux, the toast API through PowerShell on Windows) instead of `notify-rust`, which would add `mac-notification-sys` (an Objective-C build) and the `windows` crates; the title and text are passed as arguments or environment variables, never inside a script. Email is behind the `smtp` cargo feature: `lettre` with `tokio1-rustls`, the `ring` provider and the native roots plus `[http] ca_bundle` (no `native-tls`, no `aws-lc-rs`).
+
 ### D6. Recipes rather than installers
 `schedule-recipe` prints configuration and never installs anything on its own. Installing a systemd unit or a launchd agent changes the user's system outside the workspace, so it stays an explicit `--write` to a path the user chose.
 
 ### D7. Views
 `monitor status` reads only the store, with no network. The TUI view subscribes to store updates through the same runner/event channel the TUI already uses for sends. The viz view adds a `monitor_trend` message type to the `rustman-viz/1` protocol (additive: older companions reject it with `hello_ack` views not including it, and Rustman falls back to text).
+*Implementation note:* `rustman-viz/1` gains the `monitor_trend` view and message (additive; see `docs/viz-protocol.md`). The producer side (`rustman-tui::monitor_viz`, used by `status --viz` and `v`) is done and tested against a stub companion. The Raven companion does not advertise `monitor_trend` yet, as for `bench` and `stress`, so with today's companion the fallback applies; drawing the gauges, plot and heatmap in `rustman-viz` is follow-up work in the companion only, with no protocol change.
 
 ## Risks / Trade-offs
 

@@ -138,9 +138,14 @@ A firing rule SHALL notify once, not after every failing run. While it keeps fir
 `alerts.notify` SHALL support:
 - `desktop` (an OS notification);
 - `webhook` (`url`, plus `template` `slack`, `discord` or `generic`, the default);
-- `email` (SMTP `host`, `port`, `from`, `to`, with STARTTLS or TLS required).
+- `email` (SMTP `host`, `port`, `from`, `to`, with STARTTLS or TLS required), in builds with the `smtp` cargo feature.
 
 Credentials SHALL be referenced as secrets. A channel's failure SHALL be logged and SHALL NOT stop the other channels.
+
+#### Scenario: Email without the smtp feature
+- **GIVEN** a build without the `smtp` feature and an `email` channel
+- **WHEN** an alert is sent
+- **THEN** only that channel SHALL fail, with `email notifications need rustman built with the smtp feature`
 
 #### Scenario: Slack webhook
 - **GIVEN** `notify: [{webhook: {url: "{{slack_hook}}", template: slack}}]`
@@ -168,7 +173,7 @@ Alert payloads, emails, desktop notifications, stored results and status output 
 - **THEN** the payload SHALL show `«redacted:name»` instead of the value
 
 ### Requirement: Monitors are read-only by default
-Monitor requests SHALL pass the safety policy from `api-exploration`. The target hosts of the monitor's environment form the allowlist. Only GET, HEAD and OPTIONS are allowed unless the monitor file sets `allow_mutations: true`. DELETE SHALL always be refused for monitors. A blocked request SHALL record an `error` result and exit with code 4.
+Monitor requests SHALL pass the safety policy from `api-exploration`. The allowlist SHALL be the origins of the environment's URL-valued variables and of the targets' resolved URLs; other origins SHALL be blocked. Only GET, HEAD and OPTIONS are allowed unless the monitor file sets `allow_mutations: true`. DELETE SHALL always be refused for monitors. A blocked request SHALL record an `error` result and exit with code 4.
 
 #### Scenario: POST without opt-in
 - **GIVEN** a monitor whose target includes a POST request and no `allow_mutations`
@@ -211,7 +216,12 @@ The TUI SHALL offer a Monitors view, opened from the command palette, listing ea
 - **THEN** the run SHALL execute in the background without blocking the UI and the list SHALL update when it finishes
 
 ### Requirement: Trend charts in the viz companion
-When the viz companion from `visual-dashboards` is available, `rustman monitor status --viz` and `v` in the Monitors view SHALL open a trend view with uptime gauges, a latency plot over time, and an outcome heatmap by hour of day. Without the companion, the CLI SHALL fall back to the text status.
+When the viz companion from `visual-dashboards` lists the `monitor_trend` view, `rustman monitor status --viz` and `v` in the Monitors view SHALL open it with one `monitor_trend` message per monitor: uptime gauges, hourly p95 latency over time, and outcome counts by UTC hour of day for the heatmap. Otherwise the CLI SHALL fall back to the text status and the TUI SHALL say why.
+
+#### Scenario: Companion with the trend view
+- **GIVEN** a companion whose `hello_ack` lists `monitor_trend`
+- **WHEN** the user runs `rustman monitor status --viz`
+- **THEN** the companion SHALL receive `open_view` for `monitor_trend`, one `monitor_trend` per monitor and `close`, the text status SHALL still be printed, and the exit code SHALL be 0
 
 #### Scenario: Companion absent
 - **GIVEN** `rustman-viz` is not installed

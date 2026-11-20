@@ -39,6 +39,8 @@ jobs:
       # add-trace-propagation section 4: the OTLP exporter is behind the
       # `otlp` feature, and the default build has no OpenTelemetry crate.
       - run: cargo clippy --workspace --all-targets --locked --features rustman-cli/otlp -- -D warnings
+      # add-scheduled-monitors task 5.1: email alerts are behind `smtp`.
+      - run: cargo clippy -p rustman-monitor --all-targets --locked --features smtp -- -D warnings
       - name: No OpenTelemetry crate in the default build
         run: |
           if cargo tree --workspace --locked --edges normal --prefix none | grep -E '^opentelemetry'; then
@@ -123,6 +125,10 @@ jobs:
           cargo test -p rustman-http --features otlp --locked --test otlp
           cargo test -p rustman-http --features otlp --locked --lib otlp
           cargo test -p rustman-cli --features otlp --locked --test otlp
+      # add-scheduled-monitors task 5.1: the email channel against the
+      # local SMTP stub (STARTTLS, implicit TLS, no plain text).
+      - name: Monitor email alerts (smtp feature)
+        run: cargo test -p rustman-monitor --features smtp --locked
       # add-grpc-client task 6.3: an agent server built without gRPC
       # registers none of the gRPC tools.
       - name: Agent tools without gRPC

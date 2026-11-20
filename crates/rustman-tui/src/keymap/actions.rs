@@ -79,6 +79,7 @@ pub enum ActionId {
     CopyAs,
     ImportOpen,
     SnapshotReview,
+    MonitorsOpen,
     TraceOpen,
     Quit,
 }
@@ -98,7 +99,7 @@ const fn def(action: ActionId, id: &'static str, title: &'static str) -> ActionD
 }
 
 /// Every action, in the order the palette and the docs list them.
-pub const REGISTRY: [ActionDef; 74] = [
+pub const REGISTRY: [ActionDef; 75] = [
     def(ActionId::RequestSend, "request.send", "Send request"),
     def(ActionId::RequestCancel, "request.cancel", "Cancel request"),
     def(ActionId::RequestSave, "request.save", "Save request"),
@@ -235,6 +236,7 @@ pub const REGISTRY: [ActionDef; 74] = [
         "snapshot.review",
         "Review snapshots",
     ),
+    def(ActionId::MonitorsOpen, "monitors.open", "Monitors"),
     def(ActionId::TraceOpen, "trace.open", "Open trace link"),
     def(ActionId::Quit, "app.quit", "Quit"),
 ];

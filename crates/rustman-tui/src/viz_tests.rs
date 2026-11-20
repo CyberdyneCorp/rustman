@@ -21,7 +21,7 @@ const ACK: &str = r#"{"type":"hello_ack","protocol":"rustman-viz/1","viewer":"st
 /// A stub companion that speaks `rustman-viz/1` to `--protocol-check`,
 /// answers `hello` with `reply`, appends every line
 /// it reads to `<script>.log` and exits with `code`.
-fn stub(dir: &Path, reply: &str, code: u8) -> PathBuf {
+pub(crate) fn stub(dir: &Path, reply: &str, code: u8) -> PathBuf {
     if cfg!(windows) {
         let script = dir.join("stub-viz.cmd");
         let text = format!(
@@ -47,7 +47,7 @@ fn stub(dir: &Path, reply: &str, code: u8) -> PathBuf {
 
 /// The stub's log once it holds `until` (the stub writes it after the
 /// producer is done, so it is polled with a generous limit).
-fn log_of(script: &Path, until: &str) -> String {
+pub(crate) fn log_of(script: &Path, until: &str) -> String {
     let log = PathBuf::from(format!("{}.log", script.display()));
     let deadline = Instant::now() + Duration::from_secs(20);
     loop {

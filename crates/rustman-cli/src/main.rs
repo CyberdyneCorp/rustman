@@ -97,6 +97,9 @@ enum Command {
     Viz(commands::viz::VizArgs),
     /// Generate static API documentation from the workspace, or preview it
     Docs(commands::docs::DocsArgs),
+    /// Scheduled monitors: run collections on a schedule, store the
+    /// results locally and alert
+    Monitor(commands::monitor::MonitorArgs),
 }
 
 fn main() -> ExitCode {
@@ -161,6 +164,7 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
         Command::Trace(args) => commands::trace::run(&args),
         Command::Viz(args) => commands::viz::run(&args),
         Command::Docs(args) => commands::docs::run(&args),
+        Command::Monitor(args) => commands::monitor::run(&args),
     }
 }
 

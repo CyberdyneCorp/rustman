@@ -1,0 +1,26 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Send a test notification through every channel of a monitor
+
+Usage: rustman monitor test-alert [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>
+          The monitor (its name)
+
+Options:
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

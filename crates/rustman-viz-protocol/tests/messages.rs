@@ -122,6 +122,25 @@ fn samples() -> Vec<Message> {
             }],
             aborted: Some("threshold".into()),
         }),
+        Message::MonitorTrend(Box::new(MonitorTrend {
+            monitor: "api-health".into(),
+            environment: "prod".into(),
+            schedule: "every 5m".into(),
+            uptime_24h: Some(98.95),
+            uptime_7d: Some(99.5),
+            uptime_30d: None,
+            latency: vec![LatencyPoint {
+                hour: "2026-11-17T09:00:00Z".into(),
+                p95_ms: 123.0,
+            }],
+            hour_of_day: vec![HourOutcomes {
+                hour: 9,
+                passed: 11,
+                failed: 1,
+                errored: 0,
+                skipped: 0,
+            }],
+        })),
         Message::InspectResponse(Box::new(InspectResponse {
             request: Some("users/list".into()),
             status: Some(200),
@@ -177,7 +196,7 @@ fn every_message_round_trips_and_matches_the_schema() {
         assert_valid(&validator, &value);
         kinds.insert(message.kind().unwrap());
     }
-    assert_eq!(kinds.len(), 18, "every message type has a sample");
+    assert_eq!(kinds.len(), 19, "every message type has a sample");
 }
 
 #[test]
@@ -252,7 +271,7 @@ fn doc_examples() -> Vec<String> {
 fn every_example_in_the_protocol_doc_parses() {
     let validator = validator();
     let examples = doc_examples();
-    assert!(examples.len() >= 18, "{examples:?}");
+    assert!(examples.len() >= 19, "{examples:?}");
     let mut kinds = std::collections::HashSet::new();
     for line in examples {
         let message = decode_line(&line).unwrap_or_else(|e| panic!("{line}: {e}"));
@@ -261,7 +280,7 @@ fn every_example_in_the_protocol_doc_parses() {
     }
     assert_eq!(
         kinds.len(),
-        18,
+        19,
         "the doc shows every message type: {kinds:?}"
     );
 }

@@ -1,0 +1,74 @@
+---
+source: crates/rustman-monitor/src/recipe/tests.rs
+expression: "all(\"{every: 5m}\")"
+---
+===== Cron
+# Run the api-health monitor (every 5m). Install with: crontab -e
+*/5 * * * * cd /srv/ws && /usr/local/bin/rustman monitor run api-health
+===== Systemd
+# ~/.config/systemd/user/rustman-monitor-api-health.service
+[Unit]
+Description=Rustman monitor api-health
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/ws
+ExecStart=/usr/local/bin/rustman monitor run api-health
+
+# ~/.config/systemd/user/rustman-monitor-api-health.timer
+# Enable with: systemctl --user enable --now rustman-monitor-api-health.timer
+[Unit]
+Description=Run the Rustman monitor api-health (every 5m)
+
+[Timer]
+OnActiveSec=0
+OnUnitActiveSec=5m
+
+[Install]
+WantedBy=timers.target
+===== Launchd
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- ~/Library/LaunchAgents/dev.rustman.monitor.api-health.plist: runs the api-health monitor (every 5m).
+     Load with: launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.rustman.monitor.api-health.plist -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.rustman.monitor.api-health</string>
+  <key>WorkingDirectory</key>
+  <string>/srv/ws</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/rustman</string>
+    <string>monitor</string>
+    <string>run</string>
+    <string>api-health</string>
+  </array>
+  <key>StartInterval</key>
+  <integer>300</integer>
+  <key>RunAtLoad</key>
+  <true/>
+</dict>
+</plist>
+===== GithubActions
+# .github/workflows/monitor-api-health.yml: runs the api-health monitor (every 5m).
+# GitHub runs scheduled workflows at most every 5 minutes, sometimes late.
+name: monitor api-health
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    env:
+      # Secrets come from .rustman/secrets.yaml: add a step that runs
+      # printf '%s' "${{ secrets.NAME }}" | rustman secret set NAME --env prod
+      RUSTMAN_SECRET_STORE: file
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install rustman
+        run: cargo install --git https://github.com/CyberdyneCorp/rustman rustman-cli --locked
+      - name: Run the monitor
+        run: rustman monitor run api-health
