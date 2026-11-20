@@ -82,6 +82,15 @@ impl GovernedSender {
         Self::governed_by(policy, self.governor.clone())
     }
 
+    /// [`GovernedSender::new`], sending through `engine` (for example one
+    /// with an address guard).
+    pub fn with_engine(policy: SafetyPolicy, governor: Governor, engine: HttpEngine) -> Self {
+        Self {
+            engine,
+            ..Self::new(policy, governor)
+        }
+    }
+
     fn governed_by(policy: SafetyPolicy, governor: Arc<Governor>) -> Self {
         Self {
             engine: HttpEngine::new(),

@@ -67,7 +67,11 @@ fn serve(args: &ServeArgs) -> Result<u8, CliError> {
     let environment = args.selection.environment(&workspace)?.cloned();
     let secrets = secret_store(&workspace.root)?;
     let providers = super::exec::secret_providers(&workspace.root, &workspace.settings)?;
-    let sessions = Sessions::new(workspace, secrets, environment).with_secret_providers(providers);
+    // Only an already trusted plugin set loads: agents cannot trust one.
+    let plugins = super::plugins::agent(&workspace.root, environment.as_ref(), &secrets)?;
+    let sessions = Sessions::new(workspace, secrets, environment)
+        .with_secret_providers(providers)
+        .with_plugins(plugins);
     let runtime = super::exec::runtime()?;
     let served = match bind {
         None => runtime.block_on(serve_stdio(&sessions)),

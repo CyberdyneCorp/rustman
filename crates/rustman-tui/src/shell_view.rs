@@ -185,6 +185,7 @@ pub fn overlay(frame: &mut Frame, state: &State) {
         Some(Overlay::Import(dialog)) => crate::import_dialog::render(frame, dialog, &state.ui),
         Some(Overlay::SnapshotQueue(queue)) => crate::review::render_queue(frame, state, queue),
         Some(Overlay::Monitors(view)) => crate::monitors::render(frame, view, &state.ui),
+        Some(Overlay::PluginTrust(prompt)) => crate::plugin_trust::render(frame, prompt, &state.ui),
     }
 }
 

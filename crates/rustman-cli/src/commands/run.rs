@@ -23,6 +23,7 @@ use rustman_report::{Report, ReportTarget, Reporter, RunReport};
 use super::exec::{
     SendFlags, cancel_on_ctrl_c, history_store, parse_duration, runtime, secret_store,
 };
+use super::plugins::{PluginFlags, ReporterChoice, split_reporters, write_plugin_reports};
 use super::viz::RunViz;
 use super::{EnvSelection, current_dir, print_warnings};
 use crate::exit::{CliError, REQUEST, SAFETY, run_code};
@@ -72,8 +73,17 @@ pub struct RunArgs {
     /// Report format, optionally written to a file: pretty, json, junit or
     /// tap, as in json or junit:out/junit.xml (repeatable; default: pretty
     /// on stdout)
+    // Report plugins exist only in a build with plugin support.
     #[arg(long, value_name = "FORMAT[:PATH]")]
-    reporter: Vec<Reporter>,
+    #[cfg_attr(
+        feature = "plugins",
+        arg(
+            help = "Report format, optionally written to a file: pretty, json, junit or tap, \
+                    as in json or junit:out/junit.xml, or a plugin's <plugin>/<format>:PATH \
+                    (repeatable; default: pretty on stdout)"
+        )
+    )]
+    reporter: Vec<ReporterChoice>,
     /// Also render the report as json, junit, markdown, html or sarif,
     /// written to a file or stdout, as in html=out/report.html (repeatable)
     #[arg(long = "report", value_name = "FORMAT[=PATH]")]
@@ -94,10 +104,13 @@ pub struct RunArgs {
     /// run continues without it when it is not installed
     #[arg(long)]
     viz: bool,
+    #[command(flatten)]
+    plugins: PluginFlags,
 }
 
 pub fn run(args: &RunArgs) -> Result<u8, CliError> {
-    one_stdout_reporter(&args.reporter, &args.report)?;
+    let (reporters, plugin_reports) = split_reporters(&args.reporter);
+    one_stdout_reporter(&reporters, &args.report)?;
     // Checked before anything else, so the usage error comes first.
     args.flags.snapshot_mode()?;
     let ws = args.selection.workspace()?;
@@ -113,6 +126,10 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
     }
     let data = data_run(args, &ws, &cwd, &scopes, &plan)?;
     let store = std::sync::Arc::new(secret_store(&ws.root)?);
+    // A tampered or untrusted plugin set stops the run before any request
+    // is sent (plugins spec, "Integrity pinning", "Headless plugin trust").
+    let plugins = super::plugins::headless(&ws.root, env, &store, &args.plugins)?;
+    super::plugins::check_kinds(&ws, plugins.as_ref())?;
     let viz = if args.viz {
         let iterations = data
             .as_ref()
@@ -139,6 +156,7 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
     options.iterations = args.iterations.unwrap_or(1);
     options.data = data;
     options.parallel = args.parallel as usize;
+    options.plugins = plugins.clone();
     options.history = history_store(args.flags.no_history, Some(&ws), &ws.settings);
     let graphql = GraphqlRunner {
         max_events: args.max_events,
@@ -189,7 +207,9 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
     if let Some(viz) = viz {
         viz.finish(&record);
     }
-    write_reports(&args.reporter, &args.report, &record)?;
+    write_reports(&reporters, &args.report, &record)?;
+    let report = rustman_report::json(&record);
+    write_plugin_reports(plugins.as_ref(), &plugin_reports, &report)?;
     Ok(exit_code(&record))
 }
 

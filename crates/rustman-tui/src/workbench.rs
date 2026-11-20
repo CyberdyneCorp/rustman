@@ -112,7 +112,8 @@ pub fn open_path(state: &mut State, path: &Path) {
     let Some(request) = workspace(state).and_then(|ws| find(ws, path)).cloned() else {
         return;
     };
-    state.tabs.open(path, &request, &Registry::builtin());
+    let registry = Registry::of(state);
+    state.tabs.open(path, &request, &registry);
     state.shell.focus = Focus::Url;
     state.shell.overlay_open = false;
 }
@@ -329,11 +330,12 @@ fn save_all_and_quit(state: &mut State) -> Vec<Effect> {
 }
 
 fn load_from_disk(state: &mut State, id: TabId) -> Vec<Effect> {
+    let registry = Registry::of(state);
     let Some(tab) = state.tabs.get_mut(id) else {
         return Vec::new();
     };
     if let Some(request) = tab.on_disk.take() {
-        tab.reload(&request, &Registry::builtin());
+        tab.reload(&request, &registry);
     }
     Vec::new()
 }
@@ -573,7 +575,7 @@ pub fn on_files_changed(state: &mut State, paths: &[PathBuf]) -> Vec<Effect> {
 /// An open request was re-read after a change on disk: reload a clean tab,
 /// warn about a dirty one (spec: External edit conflict).
 pub fn on_request_read(state: &mut State, id: TabId, result: Result<Box<Request>, String>) {
-    let registry = Registry::builtin();
+    let registry = Registry::of(state);
     let Some(tab) = state.tabs.get_mut(id) else {
         return;
     };

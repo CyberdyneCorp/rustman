@@ -370,6 +370,17 @@ pub(super) fn body(i: &mut Interpolator<'_, '_>, body: Option<&Body>) -> Resolve
     }
 }
 
+/// `value` with every string (keys included) interpolated, and the secrets
+/// it used: the fields of a plugin kind's request file.
+pub fn resolve_value(
+    value: &Value,
+    resolver: &Resolver<'_>,
+) -> Result<(Value, Vec<UsedSecret>), ResolveError> {
+    let mut i = resolver.interpolator();
+    let resolved = json(&mut i, value);
+    i.finish(resolved)
+}
+
 fn json(i: &mut Interpolator<'_, '_>, value: &Value) -> Value {
     match value {
         Value::String(text) => Value::String(i.text(text).text),
@@ -414,6 +425,14 @@ pub(super) fn auth(i: &mut Interpolator<'_, '_>, auth: &Auth) -> Auth {
         },
         Auth::AwsSigV4(sigv4) => Auth::AwsSigV4(Box::new(aws_sigv4(i, sigv4))),
         Auth::Jwt(jwt) => Auth::Jwt(Box::new(jwt_auth(i, jwt))),
+        Auth::Plugin(plugin) => Auth::Plugin(crate::model::PluginAuth {
+            scheme: plugin.scheme.clone(),
+            params: plugin
+                .params
+                .iter()
+                .map(|(name, value)| (name.clone(), t(value)))
+                .collect(),
+        }),
     }
 }
 

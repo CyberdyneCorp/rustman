@@ -61,6 +61,7 @@ fn run_with(
         resolver,
         request: None,
         redactor: &redactor,
+        plugins: None,
     };
     evaluate(&assertions(yaml), response, &ctx)
 }
@@ -622,6 +623,7 @@ mod mcp {
             resolver: &resolver,
             request: None,
             redactor: &redactor,
+            plugins: None,
         };
         evaluate_mcp(&assertions(yaml), &response(200, body), &ctx, facts)
             .iter()

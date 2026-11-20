@@ -1,0 +1,10 @@
+# Cases for `rustman plugin test .`.
+[[case]]
+name = "requests are stamped"
+transform_request = { name = "stamp", body = "{}" }
+expect = { "header.X-Stamped" = "@@NAME@@", body = "{}" }
+
+[[case]]
+name = "the XSSI line is removed"
+transform_response = { name = "strip-xssi", body = ")]}'\n{\"id\":1}" }
+expect = { body = "{\"id\":1}" }

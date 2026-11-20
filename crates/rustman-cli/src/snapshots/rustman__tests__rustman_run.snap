@@ -67,7 +67,7 @@ Options:
           [default: 1]
 
       --reporter <FORMAT[:PATH]>
-          Report format, optionally written to a file: pretty, json, junit or tap, as in json or junit:out/junit.xml (repeatable; default: pretty on stdout)
+          Report format, optionally written to a file: pretty, json, junit or tap, as in json or junit:out/junit.xml, or a plugin's <plugin>/<format>:PATH (repeatable; default: pretty on stdout)
 
       --report <FORMAT[=PATH]>
           Also render the report as json, junit, markdown, html or sarif, written to a file or stdout, as in html=out/report.html (repeatable)
@@ -83,6 +83,9 @@ Options:
 
       --viz
           Show the run live in the graphical viz companion (rustman-viz); the run continues without it when it is not installed
+
+      --trust-plugins
+          Load the workspace plugins even when this machine has not trusted them yet, and record the approval (for CI)
 
       --color <WHEN>
           Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never

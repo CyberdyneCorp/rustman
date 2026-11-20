@@ -40,6 +40,7 @@ pub struct Sessions {
     environment: Option<Environment>,
     jobs: Arc<JobPool>,
     secret_providers: Option<Arc<SecretProviders>>,
+    plugins: Option<Arc<dyn rustman_core::plugins::Extensions>>,
 }
 
 impl std::fmt::Debug for Sessions {
@@ -62,6 +63,7 @@ impl Sessions {
             environment,
             jobs: Arc::default(),
             secret_providers: None,
+            plugins: None,
         }
     }
 
@@ -70,6 +72,18 @@ impl Sessions {
     #[must_use]
     pub fn with_secret_providers(mut self, providers: Arc<SecretProviders>) -> Self {
         self.secret_providers = Some(providers);
+        self
+    }
+
+    /// Give every session the workspace's plugins. The caller loads them
+    /// only when their set is already trusted (plugins spec, "Agents
+    /// cannot manage plugins").
+    #[must_use]
+    pub fn with_plugins(
+        mut self,
+        plugins: Option<Arc<dyn rustman_core::plugins::Extensions>>,
+    ) -> Self {
+        self.plugins = plugins;
         self
     }
 
@@ -85,7 +99,8 @@ impl Sessions {
             self.environment.clone(),
             self.jobs.clone(),
         )
-        .with_secret_providers(self.secret_providers.clone());
+        .with_secret_providers(self.secret_providers.clone())
+        .with_plugins(self.plugins.clone());
         RustmanServer::new(Arc::new(ctx))
     }
 }

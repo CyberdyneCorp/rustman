@@ -231,7 +231,7 @@ fn unknown_field_has_exact_position() {
     assert_eq!((err.line(), err.column()), (Some(5), Some(1)), "{err}");
     assert_eq!(
         err.message,
-        "unknown field `header`, expected one of version, kind, name, description, tags, docs, method, url, query, headers, body, auth, settings, variables, assertions, captures"
+        "unknown field `header`, expected one of version, kind, name, description, tags, docs, method, url, query, headers, body, auth, settings, transform, variables, assertions, captures"
     );
 }
 

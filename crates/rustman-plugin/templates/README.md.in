@@ -1,0 +1,44 @@
+# @@NAME@@
+
+A Rustman `@@POINT@@` plugin: @@DESCRIPTION@@.
+
+It is a `no_std` Rust crate built into a WebAssembly component against the
+`rustman:plugin` API through `rustman-plugin-sdk`. It imports nothing but the
+Rustman host interfaces, so it gets no filesystem, network, environment,
+clock or secrets beyond what a workspace grants it.
+
+## Build
+
+```sh
+rustup target add wasm32-wasip2
+cargo build --target wasm32-wasip2 --release
+```
+
+The component is `target/wasm32-wasip2/release/@@CRATE@@.wasm`, the
+`component` of `rustman-plugin.toml`.
+
+The first build records the exact `rustman-plugin-sdk` commit in
+`Cargo.lock`. Commit it, and build with `--locked`, so every build of the
+plugin uses the same SDK and dependencies.
+
+## Test
+
+```sh
+rustman plugin test .
+```
+
+runs the cases of `rustman-plugin-tests.toml` in the real sandbox, with a
+fake clock, randomness, environment, network and secrets, and exits 0 when
+every case passes.
+
+## Use
+
+From the root of a Rustman workspace that contains this folder:
+
+```sh
+rustman plugin add ./@@NAME@@
+```
+
+`plugin add` pins the component's sha256 and declares the plugin with no
+grants. Grant what it needs in its `[plugins.@@NAME@@]` table of
+`rustman.toml` (@@GRANTS@@), then trust the workspace's plugin set.

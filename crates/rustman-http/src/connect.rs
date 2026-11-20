@@ -195,6 +195,7 @@ impl Inner {
 
     async fn dial(&self, target: &Target) -> Result<Dialed, RequestError> {
         let (addrs, dns) = self.resolve(&target.host, target.port).await?;
+        self.dns.check(&target.host, &addrs)?;
         let started = Instant::now();
         let tcp = connect_any(&target.host, target.port, &addrs).await?;
         Ok(Dialed {

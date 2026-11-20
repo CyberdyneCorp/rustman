@@ -1,0 +1,10 @@
+# Cases for `rustman plugin test .`.
+[[case]]
+name = "words become a slug"
+generate = { name = "slug", args = ["Hello", "World!"] }
+expect = { value = "hello-world" }
+
+[[case]]
+name = "unknown generators fail"
+generate = { name = "uuid" }
+expect_error = "unknown generator uuid"

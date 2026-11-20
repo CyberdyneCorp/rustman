@@ -1,0 +1,36 @@
+[package]
+name = "rustman-plugin-sdk"
+description = "Guest SDK for Rustman plugins: the rustman:plugin WIT package, its API version and Rust bindings for each extension point"
+version = "1.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+# Published on its own, versioned with the plugin API major (design D8).
+publish = true
+include = ["src/**", "wit/**", "Cargo.toml"]
+
+# The generated guest bindings are FFI glue full of `unsafe`, so this
+# crate cannot take the workspace's `unsafe_code = "forbid"`.
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[features]
+# One feature per extension point world (task 6.2): each enables the Rust
+# bindings of that world and of the host imports. A plugin enables the
+# worlds it implements.
+auth = ["bindings"]
+assertion = ["bindings"]
+generator = ["bindings"]
+transformer = ["bindings"]
+importer = ["bindings"]
+kind = ["bindings"]
+report = ["bindings"]
+bindings = ["dep:wit-bindgen"]
+# The allocator and panic handler of a `no_std` plugin component, so it
+# links against nothing but the rustman:plugin host imports (no WASI).
+runtime = ["dep:dlmalloc"]
+
+[dependencies]
+wit-bindgen = { workspace = true, optional = true }
+dlmalloc = { workspace = true, optional = true }

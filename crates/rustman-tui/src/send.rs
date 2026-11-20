@@ -79,6 +79,10 @@ pub struct SendJob {
     pub typed: Typed,
     /// A realtime tab's session: where its entries go and its frames.
     pub realtime: Option<LiveLink>,
+    /// The plugin trust store: a send in a workspace whose plugin set is
+    /// trusted opens it (auth schemes, generators, transformers,
+    /// assertions and kinds); an untrusted set stays unloaded.
+    pub plugins: crate::plugin_trust::Gate,
 }
 
 impl fmt::Debug for SendJob {
@@ -150,6 +154,7 @@ pub fn start_with(state: &mut State, validate: bool) -> Vec<Effect> {
         snapshots: state.snapshot_mode,
         typed: Arc::clone(&flight.typed),
         realtime,
+        plugins: state.plugin_gate.clone(),
     };
     state.status.in_flight = state.tabs.in_flight();
     vec![Effect::Send(Box::new(job))]
@@ -341,6 +346,20 @@ async fn send_scratch(job: &SendJob) -> Received {
     run(job, &place, &target, true).await
 }
 
+/// The workspace's plugins, when its set is trusted on this machine: the
+/// same extension points a headless command loads, with the session's
+/// secrets and network. A scratch session has none.
+fn open_plugins(
+    job: &SendJob,
+    place: &Place<'_>,
+    store: &SecretStore,
+) -> Result<Option<Arc<dyn rustman_core::plugins::Extensions>>, String> {
+    match &job.plugins.0 {
+        Some(gate) if place.in_workspace => gate.extensions(place.root, place.environment, store),
+        _ => Ok(None),
+    }
+}
+
 /// Where a request runs.
 struct Place<'a> {
     root: &'a Path,
@@ -361,6 +380,10 @@ impl Place<'_> {
 async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: bool) -> Received {
     let store = match secret_store(place.root, job.backend) {
         Ok(store) => store,
+        Err(message) => return failed(job, message),
+    };
+    let plugins = match open_plugins(job, place, &store) {
+        Ok(plugins) => plugins,
         Err(message) => return failed(job, message),
     };
     let (feed, events) = unbounded_channel();
@@ -408,6 +431,7 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         grpc: Some(&grpc),
         realtime: Some(&realtime),
         snapshots: job.snapshots,
+        plugins,
         ..RunOptions::default()
     };
     let ctx = RunContext {
@@ -662,6 +686,7 @@ mod tests {
             snapshots: SnapshotMode::Record,
             typed: Typed::default(),
             realtime: None,
+            plugins: crate::plugin_trust::Gate::default(),
         };
         let mut other = job.clone();
         assert_eq!(job, other);

@@ -142,6 +142,7 @@ pub async fn bench(
         interrupt: interrupt.clone(),
         cancel: CancellationToken::new(),
         secret_providers: setup.secret_providers.clone(),
+        plugins: None,
     };
     let mut bench = Bench::prepare(input)?;
     if let Some(warmup) = setup.warmup {

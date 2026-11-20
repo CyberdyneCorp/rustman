@@ -1,0 +1,96 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: run
+---
+Run the requests under files or folders and report the results
+
+Usage: rustman run [OPTIONS] [PATH]...
+
+Arguments:
+  [PATH]...
+          Request files or folders to run (default: the current directory)
+
+Options:
+      --env <NAME>
+          Environment (default: RUSTMAN_ENV, then default_environment)
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --var <K=V>
+          Set a variable, above every other source (repeatable): --var k=v
+
+      --timeout <DURATION>
+          Total timeout per request, replacing settings.timeout_ms: 500ms, 5s, 2m, or a number of milliseconds
+
+  -k, --insecure
+          Do not verify TLS certificates (exchanges are flagged insecure)
+
+      --no-history
+          Do not record the exchanges in history
+
+      --trace
+          Send trace context (traceparent) even when no trace block enables it
+
+  -u, --update-snapshots
+          Overwrite snapshots that differ from the response (not in CI mode)
+
+      --ci
+          CI mode: never write snapshots, and fail on a missing one (also on when the CI variable is true or 1)
+
+      --bail[=<SCOPE>]
+          Skip the remaining requests after the first failed or errored one; --bail=iteration skips only the rest of the failing iteration
+          
+          [possible values: run, iteration]
+
+      --filter <FILTER>
+          Run only matching requests: tag:<name>, or a glob over request ids such as 'users/*' (repeatable; a request matching any runs)
+
+      --iterations <N>
+          Run the selected requests this many times (default 1)
+
+      --data <FILE>
+          Run the selected requests once per row of a CSV or JSON file, with the row's values as variables (default: the folder's _collection.yaml data)
+
+      --no-data
+          Ignore the data file a _collection.yaml names
+
+      --data-label <COLUMN>
+          Label each iteration with this column's value in reports (default: row <n>)
+
+      --secret-columns <A,B>
+          Data columns whose values are secrets and are redacted in every output, besides those named like password, token, secret or api_key
+
+      --parallel <N>
+          Run up to N folders at once; requests in one folder stay in order unless its _collection.yaml sets parallel: true
+          
+          [default: 1]
+
+      --reporter <FORMAT[:PATH]>
+          Report format, optionally written to a file: pretty, json, junit or tap, as in json or junit:out/junit.xml (repeatable; default: pretty on stdout)
+
+      --report <FORMAT[=PATH]>
+          Also render the report as json, junit, markdown, html or sarif, written to a file or stdout, as in html=out/report.html (repeatable)
+
+      --max-events <N>
+          GraphQL and JSON-RPC subscriptions stop after N events (default: each request's max_events, else 10)
+
+      --duration <DURATION>
+          GraphQL and JSON-RPC subscriptions stop after this long (default: each request's duration or max_duration_ms, else 30s)
+
+      --trust
+          Spawn the workspace's stdio MCP servers that are not trusted yet, and record the approvals
+
+      --viz
+          Show the run live in the graphical viz companion (rustman-viz); the run continues without it when it is not installed
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

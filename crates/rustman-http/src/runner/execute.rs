@@ -5,10 +5,11 @@ use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use rustman_core::Redactor;
-use rustman_core::assertions::{self, Context, needs_body};
+use rustman_core::assertions::{self, Context, PluginCalls, needs_body};
 use rustman_core::captures::{self, CaptureReport, Persistence, RunCaptures};
 use rustman_core::data_rows::RowSource;
 use rustman_core::model::{Assertion, Auth, Capture, Request};
+use rustman_core::plugins::PluginExchange;
 use rustman_core::redact::remember_for_logs;
 use rustman_core::run::redact_value;
 use rustman_core::run::{RequestRecord, RequestStatus, SkipReason};
@@ -97,6 +98,12 @@ impl Runner<'_> {
         if let Some(grpc) = sent.record.grpc.take() {
             sent.record.grpc = Some(redact_value(&grpc, &redactor));
         }
+        if let Some(transform) = sent.record.transform.take() {
+            sent.record.transform = Some(transform.redacted(&redactor));
+        }
+        if let Some(kind) = sent.record.plugin_kind.take() {
+            sent.record.plugin_kind = Some(kind.redacted(&redactor));
+        }
         sent.redactor = redactor.clone();
         self.record_mcp_history(&mut sent, &redactor, file.clone());
         let kept = self.record_history(&mut sent, &redactor, file, Some(cache_key(request)));
@@ -145,7 +152,9 @@ impl Runner<'_> {
             Request::Ws(_) | Request::Sse(_) => {
                 return Box::pin(self.execute_realtime(request, record, iteration)).await;
             }
-            Request::Opaque(_) => return Sent::skipped(record, SkipReason::UnsupportedKind),
+            Request::Opaque(opaque) => {
+                return self.execute_plugin_kind(request, opaque, record, iteration);
+            }
         };
         let captured = self.lock_captures().clone();
         let mut resolver = self.resolver(request, &captured, iteration);
@@ -160,10 +169,16 @@ impl Runner<'_> {
             request: request.entry.id(),
             cache_key: cache_key(request),
         };
-        let exchange = match Box::pin(self.exchange(target, &mut resolved)).await {
+        let transform = http.transform.clone().unwrap_or_default();
+        let sending = self.exchange(target, &mut resolved, &transform.request);
+        let mut exchange = match Box::pin(sending).await {
             Some(Ok(exchange)) => exchange,
             Some(Err(e)) => return Sent::errored(record, e.to_string()).with_resolved(resolved),
             None => return Sent::skipped(record, SkipReason::Interrupted),
+        };
+        let transformed = match self.transform_response(&transform, &mut exchange) {
+            Ok(transformed) => transformed,
+            Err(e) => return Sent::errored(record, e).with_resolved(resolved),
         };
         let checked = Checked {
             assertions: http.assertions.as_deref().unwrap_or_default(),
@@ -174,20 +189,24 @@ impl Runner<'_> {
             kind: "http",
             events: None,
         };
-        let sent = self.evaluate(&checked, exchange, record);
+        let mut sent = self.evaluate(&checked, exchange, record);
+        sent.record.transform = http.transform.is_some().then_some(transformed);
         sent.with_resolved(resolved)
     }
 
-    /// Send the request, or `None` when the run is cancelled first.
+    /// Send the request through `request_transformers` (plugin
+    /// transformers), or `None` when the run is cancelled first.
     pub(super) async fn exchange(
         &self,
         target: AuthTarget,
         resolved: &mut ResolvedRequest,
+        request_transformers: &[String],
     ) -> Option<Result<Exchange, RequestError>> {
-        let options = match self.send_options(resolved) {
+        let mut options = match self.send_options(resolved) {
             Ok(options) => options,
             Err(e) => return Some(Err(e)),
         };
+        options.request_transformers = request_transformers.to_vec();
         let login = match self.options.login {
             LoginMode::Interactive(show) => Login::Interactive(show),
             LoginMode::NonInteractive => Login::NonInteractive {
@@ -238,6 +257,7 @@ impl Runner<'_> {
             options.tls.verify = false;
         }
         options.trace = self.trace.clone();
+        options.plugins = self.options.plugins.clone().map(crate::PluginHooks);
         Ok(options.with_cookie_jar(&resolved.settings, &self.jar))
     }
 
@@ -264,6 +284,7 @@ impl Runner<'_> {
             resolver.push(RowSource::new(row, &data.secret));
         }
         resolver.push(self.state.source());
+        resolver.set_plugins(self.options.plugins.as_deref());
         resolver
     }
 
@@ -281,10 +302,12 @@ impl Runner<'_> {
             Err(e) => return Sent::errored(record, format!("cannot read the response body: {e}")),
         };
         let mut redactor = self.request_redactor(Some(checked.resolved), Some(&exchange));
+        let plugins = self.plugin_calls(checked.resolved, &redactor);
         let ctx = Context {
             resolver: checked.resolver,
             request: Some(checked.request),
             redactor: &redactor,
+            plugins: plugins.as_ref(),
         };
         record.assertions = assertions::evaluate(assertions, &view, &ctx);
         let report = self.capture(captures, &view, &mut redactor);
@@ -312,6 +335,44 @@ impl Runner<'_> {
             snapshots: snapshots.reviews,
             ..Sent::from_record(record)
         }
+    }
+
+    /// What `plugin` assertions need: the run's plugins and the method,
+    /// URL and headers of `resolved`, redacted. The request body is not
+    /// passed.
+    pub(super) fn plugin_calls(
+        &self,
+        resolved: &ResolvedRequest,
+        redactor: &Redactor,
+    ) -> Option<PluginCalls<'_>> {
+        let extensions = self.options.plugins.as_deref()?;
+        let request = PluginExchange {
+            method: resolved.method.clone(),
+            url: redactor.resolved(&resolved.url),
+            request_headers: resolved
+                .headers
+                .iter()
+                .map(|pair| {
+                    let value = redactor.resolved_header_value(&pair.name.text, &pair.value);
+                    (pair.name.text.clone(), value)
+                })
+                .collect(),
+            ..PluginExchange::default()
+        };
+        Some(PluginCalls {
+            extensions,
+            request,
+        })
+    }
+
+    /// What `plugin` assertions need for a kind without an HTTP request:
+    /// the run's plugins and an empty request side.
+    pub(super) fn bare_plugin_calls(&self) -> Option<PluginCalls<'_>> {
+        let extensions = self.options.plugins.as_deref()?;
+        Some(PluginCalls {
+            extensions,
+            request: PluginExchange::default(),
+        })
     }
 
     /// Apply captures and add the values to the run's scope. A captured

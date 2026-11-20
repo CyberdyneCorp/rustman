@@ -297,6 +297,7 @@ async fn send_one(
     let ws = ctx.workspace();
     options.history = history(ctx);
     options.gate = Some(&gate);
+    options.plugins = ctx.plugins();
     let run_ctx = RunContext {
         root: &ws.root,
         settings: &ws.settings,
@@ -557,6 +558,7 @@ async fn run_job(
         history: history(&ctx),
         gate: Some(&gate),
         snapshots: SnapshotMode::Ci,
+        plugins: ctx.plugins(),
         ..RunOptions::default()
     };
     let run_ctx = RunContext {

@@ -1,0 +1,17 @@
+# Cases for `rustman plugin test .`: each runs in the real sandbox with
+# only its grants, against these fakes.
+[fakes]
+clock = 2026-01-01T00:00:00Z
+secrets = { hmac_key = "test-secret" }
+
+[[case]]
+name = "signs with the fixed clock and the fake secret"
+grants = ["clock", "secrets:read:hmac_key"]
+sign = { scheme = "v1", method = "POST", url = "https://api.example.com/orders", params = { key_var = "hmac_key" } }
+expect = { "header.X-Timestamp" = "1767225600", "header.X-Signature" = "0278871e60295553e9588cd1ee773721a033c7ea9e7114d87148c9897f1abf71" }
+
+[[case]]
+name = "cannot read the secret without its grant"
+grants = ["clock"]
+sign = { scheme = "v1", url = "https://api.example.com/orders", params = { key_var = "hmac_key" } }
+expect_error = "secrets hmac_key"

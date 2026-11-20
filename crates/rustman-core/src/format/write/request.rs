@@ -230,6 +230,7 @@ fn http_node(r: &HttpRequest) -> Node {
         .opt("body", r.body.as_ref().map(body))
         .opt("auth", r.auth.as_ref().map(auth))
         .opt("settings", r.settings.as_ref().map(settings))
+        .opt("transform", r.transform.as_ref().map(transform))
         .opt("variables", r.variables.as_ref().map(variables))
         .opt(
             "assertions",
@@ -252,6 +253,14 @@ pub(super) fn docs_node(d: &DocsMeta) -> Node {
         .opt_plain("example", d.example)
         .opt_plain("hidden", d.hidden)
         .opt_str("description", d.description.as_deref())
+        .build()
+}
+
+fn transform(t: &crate::model::Transform) -> Node {
+    let list = |names: &[String]| (!names.is_empty()).then(|| strings(names));
+    MapBuilder::new()
+        .opt("request", list(&t.request))
+        .opt("response", list(&t.response))
         .build()
 }
 
@@ -370,6 +379,14 @@ pub(super) fn auth(a: &Auth) -> Node {
             .build(),
         Auth::AwsSigV4(sigv4) => aws_sigv4(typed("aws_sigv4"), sigv4),
         Auth::Jwt(jwt) => jwt_node(typed("jwt"), jwt),
+        Auth::Plugin(plugin) => {
+            let builder = typed("plugin").str("scheme", &plugin.scheme);
+            let builder = plugin
+                .params
+                .iter()
+                .fold(builder, |b, (name, value)| b.str(name, value));
+            builder.build()
+        }
     }
 }
 
@@ -511,6 +528,15 @@ pub(super) fn assertion(a: &Assertion) -> Node {
                 .build(),
         ),
         Assertion::CloseCode(code) => ("close_code", Node::plain(code)),
+        Assertion::Plugin(p) => {
+            let mut map = serde_json::Map::new();
+            map.insert(
+                "fn".to_owned(),
+                serde_json::Value::String(p.function.clone()),
+            );
+            map.extend(p.args.clone());
+            ("plugin", json(&serde_json::Value::Object(map)))
+        }
     };
     Node::Map(vec![(key.to_owned(), node)])
 }

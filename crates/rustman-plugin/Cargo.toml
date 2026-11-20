@@ -1,0 +1,49 @@
+[package]
+name = "rustman-plugin"
+description = "Plugin host for Rustman: sandboxed WASM component plugins, manifests, pinning, grants and limits"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[features]
+# Test plugins built in-process from WAT, for this crate's tests and the
+# integration tests of the front-ends.
+test-fixtures = ["dep:wat", "dep:wit-component", "dep:wit-parser"]
+
+[dependencies]
+rustman-core.workspace = true
+rustman-http.workspace = true
+rustman-plugin-sdk.workspace = true
+bytes.workspace = true
+dunce.workspace = true
+http.workspace = true
+jsonschema.workspace = true
+rand.workspace = true
+semver.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt"] }
+toml.workspace = true
+tracing.workspace = true
+url.workspace = true
+wasmtime.workspace = true
+wat = { workspace = true, optional = true }
+wit-component = { workspace = true, optional = true }
+wit-parser = { workspace = true, optional = true }
+
+[dev-dependencies]
+hmac.workspace = true
+rustman-plugin = { path = ".", features = ["test-fixtures"] }
+serde_json.workspace = true
+rustman-test-support.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+wit-parser.workspace = true

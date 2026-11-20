@@ -1,0 +1,54 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: root
+---
+Local-first API workbench for the terminal
+
+Usage: rustman [OPTIONS] [COMMAND]
+
+Commands:
+  init         Create a new workspace (rustman.toml, a local environment and a sample request)
+  env          Inspect environments
+  secret       Manage secret values (stored in the OS keychain, never in workspace files)
+  cookies      Manage the cookie jars kept per environment
+  auth         Log in to OAuth2-protected APIs
+  import       Import collections (Postman, Insomnia, Bruno, HAR, .http, OpenAPI) and curl commands
+  export       Export requests and collections (curl, code snippets, Postman, .http)
+  explore      Explore an API from its OpenAPI document under the safety policy
+  report       Print the report schema, render reports in other formats, diff them
+  send         Send one request (a file, id or name, or an ad-hoc METHOD URL) and print the response
+  run          Run the requests under files or folders and report the results
+  bench        Load test request files and collections against one target origin
+  stress       Find where a target listed in rustman.toml [stress] breaks, how, and whether it recovers
+  graphql      Introspect GraphQL schemas and send GraphQL operations
+  grpc         List and describe gRPC services, call methods and check health
+  rpc          Send JSON-RPC calls and batches, and fetch OpenRPC catalogs
+  history      List, inspect, replay and clear past exchanges (redacted)
+  mcp          Serve the workspace to AI agents over MCP (Model Context Protocol)
+  mcp-client   Explore and call MCP servers: their tools, resources and prompts
+  completions  Print a shell completion script: rustman completions zsh > _rustman
+  tui          Open the terminal UI (the default when stdin and stdout are a terminal)
+  webhook      Capture, inspect and mock inbound webhooks on a local listener
+  snapshot     List snapshot files and prune the ones no request uses
+  mock         Serve an OpenAPI document as a local mock server
+  ws           Open WebSocket sessions: send frames and print received messages
+  sse          Listen to Server-Sent Events streams and print their events
+  contract     Contract testing: classify OpenAPI changes as breaking or not, Pact contracts and passive conformance
+  trace        Open the trace link of a past exchange in the browser
+  viz          Open a run or exploration report in the graphical viz companion (rustman-viz)
+  help         Print this message or the help of the given subcommand(s)
+
+Options:
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help
+
+  -V, --version
+          Print version

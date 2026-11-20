@@ -3,8 +3,8 @@
 use std::path::PathBuf;
 
 use clap::{Args, Subcommand};
+use rustman_core::ConfigError;
 use rustman_core::environment::ENV_VAR;
-use rustman_core::{ConfigError, Workspace};
 
 #[derive(Debug, Args)]
 pub struct EnvArgs {
@@ -39,7 +39,7 @@ fn run_list(args: &ListArgs) -> Result<(), ConfigError> {
         path: PathBuf::from("."),
         source: e,
     })?;
-    let ws = Workspace::discover(&cwd, args.workspace.as_deref())?;
+    let ws = super::plugins::discover(&cwd, args.workspace.as_deref())?;
     super::print_warnings(&ws.warnings);
     let env_var = std::env::var(ENV_VAR).ok();
     let active = ws.active_environment(args.env.as_deref(), env_var.as_deref())?;

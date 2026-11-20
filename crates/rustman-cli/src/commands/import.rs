@@ -32,10 +32,17 @@ pub struct ImportArgs {
     #[command(subcommand)]
     command: Option<ImportCommand>,
     /// A source file or folder whose format is detected from its content
+    /// (or, followed by PLUGIN_SRC, an import format a plugin registers)
     #[arg(value_name = "SRC")]
     src: Option<PathBuf>,
+    /// The source to convert with the plugin import format given as SRC:
+    /// `rustman import <format> <src>`
+    #[arg(value_name = "PLUGIN_SRC")]
+    plugin_src: Option<PathBuf>,
     #[command(flatten)]
     options: ImportOptions,
+    #[command(flatten)]
+    plugins: super::plugins::PluginFlags,
 }
 
 #[derive(Debug, Subcommand)]
@@ -193,6 +200,9 @@ pub fn run(args: &ImportArgs) -> Result<u8, CliError> {
             .src
             .as_ref()
             .ok_or_else(|| ConfigError::Usage("import: missing source".to_owned()))?;
+        if let Some(plugin_src) = &args.plugin_src {
+            return plugin_import(&src.to_string_lossy(), plugin_src, args);
+        }
         return source(None, src, &args.options, HarFilter::default());
     };
     let all = HarFilter::default;
@@ -208,6 +218,47 @@ pub fn run(args: &ImportArgs) -> Result<u8, CliError> {
         ImportCommand::Http(a) => (Some(Format::Http), a, all()),
     };
     source(format, &a.src, &a.options, filter)
+}
+
+/// `rustman import <format> <src>` with an importer plugin: what it returns
+/// is checked, then written by the host (nothing when a file is invalid).
+fn plugin_import(format: &str, src: &Path, args: &ImportArgs) -> Result<u8, CliError> {
+    let o = &args.options;
+    let ws = o.selection.workspace()?;
+    let _lock = if o.dry_run {
+        None
+    } else {
+        Some(rustman_import::lock_workspace(&ws.root)?)
+    };
+    let env = o.selection.environment(&ws)?;
+    let store = exec::secret_store(&ws.root)?;
+    let plugins = super::plugins::headless(&ws.root, env, &store, &args.plugins)?;
+    let source = destination(&ws.root, src).map_err(|e| match e {
+        CliError::Import(ImportError::OutsideWorkspace) => {
+            let message = format!("import: {} must be inside the workspace", src.display());
+            CliError::from(ConfigError::Usage(message))
+        }
+        other => other,
+    })?;
+    let into = o
+        .into
+        .as_deref()
+        .map(|into| destination(&ws.root, into))
+        .transpose()?
+        .unwrap_or_default();
+    let target = super::plugins::ImportTarget {
+        format,
+        source: &source,
+        into: &into,
+        dry_run: o.dry_run,
+        on_conflict: match o.on_conflict {
+            ConflictPolicy::Skip => rustman_core::plugin_import::OnConflict::Skip,
+            ConflictPolicy::Overwrite => rustman_core::plugin_import::OnConflict::Overwrite,
+            ConflictPolicy::Rename => rustman_core::plugin_import::OnConflict::Rename,
+        },
+    };
+    super::plugins::import(&ws.root, plugins.as_ref(), &target)?;
+    Ok(exit::SUCCESS)
 }
 
 /// Import the file or folder `src` in `format` (detected when `None`).

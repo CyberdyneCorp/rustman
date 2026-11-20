@@ -6,8 +6,8 @@
 use rustman_core::assertions::{AssertionResult, Outcome};
 use rustman_core::captures::{CaptureOutcome, CaptureResult};
 use rustman_core::run::{
-    DataRowRecord, ExchangeRecord, HeaderRecord, JsonrpcRecord, RealtimeRecord, RequestRecord,
-    RequestStatus, RunRecord, SentRequest, SkipReason, Summary,
+    DataRowRecord, ExchangeRecord, HeaderRecord, JsonrpcRecord, PluginKindRecord, RealtimeRecord,
+    RequestRecord, RequestStatus, RunRecord, SentRequest, SkipReason, Summary, TransformRecord,
 };
 use rustman_core::snapshot::{SnapshotCounts, SnapshotResult};
 use rustman_core::trace::{ServerTiming, TraceRecord};
@@ -91,6 +91,14 @@ pub struct RunRequest {
     /// The trace context the request carried (additive); absent without one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trace: Option<TraceRecord>,
+    /// The plugin transformers the request went through, and the response
+    /// body as received (additive); absent without `transform:`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transform: Option<TransformRecord>,
+    /// The exchange of a request of a plugin kind (additive); absent from
+    /// every other request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plugin_kind: Option<PluginKindRecord>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -287,6 +295,8 @@ fn request(r: &RequestRecord) -> RunRequest {
         warnings: r.warnings.clone(),
         duration_ms: r.duration_ms,
         trace: r.trace.clone(),
+        transform: r.transform.clone(),
+        plugin_kind: r.plugin_kind.clone(),
     }
 }
 

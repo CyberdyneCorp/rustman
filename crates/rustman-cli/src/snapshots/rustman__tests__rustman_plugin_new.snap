@@ -1,0 +1,34 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Scaffold a plugin project for one extension point
+
+Usage: rustman plugin new [OPTIONS] --kind <EXTENSION_POINT> <NAME>
+
+Arguments:
+  <NAME>
+          The plugin's name, kebab-case (my-auth)
+
+Options:
+      --kind <EXTENSION_POINT>
+          The extension point the project implements
+          
+          [possible values: auth, assertion, generator, transformer, importer, kind, report]
+
+      --dir <DIR>
+          The project folder (default: ./<name>)
+
+      --sdk <PATH>
+          Build against the rustman-plugin-sdk at this path (such as crates/rustman-plugin-sdk of a Rustman checkout) instead of the Rustman repository
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

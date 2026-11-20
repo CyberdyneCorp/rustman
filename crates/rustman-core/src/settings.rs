@@ -461,11 +461,12 @@ fn unknown_keys(table: &toml::Table) -> Vec<String> {
     let mut warnings = Vec::new();
     for (section, value) in table {
         // Keys of these sections are user-chosen names. `[mcp_servers]` is
-        // read by rustman-mcp (add-mcp-client).
-        // `[secret_providers]` keys are checked per provider type.
+        // read by rustman-mcp (add-mcp-client), `[plugins]` by
+        // rustman-plugin (add-plugin-system). `[secret_providers]` keys are
+        // checked per provider type.
         if matches!(
             section.as_str(),
-            "variables" | "mcp_servers" | "secret_providers"
+            "variables" | "mcp_servers" | "secret_providers" | "plugins"
         ) {
             continue;
         }
@@ -547,6 +548,13 @@ mod tests {
         );
         let unknown = "[workspace]\nname = \"a\"\nversion = 1\n[[graphql.endpoints]]\nurl = \"x\"\nschema = \"y\"\n";
         assert!(parse(unknown).is_err());
+    }
+
+    #[test]
+    fn plugin_tables_are_left_to_the_plugin_host() {
+        let text = "[workspace]\nname = \"a\"\nversion = 1\n\n[plugins.hmac]\nsource = \"plugins/hmac\"\nsha256 = \"ab\"\ngrants = []\n";
+        let (_, warnings) = parse(text).unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
     }
 
     #[test]

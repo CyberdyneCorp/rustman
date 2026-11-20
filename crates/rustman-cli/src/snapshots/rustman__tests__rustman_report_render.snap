@@ -12,13 +12,16 @@ Arguments:
 
 Options:
       --format <FORMAT>
-          Output format: json, junit, markdown, html or sarif
+          Output format: json, junit, markdown, html or sarif, or a plugin's <plugin>/<format> (written with -o)
 
   -o, --output <FILE>
           Write to this file instead of stdout
 
       --fail-on <SEVERITY>
           JUnit fails operations with findings at or above this severity (default: the exploration's --fail-on)
+
+      --trust-plugins
+          Load the workspace plugins even when this machine has not trusted them yet, and record the approval (for CI)
 
       --color <WHEN>
           Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never

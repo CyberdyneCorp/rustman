@@ -92,8 +92,9 @@ The `kind: http` fields, in the order Rustman writes them:
 | `query` | An ordered list of `name`/`value` pairs. Names may repeat. |
 | `headers` | An ordered list of `name`/`value` pairs. |
 | `body` | One of the body types below. |
-| `auth` | `none`, `basic`, `bearer`, `api_key`, `oauth2`, `digest`, `aws_sigv4` or `jwt`. |
+| `auth` | `none`, `basic`, `bearer`, `api_key`, `oauth2`, `digest`, `aws_sigv4`, `jwt` or `plugin` ([auth plugins](plugins.md#auth-schemes)). |
 | `settings` | Per-request overrides for timeouts, redirects, TLS and transport. |
+| `transform` | `{request: [...], response: [...]}`: [plugin transformers](plugins.md#transformers) (`<plugin>/<name>`) the request goes through before auth, and the response before assertions and captures. |
 
 Header and query order is kept when the request is sent:
 
@@ -689,7 +690,7 @@ Load errors name the file and line, and Rustman reports every broken file at onc
 
 ```text
 legacy/soap.rman.yaml:2: unknown request kind 'soap' (expected one of: http, graphql, jsonrpc, grpc, mcp, ws, sse)
-users/list.rman.yaml:5: unknown field `header`, expected one of version, kind, name, description, tags, docs, method, url, query, headers, body, auth, settings, variables, assertions, captures
+users/list.rman.yaml:5: unknown field `header`, expected one of version, kind, name, description, tags, docs, method, url, query, headers, body, auth, settings, transform, variables, assertions, captures
 ```
 
 Unknown fields, duplicate keys, wrong types, bad indentation and unclosed quotes are all errors with exact positions. Rustman never guesses what a misspelled key meant.

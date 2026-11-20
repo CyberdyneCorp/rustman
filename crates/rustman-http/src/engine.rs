@@ -52,6 +52,12 @@ pub struct SendOptions {
     /// Replaces the body of the request as sent; `None` (the default) sends
     /// the request's own.
     pub body_override: Option<BodyOverride>,
+    /// Signs `auth: {type: plugin}` requests; `None` (the default) refuses
+    /// them.
+    pub plugins: Option<crate::PluginHooks>,
+    /// The plugin transformers (`<plugin>/<name>`) the request goes
+    /// through before auth; empty (the default) for none.
+    pub request_transformers: Vec<String>,
 }
 
 /// Raw bytes sent in place of a request's body (stress testing's malformed
@@ -129,6 +135,8 @@ impl SendOptions {
             },
             trace: None,
             body_override: None,
+            plugins: None,
+            request_transformers: Vec::new(),
         }
     }
 
@@ -202,6 +210,15 @@ impl HttpEngine {
         Self::default()
     }
 
+    /// An engine that connects (without a proxy) only to the server
+    /// addresses `guard` allows, checked when each connection is opened.
+    pub fn with_address_guard(guard: crate::AddressGuard) -> Self {
+        Self {
+            dns: Arc::new(Dns::guarded(guard)),
+            ..Self::default()
+        }
+    }
+
     /// Send `request`, following redirects as `options` allow, within the
     /// total timeout. Error messages are redacted.
     pub async fn send(
@@ -263,6 +280,18 @@ impl HttpEngine {
             }
             (_, token) => token,
         };
+        if !options.request_transformers.is_empty() {
+            let names = &options.request_transformers;
+            crate::plugin_transform::transform_request(
+                &mut outgoing,
+                names,
+                options.plugins.as_ref(),
+            )
+            .await?;
+        }
+        if let Some(Auth::Plugin(plugin)) = &request.auth {
+            crate::plugin_auth::sign(&mut outgoing, plugin, options.plugins.as_ref()).await?;
+        }
         auth::apply(&mut outgoing, request.auth.as_ref(), token)?;
         let signer = Signer::for_auth(request.auth.as_ref())?;
         Ok(Prepared {

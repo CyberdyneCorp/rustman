@@ -11,6 +11,7 @@ mod graphql;
 mod jsonrpc;
 mod mcp;
 mod plan;
+mod plugin;
 mod realtime;
 mod record;
 
@@ -25,6 +26,7 @@ pub use jsonrpc::{
 };
 pub use mcp::{MAX_RECORDED_NOTIFICATIONS, McpRecord};
 pub use plan::{Plan, plan};
+pub use plugin::{PluginKindRecord, TransformRecord};
 pub use realtime::{
     EndRecord, HandshakeRecord, MAX_RECORDED_FIELD, MAX_RECORDED_PAYLOAD, RealtimeRecord,
     TimelineRecord,

@@ -1,0 +1,139 @@
+# The frozen API surface of rustman:plugin@1.0.0 (see tests/wit_api.rs).
+export assertion-fn functions [functions, check]
+export auth-scheme functions [schemes, sign]
+export body-transformer functions [request-transformers, response-transformers, transform-request, transform-response]
+export format-importer functions [formats, convert]
+export report-renderer functions [formats, render]
+export request-kind functions [kinds, execute]
+export value-generator functions [names, generate]
+func assertion-fn.check(function: string, exchange: exchange, args: string) -> verdict
+func assertion-fn.functions() -> list<string>
+func auth-scheme.schemes() -> list<string>
+func auth-scheme.sign(request: auth-request) -> result<auth-output, string>
+func body-transformer.request-transformers() -> list<string>
+func body-transformer.response-transformers() -> list<string>
+func body-transformer.transform-request(name: string, url: string, message: message) -> result<message, string>
+func body-transformer.transform-response(name: string, status: u16, message: message) -> result<message, string>
+func clock.now() -> result<datetime, host-error>
+func env.get(name: string) -> result<option<string>, host-error>
+func format-importer.convert(format: string, source-path: string, source: list<u8>) -> result<import-output, string>
+func format-importer.formats() -> list<string>
+func fs-read.list-dir(path: string) -> result<list<string>, host-error>
+func fs-read.read(path: string) -> result<list<u8>, host-error>
+func http.fetch(request: request) -> result<response, host-error>
+func log.write(level: level, message: string)
+func random.bytes(len: u32) -> result<list<u8>, host-error>
+func report-renderer.formats() -> list<string>
+func report-renderer.render(format: string, report: string) -> result<list<u8>, string>
+func request-kind.execute(kind: string, request: string) -> result<kind-exchange, string>
+func request-kind.kinds() -> list<kind-info>
+func secrets.[method]secret-ref.name(self: borrow<secret-ref>) -> string
+func secrets.[method]secret-ref.reveal(self: borrow<secret-ref>) -> result<string, host-error>
+func secrets.lookup(name: string) -> option<own<secret-ref>>
+func value-generator.generate(name: string, args: list<string>) -> result<string, string>
+func value-generator.names() -> list<string>
+type assertion-fn.exchange = record { method: string, url: string, request-headers: list<header>, request-body: list<u8>, status: u16, response-headers: list<header>, response-body: list<u8>, duration-ms: u64 }
+type assertion-fn.header = header
+type assertion-fn.verdict = variant { pass(_), fail(string), error(string) }
+type auth-scheme.auth-output = record { set-headers: list<header>, add-query: list<param>, url: option<string> }
+type auth-scheme.auth-request = record { scheme: string, method: string, url: string, headers: list<header>, body: list<u8>, params: list<param> }
+type auth-scheme.header = header
+type auth-scheme.param = param
+type body-transformer.header = header
+type body-transformer.message = record { headers: list<header>, body: list<u8> }
+type clock.datetime = record { seconds: u64, nanoseconds: u32 }
+type clock.host-error = host-error
+type env.host-error = host-error
+type format-importer.import-output = record { requests: list<imported-file>, environments: list<imported-file> }
+type format-importer.imported-file = record { path: string, content: string }
+type fs-read.host-error = host-error
+type http.header = header
+type http.host-error = host-error
+type http.request = record { method: string, url: string, headers: list<header>, body: list<u8> }
+type http.response = record { status: u16, headers: list<header>, body: list<u8> }
+type log.level = enum { debug, info, warn, error }
+type random.host-error = host-error
+type request-kind.editor = variant { text(_), code(string), key-value(_), select(list<string>) }
+type request-kind.header = header
+type request-kind.kind-exchange = record { summary: string, request-body: list<u8>, status: option<u16>, headers: list<header>, body: list<u8> }
+type request-kind.kind-info = record { name: string, schema: string, pane: pane }
+type request-kind.pane = record { fields: list<pane-field>, views: list<response-view> }
+type request-kind.pane-field = record { name: string, label: string, editor: editor }
+type request-kind.response-view = enum { raw, json-tree, table }
+type secrets.host-error = host-error
+type secrets.secret-ref = resource
+type types.header = record { name: string, value: string }
+type types.host-error = variant { capability-denied(string), policy-denied(string), failed(string) }
+type types.param = record { name: string, value: string }
+world assertion exports [rustman:plugin/assertion-fn]
+world assertion imports rustman:plugin/clock
+world assertion imports rustman:plugin/env
+world assertion imports rustman:plugin/fs-read
+world assertion imports rustman:plugin/http
+world assertion imports rustman:plugin/log
+world assertion imports rustman:plugin/random
+world assertion imports rustman:plugin/secrets
+world assertion imports rustman:plugin/types
+world auth exports [rustman:plugin/auth-scheme]
+world auth imports rustman:plugin/clock
+world auth imports rustman:plugin/env
+world auth imports rustman:plugin/fs-read
+world auth imports rustman:plugin/http
+world auth imports rustman:plugin/log
+world auth imports rustman:plugin/random
+world auth imports rustman:plugin/secrets
+world auth imports rustman:plugin/types
+world generator exports [rustman:plugin/value-generator]
+world generator imports rustman:plugin/clock
+world generator imports rustman:plugin/env
+world generator imports rustman:plugin/fs-read
+world generator imports rustman:plugin/http
+world generator imports rustman:plugin/log
+world generator imports rustman:plugin/random
+world generator imports rustman:plugin/secrets
+world generator imports rustman:plugin/types
+world host exports []
+world host imports rustman:plugin/clock
+world host imports rustman:plugin/env
+world host imports rustman:plugin/fs-read
+world host imports rustman:plugin/http
+world host imports rustman:plugin/log
+world host imports rustman:plugin/random
+world host imports rustman:plugin/secrets
+world host imports rustman:plugin/types
+world importer exports [rustman:plugin/format-importer]
+world importer imports rustman:plugin/clock
+world importer imports rustman:plugin/env
+world importer imports rustman:plugin/fs-read
+world importer imports rustman:plugin/http
+world importer imports rustman:plugin/log
+world importer imports rustman:plugin/random
+world importer imports rustman:plugin/secrets
+world importer imports rustman:plugin/types
+world kind exports [rustman:plugin/request-kind]
+world kind imports rustman:plugin/clock
+world kind imports rustman:plugin/env
+world kind imports rustman:plugin/fs-read
+world kind imports rustman:plugin/http
+world kind imports rustman:plugin/log
+world kind imports rustman:plugin/random
+world kind imports rustman:plugin/secrets
+world kind imports rustman:plugin/types
+world report exports [rustman:plugin/report-renderer]
+world report imports rustman:plugin/clock
+world report imports rustman:plugin/env
+world report imports rustman:plugin/fs-read
+world report imports rustman:plugin/http
+world report imports rustman:plugin/log
+world report imports rustman:plugin/random
+world report imports rustman:plugin/secrets
+world report imports rustman:plugin/types
+world transformer exports [rustman:plugin/body-transformer]
+world transformer imports rustman:plugin/clock
+world transformer imports rustman:plugin/env
+world transformer imports rustman:plugin/fs-read
+world transformer imports rustman:plugin/http
+world transformer imports rustman:plugin/log
+world transformer imports rustman:plugin/random
+world transformer imports rustman:plugin/secrets
+world transformer imports rustman:plugin/types

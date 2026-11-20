@@ -1,0 +1,28 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Run a plugin's test cases in the sandbox, with a fake clock, randomness, environment, network and secrets; exits 1 on a failure
+
+Usage: rustman plugin test [OPTIONS] [PATH]
+
+Arguments:
+  [PATH]
+          A plugin folder (with rustman-plugin.toml) or a .wasm file
+          
+          [default: .]
+
+Options:
+      --cases <FILE>
+          The test cases (default: rustman-plugin-tests.toml next to the manifest)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

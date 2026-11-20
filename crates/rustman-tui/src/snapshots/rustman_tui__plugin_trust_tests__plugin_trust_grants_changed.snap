@@ -1,0 +1,34 @@
+---
+source: crates/rustman-tui/src/plugin_trust_tests.rs
+expression: text
+---
+┌ › Request ───────────────────────────────────────────────────────────────────────────────────────┐
+│ METHOD   No request open                                                                         │
+│ Params  Headers  Body  Auth  Assertions                                                          │
+│ Open a request from the sidebar · press Ctrl+T for a new one                                     │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                ┌ Trust workspace plugins? ──────────────────────────────────────┐                │
+│                │ The workspace plugins changed since you trusted them.          │                │
+│                │                                                                │                │
+│                │ faker 0.1.0                                                    │                │
+│                │   source: plugins/faker.wasm                                   │                │
+│                │   limits: execution time 100 ms per call, memory 64 MiB        │                │
+│                │   may generate random bytes                                    │                │
+└────────────────│ hmac 0.1.0                                                     │────────────────┘
+┌ Response ──────│   source: plugins/hmac.wasm                                    │────────────────┐
+│ No response yet│   limits: execution time 100 ms per call, memory 64 MiB        │                │
+│                │   may read the secret hmac_key                                 │                │
+│                │   may read the clock                                           │                │
+│                │   may send HTTP requests to api.example.com                    │                │
+│                │                                                                │                │
+│                │ Nothing runs until you answer.                                 │                │
+│                │ y trust and load them · n do not load them                     │                │
+│                └────────────────────────────────────────────────────────────────┘                │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ w │ no environment │ TLS verified │ 0 in flight                                        Ctrl+Q quit

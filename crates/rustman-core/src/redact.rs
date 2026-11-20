@@ -147,7 +147,9 @@ impl Redactor {
                 let key = jwt.private_key.as_deref().unwrap_or_default();
                 self.add_credential("jwt_private_key", key);
             }
-            Auth::None | Auth::OAuth2(_) => {}
+            // A plugin's params name secrets rather than hold them; what
+            // it signs with is redacted by the headers it sets.
+            Auth::None | Auth::OAuth2(_) | Auth::Plugin(_) => {}
         }
     }
 

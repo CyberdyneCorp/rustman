@@ -179,7 +179,7 @@ fn prepare(
     backend: Option<SecretBackend>,
     trust_key: TrustKey,
 ) -> Result<Prepared, String> {
-    let ws = Workspace::load(root).map_err(|e| e.to_string())?;
+    let ws = Workspace::load_with(root, &crate::files::registry()).map_err(|e| e.to_string())?;
     let store = crate::send::secret_store(root, backend)?;
     let env = ws
         .active_environment(environment, None)

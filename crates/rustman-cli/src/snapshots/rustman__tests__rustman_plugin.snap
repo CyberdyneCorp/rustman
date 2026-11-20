@@ -1,0 +1,37 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Add, list, remove and verify the workspace's WebAssembly plugins; scaffold and test new ones
+
+Usage: rustman plugin [OPTIONS] <COMMAND>
+
+Commands:
+  add     Fetch a plugin from a workspace path or an https URL, print its manifest, pin its sha256 and declare it with no grants
+  list    List the workspace's plugins: version, API, grants and trust state
+  remove  Remove a plugin from rustman.toml and rustman.lock
+  verify  Re-hash every plugin against its pin and update rustman.lock; exits 2 on a mismatch
+  api     List the plugin API versions this rustman supports
+  test    Run a plugin's test cases in the sandbox, with a fake clock, randomness, environment, network and secrets; exits 1 on a failure
+  new     Scaffold a plugin project for one extension point
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help
+
+Examples:
+  rustman plugin add ./plugins/hmac
+  rustman plugin add https://plugins.example.com/hmac-0.2.0.wasm --name hmac
+  rustman plugin list
+  rustman plugin verify
+  rustman plugin new my-auth --kind auth
+  rustman plugin test ./my-auth

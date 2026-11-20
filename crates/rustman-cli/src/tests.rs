@@ -29,12 +29,36 @@ fn cli_definition_is_valid() {
     Cli::command().debug_assert();
 }
 
+/// The help of the default build, which has plugin support.
+#[cfg(feature = "plugins")]
 #[test]
 fn help_output_snapshots() {
     for (name, help) in commands() {
         let snapshot = name.replace(' ', "_");
         insta::assert_snapshot!(snapshot, help);
     }
+}
+
+/// Without the `plugins` feature there is no `plugin` command; the top
+/// level help is otherwise the default build's.
+#[cfg(not(feature = "plugins"))]
+#[test]
+fn help_without_plugins() {
+    let all = commands();
+    assert!(
+        all.iter()
+            .all(|(name, _)| !name.starts_with("rustman plugin"))
+    );
+    let (_, root) = all.iter().find(|(name, _)| name == "rustman").unwrap();
+    insta::assert_snapshot!("rustman_without_plugins", root);
+    // `--trust-plugins` does nothing there, so no help offers it.
+    for (name, help) in &all {
+        assert!(!help.contains("--trust-plugins"), "{name}");
+        // Nor report plugins, which need plugin support.
+        assert!(!help.contains("<plugin>/<format>"), "{name}");
+    }
+    let (_, run) = all.iter().find(|(name, _)| name == "rustman run").unwrap();
+    insta::assert_snapshot!("rustman_run_without_plugins", run);
 }
 
 /// Whether `doc` names the command `name` itself, in a code span: followed

@@ -118,6 +118,8 @@ pub struct BenchArgs {
     /// bench runs the same without it
     #[arg(long)]
     viz: bool,
+    #[command(flatten)]
+    plugins: super::plugins::PluginFlags,
 }
 
 impl BenchArgs {
@@ -155,6 +157,10 @@ pub fn run(args: &BenchArgs) -> Result<u8, CliError> {
         .build(ws.settings.bench.max_vus.get())?;
     let data = data_feed(args, &cwd, &plan)?;
     let store = secret_store(&ws.root)?;
+    // A tampered or untrusted plugin set stops the bench before any load
+    // (plugins spec, "Headless plugin trust").
+    let plugins = super::plugins::headless(&ws.root, env, &store, &args.plugins)?;
+    super::plugins::check_kinds(&ws, plugins.as_ref())?;
     let (interrupt, cancel) = (CancellationToken::new(), CancellationToken::new());
     let reported = ReportContext {
         target,
@@ -184,6 +190,7 @@ pub fn run(args: &BenchArgs) -> Result<u8, CliError> {
         interrupt: interrupt.clone(),
         cancel: cancel.clone(),
         secret_providers: Some(secret_providers(&ws.root, &ws.settings)?),
+        plugins,
     };
     let bench = Bench::prepare(input)?;
     let runtime = runtime()?;

@@ -25,7 +25,7 @@ pub use realtime::{
 };
 pub use request::{
     ResolvedBody, ResolvedFile, ResolvedPair, ResolvedPart, ResolvedPartSource, ResolvedRequest,
-    TlsFiles, resolve_auth, resolve_request,
+    TlsFiles, resolve_auth, resolve_request, resolve_value,
 };
 pub use resolver::{
     Interpolator, Missing, ResolveError, Resolved, Resolver, SecretSpan, UsedSecret,

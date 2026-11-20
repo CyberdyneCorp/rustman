@@ -26,7 +26,7 @@ pub use json::json;
 pub use pretty::{pretty, pretty_styled};
 pub use render::{RenderFormat, RenderOptions, ReportTarget, render};
 pub use report::{ReadError, Report, SCHEMA};
-pub use reporter::{Format, Reporter, ReporterError};
+pub use reporter::{Format, Reporter, ReporterError, write_file_bytes};
 pub use run::{KIND_RUN, RunReport};
 pub use schema::report_schema;
 pub use tap::tap;

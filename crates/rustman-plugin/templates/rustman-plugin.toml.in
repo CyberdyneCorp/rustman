@@ -1,0 +1,7 @@
+name = "@@NAME@@"
+version = "0.1.0"
+api = 1
+extension_points = ["@@POINT@@"]
+capabilities = [@@CAPABILITIES@@]
+description = "@@DESCRIPTION@@"
+component = "target/wasm32-wasip2/release/@@CRATE@@.wasm"

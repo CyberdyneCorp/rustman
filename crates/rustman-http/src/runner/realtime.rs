@@ -176,10 +176,12 @@ impl Runner<'_> {
             _ => (None, None),
         };
         let view = outcome.view();
+        let plugins = self.bare_plugin_calls();
         let ctx = Context {
             resolver,
             request: Some(request),
             redactor,
+            plugins: plugins.as_ref(),
         };
         let results =
             assertions::evaluate_realtime(&unlocated(written), &view, &ctx, &outcome.facts);

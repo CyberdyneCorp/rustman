@@ -4,10 +4,11 @@ use std::collections::HashMap;
 use std::fmt;
 use std::ops::Range;
 
-use super::dynamic::{OsEnv, process_env};
+use super::dynamic::{Dynamic, OsEnv, process_env};
 use super::source::{EnvironmentSource, Layer, Lookup, SecretLookup, VarSource, VariablesSource};
 use super::template::{Segment, Template, TemplateError};
 use crate::environment::Environment;
+use crate::plugins::Extensions;
 use crate::redact::Redactor;
 use crate::secret::Secret;
 use crate::secrets::provider::{PREFIX as SECRET_PREFIX, SecretRef, UnresolvedSecret};
@@ -122,6 +123,8 @@ pub type UsedSecret = Secret<String>;
 pub struct Resolver<'a> {
     sources: Vec<Box<dyn VarSource + 'a>>,
     os_env: OsEnv,
+    /// Evaluates `{{$<plugin>.<name>}}`; without it they are unresolved.
+    plugins: Option<&'a dyn Extensions>,
     /// Write dynamic values (`{{$uuid}}`) back as their placeholder
     /// instead of evaluating them.
     keep_dynamics: bool,
@@ -157,6 +160,7 @@ impl<'a> Resolver<'a> {
             keep_dynamics: false,
             provided: HashMap::new(),
             secret_refs: SecretRefs::Need,
+            plugins: None,
         }
     }
 
@@ -220,7 +224,8 @@ impl<'a> Resolver<'a> {
     }
 
     /// A new, empty chain with this one's `{{$env}}` reader, dynamic
-    /// handling and secret reference mode (without fetched values).
+    /// handling (plugin generators included) and secret reference mode
+    /// (without fetched values).
     pub(crate) fn empty_like(&self) -> Resolver<'a> {
         Resolver {
             sources: Vec::new(),
@@ -228,7 +233,13 @@ impl<'a> Resolver<'a> {
             keep_dynamics: self.keep_dynamics,
             provided: HashMap::new(),
             secret_refs: self.secret_refs,
+            plugins: self.plugins,
         }
+    }
+
+    /// Evaluate plugin generators with `plugins`.
+    pub fn set_plugins(&mut self, plugins: Option<&'a dyn Extensions>) {
+        self.plugins = plugins;
     }
 
     /// Add a source after every source of the same or a higher-precedence layer.
@@ -310,6 +321,9 @@ impl Interpolator<'_, '_> {
                 Segment::Dynamic(dynamic) if self.resolver.keep_dynamics => {
                     out.text.push_str(&format!("{{{{{dynamic}}}}}"));
                 }
+                Segment::Dynamic(Dynamic::Plugin { plugin, name, args }) => {
+                    self.generate(plugin, name, args, &mut out);
+                }
                 Segment::Dynamic(dynamic) => match dynamic.evaluate(self.resolver.os_env) {
                     Some(value) => out.text.push_str(&value),
                     None => self.miss(dynamic.to_string(), None),
@@ -366,6 +380,19 @@ impl Interpolator<'_, '_> {
         self.used_secret(Secret::new(label, value.expose().clone()));
     }
 
+    /// A plugin generator's value, evaluated again for each occurrence.
+    fn generate(&mut self, plugin: &str, name: &str, args: &[String], out: &mut Resolved) {
+        let placeholder = format!("${plugin}.{name}");
+        let Some(plugins) = self.resolver.plugins else {
+            let hint = format!("plugin {plugin} is not loaded");
+            return self.miss(placeholder, Some(hint));
+        };
+        match plugins.generate(plugin, name, args) {
+            Ok(value) => out.text.push_str(&value),
+            Err(error) => self.miss(placeholder, Some(error)),
+        }
+    }
+
     fn used_secret(&mut self, secret: Secret<String>) {
         if !self.secrets.iter().any(|s| s.name() == secret.name()) {
             self.secrets.push(secret);
@@ -399,6 +426,56 @@ mod tests {
     use super::*;
     use crate::model::{VarValue, Variables};
     use crate::vars::source::NoSecrets;
+
+    /// A generator plugin numbering its calls.
+    #[derive(Default)]
+    struct Counter(std::sync::atomic::AtomicUsize);
+
+    impl Extensions for Counter {
+        fn generate(&self, plugin: &str, name: &str, args: &[String]) -> Result<String, String> {
+            if name == "broken" {
+                return Err(format!("plugin {plugin}: no such generator"));
+            }
+            let n = self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(format!("{plugin}-{name}-{}-{n}", args.join("+")))
+        }
+        fn sign(
+            &self,
+            _: &str,
+            _: &crate::plugins::SignRequest,
+        ) -> Result<crate::plugins::SignOutput, String> {
+            unreachable!()
+        }
+        fn check(
+            &self,
+            _: &str,
+            _: &crate::plugins::PluginExchange,
+            _: &str,
+        ) -> crate::plugins::PluginVerdict {
+            unreachable!()
+        }
+    }
+
+    #[test]
+    fn plugin_generators_run_once_per_occurrence() {
+        let counter = Counter::default();
+        let mut resolver = Resolver::new();
+        resolver.set_plugins(Some(&counter));
+        let out = resolver
+            .resolve("{{$faker.email}} {{$faker.email a b}}")
+            .unwrap();
+        assert_eq!(out.text, "faker-email--0 faker-email-a+b-1");
+        let err = resolver.resolve("{{$faker.broken}}").unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "unresolved variable(s): $faker.broken (plugin faker: no such generator)"
+        );
+        let unloaded = Resolver::new().resolve("{{$faker.email}}").unwrap_err();
+        assert_eq!(
+            unloaded.to_string(),
+            "unresolved variable(s): $faker.email (plugin faker is not loaded)"
+        );
+    }
 
     fn vars(pairs: &[(&str, &str)]) -> Variables {
         Variables::new(

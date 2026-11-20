@@ -38,6 +38,9 @@ rustman-bench.workspace = true
 rustman-docs.workspace = true
 rustman-monitor.workspace = true
 rustman-secrets.workspace = true
+# Plugins (add-plugin-system task 1.1): wasmtime, behind the default
+# `plugins` feature.
+rustman-plugin = { workspace = true, optional = true }
 clap.workspace = true
 clap_complete.workspace = true
 anstream.workspace = true
@@ -51,6 +54,10 @@ tokio = { workspace = true, features = ["rt", "signal", "macros", "net", "sync"]
 tokio-util.workspace = true
 
 [features]
+default = ["plugins"]
+# WASM component plugins (add-plugin-system). `--no-default-features`
+# builds without wasmtime.
+plugins = ["dep:rustman-plugin"]
 # OTLP export of client spans (add-trace-propagation section 4); off by
 # default, so the default build has no opentelemetry crate.
 otlp = ["rustman-http/otlp", "rustman-tui/otlp", "rustman-test-support/otlp"]
@@ -65,6 +72,10 @@ cloud-secrets = ["secrets-aws", "secrets-gcp", "secrets-azure"]
 
 [dev-dependencies]
 assert_cmd.workspace = true
+# Test plugins built in-process (add-plugin-system).
+rustman-plugin = { workspace = true, features = ["test-fixtures"] }
+hmac.workspace = true
+sha2.workspace = true
 base64.workspace = true
 insta.workspace = true
 jsonschema.workspace = true

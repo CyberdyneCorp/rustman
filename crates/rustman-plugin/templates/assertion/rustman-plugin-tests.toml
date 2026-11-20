@@ -1,0 +1,10 @@
+# Cases for `rustman plugin test .`.
+[[case]]
+name = "a 204 passes"
+check = { function = "status-2xx", status = 204 }
+expect = { verdict = "pass" }
+
+[[case]]
+name = "a 404 fails"
+check = { function = "status-2xx", status = 404 }
+expect = { verdict = "fail", message = "status 404 is not 2xx" }

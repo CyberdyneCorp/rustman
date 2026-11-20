@@ -150,7 +150,7 @@ impl RootArgs {
     /// The root, with its workspace when there is one.
     fn root_and_workspace(&self) -> Result<(PathBuf, Option<Workspace>), CliError> {
         let cwd = current_dir()?;
-        match Workspace::discover(&cwd, self.workspace.as_deref()) {
+        match crate::commands::plugins::discover(&cwd, self.workspace.as_deref()) {
             Ok(ws) => {
                 super::print_warnings(&ws.warnings);
                 Ok((ws.root.clone(), Some(ws)))

@@ -4,7 +4,7 @@ expression: help
 ---
 Import collections (Postman, Insomnia, Bruno, HAR, .http, OpenAPI) and curl commands
 
-Usage: rustman import [OPTIONS] [SRC]
+Usage: rustman import [OPTIONS] [SRC] [PLUGIN_SRC]
        rustman import <COMMAND>
 
 Commands:
@@ -21,7 +21,10 @@ Commands:
 
 Arguments:
   [SRC]
-          A source file or folder whose format is detected from its content
+          A source file or folder whose format is detected from its content (or, followed by PLUGIN_SRC, an import format a plugin registers)
+
+  [PLUGIN_SRC]
+          The source to convert with the plugin import format given as SRC: `rustman import <format> <src>`
 
 Options:
       --into <DIR>
@@ -53,6 +56,9 @@ Options:
 
       --workspace <DIR>
           Workspace directory (default: search from the current directory upwards)
+
+      --trust-plugins
+          Load the workspace plugins even when this machine has not trusted them yet, and record the approval (for CI)
 
       --color <WHEN>
           Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never

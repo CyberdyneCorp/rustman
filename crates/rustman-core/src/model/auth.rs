@@ -2,7 +2,8 @@
 
 use std::fmt;
 
-use serde::{Deserialize, Serialize};
+use serde::de::{self, MapAccess};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use super::common::{Seen, check_fields, exactly_one, seen};
 use super::signed_auth::{
@@ -21,6 +22,7 @@ pub const AUTH_TYPES: &[&str] = &[
     "digest",
     "aws_sigv4",
     "jwt",
+    "plugin",
 ];
 
 /// `Debug` never shows credentials (passwords, tokens, key values, client
@@ -50,6 +52,28 @@ pub enum Auth {
     },
     AwsSigV4(Box<AwsSigV4>),
     Jwt(Box<Jwt>),
+    /// `{type: plugin, scheme: <plugin>/<scheme>, ...params}`: signed by a
+    /// plugin (add-plugin-system).
+    Plugin(PluginAuth),
+}
+
+/// The scheme of an auth plugin and its parameters, in file order. A
+/// parameter may hold `{{variables}}`; `Debug` hides the values, which may
+/// be credentials.
+#[derive(Clone, PartialEq, Eq)]
+pub struct PluginAuth {
+    pub scheme: String,
+    pub params: Vec<(String, String)>,
+}
+
+impl fmt::Debug for PluginAuth {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let names: Vec<&str> = self.params.iter().map(|(n, _)| n.as_str()).collect();
+        f.debug_struct("PluginAuth")
+            .field("scheme", &self.scheme)
+            .field("params", &names)
+            .finish()
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -121,6 +145,7 @@ impl fmt::Debug for Auth {
                 .finish(),
             Self::AwsSigV4(sigv4) => f.debug_tuple("AwsSigV4").field(sigv4).finish(),
             Self::Jwt(jwt) => f.debug_tuple("Jwt").field(jwt).finish(),
+            Self::Plugin(plugin) => f.debug_tuple("Plugin").field(plugin).finish(),
         }
     }
 }
@@ -141,46 +166,112 @@ impl fmt::Debug for OAuth2 {
     }
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct RawAuth {
-    #[serde(rename = "type")]
-    kind: Located<String>,
-    username: Field<String>,
-    password: Field<String>,
-    token: Field<String>,
-    name: Field<String>,
-    value: Field<String>,
-    #[serde(rename = "in")]
-    location: Field<ApiKeyLocation>,
-    grant: Field<OAuth2Grant>,
-    token_url: Field<String>,
-    auth_url: Field<String>,
-    client_id: Field<String>,
-    client_secret: Field<String>,
-    scopes: Field<Vec<String>>,
-    region: Field<String>,
-    service: Field<String>,
-    access_key: Field<String>,
-    secret_key: Field<String>,
-    session_token: Field<String>,
-    from: Field<AwsCredentialSource>,
-    profile: Field<String>,
-    unsigned_payload: Field<bool>,
-    algorithm: Field<JwtAlgorithm>,
-    secret: Field<String>,
-    private_key: Field<String>,
-    private_key_file: Field<String>,
-    claims: Field<serde_json::Value>,
-    header: Field<serde_json::Value>,
-    ttl: Field<String>,
+/// Declares [`RawAuth`]: one optional, located field per key. The map is
+/// read by hand rather than derived, so that the fields of a `plugin`
+/// scheme (any key) can be kept while every other type still refuses
+/// unknown keys with their position.
+macro_rules! raw_auth {
+    ($($field:ident: $ty:ty => $key:literal,)*) => {
+        #[derive(Default)]
+        struct RawAuth {
+            kind: Option<Located<String>>,
+            $($field: Field<$ty>,)*
+            /// Keys no built-in type knows: the params of a `plugin` scheme.
+            extra: Vec<(Located<String>, serde_json::Value)>,
+        }
+
+        impl RawAuth {
+            fn read<'de, A: MapAccess<'de>>(
+                &mut self,
+                key: Located<String>,
+                map: &mut A,
+            ) -> Result<(), A::Error> {
+                match key.as_str() {
+                    "type" => put(&mut self.kind, &key, map),
+                    $($key => put(&mut self.$field, &key, map),)*
+                    _ => {
+                        let value = map.next_value()?;
+                        self.extra.push((key, value));
+                        Ok(())
+                    }
+                }
+            }
+        }
+    };
+}
+
+raw_auth! {
+    username: String => "username",
+    password: String => "password",
+    token: String => "token",
+    name: String => "name",
+    value: String => "value",
+    location: ApiKeyLocation => "in",
+    grant: OAuth2Grant => "grant",
+    token_url: String => "token_url",
+    auth_url: String => "auth_url",
+    client_id: String => "client_id",
+    client_secret: String => "client_secret",
+    scopes: Vec<String> => "scopes",
+    region: String => "region",
+    service: String => "service",
+    access_key: String => "access_key",
+    secret_key: String => "secret_key",
+    session_token: String => "session_token",
+    from: AwsCredentialSource => "from",
+    profile: String => "profile",
+    unsigned_payload: bool => "unsigned_payload",
+    algorithm: JwtAlgorithm => "algorithm",
+    secret: String => "secret",
+    private_key: String => "private_key",
+    private_key_file: String => "private_key_file",
+    claims: serde_json::Value => "claims",
+    header: serde_json::Value => "header",
+    ttl: String => "ttl",
+    scheme: String => "scheme",
+}
+
+/// Read the value of `key` into `slot`, refusing a key given twice.
+fn put<'de, T: Deserialize<'de>, A: MapAccess<'de>>(
+    slot: &mut Option<Located<T>>,
+    key: &Located<String>,
+    map: &mut A,
+) -> Result<(), A::Error> {
+    if slot.is_some() {
+        return Err(de::Error::custom(format!(
+            "duplicate field `{}`",
+            key.get()
+        )));
+    }
+    *slot = Some(map.next_value()?);
+    Ok(())
+}
+
+impl<'de> Deserialize<'de> for RawAuth {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+        impl<'de> de::Visitor<'de> for Visitor {
+            type Value = RawAuth;
+            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("an auth block such as `{type: bearer, token: ...}`")
+            }
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<RawAuth, A::Error> {
+                let mut raw = RawAuth::default();
+                while let Some(key) = map.next_key::<Located<String>>()? {
+                    raw.read(key, &mut map)?;
+                }
+                Ok(raw)
+            }
+        }
+        deserializer.deserialize_map(Visitor)
+    }
 }
 
 /// An optional field, with the position it was read from.
 type Field<T> = Option<Located<T>>;
 
 impl RawAuth {
-    fn present(&self) -> [(&'static str, Seen); 27] {
+    fn present(&self) -> [(&'static str, Seen); 28] {
         [
             ("username", seen(&self.username)),
             ("password", seen(&self.password)),
@@ -209,6 +300,7 @@ impl RawAuth {
             ("claims", seen(&self.claims)),
             ("header", seen(&self.header)),
             ("ttl", seen(&self.ttl)),
+            ("scheme", seen(&self.scheme)),
         ]
     }
 }
@@ -216,13 +308,27 @@ impl RawAuth {
 impl TryFrom<RawAuth> for Auth {
     type Error = String;
 
-    fn try_from(raw: RawAuth) -> Result<Self, String> {
+    fn try_from(mut raw: RawAuth) -> Result<Self, String> {
+        let Some(kind) = raw.kind.take() else {
+            return Err("missing field `type`".to_owned());
+        };
+        if kind.as_str() == "plugin" {
+            return plugin(raw);
+        }
+        if let Some((key, _)) = raw.extra.first() {
+            return Err(error_at(
+                key.position(),
+                format!("auth type '{}' does not accept '{}'", *kind, key.get()),
+            ));
+        }
+        raw.kind = Some(kind);
         let present = raw.present();
-        let what = format!("auth type '{}'", *raw.kind);
+        let kind = raw.kind.clone().expect("the type was just put back");
+        let what = format!("auth type '{}'", *kind);
         let check = |required: &[&str], optional: &[&str]| {
             check_fields(&what, &present, required, optional)
         };
-        match raw.kind.as_str() {
+        match kind.as_str() {
             "none" => check(&[], &[]).map(|()| Self::None),
             "basic" => check(&["username", "password"], &[]).map(|()| Self::Basic {
                 username: inner(raw.username),
@@ -256,7 +362,7 @@ impl TryFrom<RawAuth> for Auth {
                 jwt(raw).map(|j| Self::Jwt(Box::new(j)))
             }
             other => Err(error_at(
-                raw.kind.position(),
+                kind.position(),
                 format!(
                     "unknown auth type '{other}' (expected one of: {})",
                     AUTH_TYPES.join(", ")
@@ -264,6 +370,37 @@ impl TryFrom<RawAuth> for Auth {
             )),
         }
     }
+}
+
+/// `{type: plugin, scheme: <plugin>/<scheme>, ...params}`: every other
+/// key is a parameter for the plugin.
+fn plugin(raw: RawAuth) -> Result<Auth, String> {
+    check_fields("auth type 'plugin'", &raw.present(), &["scheme"], &[])?;
+    let scheme = raw.scheme.expect("checked above");
+    if crate::plugins::split_qualified(&scheme).is_none() {
+        return Err(error_at(
+            scheme.position(),
+            format!(
+                "auth type 'plugin': invalid scheme '{}' (expected <plugin>/<scheme>)",
+                scheme.get()
+            ),
+        ));
+    }
+    let params = raw
+        .extra
+        .into_iter()
+        .map(|(key, value)| {
+            let value = match value {
+                serde_json::Value::String(text) => text,
+                other => other.to_string(),
+            };
+            (key.into_inner(), value)
+        })
+        .collect();
+    Ok(Auth::Plugin(PluginAuth {
+        scheme: scheme.into_inner(),
+        params,
+    }))
 }
 
 fn inner<T: Default>(field: Field<T>) -> T {
@@ -475,6 +612,43 @@ mod tests {
                 .unwrap_err()
                 .message
                 .starts_with("unknown auth type 'ntlm'")
+        );
+    }
+
+    #[test]
+    fn plugin_auth_keeps_every_other_key_as_a_param() {
+        let loaded =
+            auth("{type: plugin, scheme: hmac/v1, key_var: hmac_key, window: 30}").unwrap();
+        assert_eq!(
+            loaded,
+            Auth::Plugin(PluginAuth {
+                scheme: "hmac/v1".into(),
+                params: vec![
+                    ("key_var".into(), "hmac_key".into()),
+                    ("window".into(), "30".into())
+                ],
+            })
+        );
+        assert!(!format!("{loaded:?}").contains("hmac_key"));
+        assert_eq!(
+            auth("{type: plugin, scheme: hmac}").unwrap_err().message,
+            "auth type 'plugin': invalid scheme 'hmac' (expected <plugin>/<scheme>)"
+        );
+        assert_eq!(
+            auth("{type: plugin}").unwrap_err().message,
+            "auth type 'plugin' requires 'scheme'"
+        );
+        assert_eq!(
+            auth("{type: bearer, token: t, key_var: x}")
+                .unwrap_err()
+                .message,
+            "auth type 'bearer' does not accept 'key_var'"
+        );
+        let duplicate = auth("{type: bearer, token: t, token: u}").unwrap_err();
+        assert!(
+            duplicate.message.contains("duplicate"),
+            "{}",
+            duplicate.message
         );
     }
 
