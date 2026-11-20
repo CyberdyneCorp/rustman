@@ -315,8 +315,9 @@ async fn a_run_job_reports_its_progress_while_running() {
     );
 }
 
-/// Windows denies removing a file the job still holds open; macOS reports a
-/// directory the job is still writing into as not empty.
+/// Windows denies removing a file the job still holds open, and creating a
+/// file where a just-deleted folder is still "delete pending"; macOS reports
+/// a directory the job is still writing into as not empty.
 fn is_transient(kind: std::io::ErrorKind) -> bool {
     matches!(
         kind,
@@ -324,21 +325,21 @@ fn is_transient(kind: std::io::ErrorKind) -> bool {
     )
 }
 
-/// Remove `dir`, retrying while the job still holds or writes its files.
-async fn remove_dir_retrying(dir: &std::path::Path) {
+/// Run a file-system step, retrying while it fails for a transient reason.
+async fn retrying(what: &std::path::Path, mut step: impl FnMut() -> std::io::Result<()>) {
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
-        match std::fs::remove_dir_all(dir) {
+        match step() {
             Ok(()) => return,
             Err(e) if is_transient(e.kind()) => {
                 assert!(
                     Instant::now() < deadline,
                     "{} stayed locked: {e}",
-                    dir.display()
+                    what.display()
                 );
                 tokio::time::sleep(Duration::from_millis(5)).await;
             }
-            Err(e) => panic!("cannot remove {}: {e}", dir.display()),
+            Err(e) => panic!("{}: {e}", what.display()),
         }
     }
 }
@@ -368,10 +369,10 @@ async fn a_run_job_stops_sending_once_its_audit_log_cannot_be_written() {
     // At one request per second, break the audit log right after the first.
     wait_for_hits(&api, 1).await;
     let audit = ws.path().join(".rustman/audit");
-    remove_dir_retrying(&audit).await;
-    std::fs::write(&audit, "not a folder").unwrap();
+    retrying(&audit, || std::fs::remove_dir_all(&audit)).await;
+    retrying(&audit, || std::fs::write(&audit, "not a folder")).await;
     tokio::time::sleep(Duration::from_millis(2500)).await;
-    std::fs::remove_file(&audit).unwrap();
+    retrying(&audit, || std::fs::remove_file(&audit)).await;
     let deadline = Instant::now() + Duration::from_secs(60);
     loop {
         let report = call(&client, "get_report", json!({"id": job})).await;
