@@ -32,10 +32,13 @@ pub fn resolve_placeholders(
     resolver: &Resolver<'_>,
 ) -> Result<(ResolvedRequest, Vec<PlaceholderVar>), ResolveError> {
     let used = Rc::new(RefCell::new(Vec::new()));
-    let keep = resolver.empty_like().keeping_secret_refs().with(KeepVariables {
-        inner: resolver,
-        used: Rc::clone(&used),
-    });
+    let keep = resolver
+        .empty_like()
+        .keeping_secret_refs()
+        .with(KeepVariables {
+            inner: resolver,
+            used: Rc::clone(&used),
+        });
     let resolved = resolve_request(request, &keep)?;
     let vars = used.take();
     Ok((resolved, vars))
