@@ -3,6 +3,7 @@
 use std::fmt;
 
 use super::dynamic::Dynamic;
+use crate::secrets::provider::{PREFIX as SECRET_PREFIX, SecretRef};
 
 /// One piece of a parsed template.
 #[derive(Clone, Debug, PartialEq)]
@@ -12,6 +13,9 @@ pub enum Segment {
     Var(String),
     /// `{{$fn args}}`: a value generated for every occurrence.
     Dynamic(Dynamic),
+    /// `{{secret:<provider>/<path>[#field]}}`: a provider secret, resolved
+    /// only when a request is sent.
+    Secret(SecretRef),
 }
 
 /// A parsed template.
@@ -99,6 +103,11 @@ impl Builder {
 /// The inside of `{{ ... }}`, surrounding whitespace allowed.
 fn placeholder(inner: &str) -> Result<Segment, TemplateError> {
     let trimmed = inner.trim();
+    if let Some(reference) = trimmed.strip_prefix(SECRET_PREFIX) {
+        return SecretRef::parse(reference)
+            .map(Segment::Secret)
+            .map_err(TemplateError);
+    }
     if trimmed.starts_with('$') {
         return Dynamic::parse(trimmed)
             .map(Segment::Dynamic)
@@ -130,6 +139,7 @@ impl fmt::Display for Template {
                 Segment::Literal(text) => f.write_str(&text.replace("{{", "\\{{"))?,
                 Segment::Var(name) => write!(f, "{{{{{name}}}}}")?,
                 Segment::Dynamic(d) => write!(f, "{{{{{d}}}}}")?,
+                Segment::Secret(r) => write!(f, "{{{{{SECRET_PREFIX}{r}}}}}")?,
             }
         }
         Ok(())
@@ -188,6 +198,28 @@ mod tests {
     }
 
     #[test]
+    fn secret_references_are_placeholders() {
+        let header = parse("Bearer {{secret:vault/kv/app/stripe#api_key}}");
+        assert_eq!(header[0], lit("Bearer "));
+        let Segment::Secret(reference) = &header[1] else {
+            panic!("{header:?}");
+        };
+        assert_eq!(reference.to_string(), "vault/kv/app/stripe#api_key");
+        assert!(!Template::parse("{{ secret:ci/KEY }}").unwrap().is_literal());
+        let spaced = parse("{{ secret:op/Eng Team/Stripe Key/token }}");
+        let Segment::Secret(reference) = &spaced[0] else {
+            panic!("{spaced:?}");
+        };
+        assert_eq!(reference.path, "Eng Team/Stripe Key/token");
+        assert_eq!(
+            Template::parse("{{base_url}}/{{secret:vault}}")
+                .unwrap_err()
+                .to_string(),
+            "invalid secret reference 'secret:vault' (expected secret:<provider>/<path>)"
+        );
+    }
+
+    #[test]
     fn unclosed_placeholder_is_an_error() {
         let err = Template::parse("{{base_url/users").unwrap_err();
         assert_eq!(
@@ -212,6 +244,7 @@ mod tests {
         for text in [
             "{{a}}/x\\{{y}}",
             "{{$randomInt 5 7}}-{{$env HOME}}",
+            "Bearer {{secret:vault/kv/app#pw}}",
             "plain",
         ] {
             let template = Template::parse(text).unwrap();

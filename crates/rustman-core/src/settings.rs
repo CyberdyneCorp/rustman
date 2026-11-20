@@ -153,6 +153,10 @@ pub struct Settings {
     pub monitors: MonitorSettings,
     #[serde(default)]
     pub variables: Variables,
+    /// `[secret_providers.<name>]` (add-secret-providers), checked when
+    /// loaded: no credentials, no commands, no binary paths.
+    #[serde(default)]
+    pub secret_providers: BTreeMap<String, toml::Table>,
 }
 
 /// `[docs]`: settings of `rustman docs` (api-docs-generation).
@@ -366,7 +370,17 @@ impl Settings {
                 .or_else(|| section_position(text, "trace"));
             ConfigError::from(LoadError::new(file, position, message))
         })?;
-        Ok((settings, unknown_keys(&table)))
+        let mut warnings = unknown_keys(&table);
+        let providers = crate::secrets::provider::config::check_workspace(
+            &settings.secret_providers,
+        )
+        .map_err(|refused| {
+            let section = format!("secret_providers.{}", refused.name);
+            let position = section_position(text, &section);
+            ConfigError::from(LoadError::new(file, position, refused.message))
+        })?;
+        warnings.extend(providers);
+        Ok((settings, warnings))
     }
 
     /// The settings of a request sent outside any workspace: every default,
@@ -448,7 +462,11 @@ fn unknown_keys(table: &toml::Table) -> Vec<String> {
     for (section, value) in table {
         // Keys of these sections are user-chosen names. `[mcp_servers]` is
         // read by rustman-mcp (add-mcp-client).
-        if matches!(section.as_str(), "variables" | "mcp_servers") {
+        // `[secret_providers]` keys are checked per provider type.
+        if matches!(
+            section.as_str(),
+            "variables" | "mcp_servers" | "secret_providers"
+        ) {
             continue;
         }
         let Some((_, known)) = KNOWN_KEYS.iter().find(|(name, _)| name == section) else {

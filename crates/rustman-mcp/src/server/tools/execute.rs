@@ -305,6 +305,7 @@ async fn send_one(
         in_workspace: true,
     };
     let runner = Runner::new(run_ctx, options).map_err(|e| ToolError::internal(e.to_string()))?;
+    let runner = ctx.with_providers(runner);
     let sent = runner.send(target, 1).await;
     if let Err(err) = runner.finish() {
         tracing::warn!("cookies: {err}");
@@ -566,7 +567,7 @@ async fn run_job(
         in_workspace: true,
     };
     let runner = match Runner::new(run_ctx, options) {
-        Ok(runner) => runner,
+        Ok(runner) => ctx.with_providers(runner),
         Err(err) => return job.finish(JobState::Failed, Some(err.to_string()), None),
     };
     let record = runner.run(&planned).await;

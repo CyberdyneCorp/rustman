@@ -243,7 +243,8 @@ impl Session {
             secrets: &store,
             in_workspace: self.ws.is_some(),
         };
-        let runner = Runner::new(ctx, options)?;
+        let providers = crate::commands::exec::secret_providers(self.root(), &self.settings)?;
+        let runner = Runner::new(ctx, options)?.with_secret_providers(providers);
         let sent: Sent = runtime()?.block_on(async {
             cancel_on_ctrl_c(&cancel);
             let send = runner.send(target, 1);

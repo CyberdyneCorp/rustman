@@ -226,3 +226,82 @@ fn literal_signature_credentials_are_withheld() {
     let replay = ReplayRequest::new(&original, None);
     assert_eq!(replay.withheld, ["the digest password"]);
 }
+
+/// A provider secret is stored as its placeholder and fetched again on
+/// replay: a reference by its text, a provider-backed variable through the
+/// environment, and a store secret of the environment stays in the store.
+#[test]
+fn provider_secrets_are_fetched_again_on_replay() {
+    use crate::environment::Environment;
+    use crate::model::{VarValue, Variables};
+    use crate::secrets::provider::{
+        DEFAULT_TIMEOUT, DEFAULT_TTL, FetchFuture, Origin, ProviderInfo, SecretProvider,
+        SecretProviders, SecretRef,
+    };
+
+    struct Rotated;
+    impl SecretProvider for Rotated {
+        fn fetch<'a>(&'a self, path: &'a str) -> FetchFuture<'a> {
+            Box::pin(async move { Ok(Secret::new(path, format!("new-{path}"))) })
+        }
+    }
+    let mut providers = SecretProviders::new();
+    let info = ProviderInfo {
+        name: "ci".into(),
+        kind: "spy".into(),
+        origin: Origin::Workspace,
+        auth: None,
+        timeout: DEFAULT_TIMEOUT,
+        ttl: DEFAULT_TTL,
+    };
+    providers.insert(info, std::sync::Arc::new(Rotated));
+    let span = |name: &str, value: &str| Resolved {
+        text: value.to_owned(),
+        secret_spans: vec![SecretSpan {
+            name: name.into(),
+            range: 0..value.len(),
+        }],
+    };
+    let mut original = request(spanned("Bearer ", "s3cr3t"));
+    original.query = vec![
+        pair("a", span("ci/KEY", "old-key")),
+        pair("b", span("api_token", "old-token")),
+    ];
+    original
+        .secrets
+        .push(Secret::new("ci/KEY", "old-key".to_owned()));
+    original
+        .secrets
+        .push(Secret::new("api_token", "old-token".to_owned()));
+    let replay = ReplayRequest::new(&original, None);
+    let json = serde_json::to_string(&replay).unwrap();
+    assert!(
+        !json.contains("old-key") && !json.contains("old-token"),
+        "{json}"
+    );
+
+    let env = Environment {
+        name: "dev".into(),
+        variables: Variables::new(vec![(
+            "api_token".into(),
+            VarValue::Secret(SecretRef::parse("ci/TOKEN").unwrap()),
+        )]),
+        secrets: vec!["token".into()],
+        ..Environment::default()
+    };
+    let resolve = replay.resolve_for_send(
+        Some(&env),
+        Some("dev"),
+        &Store(Some("s3cr3t")),
+        Some(&providers),
+    );
+    let again = futures_lite::future::block_on(resolve).unwrap();
+    assert_eq!(again.query[0].value.text, "new-KEY");
+    assert_eq!(again.query[1].value.text, "new-TOKEN");
+    assert_eq!(again.headers[0].value.text, "Bearer s3cr3t");
+    let names: Vec<&str> = again.secrets.iter().map(Secret::name).collect();
+    assert!(
+        names.contains(&"ci/KEY") && names.contains(&"api_token"),
+        "{names:?}"
+    );
+}

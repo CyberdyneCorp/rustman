@@ -12,7 +12,7 @@ use crate::error::RequestError;
 
 /// Static AWS keys.
 #[derive(Clone, PartialEq, Eq)]
-pub(crate) struct Keys {
+pub struct Keys {
     pub access_key: String,
     pub secret_key: String,
     pub session_token: Option<String>,
@@ -62,20 +62,32 @@ pub(crate) fn resolve(
 }
 
 fn from_env(env: &dyn Fn(&str) -> Option<String>) -> Result<Keys, RequestError> {
+    env_keys(env)
+        .ok_or_else(|| error("from: env needs AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY".into()))
+}
+
+/// The keys in `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and
+/// `AWS_SESSION_TOKEN` (read with `env`); `None` unless both keys are set.
+pub fn env_keys(env: &dyn Fn(&str) -> Option<String>) -> Option<Keys> {
     let var = |name: &str| env(name).filter(|v| !v.is_empty());
-    match (var("AWS_ACCESS_KEY_ID"), var("AWS_SECRET_ACCESS_KEY")) {
-        (Some(access_key), Some(secret_key)) => Ok(Keys {
-            access_key,
-            secret_key,
-            session_token: var("AWS_SESSION_TOKEN"),
-        }),
-        _ => Err(error(
-            "from: env needs AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY".into(),
-        )),
-    }
+    Some(Keys {
+        access_key: var("AWS_ACCESS_KEY_ID")?,
+        secret_key: var("AWS_SECRET_ACCESS_KEY")?,
+        session_token: var("AWS_SESSION_TOKEN"),
+    })
 }
 
 fn from_profile(name: &str, env: &dyn Fn(&str) -> Option<String>) -> Result<Keys, RequestError> {
+    profile_keys(name, env)?.ok_or_else(|| {
+        error(format!(
+            "profile '{name}' not found in {}",
+            shared_files(env).0.display()
+        ))
+    })
+}
+
+/// The shared credentials and config files, as `env` locates them.
+fn shared_files(env: &dyn Fn(&str) -> Option<String>) -> (PathBuf, PathBuf) {
     let home = env("HOME")
         .or_else(|| env("USERPROFILE"))
         .map(PathBuf::from)
@@ -85,18 +97,27 @@ fn from_profile(name: &str, env: &dyn Fn(&str) -> Option<String>) -> Result<Keys
     let credentials =
         env("AWS_SHARED_CREDENTIALS_FILE").map_or(aws.join("credentials"), PathBuf::from);
     let config = env("AWS_CONFIG_FILE").map_or(aws.join("config"), PathBuf::from);
+    (credentials, config)
+}
+
+/// The static keys of profile `name` from the shared credentials and
+/// config files (`HOME`, `AWS_SHARED_CREDENTIALS_FILE` and
+/// `AWS_CONFIG_FILE` read with `env`); `None` when neither file has the
+/// profile. Profiles that need SSO, a role or a process are refused.
+pub fn profile_keys(
+    name: &str,
+    env: &dyn Fn(&str) -> Option<String>,
+) -> Result<Option<Keys>, RequestError> {
+    let (credentials, config) = shared_files(env);
     let mut profile = section(&config, &config_section(name));
     let from_credentials = section(&credentials, name);
     if profile.is_none() && from_credentials.is_none() {
-        return Err(error(format!(
-            "profile '{name}' not found in {}",
-            credentials.display()
-        )));
+        return Ok(None);
     }
     profile
         .get_or_insert_default()
         .extend(from_credentials.unwrap_or_default());
-    static_keys(name, &profile.unwrap_or_default())
+    static_keys(name, &profile.unwrap_or_default()).map(Some)
 }
 
 /// The section name of profile `name` in `~/.aws/config`.

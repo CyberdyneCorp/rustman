@@ -372,6 +372,7 @@ impl Loader<'_> {
 
     fn load_request(&mut self, rel: &Path) -> Option<RequestEntry> {
         let text = self.read(rel)?;
+        self.check_secret_refs(rel, &text);
         let request = self
             .registry
             .load(rel, &text)
@@ -386,6 +387,14 @@ impl Loader<'_> {
             path: rel.to_path_buf(),
             request,
         })
+    }
+
+    /// Report malformed `{{secret:...}}` references now, not at send time.
+    fn check_secret_refs(&mut self, rel: &Path, text: &str) {
+        for (line, message) in crate::secrets::provider::malformed_in(text) {
+            let position = Some(crate::error::Position { line, column: 1 });
+            self.errors.push(LoadError::new(rel, position, message));
+        }
     }
 
     fn check_request_paths(&mut self, rel: &Path, request: &Request) {

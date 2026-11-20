@@ -22,6 +22,7 @@ pub mod tools;
 use std::sync::Arc;
 
 use rmcp::ServiceExt;
+use rustman_core::secrets::provider::SecretProviders;
 use rustman_core::{Environment, SecretStore, Workspace};
 
 pub use context::{AgentContext, Caller, Target, ToolOutput};
@@ -38,6 +39,7 @@ pub struct Sessions {
     secrets: Arc<SecretStore>,
     environment: Option<Environment>,
     jobs: Arc<JobPool>,
+    secret_providers: Option<Arc<SecretProviders>>,
 }
 
 impl std::fmt::Debug for Sessions {
@@ -59,7 +61,16 @@ impl Sessions {
             secrets: Arc::new(secrets),
             environment,
             jobs: Arc::default(),
+            secret_providers: None,
         }
+    }
+
+    /// Resolve `{{secret:...}}` references of agent-sent requests through
+    /// `providers`, shared by every session (and their cache).
+    #[must_use]
+    pub fn with_secret_providers(mut self, providers: Arc<SecretProviders>) -> Self {
+        self.secret_providers = Some(providers);
+        self
     }
 
     pub fn workspace(&self) -> &Workspace {
@@ -73,7 +84,8 @@ impl Sessions {
             self.secrets.clone(),
             self.environment.clone(),
             self.jobs.clone(),
-        );
+        )
+        .with_secret_providers(self.secret_providers.clone());
         RustmanServer::new(Arc::new(ctx))
     }
 }

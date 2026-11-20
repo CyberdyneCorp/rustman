@@ -27,7 +27,9 @@ use rustman_tui::bench_viz;
 use rustman_tui::companion::Discovery;
 use tokio_util::sync::CancellationToken;
 
-use super::exec::{overrides, parse_duration, runtime, secret_store, stop_then_cancel_on_ctrl_c};
+use super::exec::{
+    overrides, parse_duration, runtime, secret_providers, secret_store, stop_then_cancel_on_ctrl_c,
+};
 use super::run::scopes;
 use super::{EnvSelection, current_dir, print_warnings};
 use crate::exit::{ASSERTION, CliError, INTERRUPTED, SUCCESS};
@@ -181,6 +183,7 @@ pub fn run(args: &BenchArgs) -> Result<u8, CliError> {
         thresholds,
         interrupt: interrupt.clone(),
         cancel: cancel.clone(),
+        secret_providers: Some(secret_providers(&ws.root, &ws.settings)?),
     };
     let bench = Bench::prepare(input)?;
     let runtime = runtime()?;

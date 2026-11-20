@@ -89,7 +89,7 @@ Snippets send the same request as rustman except in these cases:
 
 ## Secrets
 
-Secrets are replaced by `«redacted:<name>»` unless `--show-secrets` is passed, as are the credentials in `Authorization`, `Cookie` and the other credential headers. In code snippets a credential header keeps its scheme, as in `"Bearer «redacted:api_token»"`; the `curl` snippet is exactly the `rustman export curl` command. Warnings go to stderr and never contain secret values.
+Secrets are replaced by `«redacted:<name>»` unless `--show-secrets` is passed (a [secret provider](secrets.md) reference is never fetched: it is always printed as `«redacted:<provider>/<path>[#field]»`), as are the credentials in `Authorization`, `Cookie` and the other credential headers. In code snippets a credential header keeps its scheme, as in `"Bearer «redacted:api_token»"`; the `curl` snippet is exactly the `rustman export curl` command. Warnings go to stderr and never contain secret values.
 
 ## Signature auth
 

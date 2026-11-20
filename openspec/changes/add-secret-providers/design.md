@@ -26,20 +26,24 @@
 
 ### D2. Provider trait with async `fetch(path, field) -> Secret<String>`
 - Providers return the `Secret<T>` type from the core design, so values can't be logged by accident.
-- Errors are typed: `NotFound`, `FieldNotFound`, `Auth`, `Timeout`, `Unavailable` and `Config`. They map to the documented messages, and config errors give exit code 2 while the rest give exit code 3.
+- Errors are typed: `NotFound`, `FieldNotFound`, `Auth`, `Timeout`, `Unavailable` and `Config`. They map to the documented messages. Configuration problems found when the configuration loads give exit code 2; any failure while resolving a reference, a `Config` one (a type compiled out, a Vault without an address) included, is an unresolved secret with exit code 3, in `send`, `run` and `secret get` alike. `secret test` exits 0 or 3, an unknown provider name included.
 - The trait is object-safe, so `plugins` can provide implementations later.
 
 ### D3. REST over `rustman-http` for Vault and 1Password Connect; the `op` CLI by default
-- The Vault and Connect HTTP APIs are small. Using `rustman-http` reuses TLS, proxy and CA settings and keeps the binary free of `vaultrs` and its extra stack.
+- The Vault and Connect HTTP APIs are small. Using `rustman-http` reuses its engine and TLS stack (verifying against the system trust store, with direct connections; see D4) and keeps the binary free of `vaultrs` and its extra stack.
 - The `op` CLI is the only way to use biometric and desktop-app integration, so it's the 1Password default. Connect is for CI.
 - Rejected: `vaultrs` (a second HTTP client, and a duplicate TLS config), and the 1Password SDKs (FFI to a native core).
 
 ### D4. Cloud providers behind features, with official credential chains
-- `secrets-aws` uses `aws-config` + `aws-sdk-secretsmanager` + `aws-sdk-ssm` (rustls).
-- `secrets-gcp` uses `gcp_auth` for ADC and REST through `rustman-http`.
-- `secrets-azure` uses `azure_identity` for `DefaultAzureCredential` and REST through `rustman-http`.
-- All of these are pure Rust on rustls, so there's no system library. They add compile time and size, so plain `cargo build` excludes them, and `cargo dist` release builds enable all three.
-- Rejected: reimplementing the credential chains (SSO, IMDS, workload identity), which is a correctness and security risk.
+- The cloud types are thin REST clients on `rustman-http`, like Vault and Connect (D3), so they reuse its engine and TLS verification against the operating system's trust store. They connect directly: the workspace's CA files, client certificates, proxy and `insecure` settings are not applied, so a cloned workspace cannot weaken them (a private CA must be in the system trust store; a proxy-only network is not supported yet):
+  - `secrets-aws`: Secrets Manager `GetSecretValue` and SSM `GetParameter` over the AWS JSON protocol, signed by the engine's SigV4 signer (from runner parity).
+  - `secrets-gcp`: Secret Manager's `versions/<v>:access`, with a token from Application Default Credentials (a service account key signed with `jsonwebtoken` on ring, gcloud's user credentials, the metadata server).
+  - `secrets-azure`: Key Vault's `secrets/<name>[/<version>]`, with a token from `DefaultAzureCredential`'s chain (service principal, workload identity, managed identity, the Azure CLI).
+- Each credential chain follows the platform's documented order. Metadata endpoints get a 1 s timeout, and expiring credentials are held in memory until 5 minutes before they expire.
+- The features add no crate that is not already in the tree (`time` parsing aside), so plain `cargo build` still excludes them only to keep the default build minimal; release builds enable all three (`rustman-cli` feature `cloud-secrets`). A CI job checks every type is listed and that they add at most 2 MiB.
+- `endpoint` (an emulator such as LocalStack) is accepted from the user config only, since it would let a workspace send cloud credentials to a host of its choice.
+- A Vault `address` or 1Password `connect_host` from `rustman.toml` stays allowed (the spec's "Valid Vault config"), but the user's own credentials (`VAULT_TOKEN`, `~/.vault-token`, AppRole ids, `OP_CONNECT_TOKEN`) are sent there only when `VAULT_ADDR`/`OP_CONNECT_HOST` names the same host or the user config sets it; an OIDC login is allowed since its token comes from that server. AWS `region` must match `[a-z0-9-]+`, since it is part of the endpoint host.
+- Rejected: the AWS, Google and Azure SDKs (`aws-config`, `gcp_auth`, `azure_identity`). They bring `reqwest`, `aws-lc-rs` or native TLS, which `cargo deny` bans, plus a second HTTP stack. Reimplementing the chains is the risk this accepts: they are kept to the documented sources, and SSO, assume-role and `credential_process` AWS profiles are refused with a hint rather than half-supported.
 
 ### D5. SOPS: age native, PGP via `gpg`
 - We parse the SOPS file format directly (an encrypted data key per recipient, plus AES-256-GCM per value) and decrypt age stanzas with the `age` crate.
@@ -59,6 +63,12 @@
 ### D8. Redaction label
 - The label is the reference text (`provider/path#field`), or the environment variable name when the value backs one.
 - This keeps redacted output informative ("which secret was this?") without revealing anything.
+
+### D9. Agents send references, never write them
+- An agent may send saved requests whose files (or environments) use references, but every MCP tool call whose arguments contain a `{{secret:...}}` placeholder is refused before dispatch. Otherwise a prompt-injected agent could pick any secret (another environment's keychain entry, any Vault path, the user's `cmd` provider) and choose where it is sent.
+- One check over all arguments covers every ad-hoc shape (HTTP, JSON-RPC, realtime, gRPC, `vars`) and future tools.
+- Values inserted from variables and captures are never parsed again, so they cannot carry a reference.
+- Rejected: allowing only references that already appear in the workspace's files. It still lets the agent send a known secret to a host of its choice, and needs a scan of every file.
 
 ## Risks / Trade-offs
 

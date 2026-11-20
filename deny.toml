@@ -17,6 +17,14 @@ ignore = [
     # to load its own bundled syntax definitions; no untrusted input is
     # decoded with it. Not a vulnerability.
     { id = "RUSTSEC-2025-0141", reason = "unmaintained bincode via syntect; decodes only syntect's bundled syntax dump" },
+    # basic-toml and proc-macro-error2 are unmaintained. Both come only
+    # through i18n-embed-fl, the proc macro the `age` crate (SOPS age
+    # decryption, add-secret-providers design D5) uses at compile time to
+    # embed its own localized messages; neither runs in Rustman or reads
+    # input. Not vulnerabilities. age 0.12 is not used: its post-quantum
+    # recipients pull p256 with crypto-bigint 0.5 (RUSTSEC-2026-0387).
+    { id = "RUSTSEC-2026-0374", reason = "unmaintained basic-toml via age's compile-time i18n macro; reads only age's bundled i18n.toml" },
+    { id = "RUSTSEC-2026-0173", reason = "unmaintained proc-macro-error2 via age's compile-time i18n macro; compile-time diagnostics only" },
 ]
 
 [licenses]

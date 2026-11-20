@@ -417,8 +417,12 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         secrets: &store,
         in_workspace: place.in_workspace,
     };
+    let providers = match crate::secret_providers::for_workspace(place.root, place.settings) {
+        Ok(providers) => providers,
+        Err(message) => return failed(job, message),
+    };
     let runner = match Runner::new(ctx, options) {
-        Ok(runner) => runner,
+        Ok(runner) => runner.with_secret_providers(providers),
         Err(e) => return failed(job, e.to_string()),
     };
     let mut sent = tokio::select! {

@@ -55,20 +55,29 @@ enum Callback {
 pub struct Loopback {
     listener: TcpListener,
     redirect_uri: String,
+    /// The path of `redirect_uri`: only it delivers the code.
+    callback_path: String,
 }
 
 impl Loopback {
     pub async fn bind() -> Result<Self, RequestError> {
-        let listener = TcpListener::bind(("127.0.0.1", 0))
-            .await
-            .map_err(|e| RequestError::Auth(format!("oauth2: cannot listen on 127.0.0.1: {e}")))?;
-        let port = listener
-            .local_addr()
-            .map_err(|e| RequestError::Auth(format!("oauth2: loopback listener: {e}")))?
-            .port();
+        let (listener, port) = listen(0).await?;
         Ok(Self {
             listener,
             redirect_uri: format!("http://127.0.0.1:{port}{CALLBACK_PATH}"),
+            callback_path: CALLBACK_PATH.to_owned(),
+        })
+    }
+
+    /// A listener on `127.0.0.1:<port>` (0: any free port) whose redirect
+    /// URI is `http://localhost:<port><prefix>/callback`, for servers that
+    /// only accept a registered redirect URI (Vault OIDC).
+    pub async fn bind_on(port: u16, prefix: &str) -> Result<Self, RequestError> {
+        let (listener, port) = listen(port).await?;
+        Ok(Self {
+            listener,
+            redirect_uri: format!("http://localhost:{port}{prefix}{CALLBACK_PATH}"),
+            callback_path: format!("{prefix}{CALLBACK_PATH}"),
         })
     }
 
@@ -82,7 +91,11 @@ impl Loopback {
         state: &str,
         timeout: Duration,
     ) -> Result<String, RequestError> {
-        let accepting = accept_code(&self.listener, state, MAX_CONNECTIONS);
+        let callback = Expected {
+            path: &self.callback_path,
+            state,
+        };
+        let accepting = accept_code(&self.listener, &callback, MAX_CONNECTIONS);
         tokio::time::timeout(timeout, accepting)
             .await
             .unwrap_or_else(|_| {
@@ -92,6 +105,17 @@ impl Loopback {
                 )))
             })
     }
+}
+
+async fn listen(port: u16) -> Result<(TcpListener, u16), RequestError> {
+    let listener = TcpListener::bind(("127.0.0.1", port))
+        .await
+        .map_err(|e| RequestError::Auth(format!("oauth2: cannot listen on 127.0.0.1: {e}")))?;
+    let port = listener
+        .local_addr()
+        .map_err(|e| RequestError::Auth(format!("oauth2: loopback listener: {e}")))?
+        .port();
+    Ok((listener, port))
 }
 
 /// A source of connections: the TCP listener, or a fake one in tests.
@@ -109,11 +133,17 @@ impl Accept for TcpListener {
     }
 }
 
+/// The callback a login waits for: its path and `state` parameter.
+struct Expected<'a> {
+    path: &'a str,
+    state: &'a str,
+}
+
 /// Serve connections from `acceptor`, at most `max_connections` at once,
-/// until one delivers the outcome for `state`.
+/// until one delivers the outcome `expected`.
 async fn accept_code<A: Accept + Sync>(
     acceptor: &A,
-    state: &str,
+    expected: &Expected<'_>,
     max_connections: usize,
 ) -> Result<String, RequestError> {
     let mut connections = JoinSet::new();
@@ -124,7 +154,8 @@ async fn accept_code<A: Accept + Sync>(
                 match accepted {
                     Ok(stream) => {
                         backoff = Backoff::default();
-                        connections.spawn(serve(stream, state.to_owned()));
+                        let (path, state) = (expected.path.to_owned(), expected.state.to_owned());
+                        connections.spawn(serve(stream, path, state));
                     }
                     Err(_) => backoff.wait().await,
                 }
@@ -157,13 +188,14 @@ impl Backoff {
 /// Answer one connection; `Some` when it ends the login.
 async fn serve<S: AsyncRead + AsyncWrite + Unpin>(
     mut stream: S,
+    path: String,
     state: String,
 ) -> Option<Result<String, RequestError>> {
     let head = tokio::time::timeout(HEAD_TIMEOUT, read_head(&mut stream))
         .await
         .ok()?
         .ok()?;
-    let callback = parse_callback(&head, &state);
+    let callback = parse_callback(&head, &path, &state);
     let (status, page) = match &callback {
         Callback::Other => ("404 Not Found", "not found"),
         Callback::Code(_) => ("200 OK", DONE_PAGE),
@@ -201,15 +233,16 @@ async fn respond(stream: &mut (impl AsyncWrite + Unpin), status: &str, page: &st
     let _ = stream.shutdown().await;
 }
 
-/// The outcome carried by the request line of `head`.
-fn parse_callback(head: &str, state: &str) -> Callback {
+/// The outcome carried by the request line of `head`, when it targets the
+/// callback `expected_path` exactly.
+fn parse_callback(head: &str, expected_path: &str, state: &str) -> Callback {
     let target = head
         .lines()
         .next()
         .and_then(|line| line.split(' ').nth(1))
         .unwrap_or_default();
     let (path, query) = target.split_once('?').unwrap_or((target, ""));
-    if path != CALLBACK_PATH {
+    if path != expected_path {
         return Callback::Other;
     }
     let param = |name: &str| {
@@ -234,6 +267,11 @@ fn parse_callback(head: &str, state: &str) -> Callback {
 mod tests {
     use super::*;
 
+    const EXPECTED: Expected<'static> = Expected {
+        path: CALLBACK_PATH,
+        state: "st",
+    };
+
     fn head(target: &str) -> String {
         format!("GET {target} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
     }
@@ -241,24 +279,46 @@ mod tests {
     #[test]
     fn callbacks_are_parsed() {
         assert_eq!(
-            parse_callback(&head("/callback?code=abc&state=s1"), "s1"),
+            parse_callback(&head("/callback?code=abc&state=s1"), CALLBACK_PATH, "s1"),
             Callback::Code("abc".into())
         );
-        assert_eq!(parse_callback(&head("/favicon.ico"), "s1"), Callback::Other);
         assert_eq!(
-            parse_callback(&head("/callback?code=abc&state=evil"), "s1"),
+            parse_callback(&head("/favicon.ico"), CALLBACK_PATH, "s1"),
+            Callback::Other
+        );
+        assert_eq!(
+            parse_callback(&head("/callback?code=abc&state=evil"), CALLBACK_PATH, "s1"),
             Callback::Forged
         );
         assert_eq!(
             parse_callback(
                 &head("/callback?error=access_denied&error_description=no+way&state=s1"),
+                CALLBACK_PATH,
                 "s1"
             ),
             Callback::Failed("oauth2: authorization denied (access_denied: no way)".into())
         );
         assert_eq!(
-            parse_callback(&head("/callback?state=s1"), "s1"),
+            parse_callback(&head("/callback?state=s1"), CALLBACK_PATH, "s1"),
             Callback::Failed("oauth2: the authorization response has no code".into())
+        );
+        // A prefixed callback (Vault OIDC) matches exactly, and only it.
+        let vault = "/oidc/callback";
+        assert_eq!(
+            parse_callback(&head("/oidc/callback?code=abc&state=s1"), vault, "s1"),
+            Callback::Code("abc".into())
+        );
+        for other in ["/callback", "/x/oidc/callback", "/evil/callback"] {
+            let target = format!("{other}?code=abc&state=s1");
+            assert_eq!(parse_callback(&head(&target), vault, "s1"), Callback::Other);
+        }
+        assert_eq!(
+            parse_callback(
+                &head("/oidc/callback?code=abc&state=s1"),
+                CALLBACK_PATH,
+                "s1"
+            ),
+            Callback::Other
         );
     }
 
@@ -358,7 +418,7 @@ mod tests {
     #[tokio::test]
     async fn failing_accepts_back_off_instead_of_spinning() {
         let listener = FakeListener::new(true);
-        let accepting = accept_code(&listener, "st", MAX_CONNECTIONS);
+        let accepting = accept_code(&listener, &EXPECTED, MAX_CONNECTIONS);
         let waited = tokio::time::timeout(Duration::from_millis(500), accepting).await;
         assert!(waited.is_err(), "the login cannot end without a callback");
         // 10, 20, 40, 80, 160 ms of delay fit in 500 ms: about 6 calls, where
@@ -370,7 +430,7 @@ mod tests {
     #[tokio::test]
     async fn concurrent_connections_are_capped() {
         let listener = FakeListener::new(false);
-        let accepting = accept_code(&listener, "st", 3);
+        let accepting = accept_code(&listener, &EXPECTED, 3);
         let waited = tokio::time::timeout(Duration::from_millis(300), accepting).await;
         assert!(waited.is_err(), "the login cannot end without a callback");
         assert_eq!(listener.calls(), 3, "silent connections hold every slot");

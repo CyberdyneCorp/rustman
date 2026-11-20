@@ -72,6 +72,7 @@ pub mod review;
 #[cfg(test)]
 mod review_tests;
 mod runtime;
+pub mod secret_providers;
 pub mod send;
 #[cfg(test)]
 mod send_tests;

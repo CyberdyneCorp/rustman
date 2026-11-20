@@ -146,6 +146,8 @@ These are computed again for every occurrence:
 
 ## Secrets
 
+Secrets can also come from external stores (Vault, 1Password, SOPS files, cloud secret managers...) through `{{secret:<provider>/<path>}}` references or variables written `{secret: "<provider>/<path>"}`: see [Secret providers](secrets.md).
+
 ### Declaring and setting a secret
 
 List the variable under `secrets` in the environment file (as `api_token` in `prod.yaml` above), then store its value:

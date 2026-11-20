@@ -12,7 +12,7 @@ use rustman_core::{ConfigError, Workspace};
 use rustman_http::runner::{RunContext, RunOptions, Runner};
 use serde_json::{Value, json};
 
-use super::exec::{cancel_on_ctrl_c, login_mode, runtime, secret_store};
+use super::exec::{cancel_on_ctrl_c, login_mode, runtime, secret_providers, secret_store};
 use super::send::{OutputFlags, finish};
 use super::{current_dir, print_warnings};
 use crate::exit::{CliError, SUCCESS};
@@ -171,13 +171,17 @@ impl History {
         };
         let secrets = secret_store(root)?;
         let env_name = entry.environment.as_deref();
-        // Resolving fails, before anything is sent, on a deleted secret.
-        let resolved = replay.resolve(env_name, &secrets)?;
         let environment = self.ws.as_ref().and_then(|ws| {
             ws.environments
                 .iter()
                 .find(|e| Some(e.name.as_str()) == env_name)
         });
+        let providers = secret_providers(root, settings)?;
+        let runtime = runtime()?;
+        // Resolving fails, before anything is sent, on a deleted secret or
+        // a provider secret that cannot be fetched.
+        let resolve = replay.resolve_for_send(environment, env_name, &secrets, Some(&providers));
+        let resolved = runtime.block_on(resolve)?;
         let record = settings.history.enabled && !args.no_history;
         let options = RunOptions {
             login: login_mode(),
@@ -192,8 +196,8 @@ impl History {
             secrets: &secrets,
             in_workspace: self.ws.is_some(),
         };
-        let runner = Runner::new(ctx, options)?;
-        let sent = runtime()?.block_on(async {
+        let runner = Runner::new(ctx, options)?.with_secret_providers(providers);
+        let sent = runtime.block_on(async {
             cancel_on_ctrl_c(&cancel);
             runner.replay(&entry, resolved).await
         });

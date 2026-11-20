@@ -2,7 +2,9 @@
 //! keeping its variables as `{{name}}` markers, for snippets and docs that
 //! show how a request is built rather than one concrete instance of it.
 //!
-//! Secrets are never read: a secret variable becomes `«redacted:<name>»`.
+//! Secrets are never read: a secret variable (from the store or a provider)
+//! becomes `«redacted:<name>»` and a `{{secret:...}}` reference stays as
+//! written.
 //! Dynamic values (`{{$uuid}}`, `{{$env NAME}}`) are still evaluated,
 //! unless the resolver keeps them ([`Resolver::keep_dynamics`]).
 
@@ -30,7 +32,7 @@ pub fn resolve_placeholders(
     resolver: &Resolver<'_>,
 ) -> Result<(ResolvedRequest, Vec<PlaceholderVar>), ResolveError> {
     let used = Rc::new(RefCell::new(Vec::new()));
-    let keep = resolver.empty_like().with(KeepVariables {
+    let keep = resolver.empty_like().keeping_secret_refs().with(KeepVariables {
         inner: resolver,
         used: Rc::clone(&used),
     });
@@ -53,7 +55,7 @@ impl VarSource for KeepVariables<'_, '_> {
     fn lookup(&self, name: &str) -> Option<Lookup> {
         let marker = format!("{{{{{name}}}}}");
         let value = match self.inner.lookup(name) {
-            Some(Lookup::Secret(_) | Lookup::SecretNotSet { .. }) => {
+            Some(Lookup::Secret(_) | Lookup::SecretNotSet { .. } | Lookup::Provider(_)) => {
                 return Some(Lookup::Value(placeholder(name)));
             }
             Some(Lookup::Value(value)) => value,

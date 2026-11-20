@@ -1,5 +1,6 @@
 //! Resolving templates through the precedence chain (design D8).
 
+use std::collections::HashMap;
 use std::fmt;
 use std::ops::Range;
 
@@ -9,6 +10,7 @@ use super::template::{Segment, Template, TemplateError};
 use crate::environment::Environment;
 use crate::redact::Redactor;
 use crate::secret::Secret;
+use crate::secrets::provider::{PREFIX as SECRET_PREFIX, SecretRef, UnresolvedSecret};
 use crate::settings::Settings;
 use crate::workspace::RequestRef;
 
@@ -43,6 +45,31 @@ pub enum ResolveError {
     /// A file path that, once interpolated, leaves the workspace.
     #[error(transparent)]
     PathEscape(#[from] crate::paths::PathEscape),
+    /// Provider secrets the text needs and the resolver was not given:
+    /// [`crate::secrets::provider::resolve_with_secrets`] fetches them and
+    /// resolves again. Only a send does that.
+    #[error(
+        "secret reference(s) {} are resolved only when a request is sent",
+        refs(.0)
+    )]
+    SecretsNeeded(Vec<SecretRef>),
+    /// A provider secret that could not be fetched (boxed: it is large).
+    #[error(transparent)]
+    Secret(Box<UnresolvedSecret>),
+}
+
+impl From<UnresolvedSecret> for ResolveError {
+    fn from(unresolved: UnresolvedSecret) -> Self {
+        Self::Secret(Box::new(unresolved))
+    }
+}
+
+fn refs(references: &[SecretRef]) -> String {
+    references
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn join(missing: &[Missing]) -> String {
@@ -98,6 +125,21 @@ pub struct Resolver<'a> {
     /// Write dynamic values (`{{$uuid}}`) back as their placeholder
     /// instead of evaluating them.
     keep_dynamics: bool,
+    /// Provider values fetched for this send, by reference.
+    provided: HashMap<SecretRef, Secret<String>>,
+    /// What a provider reference without a fetched value becomes.
+    secret_refs: SecretRefs,
+}
+
+/// What a resolver does with a provider reference it has no value for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SecretRefs {
+    /// Report it as needed ([`ResolveError::SecretsNeeded`]): a send.
+    Need,
+    /// Write `{{secret:...}}` back as text (placeholder mode).
+    Keep,
+    /// Write `«redacted:<label>»` without contacting a provider (exports).
+    Redact,
 }
 
 impl Default for Resolver<'_> {
@@ -113,7 +155,29 @@ impl<'a> Resolver<'a> {
             sources: Vec::new(),
             os_env: process_env,
             keep_dynamics: false,
+            provided: HashMap::new(),
+            secret_refs: SecretRefs::Need,
         }
+    }
+
+    /// Use these provider values for the references they answer.
+    pub fn provide(&mut self, values: Vec<(SecretRef, Secret<String>)>) {
+        self.provided.extend(values);
+    }
+
+    /// Leave `{{secret:...}}` references as written instead of needing
+    /// their values: for showing how a request is built.
+    pub fn keeping_secret_refs(mut self) -> Self {
+        self.secret_refs = SecretRefs::Keep;
+        self
+    }
+
+    /// Write provider secrets as `«redacted:<provider>/<path>[#field]»`
+    /// (or `«redacted:<variable>»` when one backs a variable) without
+    /// contacting a provider: for copy-as-curl and snippets.
+    pub fn redacting_secret_refs(mut self) -> Self {
+        self.secret_refs = SecretRefs::Redact;
+        self
     }
 
     /// The chain for one request: request `variables`, collection `variables`
@@ -155,13 +219,15 @@ impl<'a> Resolver<'a> {
         self
     }
 
-    /// A new, empty chain with this one's `{{$env}}` reader and dynamic
-    /// handling.
+    /// A new, empty chain with this one's `{{$env}}` reader, dynamic
+    /// handling and secret reference mode (without fetched values).
     pub(crate) fn empty_like(&self) -> Resolver<'a> {
         Resolver {
             sources: Vec::new(),
             os_env: self.os_env,
             keep_dynamics: self.keep_dynamics,
+            provided: HashMap::new(),
+            secret_refs: self.secret_refs,
         }
     }
 
@@ -204,6 +270,7 @@ impl<'a> Resolver<'a> {
             missing: Vec::new(),
             invalid: None,
             secrets: Vec::new(),
+            needed: Vec::new(),
         }
     }
 }
@@ -215,6 +282,8 @@ pub struct Interpolator<'r, 'a> {
     missing: Vec<Missing>,
     invalid: Option<TemplateError>,
     secrets: Vec<UsedSecret>,
+    /// Provider references without a value yet.
+    needed: Vec<SecretRef>,
 }
 
 impl Interpolator<'_, '_> {
@@ -245,6 +314,13 @@ impl Interpolator<'_, '_> {
                     Some(value) => out.text.push_str(&value),
                     None => self.miss(dynamic.to_string(), None),
                 },
+                Segment::Secret(reference) if self.resolver.secret_refs == SecretRefs::Keep => {
+                    out.text
+                        .push_str(&format!("{{{{{SECRET_PREFIX}{reference}}}}}"));
+                }
+                Segment::Secret(reference) => {
+                    self.provider_secret(reference, &reference.to_string(), &mut out);
+                }
             }
         }
         out
@@ -263,8 +339,31 @@ impl Interpolator<'_, '_> {
                 self.used_secret(secret);
             }
             Some(Lookup::SecretNotSet { hint }) => self.miss(name.to_owned(), Some(hint)),
+            Some(Lookup::Provider(reference)) => self.provider_secret(&reference, name, out),
             None => self.miss(name.to_owned(), None),
         }
+    }
+
+    /// The value of a provider secret, redacted as `label` (the reference
+    /// text, or the variable it backs); without one yet, it is needed.
+    fn provider_secret(&mut self, reference: &SecretRef, label: &str, out: &mut Resolved) {
+        if self.resolver.secret_refs == SecretRefs::Redact {
+            out.text.push_str(&crate::secret::placeholder(label));
+            return;
+        }
+        let Some(value) = self.resolver.provided.get(reference) else {
+            if !self.needed.contains(reference) {
+                self.needed.push(reference.clone());
+            }
+            return;
+        };
+        let start = out.text.len();
+        out.text.push_str(value.expose());
+        out.secret_spans.push(SecretSpan {
+            name: label.to_owned(),
+            range: start..out.text.len(),
+        });
+        self.used_secret(Secret::new(label, value.expose().clone()));
     }
 
     fn used_secret(&mut self, secret: Secret<String>) {
@@ -287,6 +386,9 @@ impl Interpolator<'_, '_> {
         }
         if !self.missing.is_empty() {
             return Err(ResolveError::Unresolved(self.missing));
+        }
+        if !self.needed.is_empty() {
+            return Err(ResolveError::SecretsNeeded(self.needed));
         }
         Ok((value, self.secrets))
     }
@@ -407,6 +509,34 @@ mod tests {
     fn values_are_not_expanded_again() {
         let resolver = Resolver::new().with(at(Layer::Settings, &[("a", "{{b}}"), ("b", "x")]));
         assert_eq!(text(&resolver, "{{a}}"), "{{b}}");
+    }
+
+    #[test]
+    fn references_in_values_are_never_resolved() {
+        // A captured response or an override cannot smuggle a reference in:
+        // values are inserted as text, so no provider value is needed.
+        let reference = "{{secret:op/Eng/API/token}}";
+        for layer in [Layer::Capture, Layer::Override] {
+            let resolver = Resolver::new().with(at(layer, &[("token", reference)]));
+            let resolved = resolver.resolve("Bearer {{token}}").unwrap();
+            assert_eq!(resolved.text, format!("Bearer {reference}"));
+            assert!(resolved.secret_spans.is_empty());
+        }
+    }
+
+    #[test]
+    fn redacting_resolvers_write_markers_without_values() {
+        let backed = Variables::new(vec![(
+            "token".into(),
+            VarValue::Secret(SecretRef::parse("op/Eng/API/token").unwrap()),
+        )]);
+        let resolver = Resolver::new()
+            .redacting_secret_refs()
+            .with(VariablesSource::owned(Layer::Settings, backed));
+        let resolved = resolver
+            .resolve("{{secret:vault/kv/app#pw}} {{token}}")
+            .unwrap();
+        assert_eq!(resolved.text, "«redacted:vault/kv/app#pw» «redacted:token»");
     }
 
     #[test]

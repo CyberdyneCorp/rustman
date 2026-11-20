@@ -118,6 +118,9 @@ pub fn resolve_secret(resolver: &Resolver<'_>, name: &str) -> Result<Secret<Stri
         Some(Lookup::Secret(secret)) => Ok(secret),
         Some(Lookup::Value(value)) => Ok(Secret::new(name, value)),
         Some(Lookup::SecretNotSet { hint }) => Err(format!("{name}: {hint}")),
+        Some(Lookup::Provider(reference)) => Err(format!(
+            "{name}: provider secret {reference} is not supported for webhook verifiers"
+        )),
         None => Err(format!("unresolved variable(s): {name}")),
     }
 }

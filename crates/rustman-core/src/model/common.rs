@@ -8,6 +8,7 @@ use serde::{Deserialize, Deserializer};
 
 use crate::error::Position;
 use crate::format::{Located, MaybeFloat, error_at, exact_located};
+use crate::secrets::provider::{PREFIX as SECRET_PREFIX, SecretRef};
 
 /// One `{name, value}` pair. Used for headers, query parameters and form fields,
 /// where order matters and names may repeat.
@@ -43,13 +44,15 @@ impl NameValue {
     }
 }
 
-/// A variable value: a string, a number or a boolean.
+/// A variable value: a string, a number, a boolean, or `{secret: "<ref>"}`,
+/// a value read from a secret provider when a request is sent.
 #[derive(Clone, Debug, PartialEq)]
 pub enum VarValue {
     String(String),
     Integer(i64),
     Float(f64),
     Bool(bool),
+    Secret(SecretRef),
 }
 
 impl fmt::Display for VarValue {
@@ -59,6 +62,8 @@ impl fmt::Display for VarValue {
             Self::Integer(n) => write!(f, "{n}"),
             Self::Float(n) => write!(f, "{n}"),
             Self::Bool(b) => write!(f, "{b}"),
+            // The reference, never a value.
+            Self::Secret(r) => write!(f, "{{{{{SECRET_PREFIX}{r}}}}}"),
         }
     }
 }
@@ -243,12 +248,22 @@ impl<'de> Visitor<'de> for CheckedVarVisitor {
         Ok(Self::invalid(de::Unexpected::Seq))
     }
 
+    /// `{secret: "<provider>/<path>[#field]"}`; any other mapping is invalid.
     fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<VarCheck, A::Error> {
-        while map
-            .next_entry::<de::IgnoredAny, de::IgnoredAny>()?
-            .is_some()
-        {}
-        Ok(Self::invalid(de::Unexpected::Map))
+        let mut reference: Option<String> = None;
+        let mut other = false;
+        while let Some(key) = map.next_key::<String>()? {
+            if key == "secret" && reference.is_none() {
+                reference = Some(map.next_value::<String>()?);
+            } else {
+                map.next_value::<de::IgnoredAny>()?;
+                other = true;
+            }
+        }
+        Ok(match reference {
+            Some(text) if !other => SecretRef::parse(&text).map(VarValue::Secret),
+            _ => Self::invalid(de::Unexpected::Map),
+        })
     }
 }
 

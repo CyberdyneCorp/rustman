@@ -1,7 +1,9 @@
-//! `rustman secret set|rm|list`.
+//! `rustman secret set|rm|list`, and `get|test|list-providers` for
+//! provider secrets (in `secret_provider`).
 //!
-//! Values are never printed. `set` prompts without echo when stdin is a
-//! terminal, and otherwise reads the value from stdin (for scripts and CI).
+//! Values are never printed (`get --reveal` on a terminal aside). `set`
+//! prompts without echo when stdin is a terminal, and otherwise reads the
+//! value from stdin (for scripts and CI).
 
 use std::io::{self, IsTerminal, Read};
 use std::path::{Path, PathBuf};
@@ -12,6 +14,8 @@ use rustman_core::secrets::{BACKEND_VAR, SECRETS_FILE, StoredIn};
 use rustman_core::{
     ConfigError, Environment, Secret, SecretBackend, SecretError, SecretStore, Workspace,
 };
+
+use crate::exit::{CliError, SUCCESS};
 
 #[derive(Debug, Args)]
 pub struct SecretArgs {
@@ -27,6 +31,12 @@ enum SecretCommand {
     Rm(NameArgs),
     /// List declared secrets and whether a value is stored (values are never shown)
     List(Common),
+    /// Fetch a secret reference from its provider and show it masked
+    Get(super::secret_provider::GetArgs),
+    /// Check that secret providers can authenticate and be reached
+    Test(super::secret_provider::TestArgs),
+    /// List the configured secret providers (never values)
+    ListProviders(super::secret_provider::ListProvidersArgs),
 }
 
 #[derive(Debug, Args)]
@@ -47,11 +57,15 @@ struct Common {
     workspace: Option<PathBuf>,
 }
 
-pub fn run(args: &SecretArgs) -> Result<(), ConfigError> {
+pub fn run(args: &SecretArgs) -> Result<u8, CliError> {
+    let done = |()| SUCCESS;
     match &args.command {
-        SecretCommand::Set(a) => run_set(a),
-        SecretCommand::Rm(a) => run_rm(a),
-        SecretCommand::List(a) => run_list(a),
+        SecretCommand::Set(a) => Ok(run_set(a).map(done)?),
+        SecretCommand::Rm(a) => Ok(run_rm(a).map(done)?),
+        SecretCommand::List(a) => Ok(run_list(a).map(done)?),
+        SecretCommand::Get(a) => super::secret_provider::get(a),
+        SecretCommand::Test(a) => super::secret_provider::test(a),
+        SecretCommand::ListProviders(a) => super::secret_provider::list_providers(a),
     }
 }
 

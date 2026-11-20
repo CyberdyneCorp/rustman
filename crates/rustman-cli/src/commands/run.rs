@@ -172,7 +172,8 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
         secrets: &store,
         in_workspace: true,
     };
-    let runner = Runner::new(ctx, options)?;
+    let providers = super::exec::secret_providers(&ws.root, &ws.settings)?;
+    let runner = Runner::new(ctx, options)?.with_secret_providers(providers);
     let record = runtime()?.block_on(async {
         cancel_on_ctrl_c(&cancel);
         let record = runner.run(&plan).await;

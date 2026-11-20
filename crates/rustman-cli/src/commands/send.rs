@@ -174,7 +174,8 @@ fn send(
         secrets: &store,
         in_workspace: ws.is_some(),
     };
-    let runner = Runner::new(ctx, options)?;
+    let providers = super::exec::secret_providers(target.root, settings)?;
+    let runner = Runner::new(ctx, options)?.with_secret_providers(providers);
     let sent = runtime()?.block_on(async {
         cancel_on_ctrl_c(&cancel);
         runner.send(target, 1).await

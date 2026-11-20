@@ -66,7 +66,8 @@ fn serve(args: &ServeArgs) -> Result<u8, CliError> {
         .map_err(|e| ConfigError::Usage(e.to_string()))?;
     let environment = args.selection.environment(&workspace)?.cloned();
     let secrets = secret_store(&workspace.root)?;
-    let sessions = Sessions::new(workspace, secrets, environment);
+    let providers = super::exec::secret_providers(&workspace.root, &workspace.settings)?;
+    let sessions = Sessions::new(workspace, secrets, environment).with_secret_providers(providers);
     let runtime = super::exec::runtime()?;
     let served = match bind {
         None => runtime.block_on(serve_stdio(&sessions)),

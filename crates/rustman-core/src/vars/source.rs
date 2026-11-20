@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use crate::environment::Environment;
 use crate::model::{VarValue, Variables};
 use crate::secret::Secret;
+use crate::secrets::provider::SecretRef;
 
 /// A layer of the precedence chain, highest precedence first. A resolver
 /// always consults layers in this order, whatever order sources were added in.
@@ -39,6 +40,19 @@ pub enum Lookup {
     SecretNotSet {
         hint: String,
     },
+    /// `{secret: "<ref>"}`: a value a secret provider supplies when the
+    /// request is sent.
+    Provider(SecretRef),
+}
+
+impl Lookup {
+    /// The lookup of a plain variable value.
+    pub fn of(value: &VarValue) -> Self {
+        match value {
+            VarValue::Secret(reference) => Self::Provider(reference.clone()),
+            other => Self::Value(other.to_string()),
+        }
+    }
 }
 
 /// One source of variables in the precedence chain.
@@ -77,7 +91,7 @@ impl VarSource for VariablesSource<'_> {
     }
 
     fn lookup(&self, name: &str) -> Option<Lookup> {
-        self.vars.get(name).map(|v| Lookup::Value(v.to_string()))
+        self.vars.get(name).map(Lookup::of)
     }
 }
 
@@ -118,11 +132,7 @@ impl VarSource for EnvironmentSource<'_> {
 
     fn lookup(&self, name: &str) -> Option<Lookup> {
         if !self.env.is_secret(name) {
-            return self
-                .env
-                .variables
-                .get(name)
-                .map(|v| Lookup::Value(v.to_string()));
+            return self.env.variables.get(name).map(Lookup::of);
         }
         let env = &self.env.name;
         Some(match self.secrets.secret(env, name) {
@@ -203,6 +213,25 @@ mod tests {
         let source = EnvironmentSource::new(&env, &NoSecrets);
         assert_eq!(source.lookup("n"), Some(Lookup::Value("5".into())));
         assert_eq!(source.lookup("missing"), None);
+    }
+
+    #[test]
+    fn provider_backed_variables_look_up_as_references() {
+        let reference = SecretRef::parse("op/Engineering/Stripe/token").unwrap();
+        let mut env = prod();
+        env.variables = Variables::new(vec![(
+            "api_token".into(),
+            VarValue::Secret(reference.clone()),
+        )]);
+        env.secrets.clear();
+        let source = EnvironmentSource::new(&env, &NoSecrets);
+        assert_eq!(
+            source.lookup("api_token"),
+            Some(Lookup::Provider(reference.clone()))
+        );
+        let vars = env.variables.clone();
+        let plain = VariablesSource::new(Layer::Request, &vars);
+        assert_eq!(plain.lookup("api_token"), Some(Lookup::Provider(reference)));
     }
 
     #[test]

@@ -265,6 +265,13 @@ pub fn run(state: &mut State, action: ActionId) -> Vec<Effect> {
         ActionId::EnvSwitch => open_palette(state, Scope::Environments),
         ActionId::HelpOpen => state.overlay = Some(Overlay::Help { scroll: 0 }),
         ActionId::SecretsReveal => return reveal::toggle(state),
+        ActionId::SecretsRefresh => {
+            crate::secret_providers::refresh_all();
+            state.notify(
+                Severity::Info,
+                "Secrets refreshed: the next send fetches them again",
+            );
+        }
         ActionId::CopyAs => copy_as::open(state),
         ActionId::ImportOpen => import_dialog::open(state),
         ActionId::VizOpen => return viz::start(state),

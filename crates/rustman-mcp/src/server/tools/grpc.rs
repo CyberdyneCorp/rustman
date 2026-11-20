@@ -437,6 +437,7 @@ async fn send(
         in_workspace: true,
     };
     let runner = Runner::new(run_ctx, options).map_err(|e| ToolError::internal(e.to_string()))?;
+    let runner = ctx.with_providers(runner);
     let sent = runner.send(target, 1).await;
     if let Err(err) = runner.finish() {
         tracing::warn!("cookies: {err}");
