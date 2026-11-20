@@ -317,11 +317,14 @@ async fn a_run_job_reports_its_progress_while_running() {
 
 /// Windows denies removing a file the job still holds open, and creating a
 /// file where a just-deleted folder is still "delete pending"; macOS reports
-/// a directory the job is still writing into as not empty.
+/// a directory the job is still writing into as not empty; Linux reports a
+/// folder the job recreated before the write as a directory.
 fn is_transient(kind: std::io::ErrorKind) -> bool {
     matches!(
         kind,
-        std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::DirectoryNotEmpty
+        std::io::ErrorKind::PermissionDenied
+            | std::io::ErrorKind::DirectoryNotEmpty
+            | std::io::ErrorKind::IsADirectory
     )
 }
 
@@ -369,8 +372,15 @@ async fn a_run_job_stops_sending_once_its_audit_log_cannot_be_written() {
     // At one request per second, break the audit log right after the first.
     wait_for_hits(&api, 1).await;
     let audit = ws.path().join(".rustman/audit");
-    retrying(&audit, || std::fs::remove_dir_all(&audit)).await;
-    retrying(&audit, || std::fs::write(&audit, "not a folder")).await;
+    // One step: the job may recreate the folder between the removal and the write.
+    retrying(&audit, || {
+        match std::fs::remove_dir_all(&audit) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e),
+            _ => {}
+        }
+        std::fs::write(&audit, "not a folder")
+    })
+    .await;
     tokio::time::sleep(Duration::from_millis(2500)).await;
     retrying(&audit, || std::fs::remove_file(&audit)).await;
     let deadline = Instant::now() + Duration::from_secs(60);
