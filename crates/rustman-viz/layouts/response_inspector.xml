@@ -1,0 +1,14 @@
+<!-- Response inspector (add-raven-visualizer D5, D6). -->
+<Window Title="Rustman · Response" Width="1200" Height="820" MinWidth="800" MinHeight="500">
+  <VBox Spacing="12" Slot.Padding="18">
+    <VBox Spacing="2">
+      <Label Name="title" Text="Response" TextSize="22"/>
+      <Label Name="heading" Text="" Color="#8A93A6"/>
+    </VBox>
+    <Label Name="summary" Text="" Selectable="true"/>
+    <TabView Name="tabs" Slot.Fill="1">
+      <VBox Name="table" Slot.Title="Table"/>
+      <VBox Name="json" Slot.Title="JSON"/>
+    </TabView>
+  </VBox>
+</Window>

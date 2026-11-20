@@ -4,9 +4,10 @@
 
 - `cli-runner` and `api-exploration` already produce structured run and exploration reports (JSON) through `test-reports`. They also emit progress events while running.
 - config.yaml requires that the default `rustman` binary builds and runs with no C toolchain and no GPU, and that native-library features sit behind a cargo feature and a separate binary.
-- Raven facts that shape this design, verified in its repository at v0.2.3:
-  - It's a C11 library. The Rust crate `raven-gui` (used as `raven`) links it through `RAVEN_LIB_DIR`, with `RAVEN_STATIC=1` for a static library.
-  - It renders with Vulkan, loaded at run time; macOS needs MoltenVK. It has native windows on Win32, X11/Wayland and Cocoa.
+- Raven facts that shape this design, verified in its repository at v0.3.0 (first written against v0.2.3):
+  - It's a C11 library. Its Rust bindings (package `raven-gui`, used as `raven`) live in the Raven repository under `bindings/rust` and link the library through `RAVEN_LIB_DIR`, with `RAVEN_STATIC=1` for a static library. They are **not on crates.io**: the `raven-gui` crate there is an unrelated project (a Uxn emulator GUI, MPL-2.0).
+  - It renders with Metal on macOS (the default since 0.3, so MoltenVK is no longer needed) and with Vulkan, loaded at run time, elsewhere. It has native windows on Win32, X11/Wayland and Cocoa, and a null backend with no window system for tests.
+  - Charts, plots, tables and node graphs are created in code (`Rwidget_create`), not declared in XML.
   - Widgets: `Chart` kinds Pie, Donut, Gauge, Heatmap and Sparkline; `Plot` for curves over axes; `Table` with virtual rows; a `TextEditor` with JSON highlighting; a node graph.
   - Windows can be written in XML, and `window_from_xml` loads them.
   - The README itself says the public API is still subject to change (pre-1.0).
@@ -58,22 +59,23 @@ The producer side (discovery, the probe, the handshake and the live stream) live
 - All `unsafe` calls into `raven` live in `crates/rustman-viz/src/raven_adapter/`. The rest of the crate talks to a safe internal trait (`Surface`, `ChartHandle`, `TableHandle`, `GraphHandle`).
 - Inside the adapter: `#![deny(unsafe_op_in_unsafe_fn)]`, a `// SAFETY:` comment on every block, a handle type that frees its widget in `Drop`, and all Raven calls on the thread that called `Rinit`.
 - Protocol decoding runs on a separate reader thread and hands typed updates to the UI thread through a bounded channel (capacity 1024; the newest progress update wins when it's full, while `finding` and `*_finished` are never dropped).
-- `raven-gui` is pinned to an exact version (`=0.2.3` at writing). Upgrades are explicit PRs that touch only the adapter. CI builds against the pinned version.
+- The bindings are a git dependency pinned to the commit of a Raven release tag (v0.3.0, `c34466d`), and `deny.toml` allows only that repository as a git source. Upgrades are explicit PRs that touch only the adapter. CI builds against the pinned version.
+- `crates/rustman-viz` is excluded from the root workspace and has its own workspace and lockfile. Otherwise resolving the root workspace would fetch the Raven repository on every `cargo build` of `rustman`, which would break the "no trace in `rustman`" goal.
 
 ### D5. Window layouts as embedded XML
-Each view's skeleton is an XML file compiled into the binary (`include_str!`), loaded with `window_from_xml`, and its widgets looked up by name. Data is pushed through the adapter. With `RUSTMAN_VIZ_DEV_LAYOUTS=<dir>`, layouts are loaded from disk instead, so Raven's hot reload can be used while designing. That's a development aid, not a user feature.
+Each view's skeleton is an XML file compiled into the binary (`include_str!`), loaded with `window_from_xml`, and its widgets looked up by name. Labels are filled in place. Charts, plots, tables, editors and graphs are created in code inside named empty containers. Data is pushed through the adapter. With `RUSTMAN_VIZ_DEV_LAYOUTS=<dir>`, layouts are loaded from disk instead, so Raven's hot reload can be used while designing. That's a development aid, not a user feature.
 
 ### D6. View content mapping
 | View | Raven widgets | Data source |
 |------|---------------|-------------|
 | Run dashboard | `Chart` Sparkline KPI tiles (requests, pass %, p50, p95, errors), `Chart` Donut (2xx/3xx/4xx/5xx/transport errors), `Plot` latency over time, `Plot` histogram (bucketed), `Table` per-request rows with an embedded sparkline | run events / run report |
 | Exploration dashboard | `Chart` Heatmap (operations × status classes), `Chart` Gauge (operation coverage %, status-code coverage %), `Table` findings sorted by severity, then operation | exploration events / report |
-| API graph | node graph: one node per operation, links for data dependencies (a capture from A feeds a parameter of B), colour by worst finding severity | exploration report dependency graph |
+| API graph | node graph: one node per operation, links for data dependencies (a capture from A feeds a parameter of B), colour by worst finding severity | the `dependencies` field of the exploration report (producer, consumer, parameter, pointer), added to `rustman.report/v1` as an optional field and filled from the explorer's resource graph |
 | Response inspector | `Table` (virtual rows) for a top-level or JSONPath-selected array, columns from the union of keys in the first 1,000 elements; read-only `TextEditor` with JSON highlighting | `inspect_response` / blob_ref |
 
 ### D7. Packaging
 - `rustman` release artifacts are unchanged.
-- `rustman-viz` artifacts per OS are built in a separate CI job. It downloads the matching prebuilt Raven release, links statically (`RAVEN_STATIC=1`) where the platform allows, and bundles `raven.dll` next to the executable on Windows if it's built shared. On macOS the release notes say to install MoltenVK (`brew install molten-vk`).
+- `rustman-viz` artifacts per OS are built in a separate CI job. It downloads the matching prebuilt Raven release, links statically (`RAVEN_STATIC=1`) where the platform allows, and bundles `raven.dll` next to the executable on Windows if it's built shared. On macOS it draws with Metal and needs nothing else.
 - `cargo install rustman-viz` documents the `RAVEN_LIB_DIR` requirement. `build.rs` fails with an actionable message when the library isn't found.
 - Apache-2.0 notice for Raven (and its `third_party` notices) is shipped with the `rustman-viz` artifacts.
 
@@ -99,4 +101,4 @@ New optional component, nothing to migrate. Ships after `add-openapi-explorer`, 
 
 ## Open Questions
 
-- Will Raven publish prebuilt static libraries for all three OSes on each release, or should our CI build Raven from source at the pinned commit? This only affects the packaging job, not the specs.
+- ~~Will Raven publish prebuilt static libraries for all three OSes on each release?~~ Yes: v0.2.3 and v0.3.0 publish static and shared packages for Linux, macOS (universal) and Windows (MSVC and MinGW), with `SHA256SUMS.txt`. CI downloads them and checks the checksum.

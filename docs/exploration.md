@@ -138,6 +138,7 @@ Findings on the same rule and operation are reported once, with the number of `o
 | `left_behind` | Created resources that were not deleted |
 | `cleanup` | Each delete of a created resource and the status it got |
 | `operations` | The documented operations in document order, with their `operation_id` and `tags` (JUnit groups by the first tag) |
+| `dependencies` | The data dependencies discovery found: each `producer` operation whose response provides a `parameter` of a `consumer` operation, and the JSON `pointer` it is read from (the [API graph](viz.md#api-graph) draws them). Absent when there are none. |
 
 ## Reproducing findings
 

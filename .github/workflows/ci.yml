@@ -250,6 +250,57 @@ jobs:
         env:
           RUSTMAN_MCP_EVERYTHING: ${{ runner.temp }}/everything/node_modules/@modelcontextprotocol/server-everything/dist/index.js
 
+  # add-raven-visualizer tasks 3.1, 3.3-3.5, 4.5: the optional companion
+  # builds against the pinned Raven release and its tests run with Raven's
+  # headless backend (no window system, no GPU). It has its own workspace,
+  # so the jobs above never fetch or build Raven.
+  viz-companion:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates/rustman-viz
+    env:
+      RAVEN_VERSION: v0.3.0
+      RAVEN_STATIC: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install toolchain from rust-toolchain.toml
+        working-directory: .
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/rustman-viz
+      - name: X11 development files (the static Raven library links libX11)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev
+      - name: Download and verify the Raven library
+        run: |
+          base="https://github.com/oscar-soirey/Raven/releases/download/$RAVEN_VERSION"
+          cd "$RUNNER_TEMP"
+          curl -fsSLO "$base/raven-linux-x64-static.tar.gz"
+          curl -fsSLO "$base/SHA256SUMS.txt"
+          grep ' raven-linux-x64-static.tar.gz$' SHA256SUMS.txt | sha256sum -c -
+          tar -xzf raven-linux-x64-static.tar.gz
+          echo "RAVEN_LIB_DIR=$RUNNER_TEMP/raven-linux-x64-static/lib" >> "$GITHUB_ENV"
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --features raven --locked -- -D warnings
+      - name: Tests (models without Raven, then the executable, headless)
+        run: |
+          cargo test --locked
+          cargo test --features raven --locked
+      - name: No HTTP client in the companion (read-only, task 4.5)
+        run: |
+          if cargo tree --features raven --locked --edges normal --prefix none \
+              | grep -E '^(hyper|hyper-util|reqwest|ureq|rustman-http|rustman-core|tokio) '; then
+            echo "the companion must not depend on an HTTP client"; exit 1
+          fi
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: crates/rustman-viz/Cargo.toml
+          command: check
+          arguments: --all-features
+
   deny:
     runs-on: ubuntu-latest
     steps:

@@ -1,0 +1,42 @@
+<!-- Exploration dashboard (add-raven-visualizer D5, D6). -->
+<Window Title="Rustman · Exploration" Width="1280" Height="860" MinWidth="900" MinHeight="600">
+  <VBox Spacing="14" Slot.Padding="18">
+    <HBox Spacing="12">
+      <VBox Spacing="2" Slot.Fill="1">
+        <Label Name="title" Text="Exploration" TextSize="22"/>
+        <Label Name="subtitle" Text="" Color="#8A93A6"/>
+      </VBox>
+      <Border Padding="8,4" CornerRadius="12" Slot.VAlign="Center">
+        <Label Name="state" Text="Running"/>
+      </Border>
+    </HBox>
+    <HBox Spacing="12" Slot.Fill="3">
+      <Border Padding="12" CornerRadius="10" Slot.Fill="3">
+        <VBox Spacing="6">
+          <Label Text="Probes by operation and status class (click a row to filter the findings)" Color="#8A93A6"/>
+          <VBox Name="heatmap" Slot.Fill="1"/>
+        </VBox>
+      </Border>
+      <VBox Spacing="12" Width="260">
+        <Border Padding="12" CornerRadius="10" Slot.Fill="1">
+          <VBox Spacing="6">
+            <Label Text="Operation coverage" Color="#8A93A6"/>
+            <VBox Name="coverage_operations" Slot.Fill="1"/>
+          </VBox>
+        </Border>
+        <Border Padding="12" CornerRadius="10" Slot.Fill="1">
+          <VBox Spacing="6">
+            <Label Text="Documented status coverage" Color="#8A93A6"/>
+            <VBox Name="coverage_statuses" Slot.Fill="1"/>
+          </VBox>
+        </Border>
+      </VBox>
+    </HBox>
+    <Border Padding="12" CornerRadius="10" Slot.Fill="2">
+      <VBox Spacing="6">
+        <Label Name="findings_heading" Text="Findings" Color="#8A93A6"/>
+        <VBox Name="findings" Slot.Fill="1"/>
+      </VBox>
+    </Border>
+  </VBox>
+</Window>
