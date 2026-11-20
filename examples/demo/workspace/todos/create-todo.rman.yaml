@@ -1,0 +1,26 @@
+version: 1
+kind: http
+name: Create todo
+method: POST
+url: '{{base_url}}/todos'
+body:
+  type: json
+  content:
+    title: Ship it
+assertions:
+  - status: 201
+  - json:
+      path: $.id
+      type: integer
+  - json:
+      path: $.title
+      equals: Ship it
+  - json:
+      path: $.done
+      equals: false
+  - latency:
+      total_lt: 500
+captures:
+  - var: id
+    from: json
+    path: $.id

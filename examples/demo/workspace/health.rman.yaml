@@ -1,0 +1,12 @@
+version: 1
+kind: http
+name: Health
+method: GET
+url: '{{base_url}}/health'
+assertions:
+  - status: 200
+  - json:
+      path: $.status
+      equals: ok
+  - latency:
+      total_lt: 500

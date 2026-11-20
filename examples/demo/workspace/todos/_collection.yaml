@@ -1,0 +1,9 @@
+name: Todos
+description: The todo endpoints, all behind a bearer token
+order:
+  - list-todos
+  - create-todo
+  - get-todo
+auth:
+  type: bearer
+  token: '{{api_token}}'
