@@ -9,6 +9,7 @@ use std::path::Path;
 use serde::Deserialize;
 
 use super::common::Variables;
+use super::docs::DocsMeta;
 use super::graphql::GraphqlRequest;
 use super::grpc::GrpcRequest;
 use super::http::HttpRequest;
@@ -93,6 +94,20 @@ impl Request {
         tags.as_deref().unwrap_or_default()
     }
 
+    /// The request's `docs:` key, when the file has one.
+    pub fn docs(&self) -> Option<&DocsMeta> {
+        match self {
+            Self::Http(r) => r.docs.as_ref(),
+            Self::Graphql(r) => r.docs.as_ref(),
+            Self::Jsonrpc(r) => r.docs.as_ref(),
+            Self::Mcp(r) => r.docs.as_ref(),
+            Self::Grpc(r) => r.docs.as_ref(),
+            Self::Ws(r) => r.docs.as_ref(),
+            Self::Sse(r) => r.docs.as_ref(),
+            Self::Opaque(r) => r.docs.as_ref(),
+        }
+    }
+
     /// The request's layer of Rustman variables. A graphql request's
     /// `variables` are GraphQL variables sent in the payload, not a layer.
     pub fn variables(&self) -> Option<&Variables> {
@@ -134,6 +149,7 @@ pub struct OpaqueRequest {
     pub name: String,
     pub description: Option<String>,
     pub tags: Option<Vec<String>>,
+    pub docs: Option<DocsMeta>,
     pub variables: Option<Variables>,
     pub source: String,
 }
@@ -314,6 +330,7 @@ struct OpaqueHeader {
     name: String,
     description: Option<String>,
     tags: Option<Vec<String>>,
+    docs: Option<DocsMeta>,
     variables: Option<Variables>,
 }
 
@@ -325,6 +342,7 @@ pub fn load_opaque(file: &Path, text: &str) -> Result<Request, LoadError> {
         name: header.name,
         description: header.description,
         tags: header.tags,
+        docs: header.docs,
         variables: header.variables,
         source: text.to_owned(),
     }))

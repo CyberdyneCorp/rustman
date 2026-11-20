@@ -24,7 +24,7 @@ pub mod subscription;
 pub mod ws;
 
 pub use adhoc::{AD_HOC, ad_hoc_entry};
-pub use catalog::{CATALOG_CACHE_DIR, Catalog, CatalogError, MethodSpec, ParamSpec};
+pub use catalog::{CATALOG_CACHE_DIR, Catalog, CatalogError, ErrorSpec, MethodSpec, ParamSpec};
 pub use client::JsonrpcClient;
 pub use envelope::{Envelope, IdSequence, Response, RpcError, classify, request_body};
 pub use error::JsonrpcError;

@@ -46,6 +46,8 @@ pub struct JsonrpcRequest {
     pub name: String,
     pub description: Option<String>,
     pub tags: Option<Vec<String>>,
+    /// How the request appears in `rustman docs` output.
+    pub docs: Option<super::docs::DocsMeta>,
     /// An `http`, `https`, `ws` or `wss` URL; `{{variables}}` are
     /// interpolated.
     pub endpoint: String,
@@ -378,6 +380,7 @@ pub fn jsonrpc_as_http(file: &Path, request: &JsonrpcRequest) -> Result<HttpRequ
         name: request.name.clone(),
         description: request.description.clone(),
         tags: request.tags.clone(),
+        docs: request.docs.clone(),
         method: Some(Method::parse("POST").expect("POST is a method")),
         url: request.endpoint.clone(),
         query: None,

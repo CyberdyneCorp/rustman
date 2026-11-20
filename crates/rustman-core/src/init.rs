@@ -76,6 +76,7 @@ fn sample_request() -> Request {
         name: "Ping".to_owned(),
         description: Some("Sample request created by rustman init".to_owned()),
         tags: None,
+        docs: None,
         method: Method::parse("GET").ok(),
         url: "{{base_url}}/get".to_owned(),
         query: None,

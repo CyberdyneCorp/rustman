@@ -78,6 +78,14 @@ Every value written to the site SHALL pass the `environments` redaction step. Se
 - **WHEN** docs are built
 - **THEN** the build SHALL fail with `secret value found in site/<file>` and exit code 1, and SHALL NOT leave that file in place
 
+### Requirement: Literal credentials in generated docs
+Literal credentials written in request files SHALL be redacted in every output file, including code samples, examples and the search index: credential-named header values, the userinfo of a URL, and the values of query parameters and body fields whose name reads like a credential (`password`, `token`, `secret`, `api_key`). Variable references SHALL be kept as written.
+
+#### Scenario: Literal credentials in a URL and body
+- **GIVEN** a request with url `https://user:pw-literal-123@api.example/x?api_key=querysecret123` and JSON body field `password: hunter2literal`
+- **WHEN** docs are built
+- **THEN** no output file, code sample or search index entry SHALL contain `pw-literal-123`, `querysecret123` or `hunter2literal`, and the page SHALL show `«redacted:userinfo»` and `api_key=«redacted:api_key»`
+
 ### Requirement: Environment values are not published by default
 Variables SHALL be rendered by name only. A variable's value SHALL appear only when it is listed in `[docs].publish_variables`, which SHALL reject secrets with exit code 2. `--env <name>` SHALL select which environment's publishable values to show, defaulting to none.
 

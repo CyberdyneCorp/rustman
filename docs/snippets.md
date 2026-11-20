@@ -153,4 +153,6 @@ error: snippet: kind 'mcp' has no snippet export
 
 The snippet engine lives in `rustman-http` (`rustman_http::snippet`), so the CLI, the TUI and generated docs share it: `snippet(&resolved, lang, &options)` renders one language from a resolved request, and `resolve_placeholders` resolves a request for placeholder mode. Each language is one `minijinja` template in `crates/rustman-http/src/snippet/templates/` plus its quoting rules.
 
+`rustman docs` code samples are this engine in placeholder mode, so a page shows byte for byte what `rustman export snippet --placeholders` prints with no environment selected, for requests that use no secret and no dynamic variable (docs also write secrets declared in any environment as `«redacted:<name>»` and keep `{{$uuid}}` as written; see [API docs](api-docs.md#code-samples)). `custom_snippet(&resolved, lang, &options, template)` renders a user template (`[docs].template_dirs`) over the same view; templates see the global `docs_context_version` (`TEMPLATE_CONTEXT_VERSION`). A `Resolver` built with `keep_dynamics()` writes `{{$uuid}}` and the other dynamic values back as written instead of evaluating them.
+
 In the TUI, `Alt+C` or **Copy as…** in the palette copies the current request as a snippet through OSC 52; see [Terminal UI](tui.md#copy-as-code).

@@ -1,0 +1,41 @@
+[package]
+name = "rustman-docs"
+description = "Static API documentation generated from a Rustman workspace"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+rustman-core.workspace = true
+rustman-http.workspace = true
+rustman-explore.workspace = true
+rustman-graphql.workspace = true
+rustman-jsonrpc.workspace = true
+apollo-compiler.workspace = true
+minijinja = { workspace = true, features = ["macros", "multi_template"] }
+pulldown-cmark.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_json_path.workspace = true
+thiserror.workspace = true
+# The preview server (`rustman docs serve`, design D6).
+bytes.workspace = true
+http.workspace = true
+http-body-util = { workspace = true, features = ["channel"] }
+hyper = { workspace = true, features = ["server", "http1"] }
+hyper-util = { workspace = true, features = ["tokio"] }
+notify.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["net", "time", "rt", "sync", "fs", "macros"] }
+tokio-util.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+dunce.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "io-util"] }
+
+[lints]
+workspace = true

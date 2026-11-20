@@ -34,8 +34,8 @@
 - [x] 4.4 Add a CI job that runs each snippet against a local echo server for every interpreter on the runner (curl, wget, httpie, python, node, go, pwsh, dotnet, cargo). Verify: the job asserts identical method, path, query, headers and body; missing interpreters are reported as skipped, never as passed.
   - Note: the `snippets` job in `ci.yml` runs `crates/rustman-cli/tests/snippet_run.rs` and requires all 11 languages (axios is installed in a folder of its own, cargo fetches reqwest). It also sends a non-ASCII header and body, except from PowerShell and C#, whose .NET client refuses non-ASCII header values (`export snippet` warns). Locally curl, httpie, python-requests, python-httpx, js-fetch, node-axios, go and rust-reqwest pass; wget, pwsh and dotnet are not installed here. The job is green on main (run 44364626252, all 11 languages `passed:`); locally the same test passes with the missing interpreters reported as `skipped:`.
 
-- [ ] 4.5 Implement `--placeholders` (`{{name}}` in shell tools, constants in code) and the `fetch`/`python`/`rust` aliases. Verify: snapshot tests per language in placeholder mode; a test checks that `rustman docs` output and `export snippet --placeholders` match byte for byte.
-  - Note: `--placeholders`, the aliases and the per-language placeholder snapshots are done; the `rustman docs` comparison waits for `add-docs-generator`, which has to call `rustman_http::snippet` in placeholder mode.
+- [x] 4.5 Implement `--placeholders` (`{{name}}` in shell tools, constants in code) and the `fetch`/`python`/`rust` aliases. Verify: snapshot tests per language in placeholder mode; a test checks that `rustman docs` output and `export snippet --placeholders` match byte for byte.
+  - Note: `--placeholders`, the aliases and the per-language placeholder snapshots are done; the `rustman docs` comparison is `crates/rustman-cli/tests/docs_samples.rs` (`docs_samples_match_export_snippet_placeholders_byte_for_byte`, add-docs-generator 4.1).
 
 ## 5. TUI
 

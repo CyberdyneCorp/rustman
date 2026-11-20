@@ -2,7 +2,8 @@
 //! schema order, for requests built in code. A loaded file keeps its text.
 
 use super::request::{
-    assertion, auth, body, capture, json, json_assertion, name_values, strings, variables,
+    assertion, auth, body, capture, docs_node, json, json_assertion, name_values, strings,
+    variables,
 };
 use super::{MapBuilder, Node, render};
 use crate::format::Located;
@@ -19,6 +20,7 @@ pub fn ws_to_yaml(r: &WsRequest) -> String {
         .str("name", &r.name)
         .opt_str("description", r.description.as_deref())
         .opt("tags", r.tags.as_deref().map(strings))
+        .opt("docs", r.docs.as_ref().map(docs_node))
         .str("url", r.url.get())
         .opt("headers", r.headers.as_deref().map(name_values))
         .opt("auth", r.auth.as_ref().map(auth))
@@ -46,6 +48,7 @@ pub fn sse_to_yaml(r: &SseRequest) -> String {
         .str("name", &r.name)
         .opt_str("description", r.description.as_deref())
         .opt("tags", r.tags.as_deref().map(strings))
+        .opt("docs", r.docs.as_ref().map(docs_node))
         .opt_str("method", r.method.as_ref().map(|m| m.as_str()))
         .str("url", r.url.get())
         .opt("headers", r.headers.as_deref().map(name_values))

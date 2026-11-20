@@ -1,0 +1,131 @@
+---
+source: crates/rustman-docs/tests/html.rs
+expression: "stable(&read(&site, \"endpoints/users-create.html\"))"
+---
+<!doctype html>
+<html lang="en" data-root="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="rustman docs <version>">
+<title>Create user - Shop</title>
+<script>try{var t=window.localStorage.getItem("rustman-docs-theme");if(t==="dark"||t==="light"){document.documentElement.setAttribute("data-theme",t)}}catch(e){}</script>
+<link rel="stylesheet" href="../assets/app.c2ca6b14.css">
+</head>
+<body>
+<header class="top">
+<a class="title" href="../index.html">Shop</a>
+<span class="spacer"></span>
+<button class="theme" id="theme-toggle" type="button" hidden>Toggle theme</button>
+</header>
+<div class="layout">
+<nav class="side" aria-label="Endpoints">
+<div id="search" hidden>
+<input id="search-input" type="search" placeholder="Search endpoints" aria-label="Search endpoints" autocomplete="off">
+<ul id="search-results"></ul>
+</div>
+<ul>
+<li><a class="section" href="../index.html#auth">auth</a>
+</li>
+<li><a class="section" href="../index.html#users">Users</a>
+<ul>
+<li><a href="../endpoints/users-create.html"><span class="method">POST</span> Create user</a></li>
+<li><a href="../endpoints/users-delete.html"><span class="method">DELETE</span> Delete user</a></li>
+<li><a href="../endpoints/users-get.html"><span class="method">GET</span> Get user</a></li>
+</ul>
+</li>
+</ul>
+</nav>
+<main>
+<article id="users-create">
+<h1>Create user</h1>
+<p class="request-line"><span class="method">POST</span> <code>{{base_url}}/users</code></p>
+<p>Creates a user.</p>
+<h2>Headers</h2>
+<table>
+<thead><tr><th>Header</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td><code>Content-Type</code></td><td><code>application/json</code></td></tr>
+<tr><td><code>Authorization</code></td><td><code>Bearer {{token}}</code></td></tr>
+</tbody>
+</table>
+<h2>Body</h2>
+<p>Body type: <code>json</code></p>
+<table>
+<thead><tr><th>Field</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td><code>name</code></td><td><code>Ada</code></td></tr>
+<tr><td><code>role</code></td><td><code>admin</code></td></tr>
+</tbody>
+</table>
+<h2>Expected behavior</h2>
+<ul>
+<li>Expected: status 201</li>
+</ul>
+<h2>Produces</h2>
+<ul>
+<li>Produces: {{user_id}} from json $.id</li>
+</ul>
+<h2>Code samples</h2>
+<div class="samples">
+<input type="radio" name="sample" id="sample-1" checked><label for="sample-1">curl</label>
+<input type="radio" name="sample" id="sample-2"><label for="sample-2">httpie</label>
+<input type="radio" name="sample" id="sample-3"><label for="sample-3">fetch</label>
+<input type="radio" name="sample" id="sample-4"><label for="sample-4">python</label>
+<input type="radio" name="sample" id="sample-5"><label for="sample-5">rust</label>
+<pre class="sample" data-lang="curl"><code>curl &#39;{{base_url}}/users&#39; -H &#39;Content-Type: application/json&#39; -H &#39;Authorization: «redacted:token»&#39; --data-raw &#39;{&quot;name&quot;:&quot;Ada&quot;,&quot;role&quot;:&quot;admin&quot;}&#39; -L</code></pre>
+<pre class="sample" data-lang="httpie"><code>http --ignore-stdin --follow &#39;--raw={&quot;name&quot;:&quot;Ada&quot;,&quot;role&quot;:&quot;admin&quot;}&#39; -- POST &#39;{{base_url}}/users&#39; \
+  &#39;Content-Type:application/json&#39; \
+  &#39;Authorization:Bearer «redacted:token»&#39;</code></pre>
+<pre class="sample" data-lang="fetch"><code>const BASE_URL = &quot;{{base_url}}&quot;;
+
+const response = await fetch(BASE_URL + &quot;/users&quot;, {
+  method: &quot;POST&quot;,
+  headers: {
+    &quot;Content-Type&quot;: &quot;application/json&quot;,
+    &quot;Authorization&quot;: &quot;Bearer «redacted:token»&quot;,
+  },
+  body: JSON.stringify({&quot;name&quot;: &quot;Ada&quot;, &quot;role&quot;: &quot;admin&quot;}),
+});
+console.log(response.status);
+console.log(await response.text());</code></pre>
+<pre class="sample" data-lang="python"><code>import requests
+
+BASE_URL = &quot;{{base_url}}&quot;
+
+response = requests.post(
+    BASE_URL + &quot;/users&quot;,
+    json={&quot;name&quot;: &quot;Ada&quot;, &quot;role&quot;: &quot;admin&quot;},
+    headers={
+        &quot;Content-Type&quot;: &quot;application/json&quot;,
+        &quot;Authorization&quot;: &quot;Bearer «redacted:token»&quot;,
+    },
+)
+print(response.status_code)
+print(response.text)</code></pre>
+<pre class="sample" data-lang="rust"><code>// Cargo.toml: reqwest = { version = &quot;0.12&quot;, features = [&quot;blocking&quot;] }
+
+const BASE_URL: &amp;str = &quot;{{base_url}}&quot;;
+
+fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    let client = reqwest::blocking::Client::builder()
+        .build()?;
+    let response = client
+        .request(reqwest::Method::POST, [BASE_URL, &quot;/users&quot;].concat())
+        .header(&quot;Content-Type&quot;, &quot;application/json&quot;)
+        .header(&quot;Authorization&quot;, &quot;Bearer «redacted:token»&quot;)
+        .body(&quot;{\&quot;name\&quot;:\&quot;Ada\&quot;,\&quot;role\&quot;:\&quot;admin\&quot;}&quot;)
+        .send()?;
+    println!(&quot;{}&quot;, response.status());
+    println!(&quot;{}&quot;, response.text()?);
+    Ok(())
+}</code></pre>
+</div>
+</article>
+</main>
+</div>
+<footer class="muted" style="padding:16px">Generated by rustman docs <version></footer>
+<script src="../assets/search-index.bea4d117.js"></script>
+<script src="../assets/app.4aaf3d9e.js"></script>
+</body>
+</html>

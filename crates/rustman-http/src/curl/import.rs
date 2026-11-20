@@ -252,6 +252,7 @@ impl Parsed {
             name: request_name(method.as_str(), &url),
             description: None,
             tags: None,
+            docs: None,
             method: Some(method),
             url,
             query,

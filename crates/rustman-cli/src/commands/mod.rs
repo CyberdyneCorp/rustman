@@ -5,6 +5,7 @@ pub mod bench;
 pub mod completions;
 pub mod contract;
 pub mod cookies;
+pub mod docs;
 pub mod env;
 pub mod exec;
 pub mod explore;

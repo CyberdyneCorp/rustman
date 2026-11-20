@@ -4,10 +4,8 @@
 //! the session's secret values (and their base64 forms) and the sensitive
 //! header names, so no code path can skip it.
 
-use base64::Engine as _;
-use base64::engine::general_purpose::{STANDARD, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD};
 use rustman_core::model::{Auth, NameValue, Request};
-use rustman_core::redact::{MIN_HEADER_CREDENTIAL, remember_for_logs};
+use rustman_core::redact::{MIN_HEADER_CREDENTIAL, base64_forms, remember_for_logs};
 use rustman_core::secret::placeholder;
 use rustman_core::{Redactor, Secret, Workspace};
 use serde_json::Value;
@@ -50,9 +48,8 @@ impl OutputRedactor {
             return;
         }
         self.redactor.add(secret);
-        for engine in [&STANDARD, &STANDARD_NO_PAD, &URL_SAFE, &URL_SAFE_NO_PAD] {
-            self.redactor
-                .add_value(secret.name(), &engine.encode(value));
+        for form in base64_forms(value) {
+            self.redactor.add_value(secret.name(), &form);
         }
         remember_for_logs(&self.redactor);
     }
@@ -216,6 +213,8 @@ fn mask_pair(items: &mut [Value]) {
 
 #[cfg(test)]
 mod tests {
+    use base64::Engine as _;
+    use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
     use serde_json::json;
 
     use super::*;

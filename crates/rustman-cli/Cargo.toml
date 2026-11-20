@@ -35,6 +35,7 @@ rustman-contract.workspace = true
 rustman-viz-client.workspace = true
 rustman-viz-protocol.workspace = true
 rustman-bench.workspace = true
+rustman-docs.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
 anstream.workspace = true

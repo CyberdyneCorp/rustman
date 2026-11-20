@@ -1,0 +1,15 @@
+---
+source: crates/rustman-docs/tests/markdown.rs
+expression: "read(&out, \"sections/users.md\")"
+---
+# Users
+
+[Index](../README.md)
+
+<p>User <strong>accounts</strong>. See <a href="https://guide.example/users">the guide</a>.</p>
+
+## Endpoints
+
+- [POST Create user](../endpoints/users-create.md) `{{base_url}}/users`
+- [DELETE Delete user](../endpoints/users-delete.md) `{{base_url}}/users/{{user_id}}`
+- [GET Get user](../endpoints/users-get.md) `{{base_url}}/users/{{user_id}}`

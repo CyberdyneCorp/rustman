@@ -95,6 +95,8 @@ enum Command {
     Trace(commands::trace::TraceArgs),
     /// Open a run or exploration report in the graphical viz companion (rustman-viz)
     Viz(commands::viz::VizArgs),
+    /// Generate static API documentation from the workspace, or preview it
+    Docs(commands::docs::DocsArgs),
 }
 
 fn main() -> ExitCode {
@@ -158,6 +160,7 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
         Command::Contract(args) => commands::contract::run(&args),
         Command::Trace(args) => commands::trace::run(&args),
         Command::Viz(args) => commands::viz::run(&args),
+        Command::Docs(args) => commands::docs::run(&args),
     }
 }
 

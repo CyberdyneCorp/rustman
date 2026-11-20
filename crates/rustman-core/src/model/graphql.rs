@@ -46,6 +46,8 @@ pub struct GraphqlRequest {
     pub name: String,
     pub description: Option<String>,
     pub tags: Option<Vec<String>>,
+    /// How the request appears in `rustman docs` output.
+    pub docs: Option<super::docs::DocsMeta>,
     /// The GraphQL endpoint URL; `{{variables}}` are interpolated.
     pub endpoint: String,
     /// The inline document; never interpolated.
@@ -227,6 +229,7 @@ pub fn graphql_as_http(
         name: request.name.clone(),
         description: request.description.clone(),
         tags: request.tags.clone(),
+        docs: request.docs.clone(),
         method: Some(Method::parse("POST").expect("POST is a method")),
         url: request.endpoint.clone(),
         query: None,

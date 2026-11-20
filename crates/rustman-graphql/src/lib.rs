@@ -31,6 +31,7 @@ mod variables;
 
 pub use cache::{CachedSchema, SCHEMA_CACHE_DIR, SchemaCache, cache_key, normalize_endpoint};
 pub use completion::{Completion, CompletionKind, complete};
+pub use deprecation::deprecation_reason;
 pub use document::load_document;
 pub use error::GraphqlError;
 pub use execute::{ApqOutcome, HttpOperation, HttpResult, execute_http};

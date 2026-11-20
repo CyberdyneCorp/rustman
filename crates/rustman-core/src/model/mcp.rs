@@ -76,6 +76,8 @@ pub struct McpRequest {
     pub name: String,
     pub description: Option<String>,
     pub tags: Option<Vec<String>>,
+    /// How the request appears in `rustman docs` output.
+    pub docs: Option<super::docs::DocsMeta>,
     /// The name of a server the workspace defines.
     pub server: String,
     pub operation: McpOperation,
@@ -116,6 +118,7 @@ impl McpRequest {
             name: name.to_owned(),
             description: None,
             tags: None,
+            docs: None,
             server: server.to_owned(),
             operation,
             params: (!params.is_empty()).then_some(params),

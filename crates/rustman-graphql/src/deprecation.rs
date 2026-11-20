@@ -13,7 +13,7 @@ use crate::validate::{Diagnostic, Severity, position};
 pub const DEFAULT_REASON: &str = "No longer supported";
 
 /// The `reason` of a `@deprecated` directive in `directives`, if any.
-pub(crate) fn deprecation_reason(directives: &DirectiveList) -> Option<String> {
+pub fn deprecation_reason(directives: &DirectiveList) -> Option<String> {
     let directive = directives.get("deprecated")?;
     let reason = directive
         .specified_argument_by_name("reason")

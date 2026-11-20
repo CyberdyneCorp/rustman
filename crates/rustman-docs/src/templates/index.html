@@ -1,0 +1,43 @@
+{% extends "layout.html" %}
+{% block content %}
+<h1>{{ site.title }}</h1>
+{% if site.variables %}
+<h2 id="variables">Variables</h2>
+<table>
+<thead><tr><th>Name</th><th>Value</th></tr></thead>
+<tbody>
+{% for v in site.variables %}
+<tr><td><code>{{ v.name }}</code></td><td><code>{{ v.value }}</code></td></tr>
+{% endfor %}
+</tbody>
+</table>
+{% endif %}
+{% for section in site.sections recursive %}
+<section>
+{% set h = "h2" if section.depth == 1 else "h3" %}
+<{{ h }} id="{{ section.slug }}">{{ section.title }}</{{ h }}>
+{% if section.description %}
+{{ section.description|safe -}}
+{% endif %}
+{% if section.endpoints %}
+<ul>
+{% for e in section.endpoints %}
+<li><a href="endpoints/{{ e.slug }}.html">{% if e.method %}<span class="method">{{ e.method }}</span> {% endif %}{{ e.name }}</a>{% if e.url %} <code>{{ e.url }}</code>{% endif %}{% if e.deprecated %} <span class="badge">deprecated</span>{% endif %}</li>
+{% endfor %}
+</ul>
+{% endif %}
+{{ loop(section.sections) -}}
+</section>
+{% endfor %}
+{% for set in site.references %}
+<section>
+<h2 id="{{ set.slug }}">{{ set.title }}</h2>
+<p><code>{{ set.endpoint }}</code></p>
+<ul>
+{% for p in set.pages %}
+<li><a href="reference/{{ p.slug }}.html">{{ p.name }}</a> <span class="muted">{{ p.label }}</span>{% if p.deprecated %} <span class="badge">deprecated</span>{% endif %}</li>
+{% endfor %}
+</ul>
+</section>
+{% endfor %}
+{% endblock %}

@@ -138,6 +138,7 @@ pub fn request_file(
             capture.target()
         )),
         tags: None,
+        docs: None,
         method: Some(method),
         url: url.to_owned(),
         query: None,

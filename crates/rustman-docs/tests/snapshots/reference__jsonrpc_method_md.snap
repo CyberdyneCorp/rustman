@@ -1,0 +1,35 @@
+---
+source: crates/rustman-docs/tests/reference.rs
+expression: "read(&site, \"reference/json-rpc-methods-eth-getbalance.md\")"
+---
+# eth\_getBalance
+
+[Index](../README.md) / JSON-RPC methods `{{base_url}}/rpc`
+
+*method*
+
+<p>Balance of an &lt;account&gt;.</p>
+
+## Params
+
+| Name | Required | Schema |
+| --- | --- | --- |
+| address | yes | {"type":"string"} |
+| block | no | {"type":"string"} |
+
+## Errors
+
+| Code | Message |
+| --- | --- |
+| -32000 | header not found |
+
+## Schemas
+
+### Result
+
+```json
+{
+  "type": "string",
+  "pattern": "^0x"
+}
+```

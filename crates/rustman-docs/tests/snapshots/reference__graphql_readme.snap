@@ -1,0 +1,21 @@
+---
+source: crates/rustman-docs/tests/reference.rs
+expression: "&readme[at..]"
+---
+## GraphQL schema
+
+`{{base_url}}/graphql`
+
+- [Book](reference/graphql-schema-book.md) *object*
+- [CreateUserInput](reference/graphql-schema-createuserinput.md) *input*
+- [DateTime](reference/graphql-schema-datetime.md) *scalar*
+- [Message](reference/graphql-schema-message.md) *object*
+- [Mutation](reference/graphql-schema-mutation.md) *object*
+- [Node](reference/graphql-schema-node.md) *interface*
+- [Query](reference/graphql-schema-query.md) *object*
+- [Role](reference/graphql-schema-role.md) *enum*
+- [SearchResult](reference/graphql-schema-searchresult.md) *union*
+- [Session](reference/graphql-schema-session.md) *object*
+- [Subscription](reference/graphql-schema-subscription.md) *object*
+- [Upload](reference/graphql-schema-upload.md) *scalar*
+- [User](reference/graphql-schema-user.md) *object*

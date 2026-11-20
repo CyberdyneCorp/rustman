@@ -101,6 +101,7 @@ fn http_request(r: &ImportedRequest, target: &Target<'_>, notes: &mut Vec<Note>)
         name: r.name.clone(),
         description: r.description.clone(),
         tags: None,
+        docs: None,
         method: Method::parse(&r.method).ok(),
         url: r.url.clone(),
         query: name_values(&r.query),

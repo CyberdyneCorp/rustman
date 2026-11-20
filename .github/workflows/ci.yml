@@ -101,6 +101,15 @@ jobs:
       - name: Require Python for the wire regression corpus
         shell: bash
         run: echo "RUSTMAN_REQUIRE_PYTHON=1" >> "$GITHUB_ENV"
+      # add-docs-generator task 3.3: the search benchmark and the headless
+      # browser test need node and Chrome (both preinstalled on the Linux
+      # runner); RUSTMAN_REQUIRE_BROWSER turns a missing one into a failure.
+      - name: Require node and Chrome for the docs search tests
+        if: runner.os == 'Linux'
+        run: |
+          node --version
+          google-chrome --version
+          echo "RUSTMAN_REQUIRE_BROWSER=1" >> "$GITHUB_ENV"
       - run: cargo test --workspace --locked
       # add-trace-propagation section 4: everything again with OTLP export
       # built in on Linux; macOS and Windows run the export tests against

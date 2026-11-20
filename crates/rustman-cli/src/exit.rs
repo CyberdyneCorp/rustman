@@ -93,6 +93,9 @@ pub enum CliError {
     /// A bench refused before any load: bad flags, a cap, or the policy.
     #[error(transparent)]
     Bench(#[from] rustman_bench::BenchError),
+    /// A docs build that cannot run, or whose output held a secret.
+    #[error(transparent)]
+    Docs(#[from] rustman_docs::DocsError),
 }
 
 impl From<RequestSnippetError> for CliError {
@@ -115,6 +118,7 @@ impl CliError {
             Self::Graphql(err) => graphql_code(err),
             Self::Mcp(err) => mcp_code(err),
             Self::Grpc(err) => u8::try_from(err.exit_code()).unwrap_or(REQUEST),
+            Self::Docs(err) => err.exit_code(),
             Self::Curl(_)
             | Self::History(_)
             | Self::Import(_)

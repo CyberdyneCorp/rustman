@@ -734,16 +734,20 @@ fn is_credential(value: &str) -> bool {
     !marker && value.chars().count() >= MIN_HEADER_CREDENTIAL
 }
 
+/// The base64 forms of `value`: standard and URL-safe alphabets, padded
+/// or not. Shared by every second pass that matches encoded secrets (the
+/// MCP server's output redactor, the docs generator's leak scan).
+pub fn base64_forms(value: &str) -> [String; 4] {
+    [&STANDARD, &STANDARD_NO_PAD, &URL_SAFE, &URL_SAFE_NO_PAD].map(|engine| engine.encode(value))
+}
+
 /// The forms of a secret `value` an echo may carry besides those every
 /// value is matched in (`redact/forms.rs`): base64 (standard and
 /// URL-safe, padded or not), for a secret echoed inside a token, and hex
 /// in lower and upper case, for a secret echoed as bytes (JSON-RPC nodes
 /// write data as hex).
 fn echo_forms(value: &str) -> Vec<String> {
-    let mut forms: Vec<String> = [&STANDARD, &STANDARD_NO_PAD, &URL_SAFE, &URL_SAFE_NO_PAD]
-        .iter()
-        .map(|engine| engine.encode(value))
-        .collect();
+    let mut forms: Vec<String> = base64_forms(value).into();
     let hex: String = value.bytes().map(|b| format!("{b:02x}")).collect();
     forms.push(hex.to_uppercase());
     forms.push(hex);

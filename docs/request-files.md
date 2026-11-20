@@ -63,6 +63,7 @@ Every request file has these fields, in this order:
 | `name` | yes | The name shown in reports and used by `rustman send <name>`. |
 | `description` | no | Free text. |
 | `tags` | no | A list of strings. |
+| `docs` | no | How `rustman docs` shows the request: `example: true` publishes its latest recorded exchange (redacted), `hidden: true` leaves it out of the site, `description` adds Markdown to its page (see [API docs](api-docs.md#request-file-docs-key)). |
 | `variables` | no | Request-level variables (see environments.md for precedence). |
 | `assertions` | no | Checks on the response (see [assertions.md](assertions.md)). |
 | `captures` | no | Values extracted from the response for later requests. |
@@ -688,7 +689,7 @@ Load errors name the file and line, and Rustman reports every broken file at onc
 
 ```text
 legacy/soap.rman.yaml:2: unknown request kind 'soap' (expected one of: http, graphql, jsonrpc, grpc, mcp, ws, sse)
-users/list.rman.yaml:5: unknown field `header`, expected one of version, kind, name, description, tags, method, url, query, headers, body, auth, settings, variables, assertions, captures
+users/list.rman.yaml:5: unknown field `header`, expected one of version, kind, name, description, tags, docs, method, url, query, headers, body, auth, settings, variables, assertions, captures
 ```
 
 Unknown fields, duplicate keys, wrong types, bad indentation and unclosed quotes are all errors with exact positions. Rustman never guesses what a misspelled key meant.

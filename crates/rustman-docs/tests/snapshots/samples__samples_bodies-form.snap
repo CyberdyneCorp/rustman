@@ -1,0 +1,76 @@
+---
+source: crates/rustman-docs/tests/samples.rs
+expression: "samples_of(ws.path(), slug)"
+---
+## Code samples
+
+### curl
+
+```sh
+curl '{{base_url}}/form' --data-raw 'q=a+b%26c&page={{page}}' -L
+```
+
+### httpie
+
+```sh
+http --ignore-stdin --follow '--raw=q=a+b%26c&page={{page}}' -- POST '{{base_url}}/form' \
+  'Content-Type:application/x-www-form-urlencoded'
+```
+
+### fetch
+
+```js
+const BASE_URL = "{{base_url}}";
+const PAGE = "{{page}}";
+
+const response = await fetch(BASE_URL + "/form", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/x-www-form-urlencoded",
+  },
+  body: "q=a+b%26c&page=" + PAGE,
+});
+console.log(response.status);
+console.log(await response.text());
+```
+
+### python
+
+```python
+import requests
+
+BASE_URL = "{{base_url}}"
+PAGE = "{{page}}"
+
+response = requests.post(
+    BASE_URL + "/form",
+    data=("q=a+b%26c&page=" + PAGE).encode(),
+    headers={
+        "Content-Type": "application/x-www-form-urlencoded",
+    },
+)
+print(response.status_code)
+print(response.text)
+```
+
+### rust
+
+```rust
+// Cargo.toml: reqwest = { version = "0.12", features = ["blocking"] }
+
+const BASE_URL: &str = "{{base_url}}";
+const PAGE: &str = "{{page}}";
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = reqwest::blocking::Client::builder()
+        .build()?;
+    let response = client
+        .request(reqwest::Method::POST, [BASE_URL, "/form"].concat())
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(["q=a+b%26c&page=", PAGE].concat())
+        .send()?;
+    println!("{}", response.status());
+    println!("{}", response.text()?);
+    Ok(())
+}
+```
