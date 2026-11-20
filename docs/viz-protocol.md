@@ -62,6 +62,13 @@ A bench (`rustman bench --viz`, see [Load testing](bench.md)) opens the `bench` 
 
 A stress run (`rustman stress --viz`, see [Stress testing](stress.md)) opens the `stress` view and streams the same `bench_tick` per second for valid traffic, then `close`. A companion whose `hello_ack` lacks `stress` gets no stream, and the run warns `viz companion has no stress view` once.
 
+Monitor trends (`rustman monitor status --viz` and `v` in the TUI's Monitors view, see [Monitors](monitors.md)) open the `monitor_trend` view and send one `monitor_trend` per monitor, then `close`: the uptime gauges (24 hours, 7 and 30 days, left out without runs), the p95 latency of each hour with runs, oldest first, and the outcomes by UTC hour of day for the heatmap. They hold counts, timings and outcomes only, never request or response content. A companion whose `hello_ack` lacks `monitor_trend` gets nothing, and Rustman shows the text status with a note:
+
+```json
+{"type":"open_view","view":"monitor_trend","title":"rustman monitor status"}
+{"type":"monitor_trend","monitor":"api-health","environment":"prod","schedule":"every 5m","uptime_24h":98.95,"uptime_7d":99.5,"uptime_30d":99.9,"latency":[{"hour":"2026-11-17T09:00:00Z","p95_ms":123.0}],"hour_of_day":[{"hour":9,"passed":11,"failed":1,"errored":0,"skipped":0}]}
+```
+
 
 A response for the inspector, inline or by reference. Header values and bodies are redacted by the producer before they are written (secrets appear as `«redacted:name»`); the companion has no reveal function:
 

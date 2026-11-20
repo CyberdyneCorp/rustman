@@ -134,6 +134,12 @@ impl BenchViz {
         }
     }
 
+    /// Queue `message`, which must not be dropped: wait at most
+    /// [`FINISH_TIMEOUT`] when the companion is behind.
+    pub(crate) fn send(&self, message: Message) {
+        send_until(&self.queue, message, Instant::now() + FINISH_TIMEOUT);
+    }
+
     /// Send `bench_finished` (when the bench has an outcome) and `close`,
     /// waiting at most [`FINISH_TIMEOUT`]; a companion that does not read
     /// them in time is killed. The companion's windows may stay open after

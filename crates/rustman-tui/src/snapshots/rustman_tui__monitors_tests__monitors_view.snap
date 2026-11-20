@@ -1,0 +1,30 @@
+---
+source: crates/rustman-tui/src/monitors_tests.rs
+expression: screen(&mut state)
+---
+┌ › Request ─────────────────────────────────────────────────────────────────────────────┐
+│ METHOD   No request open                                                               │
+│ Params  Headers  Body  Auth  Assertions                                                │
+│ Open a request from the sidebar · press Ctrl+T for a new one                           │
+│                                                                                        │
+│                                                                                        │
+│                                                                                        │
+│                                                                                        │
+│           ┌Monitors────────────────────────────────────────────────────────┐           │
+│           │ › api-health   fail    98.95% ▁▁▂▂▂▃▃▃▃▄▄▄▅▅▅▆▆▆▆▇▇▇██ firing  │           │
+│           │   checkout     pass   100.00% ▁▁▂▂▂▃▃▃▃▄▄▄▅▅▅▆▆▆▆▇▇▇██         │           │
+│           │                                                                │           │
+└───────────│ api-health · prod · every 5m                                   │───────────┘
+┌ Response ─│ firing consecutive_failures: 2 since 2026-03-01T09:50:00Z      │───────────┐
+│ No respons│ 2026-03-01T10:00:00Z  fail      120 ms                         │           │
+│           │ 2026-03-01T09:55:00Z  fail       95 ms                         │           │
+│           │                                                                │           │
+│           │ j/k select · r run now · v trends · Esc close                  │           │
+│           └────────────────────────────────────────────────────────────────┘           │
+│                                                                                        │
+│                                                                                        │
+│                                                                                        │
+│                                                                                        │
+│                                                                                        │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+ Scratch session │ no environment │ TLS verified │ 0 in flight                Ctrl+Q quit

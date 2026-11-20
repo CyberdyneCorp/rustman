@@ -44,6 +44,10 @@ exceptions = [
     # CC0-1.0 is a public-domain dedication, compatible with MIT OR
     # Apache-2.0. Allowed only for the TUI's file watcher.
     { allow = ["CC0-1.0"], crate = "notify" },
+    # 0BSD is a permissive license without even an attribution clause.
+    # Allowed only for lettre's quoted-printable encoder (monitor email
+    # alerts, the `smtp` feature).
+    { allow = ["0BSD"], crate = "quoted_printable" },
 ]
 
 [licenses.private]

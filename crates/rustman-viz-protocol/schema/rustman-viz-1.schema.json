@@ -108,7 +108,7 @@
         "properties": {
           "view": {
             "type": "string",
-            "description": "run_dashboard, exploration_dashboard, api_graph, response_inspector, bench"
+            "description": "run_dashboard, exploration_dashboard, api_graph, response_inspector, bench, stress, monitor_trend"
           },
           "title": {
             "type": "string"
@@ -735,6 +735,104 @@
       },
       "then": {
         "type": "object"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "monitor_trend"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "monitor",
+          "environment",
+          "schedule"
+        ],
+        "properties": {
+          "monitor": {
+            "type": "string"
+          },
+          "environment": {
+            "type": "string"
+          },
+          "schedule": {
+            "type": "string"
+          },
+          "uptime_24h": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "uptime_7d": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "uptime_30d": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "latency": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "hour",
+                "p95_ms"
+              ],
+              "properties": {
+                "hour": {
+                  "type": "string"
+                },
+                "p95_ms": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "hour_of_day": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "hour",
+                "passed",
+                "failed",
+                "errored",
+                "skipped"
+              ],
+              "properties": {
+                "hour": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 23
+                },
+                "passed": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "failed": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "errored": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "skipped": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        }
       }
     }
   ]

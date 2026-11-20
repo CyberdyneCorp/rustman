@@ -115,6 +115,8 @@ pub enum Overlay {
     Import(Box<crate::import_dialog::ImportDialog>),
     /// The snapshot review queue (`Alt+A`).
     SnapshotQueue(Box<review::Queue>),
+    /// The Monitors view.
+    Monitors(Box<crate::monitors::MonitorsView>),
 }
 
 /// What fills the terminal.
@@ -319,6 +321,8 @@ pub enum Action {
     Imported(Box<crate::import_dialog::ImportDone>),
     /// An approved snapshot was written (or not).
     SnapshotApproved(Box<review::Approved>),
+    /// The Monitors view's load or run finished.
+    MonitorsDone(Box<crate::monitors::MonitorsDone>),
 }
 
 /// Why the loop stopped without the user quitting.
@@ -421,6 +425,8 @@ pub enum Effect {
     Import(Box<crate::import_dialog::ImportJob>),
     /// Write an approved snapshot.
     ApproveSnapshot(Box<review::ApproveJob>),
+    /// Load the monitors or run one.
+    Monitors(Box<crate::monitors::MonitorJob>),
 }
 
 impl State {
@@ -628,6 +634,10 @@ fn on_workbench(state: &mut State, action: Action) -> Vec<Effect> {
         Action::Imported(done) => crate::import_dialog::on_done(state, *done),
         Action::SnapshotApproved(done) => {
             review::on_approved(state, *done);
+            Vec::new()
+        }
+        Action::MonitorsDone(done) => {
+            crate::monitors::on_done(state, *done);
             Vec::new()
         }
         other => viewer_keys::on_action(state, other),

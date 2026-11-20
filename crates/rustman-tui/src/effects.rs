@@ -115,6 +115,7 @@ fn execute_other(effect: Effect) -> Action {
         Effect::Snippet(job) => crate::copy_as::execute(&job),
         Effect::Import(job) => crate::import_dialog::execute(&job),
         Effect::ApproveSnapshot(job) => crate::review::execute(&job),
+        Effect::Monitors(job) => crate::monitors::execute(&job),
         other => Action::Abort(Abort::Failed(format!("unexpected effect {other:?}"))),
     }
 }

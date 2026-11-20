@@ -33,6 +33,7 @@ pub fn shell_key(state: &mut State, chord: Chord) -> Vec<Effect> {
         }
         Some(Overlay::Import(_)) => import_dialog::key(state, chord),
         Some(Overlay::SnapshotQueue(_)) => review::queue_key(state, chord),
+        Some(Overlay::Monitors(_)) => crate::monitors::key(state, chord),
         _ => match crate::webhook::key(state, chord)
             .or_else(|| crate::mock_server::key(state, chord))
             .or_else(|| crate::mcp::key(state, chord))
@@ -268,6 +269,7 @@ pub fn run(state: &mut State, action: ActionId) -> Vec<Effect> {
         ActionId::ImportOpen => import_dialog::open(state),
         ActionId::VizOpen => return viz::start(state),
         ActionId::SnapshotReview => review::open_queue(state),
+        ActionId::MonitorsOpen => return crate::monitors::open(state),
         ActionId::MockOpen => {
             state.mcp.open = false;
             crate::mock_server::toggle_pane(state);

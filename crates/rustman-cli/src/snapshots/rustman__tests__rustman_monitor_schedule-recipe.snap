@@ -1,0 +1,34 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Print a scheduler configuration that runs a monitor
+
+Usage: rustman monitor schedule-recipe [OPTIONS] --for <SCHEDULER> <NAME>
+
+Arguments:
+  <NAME>
+          The monitor (its name)
+
+Options:
+      --for <SCHEDULER>
+          The scheduler to configure
+          
+          [possible values: cron, systemd, launchd, github-actions]
+
+      --write <PATH>
+          Write the configuration to this file instead of printing it
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

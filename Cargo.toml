@@ -34,6 +34,7 @@ rustman-mock = { path = "crates/rustman-mock", version = "0.1.0" }
 rustman-contract = { path = "crates/rustman-contract", version = "0.1.0" }
 rustman-bench = { path = "crates/rustman-bench", version = "0.1.0" }
 rustman-docs = { path = "crates/rustman-docs", version = "0.1.0" }
+rustman-monitor = { path = "crates/rustman-monitor", version = "0.1.0" }
 
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
@@ -279,6 +280,17 @@ hdrhistogram = { version = "7.5", default-features = false }
 # Executor overhead benchmark (add-load-testing task 1.3), dev-only; no
 # plots, rayon or HTML reports.
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
+# Scheduled monitors (add-scheduled-monitors design D2): cron expressions
+# with croner over jiff, which handles timezones and DST and bundles the tz
+# database where the OS has none (Windows). croner's default chrono backend
+# is not used (chrono is unmaintained, RUSTSEC-2026-0543); the `cron` crate
+# and tokio-cron-scheduler are rejected (design D2).
+croner = { version = "4.0.2", default-features = false, features = ["jiff"] }
+jiff = { version = "0.2.35", features = ["serde"] }
+# Monitor email alerts (add-scheduled-monitors design D5), behind the
+# rustman-monitor `smtp` feature: SMTP over rustls with the ring provider
+# and the OS roots; no native-tls, no aws-lc-rs.
+lettre = { version = "0.11.24", default-features = false, features = ["smtp-transport", "builder", "tokio1", "tokio1-rustls", "ring", "rustls-native-certs"] }
 
 # API docs (add-docs-generator design open question): CommonMark rendering
 # of collection and request descriptions, pure Rust. Raw HTML in the input is

@@ -27,6 +27,9 @@ pub enum Message {
     BenchTick(BenchTick),
     /// The end of a bench; never dropped.
     BenchFinished(BenchFinished),
+    /// The trend of one monitor (add-scheduled-monitors), for the
+    /// `monitor_trend` view.
+    MonitorTrend(Box<MonitorTrend>),
     InspectResponse(Box<InspectResponse>),
     /// A payload too large for one line, written to a file.
     BlobRef(BlobRef),
@@ -75,6 +78,9 @@ pub enum View {
     /// Load against latency and errors (`rustman stress --viz`): the
     /// stream is the bench's (`bench_tick` per second, then `close`).
     Stress,
+    /// Uptime gauges, a latency plot and an outcome heatmap per monitor
+    /// (`rustman monitor status --viz`, `v` in the TUI's Monitors view).
+    MonitorTrend,
     /// A view added by a later minor version.
     #[serde(other)]
     Unknown,
@@ -291,6 +297,48 @@ pub struct BenchFinished {
     pub aborted: Option<String>,
 }
 
+/// The trend of one monitor over the store's retention: counts, timings
+/// and outcomes only, never request or response content.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MonitorTrend {
+    pub monitor: String,
+    pub environment: String,
+    /// As shown by `rustman monitor list`, such as `every 5m`.
+    pub schedule: String,
+    /// Uptime gauges in percent; left out without executed runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uptime_24h: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uptime_7d: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uptime_30d: Option<f64>,
+    /// The p95 latency of each hour with executed runs, oldest first.
+    #[serde(default)]
+    pub latency: Vec<LatencyPoint>,
+    /// Outcomes by UTC hour of day, `hour` 0 to 23.
+    #[serde(default)]
+    pub hour_of_day: Vec<HourOutcomes>,
+}
+
+/// One point of the latency plot.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LatencyPoint {
+    /// RFC 3339 start of the hour (UTC).
+    pub hour: String,
+    pub p95_ms: f64,
+}
+
+/// One cell row of the outcome heatmap.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct HourOutcomes {
+    /// The UTC hour of day, 0 to 23.
+    pub hour: u8,
+    pub passed: u64,
+    pub failed: u64,
+    pub errored: u64,
+    pub skipped: u64,
+}
+
 /// One response header, as received.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Header {
@@ -372,6 +420,7 @@ impl Message {
             Self::LoadReport(_) => "load_report",
             Self::BenchTick(_) => "bench_tick",
             Self::BenchFinished(_) => "bench_finished",
+            Self::MonitorTrend(_) => "monitor_trend",
             Self::InspectResponse(_) => "inspect_response",
             Self::BlobRef(_) => "blob_ref",
             Self::Error(_) => "error",

@@ -21,8 +21,9 @@ pub use frame::{
 pub use message::{
     Assertions, BenchFinished, BenchThreshold, BenchTick, BlobRef, Body, Close, ErrorMessage,
     ExchangeCompleted, ExplorationFinished, ExplorationStarted, Finding, Header, Hello, HelloAck,
-    HelloReject, InspectResponse, LoadReport, Message, OpenView, Outcome, ProbeCompleted,
-    ReportKind, RunFinished, RunStarted, RunState, RunSummary, Severity, View,
+    HelloReject, HourOutcomes, InspectResponse, LatencyPoint, LoadReport, Message, MonitorTrend,
+    OpenView, Outcome, ProbeCompleted, ReportKind, RunFinished, RunStarted, RunState, RunSummary,
+    Severity, View,
 };
 
 /// The protocol this build speaks.

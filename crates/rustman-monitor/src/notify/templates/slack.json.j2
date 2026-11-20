@@ -1,0 +1,16 @@
+{
+  "text": {{ title | tojson }},
+  "attachments": [
+    {
+      "color": {{ color | tojson }},
+      "text": {{ text | tojson }},
+      "fields": [
+        {"title": "Monitor", "value": {{ monitor | tojson }}, "short": true},
+        {"title": "Environment", "value": {{ environment | tojson }}, "short": true},
+        {"title": "Rule", "value": {{ (rule or "none") | tojson }}, "short": false},
+        {"title": "Latest failure", "value": {{ (failure or "none") | tojson }}, "short": false}
+      ],
+      "ts": {{ timestamp }}
+    }
+  ]
+}

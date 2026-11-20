@@ -55,6 +55,8 @@ const KNOWN_KEYS: &[(&str, &[&str])] = &[
     ("bench", BENCH_KEYS),
     // Read by rustman-bench's stress module (add-stress-testing).
     ("stress", STRESS_KEYS),
+    // Read by rustman-monitor (add-scheduled-monitors).
+    ("monitors", &["retention"]),
     // Read by rustman-webhook (add-webhook-inspector).
     ("webhook", &["host", "port", "verifiers"]),
     // Read by rustman-mock (add-openapi-mock-server).
@@ -148,6 +150,8 @@ pub struct Settings {
     #[serde(default)]
     pub docs: DocsSettings,
     #[serde(default)]
+    pub monitors: MonitorSettings,
+    #[serde(default)]
     pub variables: Variables,
 }
 
@@ -172,6 +176,16 @@ pub struct DocsSettings {
     /// Folders, relative to the workspace root, whose templates override
     /// or add code-sample templates by language id.
     pub template_dirs: Vec<String>,
+}
+
+/// `[monitors]`: settings of scheduled monitors, read by rustman-monitor
+/// (add-scheduled-monitors).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct MonitorSettings {
+    /// How long hourly aggregates are kept, such as `30d` (the default when
+    /// unset); rustman-monitor validates it.
+    pub retention: Option<String>,
 }
 
 /// `[jsonrpc]`: settings of the JSON-RPC client. Not `JsonrpcSettings`:

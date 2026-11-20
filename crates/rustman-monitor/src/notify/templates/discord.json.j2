@@ -1,0 +1,17 @@
+{
+  "content": {{ title | tojson }},
+  "embeds": [
+    {
+      "title": {{ title | tojson }},
+      "description": {{ text | tojson }},
+      "color": {{ color_int }},
+      "timestamp": {{ at | tojson }},
+      "fields": [
+        {"name": "Monitor", "value": {{ monitor | tojson }}, "inline": true},
+        {"name": "Environment", "value": {{ environment | tojson }}, "inline": true},
+        {"name": "Rule", "value": {{ (rule or "none") | tojson }}},
+        {"name": "Latest failure", "value": {{ (failure or "none") | tojson }}}
+      ]
+    }
+  ]
+}

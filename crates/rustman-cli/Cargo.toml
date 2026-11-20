@@ -36,6 +36,7 @@ rustman-viz-client.workspace = true
 rustman-viz-protocol.workspace = true
 rustman-bench.workspace = true
 rustman-docs.workspace = true
+rustman-monitor.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
 anstream.workspace = true
@@ -52,6 +53,8 @@ tokio-util.workspace = true
 # OTLP export of client spans (add-trace-propagation section 4); off by
 # default, so the default build has no opentelemetry crate.
 otlp = ["rustman-http/otlp", "rustman-tui/otlp", "rustman-test-support/otlp"]
+# Email alerts for monitors over SMTP (add-scheduled-monitors design D5).
+smtp = ["rustman-monitor/smtp"]
 
 [dev-dependencies]
 assert_cmd.workspace = true

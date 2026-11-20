@@ -128,7 +128,8 @@ fn update_gitignore(dir: &Path, report: &mut InitReport) -> Result<(), ConfigErr
     Ok(())
 }
 
-fn ignores_rustman_dir(gitignore: &str) -> bool {
+/// Whether a `.gitignore` text has a line ignoring `.rustman/` at its root.
+pub fn ignores_rustman_dir(gitignore: &str) -> bool {
     gitignore
         .lines()
         .map(str::trim)
