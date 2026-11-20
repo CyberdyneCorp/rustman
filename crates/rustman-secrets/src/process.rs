@@ -46,6 +46,16 @@ async fn spawn_and_wait(
     own_group: bool,
 ) -> Result<Output, RunError> {
     let (program, args) = argv.split_first().ok_or(RunError::NotFound)?;
+    // Windows also searches the parent's PATH and the system folders after
+    // the child's, so a program the context's PATH lacks could still run.
+    // Look it up in the context's PATH only.
+    #[cfg(windows)]
+    let program = &locate(
+        ctx.var("PATH").as_deref().unwrap_or_default(),
+        program,
+        &[".exe", ".cmd", ".bat", ".com"],
+    )
+    .ok_or(RunError::NotFound)?;
     let mut command = Command::new(program);
     command
         .args(args)
@@ -91,6 +101,32 @@ async fn spawn_and_wait(
     })
 }
 
+/// `program` found in the `;`-separated `path` folders (trying each of
+/// `extensions` when it has none), or itself when it names a path.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn locate(path: &str, program: &str, extensions: &[&str]) -> Option<std::path::PathBuf> {
+    let named = std::path::Path::new(program);
+    if named.components().count() > 1 || named.is_absolute() {
+        return Some(named.to_path_buf());
+    }
+    let candidates = |dir: &str| {
+        let base = std::path::Path::new(dir).join(program);
+        let mut all = vec![base.clone()];
+        if named.extension().is_none() {
+            all.extend(extensions.iter().map(|ext| {
+                let mut with = base.clone().into_os_string();
+                with.push(ext);
+                std::path::PathBuf::from(with)
+            }));
+        }
+        all
+    };
+    path.split(';')
+        .filter(|dir| !dir.is_empty())
+        .flat_map(candidates)
+        .find(|candidate| candidate.is_file())
+}
+
 /// The process group of a running program, killed when dropped before
 /// the program finished (a timed-out fetch drops the future).
 /// (Windows has no process groups here: the field is only read on Unix.)
@@ -114,4 +150,31 @@ impl Drop for GroupGuard {
 /// surrounding whitespace.
 pub fn trimmed(stdout: &[u8]) -> Result<String, std::str::Utf8Error> {
     std::str::from_utf8(stdout).map(|s| s.trim().to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::locate;
+
+    /// Regression: on Windows a program missing from the context's PATH
+    /// still ran from the parent's PATH (the runner's `az`), so the
+    /// credential chain timed out instead of finding no credentials.
+    #[test]
+    fn programs_are_found_only_in_the_given_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let empty = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("az.cmd"), "").unwrap();
+        let exts = [".exe", ".cmd"];
+        let path = format!("{};{}", empty.path().display(), dir.path().display());
+        assert_eq!(locate(&path, "az", &exts), Some(dir.path().join("az.cmd")));
+        assert_eq!(
+            locate(&path, "az.cmd", &exts),
+            Some(dir.path().join("az.cmd"))
+        );
+        assert_eq!(
+            locate(&empty.path().display().to_string(), "az", &exts),
+            None
+        );
+        assert_eq!(locate("", "az", &exts), None);
+    }
 }
