@@ -1,7 +1,8 @@
 //! A workspace request as a snippet, the pipeline `rustman export
 //! snippet` and the TUI's "Copy as…" share: a GraphQL request becomes its
-//! POST, variables are resolved (or kept as placeholders), and the
-//! snippet is rendered. The secret store's warnings come with the
+//! POST, variables are resolved (or kept as placeholders), provider
+//! secrets are shown redacted without being fetched, and the snippet is
+//! rendered. The secret store's warnings come with the
 //! snippet's own.
 
 use rustman_core::settings::Settings;
@@ -44,7 +45,10 @@ pub fn request_snippet(
         Some(entry) => RequestRef { entry, ..target },
         None => target,
     };
-    let resolver = Resolver::for_request(how.settings, &target, how.environment, how.secrets);
+    // A snippet never contacts a secret provider: references are shown as
+    // `«redacted:<provider>/<path>[#field]»`.
+    let resolver = Resolver::for_request(how.settings, &target, how.environment, how.secrets)
+        .redacting_secret_refs();
     let resolved = if how.placeholders {
         resolve_placeholders(&target, &resolver).map(|(r, vars)| (r, Some(vars)))
     } else {

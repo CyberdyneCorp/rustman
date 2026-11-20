@@ -10,6 +10,7 @@ publish = false
 
 [dependencies]
 rustman-core.workspace = true
+rustman-secrets.workspace = true
 rustman-bench.workspace = true
 rustman-http.workspace = true
 rustman-graphql.workspace = true

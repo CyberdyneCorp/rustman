@@ -42,6 +42,7 @@ pub enum ActionId {
     Escape,
     EnvSwitch,
     SecretsReveal,
+    SecretsRefresh,
     EditorExternal,
     EditorMode,
     EditorComplete,
@@ -143,6 +144,11 @@ pub const REGISTRY: [ActionDef; 75] = [
     def(ActionId::Escape, "ui.escape", "Close or dismiss"),
     def(ActionId::EnvSwitch, "env.switch", "Switch environment"),
     def(ActionId::SecretsReveal, "secrets.reveal", "Reveal secrets"),
+    def(
+        ActionId::SecretsRefresh,
+        "secrets.refresh",
+        "Refresh secrets",
+    ),
     def(
         ActionId::EditorExternal,
         "editor.external",

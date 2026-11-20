@@ -65,6 +65,8 @@ pub fn render_text(text: &str, context: &Context<'_, '_>) -> Rendered<String> {
                 Some(value) => out.value.push_str(&value),
                 None => out.unresolved.push(dynamic.to_string()),
             },
+            // Mock responses never read provider secrets.
+            Segment::Secret(reference) => out.unresolved.push(format!("secret:{reference}")),
         }
     }
     out

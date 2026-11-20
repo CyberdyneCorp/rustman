@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use rmcp::model::{JsonObject, ProgressToken, RequestId, Tool, ToolAnnotations};
 use rmcp::service::{Peer, RoleServer};
+use rustman_core::secrets::provider::mentions_reference;
 use schemars::JsonSchema;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -264,8 +265,34 @@ pub fn exists(name: &str) -> bool {
     catalog().iter().any(|t| t.name == name)
 }
 
+/// Refuse `{{secret:...}}` references anywhere in a tool's arguments
+/// (secret-providers spec "Agents cannot write secret references"): an agent
+/// may send saved requests that use references, but never choose which
+/// secret is fetched or where it goes.
+fn refuse_secret_references(arguments: &Value) -> Result<(), ToolError> {
+    if !mentions_secret(arguments) {
+        return Ok(());
+    }
+    Err(ToolError::new(
+        ErrorCode::InvalidInput,
+        "secret references ({{secret:...}}) are allowed only in saved request and environment files, not in tool arguments",
+    ))
+}
+
+fn mentions_secret(value: &Value) -> bool {
+    match value {
+        Value::String(text) => mentions_reference(text),
+        Value::Array(items) => items.iter().any(mentions_secret),
+        Value::Object(map) => map
+            .iter()
+            .any(|(key, value)| mentions_reference(key) || mentions_secret(value)),
+        _ => false,
+    }
+}
+
 /// Run the tool `name`.
 pub async fn call(name: &str, call: &Call) -> Result<ToolOutput, ToolError> {
+    refuse_secret_references(&call.arguments)?;
     match name {
         "list_requests" => workspace::list_requests(call),
         "get_request" => workspace::get_request(call),

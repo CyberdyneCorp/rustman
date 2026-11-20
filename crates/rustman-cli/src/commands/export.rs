@@ -158,7 +158,9 @@ fn curl(args: &CurlArgs) -> Result<(), CliError> {
     let env = args.selection.environment(&ws)?;
     let target = ws.find_request(&args.request, &current_dir()?)?;
     let store = secret_store(&ws)?;
-    let resolver = Resolver::for_request(&ws.settings, &target, env, &store);
+    // Provider secrets are shown redacted and never fetched.
+    let resolver =
+        Resolver::for_request(&ws.settings, &target, env, &store).redacting_secret_refs();
     let resolved = resolve_request(&target, &resolver);
     print_warnings(&store.take_warnings());
     let exported = export_curl(&resolved?, args.show_secrets);

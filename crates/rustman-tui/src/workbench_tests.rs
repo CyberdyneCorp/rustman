@@ -129,7 +129,7 @@ fn select(state: &mut State, label: &str) {
     state.shell.selected = rows.iter().position(|r| r.label == label).unwrap();
 }
 
-fn open(state: &mut State, label: &str) {
+pub(crate) fn open(state: &mut State, label: &str) {
     select(state, label);
     press(state, "Enter");
 }

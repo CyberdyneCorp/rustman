@@ -25,7 +25,7 @@ use rustman_core::vars::UsedSecret;
 
 use crate::error::RequestError;
 use crate::exchange::Exchange;
-pub(crate) use credentials::Keys;
+pub use credentials::{Keys, env_keys, profile_keys};
 
 /// Headers a signature sets; any already on a hop is replaced.
 const SIGNATURE_HEADERS: [&str; 4] = [

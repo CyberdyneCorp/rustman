@@ -142,6 +142,7 @@ impl Render<'_, '_> {
                 Segment::Literal(text) => out.push_str(text),
                 Segment::Var(name) => out.push_str(&self.variable(name)),
                 Segment::Dynamic(dynamic) => out.push_str(&format!("«dynamic:{dynamic}»")),
+                Segment::Secret(reference) => out.push_str(&format!("«redacted:{reference}»")),
             }
         }
         out

@@ -133,7 +133,7 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
     match command {
         Command::Init(args) => Ok(commands::init::run(&args).map(done)?),
         Command::Env(args) => Ok(commands::env::run(&args).map(done)?),
-        Command::Secret(args) => Ok(commands::secret::run(&args).map(done)?),
+        Command::Secret(args) => commands::secret::run(&args),
         Command::Cookies(args) => Ok(commands::cookies::run(&args).map(done)?),
         Command::Auth(args) => commands::auth::run(&args).map(done),
         Command::Import(args) => commands::import::run(&args),

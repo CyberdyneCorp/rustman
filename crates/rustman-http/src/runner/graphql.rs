@@ -20,7 +20,7 @@ use rustman_core::model::{GraphqlRequest, GraphqlTransport};
 use rustman_core::redact::remember_for_logs;
 use rustman_core::run::{GraphqlRecord, RequestRecord, SkipReason};
 use rustman_core::settings::Settings;
-use rustman_core::vars::{ResolvedGraphql, ResolvedRequest, resolve_graphql};
+use rustman_core::vars::{ResolvedGraphql, ResolvedRequest, Resolver, resolve_graphql};
 use rustman_core::workspace::RequestRef;
 use tokio_util::sync::CancellationToken;
 
@@ -85,8 +85,9 @@ impl Runner<'_> {
             return Sent::skipped(record, SkipReason::UnsupportedKind);
         };
         let captured = self.lock_captures().clone();
-        let resolver = self.resolver(request, &captured, iteration);
-        let resolved = match resolve_graphql(request, &resolver) {
+        let mut resolver = self.resolver(request, &captured, iteration);
+        let resolve = |r: &Resolver<'_>| resolve_graphql(request, r);
+        let resolved = match self.with_secrets(&mut resolver, resolve).await {
             Ok(resolved) => resolved,
             Err(e) => return Sent::errored(record, e.to_string()),
         };

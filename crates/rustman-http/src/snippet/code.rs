@@ -71,6 +71,7 @@ impl Syntax {
                 Segment::Var(name) => self.constant(&constant_name(name)),
                 Segment::Literal(text) => self.literal(text),
                 Segment::Dynamic(dynamic) => self.literal(&format!("{{{{{dynamic}}}}}")),
+                Segment::Secret(reference) => self.literal(&format!("{{{{secret:{reference}}}}}")),
             })
             .collect();
         match parts.as_slice() {

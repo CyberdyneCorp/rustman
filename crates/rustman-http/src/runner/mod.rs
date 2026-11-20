@@ -32,7 +32,7 @@ mod snapshots;
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use futures_util::future::{BoxFuture, join_all};
@@ -42,10 +42,11 @@ use rustman_core::model::Variables;
 use rustman_core::run::{
     DataRowRecord, DataRun, Plan, RequestRecord, RunRecord, Summary, now_rfc3339,
 };
+use rustman_core::secrets::provider::{SecretProviders, resolve_with_secrets};
 use rustman_core::settings::Settings;
 use rustman_core::snapshot::{SnapshotMode, SnapshotReview};
 use rustman_core::trace::{TraceLink, TracePropagation, WorkspaceScope};
-use rustman_core::vars::{ResolvedGrpc, ResolvedRequest};
+use rustman_core::vars::{ResolveError, ResolvedGrpc, ResolvedRequest, Resolver};
 use rustman_core::{Environment, Redactor, SecretStore};
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
@@ -280,6 +281,9 @@ pub struct Runner<'a> {
     link: Option<TraceLink>,
     /// `[trace.export]`: the client span of each exchange.
     export: SpanExport,
+    /// Where `{{secret:...}}` references are fetched from when a request
+    /// is sent; without them every reference is unresolved.
+    secret_providers: Option<Arc<SecretProviders>>,
 }
 
 impl<'a> Runner<'a> {
@@ -320,6 +324,7 @@ impl<'a> Runner<'a> {
             trace,
             link,
             export,
+            secret_providers: None,
         };
         runner.remember(&trace_secrets.unwrap_or_default());
         runner.remember(&link_secrets.unwrap_or_default());
@@ -329,6 +334,25 @@ impl<'a> Runner<'a> {
         }
         runner.keep_as_baseline();
         Ok(runner)
+    }
+
+    /// Resolve `{{secret:...}}` references through `providers` (shared
+    /// with the rest of the process, so their cache is too).
+    #[must_use]
+    pub fn with_secret_providers(mut self, providers: Arc<SecretProviders>) -> Self {
+        self.secret_providers = Some(providers);
+        self
+    }
+
+    /// Resolve with `resolve`, fetching the provider secrets it needs:
+    /// the only place a send contacts a secret provider.
+    pub(crate) async fn with_secrets<T>(
+        &self,
+        resolver: &mut Resolver<'_>,
+        resolve: impl Fn(&Resolver<'_>) -> Result<T, ResolveError>,
+    ) -> Result<T, ResolveError> {
+        let providers = self.secret_providers.as_deref();
+        resolve_with_secrets(resolver, providers, resolve).await
     }
 
     /// Execute every request of `plan`, `iterations` times.

@@ -18,7 +18,7 @@
 - Every resolved value joins the redaction set from `environments`, so it's masked in the TUI, history, reports and agent results.
 - Failure handling:
   - an unresolved secret is a request error (exit code 3), naming the provider and path but never the value
-  - a misconfigured provider is a configuration error (exit code 2)
+  - a misconfigured provider is a configuration error (exit code 2) when the configuration loads; a problem found only while resolving (a type not in this build, a missing region or address) leaves the reference unresolved (exit code 3)
 - CLI: `rustman secret get|test|list-providers`. `get` masks the value unless `--reveal` is passed on a TTY.
 - Agents never receive secret values.
 
@@ -35,7 +35,7 @@ None. `environments` keeps its keychain secrets and its redaction invariant unch
 ## Impact
 
 - New module `secrets/` in `rustman-core` (reference parsing, resolver, cache, provider trait). REST-based providers sit on `rustman-http`.
-- Optional cargo features `secrets-aws`, `secrets-gcp` and `secrets-azure` add the cloud credential-chain crates. They're off for plain `cargo build` and on for official release binaries.
+- Optional cargo features `secrets-aws`, `secrets-gcp` and `secrets-azure` add the cloud providers (REST clients on `rustman-http` with each platform's credential chain). They're off for plain `cargo build` and on for official release binaries.
 - New dependencies: `age` (SOPS age decryption). PGP decryption shells out to `gpg` only when it's installed.
 - `rustman.toml` gains `[secret_providers.*]`. The user config (`~/.config/rustman/config.toml`) gains `[secret_providers.*]` for `cmd` and for overriding binary paths.
 - `rustman-cli` gains `secret get|test|list-providers`. `secret set` from `environments` stays as it is.

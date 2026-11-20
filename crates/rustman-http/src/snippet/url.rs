@@ -66,6 +66,7 @@ fn encode(text: &str) -> String {
             Segment::Var(name) => format!("{{{{{name}}}}}"),
             Segment::Literal(text) => form_urlencoded::byte_serialize(text.as_bytes()).collect(),
             Segment::Dynamic(dynamic) => format!("{{{{{dynamic}}}}}"),
+            Segment::Secret(reference) => format!("{{{{secret:{reference}}}}}"),
         })
         .collect()
 }

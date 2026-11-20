@@ -17,6 +17,7 @@ use std::time::Duration;
 use rustman_core::model::Variables;
 use rustman_core::run::{Plan, now_rfc3339};
 use rustman_core::safety::{EnvironmentInfo, Governor, Limits, SafetyPolicy};
+use rustman_core::secrets::provider::SecretProviders;
 use rustman_core::snapshot::SnapshotMode;
 use rustman_http::GovernedSender;
 use rustman_http::runner::{RunContext, RunOptions, Runner};
@@ -71,6 +72,9 @@ pub struct BenchInput<'a> {
     pub interrupt: CancellationToken,
     /// Cancelled on a second Ctrl+C: requests in flight are cancelled.
     pub cancel: CancellationToken,
+    /// Resolve `{{secret:...}}` references (shared by every VU, so a
+    /// value is fetched once per run).
+    pub secret_providers: Option<Arc<SecretProviders>>,
 }
 
 /// What a bench produced.
@@ -337,8 +341,11 @@ impl<'a> Bench<'a> {
                     gate: Some(gate),
                     ..RunOptions::default()
                 };
-                let runner = Runner::new(ctx, options)
+                let mut runner = Runner::new(ctx, options)
                     .map_err(|e| BenchError::Usage(format!("bench: {e}")))?;
+                if let Some(providers) = &input.secret_providers {
+                    runner = runner.with_secret_providers(Arc::clone(providers));
+                }
                 Ok(Vu { index, runner })
             })
             .collect()

@@ -24,6 +24,7 @@ pub mod report;
 pub mod rpc;
 pub mod run;
 pub mod secret;
+pub mod secret_provider;
 pub mod send;
 pub(crate) mod session;
 pub mod snapshot;

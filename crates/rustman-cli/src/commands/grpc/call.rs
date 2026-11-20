@@ -113,7 +113,8 @@ fn send(
         secrets: &store,
         in_workspace: ws.is_some(),
     };
-    let runner = Runner::new(ctx, options)?;
+    let providers = crate::commands::exec::secret_providers(session.root(), &session.settings)?;
+    let runner = Runner::new(ctx, options)?.with_secret_providers(providers);
     let sent = runtime()?.block_on(async {
         cancel_on_ctrl_c(&cancel);
         runner.send(request, 1).await

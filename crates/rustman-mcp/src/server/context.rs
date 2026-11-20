@@ -12,8 +12,10 @@ use rustman_core::agent::AgentSettings;
 use rustman_core::model::Request;
 use rustman_core::run::now_rfc3339;
 use rustman_core::safety::MethodClass;
+use rustman_core::secrets::provider::SecretProviders;
 use rustman_core::vars::ResolvedRequest;
 use rustman_core::{Environment, Redactor, SecretStore, Workspace};
+use rustman_http::runner::Runner;
 use rustman_http::{Exchange, GovernedError, GovernedSender, SendOptions};
 use serde_json::Value;
 
@@ -95,6 +97,9 @@ pub struct AgentContext {
     bodies: Mutex<BodyStore>,
     jobs: Jobs,
     audit: AuditLog,
+    /// Where `{{secret:...}}` references of sent requests are fetched;
+    /// values are resolved inside the engine and never returned.
+    secret_providers: Option<Arc<SecretProviders>>,
 }
 
 impl std::fmt::Debug for AgentContext {
@@ -135,6 +140,23 @@ impl AgentContext {
             bodies: Mutex::new(BodyStore::default()),
             jobs: Jobs::in_pool(pool),
             audit,
+            secret_providers: None,
+        }
+    }
+
+    /// Resolve the secret references of sent requests through `providers`.
+    #[must_use]
+    pub fn with_secret_providers(mut self, providers: Option<Arc<SecretProviders>>) -> Self {
+        self.secret_providers = providers;
+        self
+    }
+
+    /// `runner`, fetching secret references through the session's
+    /// providers when it has any.
+    pub fn with_providers<'a>(&self, runner: Runner<'a>) -> Runner<'a> {
+        match &self.secret_providers {
+            Some(providers) => runner.with_secret_providers(providers.clone()),
+            None => runner,
         }
     }
 

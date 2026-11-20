@@ -288,6 +288,7 @@ fn var_value(value: &VarValue) -> Node {
         VarValue::Integer(n) => Node::plain(n),
         VarValue::Float(n) => Node::Plain(float(*n)),
         VarValue::Bool(b) => Node::plain(b),
+        VarValue::Secret(r) => Node::Map(vec![("secret".to_owned(), Node::str(r.to_string()))]),
     }
 }
 

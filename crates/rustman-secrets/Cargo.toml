@@ -1,0 +1,48 @@
+[package]
+name = "rustman-secrets"
+description = "Secret providers for Rustman: keychain, env, SOPS, 1Password, Vault and user commands"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+rustman-core.workspace = true
+rustman-http.workspace = true
+aes-gcm.workspace = true
+age.workspace = true
+base64.workspace = true
+form_urlencoded.workspace = true
+percent-encoding.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+toml.workspace = true
+url.workspace = true
+zeroize.workspace = true
+uuid.workspace = true
+tokio = { workspace = true, features = ["fs", "process", "io-util", "rt", "time", "sync"] }
+jsonwebtoken = { workspace = true, optional = true }
+time = { workspace = true, optional = true, features = ["parsing"] }
+
+[target.'cfg(unix)'.dependencies]
+# Kill a timed-out program's whole process group, not only the child.
+rustix.workspace = true
+
+[features]
+# Cloud providers (add-secret-providers design D4): thin REST clients on
+# rustman-http with each platform's credential chain. Off for a plain
+# build, on in release builds (rustman-cli feature `cloud-secrets`).
+secrets-aws = ["dep:time"]
+secrets-gcp = ["dep:jsonwebtoken"]
+secrets-azure = []
+
+[dev-dependencies]
+rustman-test-support.workspace = true
+tempfile.workspace = true
+time = { workspace = true, features = ["formatting", "parsing"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[lints]
+workspace = true

@@ -148,8 +148,9 @@ impl Runner<'_> {
             Request::Opaque(_) => return Sent::skipped(record, SkipReason::UnsupportedKind),
         };
         let captured = self.lock_captures().clone();
-        let resolver = self.resolver(request, &captured, iteration);
-        let mut resolved = match resolve_request(request, &resolver) {
+        let mut resolver = self.resolver(request, &captured, iteration);
+        let resolve = |r: &Resolver<'_>| resolve_request(request, r);
+        let mut resolved = match self.with_secrets(&mut resolver, resolve).await {
             Ok(resolved) => resolved,
             Err(e) => return Sent::errored(record, e.to_string()),
         };

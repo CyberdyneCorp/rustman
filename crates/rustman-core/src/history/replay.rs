@@ -2,7 +2,8 @@
 //! secret turned back into its `{{name}}` placeholder (request-history spec
 //! "Inspect and replay"). Replaying resolves those placeholders from the
 //! current secret store, so the stored entry never holds a secret value and
-//! a deleted secret fails with `unresolved variable(s): <name>`.
+//! a deleted secret fails with `unresolved variable(s): <name>`. A secret
+//! from a provider is fetched again when the replay is sent.
 //!
 //! A credential written literally (an `Authorization` header or auth token
 //! that uses no secret variable) is not kept, as the redaction invariant
@@ -16,12 +17,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use super::template::{Templater, Withheld};
+use crate::environment::Environment;
 use crate::model::{
     ApiKeyLocation, Auth, AwsCredentials, AwsSigV4, Jwt, JwtAlgorithm, OAuth2, OAuth2Grant,
-    RequestSettings,
+    RequestSettings, VarValue,
 };
 use crate::redact::{Redactor, sensitive_header};
 use crate::secret::Secret;
+use crate::secrets::provider::{SecretProviders, SecretRef, resolve_with_secrets};
 use crate::vars::{
     Interpolator, Layer, Lookup, ResolveError, ResolvedBody, ResolvedFile, ResolvedPair,
     ResolvedRequest, Resolver, SecretLookup, TlsFiles, VarSource,
@@ -222,19 +225,51 @@ impl ReplayRequest {
         env: Option<&str>,
         secrets: &dyn SecretLookup,
     ) -> Result<ResolvedRequest, ResolveError> {
-        if !self.withheld.is_empty() {
-            return Err(ResolveError::Unsupported(format!(
-                "this exchange cannot be replayed: {} {} not kept in history \
-                 (send the request from its file instead)",
-                self.withheld.join(", "),
-                if self.withheld.len() == 1 {
-                    "was"
-                } else {
-                    "were"
-                }
-            )));
+        self.check_kept()?;
+        let resolver = Resolver::new().with(StoredSecrets {
+            env,
+            providers: None,
+            secrets,
+        });
+        self.resolve_with(&resolver)
+    }
+
+    /// [`Self::resolve`] for a send: a placeholder naming a provider
+    /// reference (`ci/KEY`), or a variable `environment` backs with one,
+    /// is fetched again through `providers`.
+    pub async fn resolve_for_send(
+        &self,
+        environment: Option<&Environment>,
+        env: Option<&str>,
+        secrets: &dyn SecretLookup,
+        providers: Option<&SecretProviders>,
+    ) -> Result<ResolvedRequest, ResolveError> {
+        self.check_kept()?;
+        let mut resolver = Resolver::new().with(StoredSecrets {
+            env,
+            providers: Some(ProviderNames { environment }),
+            secrets,
+        });
+        resolve_with_secrets(&mut resolver, providers, |r| self.resolve_with(r)).await
+    }
+
+    fn check_kept(&self) -> Result<(), ResolveError> {
+        if self.withheld.is_empty() {
+            return Ok(());
         }
-        let resolver = Resolver::new().with(StoredSecrets { env, secrets });
+        Err(ResolveError::Unsupported(format!(
+            "this exchange cannot be replayed: {} {} not kept in history \
+             (send the request from its file instead)",
+            self.withheld.join(", "),
+            if self.withheld.len() == 1 {
+                "was"
+            } else {
+                "were"
+            }
+        )))
+    }
+
+    fn resolve_with(&self, resolver: &Resolver<'_>) -> Result<ResolvedRequest, ResolveError> {
         let mut i = resolver.interpolator();
         let request = ResolvedRequest {
             method: self.method.clone(),
@@ -649,7 +684,31 @@ impl ReplayTls {
 /// Every placeholder of a stored request names a secret of its environment.
 struct StoredSecrets<'a> {
     env: Option<&'a str>,
+    /// Set when replay may fetch provider secrets again.
+    providers: Option<ProviderNames<'a>>,
     secrets: &'a dyn SecretLookup,
+}
+
+/// Tells which placeholders of a stored request name provider secrets.
+struct ProviderNames<'a> {
+    environment: Option<&'a Environment>,
+}
+
+impl ProviderNames<'_> {
+    /// The reference behind placeholder `name`: a variable of the
+    /// environment backed by a provider, or the reference text itself
+    /// unless the environment keeps a store secret of that name.
+    fn reference(&self, name: &str) -> Option<SecretRef> {
+        if let Some(env) = self.environment {
+            if let Some(VarValue::Secret(reference)) = env.variables.get(name) {
+                return Some(reference.clone());
+            }
+            if env.secrets.iter().any(|s| s == name) {
+                return None;
+            }
+        }
+        SecretRef::parse(name).ok()
+    }
 }
 
 impl VarSource for StoredSecrets<'_> {
@@ -658,6 +717,10 @@ impl VarSource for StoredSecrets<'_> {
     }
 
     fn lookup(&self, name: &str) -> Option<Lookup> {
+        let provided = self.providers.as_ref().and_then(|p| p.reference(name));
+        if let Some(reference) = provided {
+            return Some(Lookup::Provider(reference));
+        }
         let Some(env) = self.env else {
             return Some(Lookup::SecretNotSet {
                 hint: "the exchange had no environment".to_owned(),

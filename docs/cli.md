@@ -14,6 +14,9 @@ This page covers sending and running requests, reporters, terminal behavior, log
 | `rustman secret set <name> --env <env>` | Store a secret value (read from stdin or a no-echo prompt) | [Secrets](environments.md#declaring-and-setting-a-secret) |
 | `rustman secret list --env <env>` | List the declared secrets and whether each is set | [Secrets](environments.md#declaring-and-setting-a-secret) |
 | `rustman secret rm <name> --env <env>` | Delete a stored secret value | [Secrets](environments.md#declaring-and-setting-a-secret) |
+| `rustman secret get <ref>` | Fetch a secret reference (`<provider>/<path>[#field]`) from its provider and print `•••••••• (<n> chars, <provider>)`; `--reveal` prints the value, on a terminal only (exit 2 otherwise); exits 3 when the secret cannot be resolved, whatever the cause (an unknown provider or a provider type not in this build included), as `send` does; `--workspace` | [Secret providers](secrets.md#the-secret-commands) |
+| `rustman secret test [<provider>]` | Check that secret providers (one, or every configured one) can authenticate and be reached; exits 0 when every check passes and 3 otherwise (an unknown provider name included) | [Secret providers](secrets.md#the-secret-commands) |
+| `rustman secret list-providers` | List the configured secret providers: name, type, auth, origin (workspace or user) and whether the type is in this build, never values; `--types` lists the provider types this build supports | [Secret providers](secrets.md#the-secret-commands) |
 | `rustman cookies clear` | Empty the cookie jar of an environment | [Cookies](http.md#cookies) |
 | `rustman auth login <request>` | Run the OAuth2 authorization-code login for a request and cache its token | [OAuth2](http.md#oauth2) |
 | `rustman import curl` | Create a request file from a curl command | [Curl import](http.md#import) |
@@ -33,10 +36,10 @@ This page covers sending and running requests, reporters, terminal behavior, log
 | `rustman report schema` | Print the JSON Schema of `rustman.report/v1` | [Reports](reports.md#the-canonical-report) |
 | `rustman report render <report.json> --format <format>` | Render a run or exploration report as `json`, `junit`, `markdown`, `html` or `sarif`; `-o <file>`, `--fail-on` | [Reports](reports.md#rendering) |
 | `rustman report diff <old.json> <new.json>` | List new, fixed and unchanged findings, coverage deltas and changed assertions; `--fail-on`, `--format markdown\|json` | [Reports](reports.md#comparing-reports) |
-| `rustman export curl <request>` | Print a request as a curl command (redacted) | [Curl export](http.md#export) |
+| `rustman export curl <request>` | Print a request as a curl command (redacted; secret provider references print as `«redacted:<provider>/<path>»` without being fetched) | [Curl export](http.md#export) |
 | `rustman export postman <path>` | Write a collection folder or request file as a Postman Collection v2.1 (`-o <file>`) | [Exporting](import.md#exporting) |
 | `rustman export http <path>` | Write a collection folder or request file as a `.http` file (`-o <file>`) | [Exporting](import.md#exporting) |
-| `rustman export snippet --lang <lang> <request>` | Print a request as code for one of 11 languages and tools (redacted); `--list` lists them | [Code snippets](snippets.md) |
+| `rustman export snippet --lang <lang> <request>` | Print a request as code for one of 11 languages and tools (redacted; secret provider references are never fetched); `--list` lists them | [Code snippets](snippets.md) |
 | `rustman send` | Send one request and print the response | [below](#rustman-send) |
 | `rustman run` | Run the requests under files and folders and report the results | [below](#rustman-run) |
 | `rustman bench [path]... --target <url>` | Load test request files and collections as virtual-user iterations under the safety policy pinned to `--target`; `--executor` (`constant-vus`, `ramping-vus`, `constant-arrival-rate`), `--vus`, `--duration`, `--iterations`, `--think-time`, `--stage` (or `rustman.toml [[bench.stages]]`), `--rate`, `--max-vus`, `--data`, `--data-mode`, `--data-exhaust`, `--secret-columns`, `--allow-mutations`, `--allow-destructive`, `--production`, `--timeout`, `--insecure`/`-k`, `--env`, `--var`, `--threshold`, `--report json=<file>`/`html=<file>`, `--viz`; shows a live dashboard on a terminal (a progress line every 10 s otherwise); capped by `rustman.toml [bench]`; exits 1 when a threshold fails, 2 on a usage error or a cap, 4 when the policy refuses, 130 on Ctrl+C | [Load testing](bench.md) |

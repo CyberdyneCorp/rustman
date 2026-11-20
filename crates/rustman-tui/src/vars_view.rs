@@ -173,9 +173,10 @@ impl<'a> VarScope<'a> {
             .and_then(|r| r.lookup_with_layer(name));
         match found {
             Some((layer, Lookup::Value(value))) => Info::Value { value, layer },
-            Some((layer, Lookup::Secret(_) | Lookup::SecretNotSet { .. })) => {
-                Info::Secret { layer }
-            }
+            Some((
+                layer,
+                Lookup::Secret(_) | Lookup::SecretNotSet { .. } | Lookup::Provider(_),
+            )) => Info::Secret { layer },
             None => Info::Unresolved,
         }
     }

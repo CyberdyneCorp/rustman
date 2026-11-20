@@ -552,7 +552,7 @@ pub fn has_literal(value: &str) -> bool {
     match Template::parse(value) {
         Ok(template) => template.segments().iter().any(|s| match s {
             Segment::Literal(text) => !text.trim().is_empty(),
-            Segment::Var(_) | Segment::Dynamic(_) => false,
+            Segment::Var(_) | Segment::Dynamic(_) | Segment::Secret(_) => false,
         }),
         Err(_) => !value.trim().is_empty(),
     }

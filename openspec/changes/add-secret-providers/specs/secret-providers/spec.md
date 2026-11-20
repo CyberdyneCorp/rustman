@@ -19,6 +19,14 @@ A secret reference SHALL be written `{{secret:<provider>/<path>[#<field>]}}`. `<
 - **WHEN** the workspace loads
 - **THEN** loading SHALL report `invalid secret reference 'secret:vault' (expected secret:<provider>/<path>)`
 
+### Requirement: Spaces in secret references
+`<path>` and `<field>` MAY contain spaces, but not at either end. No part of a reference SHALL contain other whitespace or braces, and `<provider>` SHALL NOT contain spaces.
+
+#### Scenario: Names with spaces
+- **GIVEN** a header `Bearer {{secret:op/Eng Team/Stripe Key/token}}`
+- **WHEN** the request is sent
+- **THEN** provider `op` SHALL be asked for the path `Eng Team/Stripe Key/token`
+
 ### Requirement: Provider-backed environment variables
 An environment file SHALL allow a variable whose value is `{secret: "<provider>/<path>[#field]"}`. That variable SHALL resolve through the provider at send time, and SHALL behave as a secret for redaction and display. Its value SHALL never be written to any file.
 
@@ -58,13 +66,31 @@ Providers SHALL be configured as `[secret_providers.<name>]` with `type` and typ
 - **WHEN** the request is sent
 - **THEN** it SHALL fail with `unknown secret provider 'lastpass' (configured: <names>)` as a request error
 
+### Requirement: Nested provider settings
+The credential check of `rustman.toml` SHALL cover values at any depth, naming a nested key by its dotted path, and SHALL refuse a string value that is a URL with a `user:password@` part. No provider setting SHALL be a table: a nested table SHALL be a configuration error (exit code 2), never ignored.
+
+#### Scenario: Token in a nested table
+- **GIVEN** `[secret_providers.vault.auth]` containing `token = "hvs.abc"`
+- **WHEN** the workspace loads
+- **THEN** loading SHALL fail with `credentials must not be stored in rustman.toml (auth.token)` and exit code 2
+
+#### Scenario: Credentials in an address
+- **GIVEN** `[secret_providers.vault]` with `address = "https://me:hvs.abc@vault.example.com"`
+- **WHEN** the workspace loads
+- **THEN** loading SHALL fail with the credentials error, without the value, and exit code 2
+
+#### Scenario: A nested table is not ignored
+- **GIVEN** `[secret_providers.vault.auth]` containing `method = "approle"`
+- **WHEN** the configuration loads
+- **THEN** loading SHALL fail with `secret provider 'vault': 'auth' must not be a table` and exit code 2
+
 ### Requirement: Supported provider types
 The system SHALL support these provider `type` values: `keychain`, `env`, `sops`, `onepassword` and `vault` in every build; `aws-secrets-manager` and `aws-ssm` with cargo feature `secrets-aws`; `gcp-secret-manager` with `secrets-gcp`; `azure-key-vault` with `secrets-azure`; and `cmd` from user config only. Release binaries SHALL enable all three cloud features. A type compiled out SHALL fail with `secret provider type '<t>' is not available in this build (feature <f>)`.
 
 #### Scenario: Cloud type in a minimal build
 - **GIVEN** a binary built without `secrets-aws` and a provider with `type = "aws-secrets-manager"`
 - **WHEN** a reference to it is resolved
-- **THEN** it SHALL fail with the not-available error naming feature `secrets-aws`
+- **THEN** it SHALL fail with the not-available error naming feature `secrets-aws`, as an unresolved secret (exit code 3 for `send`, `run` and `secret get` alike)
 
 ### Requirement: Keychain and env providers
 A `keychain` provider SHALL read entries written by `rustman secret set` (the store from `environments`), with `<path>` as `<env>/<name>`. An `env` provider SHALL read the process environment variable named by `<path>`. A missing entry or variable SHALL be unresolved.
@@ -91,7 +117,7 @@ A `sops` provider SHALL decrypt SOPS-encrypted YAML or JSON files inside the wor
 - **THEN** resolution SHALL fail with `sops: PGP decryption requires gpg, which was not found`
 
 ### Requirement: 1Password provider
-A `onepassword` provider SHALL resolve `<vault>/<item>/<field>` using the `op` CLI (`op read`) by default, or using a Connect server when `connect_host` is configured, with its token read from `OP_CONNECT_TOKEN`. The `op` binary path SHALL come from `PATH` or the user config, never from the workspace.
+A `onepassword` provider SHALL resolve `<vault>/<item>/<field>` using the `op` CLI (`op read`) by default, or using a Connect server when `connect_host` is configured, with its token read from `OP_CONNECT_TOKEN`. The `op` binary path SHALL come from `PATH` or the user config, never from the workspace. In both modes a path without a vault, item and field SHALL fail with `onepassword: path '<path>' must be <vault>/<item>/<field>` before anything is run or contacted.
 
 #### Scenario: op CLI
 - **GIVEN** a signed-in `op` CLI and provider `op` of type `onepassword`
@@ -181,10 +207,16 @@ Every value resolved through a provider SHALL be added to the redaction set from
 - **THEN** neither SHALL contain the value
 - **AND** both SHALL contain `«redacted:aws/prod/db#password»`
 
+#### Scenario: Copy as curl
+- **GIVEN** a request whose header is `Bearer {{secret:op/Eng/API/token}}`
+- **WHEN** the user runs `rustman export curl` or `rustman export snippet` on it, or copies it from the TUI
+- **THEN** the output SHALL contain `Bearer «redacted:op/Eng/API/token»`
+- **AND** no provider SHALL be contacted
+
 ### Requirement: Secret CLI commands
 The CLI SHALL provide:
 - `rustman secret get <ref>`: prints `••••••••` with the value's length and provider. `--reveal` prints the value only when stdout is a TTY; otherwise it fails with exit code 2.
-- `rustman secret test [<provider>]`: checks auth and connectivity, exiting 0 or 3.
+- `rustman secret test [<provider>]`: checks auth and connectivity, exiting 0 or 3 (an unknown provider name is a failed check, exit code 3).
 - `rustman secret list-providers`: lists name, type, auth method, origin (workspace or user) and status, never values.
 
 #### Scenario: Masked by default
@@ -201,7 +233,7 @@ The CLI SHALL provide:
 - **THEN** it SHALL report `vault: authentication failed` and exit with code 3
 
 ### Requirement: Agents never receive secret values
-Requests triggered by an agent MAY use secret references, which are resolved inside the engine. No tool of the agent interface SHALL return a resolved value: request definitions SHALL show the reference text, and results SHALL be redacted. The agent interface SHALL NOT expose `secret get` or `secret test`.
+Saved requests and environments that an agent sends MAY use secret references, which are resolved inside the engine. No tool of the agent interface SHALL return a resolved value: request definitions SHALL show the reference text, and results SHALL be redacted. The agent interface SHALL NOT expose `secret get` or `secret test`.
 
 #### Scenario: Agent reads a request file
 - **GIVEN** a request whose header is `Bearer {{secret:op/Eng/API/token}}`
@@ -211,6 +243,19 @@ Requests triggered by an agent MAY use secret references, which are resolved ins
 #### Scenario: Agent sends the request
 - **WHEN** an agent sends that request and the server echoes the token
 - **THEN** the tool result SHALL contain `«redacted:op/Eng/API/token»` and not the value
+
+### Requirement: Agents cannot write secret references
+An agent SHALL NOT write a reference itself. A tool call whose arguments (ad-hoc URL, headers, body, params, frames, variables) contain a `{{secret:...}}` placeholder SHALL be refused with `invalid_input` before anything is fetched or sent. Values inserted from variables or captures SHALL NOT be resolved again.
+
+#### Scenario: Agent writes a reference into an ad-hoc request
+- **WHEN** an agent sends an ad-hoc request with the header `Authorization: Bearer {{secret:op/Eng/API/token}}`
+- **THEN** the call SHALL fail with `invalid_input` and a message that references are allowed only in saved request and environment files
+- **AND** no provider SHALL be contacted and no request SHALL be sent
+
+#### Scenario: A captured value holds a reference
+- **GIVEN** a captured value `{{secret:op/Eng/API/token}}`
+- **WHEN** a later request uses `{{token}}`
+- **THEN** it SHALL send the text `{{secret:op/Eng/API/token}}` as is, without contacting a provider
 
 ### Requirement: Plugins and provider secrets
 A plugin SHALL receive a provider-resolved value only with a `secrets:read:<name>` grant from `plugins`, where `<name>` is the backed environment variable or the full reference (`<provider>/<path>[#field]`). Without the grant, the plugin SHALL see the redaction placeholder.

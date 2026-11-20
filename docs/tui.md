@@ -385,6 +385,7 @@ The table below is generated from the action registry; a test fails if it drifts
 | Close or dismiss | `ui.escape` | `Esc` |  |
 | Switch environment | `env.switch` | `Alt+E` |  |
 | Reveal secrets | `secrets.reveal` | `Alt+R` |  |
+| Refresh secrets | `secrets.refresh` |  |  |
 | Edit in external editor | `editor.external` | `Ctrl+E` (editor) |  |
 | Change body mode or auth type | `editor.mode` | `Alt+M` (editor) |  |
 | Show completions | `editor.complete` | `Ctrl+Space` (editor) |  |

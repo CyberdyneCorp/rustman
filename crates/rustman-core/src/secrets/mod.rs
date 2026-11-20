@@ -9,6 +9,7 @@ mod file;
 mod git;
 pub mod keychain;
 mod private_file;
+pub mod provider;
 pub mod workspace_id;
 
 use std::io;

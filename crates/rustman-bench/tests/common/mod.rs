@@ -4,6 +4,7 @@
 
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use rustman_bench::{
@@ -14,6 +15,7 @@ use rustman_core::data_rows::{DataRows, SecretColumns};
 use rustman_core::model::Variables;
 use rustman_core::run::{DataRun, plan};
 use rustman_core::safety::Permission;
+use rustman_core::secrets::provider::SecretProviders;
 use rustman_core::{SecretBackend, SecretStore, Workspace};
 use rustman_http::runner::RunContext;
 use tokio_util::sync::CancellationToken;
@@ -68,6 +70,7 @@ pub struct Setup<'a> {
     pub warmup: Option<Duration>,
     /// Interrupt the bench (a first Ctrl+C) this long after its start.
     pub interrupt_after: Option<Duration>,
+    pub secret_providers: Option<Arc<SecretProviders>>,
 }
 
 impl<'a> Setup<'a> {
@@ -82,6 +85,7 @@ impl<'a> Setup<'a> {
             thresholds: Vec::new(),
             warmup: None,
             interrupt_after: None,
+            secret_providers: None,
         }
     }
 }
@@ -137,6 +141,7 @@ pub async fn bench(
         thresholds: setup.thresholds,
         interrupt: interrupt.clone(),
         cancel: CancellationToken::new(),
+        secret_providers: setup.secret_providers.clone(),
     };
     let mut bench = Bench::prepare(input)?;
     if let Some(warmup) = setup.warmup {

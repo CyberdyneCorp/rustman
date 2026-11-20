@@ -41,6 +41,14 @@ jobs:
       - run: cargo clippy --workspace --all-targets --locked --features rustman-cli/otlp -- -D warnings
       # add-scheduled-monitors task 5.1: email alerts are behind `smtp`.
       - run: cargo clippy -p rustman-monitor --all-targets --locked --features smtp -- -D warnings
+      # add-secret-providers section 4: the cloud secret providers.
+      - run: cargo clippy --workspace --all-targets --locked --features rustman-cli/cloud-secrets -- -D warnings
+      # docs/secrets.md: each cloud feature can be built on its own.
+      - name: Each cloud secret feature on its own
+        run: |
+          for f in secrets-aws secrets-gcp secrets-azure; do
+            cargo clippy -p rustman-secrets --all-targets --locked --features "$f" -- -D warnings
+          done
       - name: No OpenTelemetry crate in the default build
         run: |
           if cargo tree --workspace --locked --edges normal --prefix none | grep -E '^opentelemetry'; then
@@ -113,6 +121,31 @@ jobs:
           google-chrome --version
           echo "RUSTMAN_REQUIRE_BROWSER=1" >> "$GITHUB_ENV"
       - run: cargo test --workspace --locked
+      # add-secret-providers task 3.2: decrypt a file the real `sops`
+      # binary encrypted for an age key (the other SOPS tests use fixtures
+      # written in the SOPS format by the test itself).
+      - name: SOPS files from the sops binary
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y age
+          curl -fsSL -o /tmp/sops https://github.com/getsops/sops/releases/download/v3.9.4/sops-v3.9.4.linux.amd64
+          sudo install -m 0755 /tmp/sops /usr/local/bin/sops
+          RUSTMAN_REQUIRE_SOPS=1 cargo test -p rustman-secrets --locked --test sops real_sops
+      # add-secret-providers tasks 4.1-4.3: the cloud providers against
+      # local stubs, and the secret commands of a build with all of them.
+      # A third rustman-cli test build would overflow the Linux runner's
+      # disk (see the otlp step), so Linux runs the CLI part in the
+      # release-secrets job.
+      - name: Cloud secret providers
+        run: cargo test -p rustman-secrets --locked --features secrets-aws,secrets-gcp,secrets-azure
+      - name: Secret commands with every cloud provider
+        if: runner.os != 'Linux'
+        run: cargo test -p rustman-cli --locked --features cloud-secrets --test secret_cli --test secret_providers
+      # add-secret-providers task 2.2: "Cloud type in a minimal build".
+      - name: Secret providers in a minimal build
+        run: |
+          cargo test -p rustman-secrets --no-default-features --locked --test builtin cloud_type_in_a_minimal_build
+          cargo build -p rustman-cli --no-default-features --locked
       # add-trace-propagation section 4: everything again with OTLP export
       # built in on Linux; macOS and Windows run the export tests against
       # the in-process collector (task 5.1's in-process variant).
@@ -234,6 +267,119 @@ jobs:
           done
           RUSTMAN_ANVIL_URL=http://127.0.0.1:8545 \
             cargo test -p rustman-cli --test rpc_run --locked -- --nocapture
+
+  # add-secret-providers task 4.1: aws-secrets-manager and aws-ssm against
+  # LocalStack (a JSON secret with a field, a SecureString parameter).
+  secrets-localstack:
+    runs-on: ubuntu-latest
+    services:
+      localstack:
+        image: localstack/localstack:3.8
+        ports: [ "4566:4566" ]
+        env:
+          SERVICES: secretsmanager,ssm
+    env:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: eu-west-1
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p rustman-secrets --features secrets-aws --test aws --locked --no-run
+      - name: Create the secret and the parameter
+        run: |
+          for _ in $(seq 1 60); do
+            curl -sf http://127.0.0.1:4566/_localstack/health >/dev/null && break
+            sleep 1
+          done
+          aws --endpoint-url http://127.0.0.1:4566 secretsmanager create-secret \
+            --name prod/db --secret-string '{"password":"localstack-password"}'
+          aws --endpoint-url http://127.0.0.1:4566 ssm put-parameter \
+            --name /app/key --type SecureString --value localstack-parameter
+      - name: Resolve them through the providers
+        env:
+          RUSTMAN_LOCALSTACK_URL: http://127.0.0.1:4566
+        run: cargo test -p rustman-secrets --features secrets-aws --test aws --locked localstack -- --nocapture
+
+  # add-secret-providers task 3.4: the vault provider against a real
+  # `vault server -dev` (KV v2 with versions, and a token without access).
+  secrets-vault:
+    runs-on: ubuntu-latest
+    services:
+      vault:
+        image: hashicorp/vault:1.17
+        ports: [ "8200:8200" ]
+        env:
+          VAULT_DEV_ROOT_TOKEN_ID: rustman-dev-root
+          VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    env:
+      VAULT_ADDR: http://127.0.0.1:8200
+      VAULT_TOKEN: rustman-dev-root
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p rustman-secrets --test vault --locked --no-run
+      - name: Write two versions of secret/app and a limited token
+        run: |
+          for _ in $(seq 1 60); do
+            curl -sf "$VAULT_ADDR/v1/sys/health" >/dev/null && break
+            sleep 1
+          done
+          for v in 1 2; do
+            curl -sf -H "X-Vault-Token: $VAULT_TOKEN" -X POST \
+              -d "{\"data\":{\"password\":\"dev-password-v$v\"}}" \
+              "$VAULT_ADDR/v1/secret/data/app"
+          done
+          curl -sf -H "X-Vault-Token: $VAULT_TOKEN" -X PUT \
+            -d '{"policy":"path \"secret/data/other\" { capabilities = [\"read\"] }"}' \
+            "$VAULT_ADDR/v1/sys/policies/acl/other-only"
+          limited=$(curl -sf -H "X-Vault-Token: $VAULT_TOKEN" -X POST \
+            -d '{"policies":["other-only"],"ttl":"10m"}' \
+            "$VAULT_ADDR/v1/auth/token/create" | jq -r .auth.client_token)
+          echo "::add-mask::$limited"
+          echo "RUSTMAN_VAULT_LIMITED_TOKEN=$limited" >> "$GITHUB_ENV"
+      - name: Resolve them through the provider
+        env:
+          RUSTMAN_VAULT_ADDR: http://127.0.0.1:8200
+          RUSTMAN_VAULT_TOKEN: rustman-dev-root
+        run: cargo test -p rustman-secrets --test vault --locked vault_dev_server -- --nocapture
+
+  # add-secret-providers task 4.4: release binaries carry every cloud
+  # secret provider (feature cloud-secrets), and the cloud providers add at
+  # most 2 MiB to the default release binary.
+  release-secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p rustman-cli --locked
+      - run: cp target/release/rustman "$RUNNER_TEMP/rustman-default"
+      - run: cargo build --release -p rustman-cli --locked --features cloud-secrets
+      - name: Every provider type is in the release binary
+        run: |
+          types=" $(target/release/rustman secret list-providers --types | tr '\n' ' ')"
+          for t in keychain env sops onepassword vault cmd aws-secrets-manager aws-ssm \
+                   gcp-secret-manager azure-key-vault; do
+            case "$types" in *" $t "*) ;; *) echo "provider type $t is missing"; exit 1 ;; esac
+          done
+      - name: Binary size budget
+        run: |
+          default=$(stat -c %s "$RUNNER_TEMP/rustman-default")
+          release=$(stat -c %s target/release/rustman)
+          echo "default $default bytes, with the cloud providers $release bytes"
+          if [ $((release - default)) -gt $((2 * 1024 * 1024)) ]; then
+            echo "the cloud secret providers add more than 2 MiB"; exit 1
+          fi
+      # The Linux part of the test job's "Secret commands with every cloud
+      # provider" step, on this job's own disk.
+      - name: Secret commands with every cloud provider
+        run: cargo test -p rustman-cli --locked --features cloud-secrets --test secret_cli --test secret_providers
 
   # add-trace-propagation task 5.1: `rustman run` with `scope: run` against
   # HotROD (an API instrumented with OpenTelemetry), with Rustman and HotROD

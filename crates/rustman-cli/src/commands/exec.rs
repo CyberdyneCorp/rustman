@@ -136,6 +136,15 @@ pub fn secret_store(root: &Path) -> Result<SecretStore, ConfigError> {
     Ok(SecretStore::open(root, backend))
 }
 
+/// The secret providers of `settings` and the user config, for the
+/// requests sent from the workspace at `root` (add-secret-providers).
+pub fn secret_providers(
+    root: &Path,
+    settings: &rustman_core::settings::Settings,
+) -> Result<std::sync::Arc<rustman_core::secrets::provider::SecretProviders>, ConfigError> {
+    rustman_secrets::load(root, settings).map(std::sync::Arc::new)
+}
+
 /// A redactor for the secret values of `env` held in `store`. The store's
 /// warnings are left for the caller to print once.
 pub fn secret_redactor(store: &SecretStore, env: &Environment) -> Redactor {
