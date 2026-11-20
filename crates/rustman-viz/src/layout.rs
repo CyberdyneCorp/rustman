@@ -27,8 +27,8 @@ impl ViewKind {
             View::ExplorationDashboard => Some(Self::Exploration),
             View::ApiGraph => Some(Self::Graph),
             View::ResponseInspector => Some(Self::Inspector),
-            // No bench dashboard yet: the companion does not advertise it.
-            View::Bench | View::Unknown => None,
+            // No bench or stress dashboard yet: the companion does not advertise them.
+            View::Bench | View::Stress | View::Unknown => None,
         }
     }
 
@@ -121,6 +121,15 @@ pub const RUN_TILES: [(&str, &str); 5] = [
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Views the companion has no dashboard for are not advertised; the
+    /// stress view landed in the protocol after the companion.
+    #[test]
+    fn views_without_a_dashboard_have_no_layout() {
+        for view in [View::Bench, View::Stress, View::Unknown] {
+            assert_eq!(ViewKind::from_view(view), None, "{view:?}");
+        }
+    }
 
     /// Task 3.5: every widget name the code looks up exists in its layout.
     #[test]
