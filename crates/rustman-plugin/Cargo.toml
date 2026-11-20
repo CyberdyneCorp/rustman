@@ -39,6 +39,9 @@ wat = { workspace = true, optional = true }
 wit-component = { workspace = true, optional = true }
 wit-parser = { workspace = true, optional = true }
 
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
 [dev-dependencies]
 hmac.workspace = true
 rustman-plugin = { path = ".", features = ["test-fixtures"] }

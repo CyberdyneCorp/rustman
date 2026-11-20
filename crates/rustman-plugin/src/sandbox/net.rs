@@ -7,7 +7,7 @@
 //! so a call can block on a request from any thread, inside a Tokio
 //! runtime or not.
 
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -16,6 +16,7 @@ use rustman_core::Environment;
 use rustman_core::Redactor;
 use rustman_core::history::{Entry, HistoryStore, NewEntry};
 use rustman_core::model::RequestSettings;
+use rustman_core::plugins::PluginNetGuard;
 use rustman_core::run::{RequestRecord, RequestStatus, SentRequest};
 use rustman_core::safety::{
     EnvironmentInfo, Governor, Limits, Origin, Permission, PolicyOptions, SafetyPolicy,
@@ -48,6 +49,9 @@ pub struct GovernedNetwork {
     history: Option<HistoryStore>,
     /// Secrets of the session, redacted from what history records.
     redactor: Redactor,
+    /// Agent sessions: admits (and audits) each request on top of the
+    /// grants and the policy.
+    guard: Option<Arc<dyn PluginNetGuard>>,
     runtime: Option<Runtime>,
 }
 
@@ -95,8 +99,17 @@ impl GovernedNetwork {
             options,
             history,
             redactor,
+            guard: None,
             runtime: Some(runtime),
         })
+    }
+
+    /// The network with `guard` admitting each request first: an agent
+    /// session's allowlist and audit log ([`PluginNetGuard`]).
+    #[must_use]
+    pub fn with_guard(mut self, guard: Arc<dyn PluginNetGuard>) -> Self {
+        self.guard = Some(guard);
+        self
     }
 
     /// The network of a session whose plugins hold `grants`: `None` when
@@ -142,6 +155,15 @@ impl GovernedNetwork {
     /// Send `request` for `plugin`, whose `net:` grants allow its host.
     pub fn fetch(&self, plugin: &str, request: Request) -> Result<Response, HostError> {
         let resolved = resolved(&request);
+        let mut redactor = Redactor::for_request(&resolved);
+        redactor.merge(&self.redactor);
+        if let Some(guard) = &self.guard {
+            let url = &resolved.url.text;
+            let shown = redactor.text(url);
+            guard
+                .admit(plugin, &resolved.method, url, &shown)
+                .map_err(|reason| HostError::PolicyDenied(redactor.text(&reason).into_owned()))?;
+        }
         let mut options = self.options.clone();
         if !request.body.is_empty() {
             options.body_override = Some(BodyOverride {
@@ -152,8 +174,6 @@ impl GovernedNetwork {
         }
         let started = Instant::now();
         let sent = self.block_on(self.sender.send(&resolved, &options));
-        let mut redactor = Redactor::for_request(&resolved);
-        redactor.merge(&self.redactor);
         match sent {
             Ok(exchange) => {
                 redactor.merge(&exchange.credentials);
@@ -231,26 +251,92 @@ pub fn is_localhost_name(host: &str) -> bool {
     host == "localhost" || host.ends_with(".localhost")
 }
 
-/// Whether `ip` is this machine or a private network: loopback
-/// (127.0.0.0/8, ::1), private (10/8, 172.16/12, 192.168/16, fc00::/7),
-/// link-local (169.254/16 with the cloud metadata address, fe80::/10) or
-/// unspecified (0.0.0.0, ::). An IPv4-mapped IPv6 address is judged as
-/// its IPv4 address.
+/// Whether `ip` is not a public address: anything that is not globally
+/// routable unicast is refused by default. IPv4: this network (0/8),
+/// private (10/8, 172.16/12, 192.168/16), shared CGNAT (100.64/10),
+/// loopback (127/8), link-local (169.254/16, with the cloud metadata
+/// address), IETF protocol assignments (192.0.0/24), documentation
+/// (192.0.2/24, 198.51.100/24, 203.0.113/24), the 6to4 relay
+/// (192.88.99/24), benchmarking (198.18/15), multicast (224/4), reserved
+/// (240/4) and broadcast. IPv6: everything outside global unicast
+/// (2000::/3: so loopback, unspecified, unique-local, link-local, the
+/// deprecated site-local fec0::/10, multicast, discard), IETF protocol
+/// assignments and Teredo (2001::/23), documentation (2001:db8::/32,
+/// 3fff::/20). An IPv6 address wrapping an IPv4 one is judged as that
+/// IPv4 address: IPv4-mapped (::ffff:0:0/96), IPv4-compatible (::/96),
+/// NAT64 (64:ff9b::/96) and 6to4 (2002::/16).
 pub fn is_private_ip(ip: IpAddr) -> bool {
     match ip {
-        IpAddr::V4(ip) => {
-            ip.is_loopback() || ip.is_private() || ip.is_link_local() || ip.is_unspecified()
-        }
-        IpAddr::V6(ip) => match ip.to_ipv4_mapped() {
-            Some(v4) => is_private_ip(IpAddr::V4(v4)),
-            None => {
-                ip.is_loopback()
-                    || ip.is_unspecified()
-                    || ip.is_unique_local()
-                    || ip.is_unicast_link_local()
-            }
+        IpAddr::V4(v4) => !is_global_v4(v4),
+        IpAddr::V6(v6) => match wrapped_v4(v6) {
+            Some(v4) => !is_global_v4(v4),
+            None => !is_global_v6(v6),
         },
     }
+}
+
+/// The IPv4 ranges that are not globally routable unicast, as
+/// `(network, prefix length)`.
+const NON_GLOBAL_V4: [([u8; 4], u32); 15] = [
+    ([0, 0, 0, 0], 8),
+    ([10, 0, 0, 0], 8),
+    ([100, 64, 0, 0], 10),
+    ([127, 0, 0, 0], 8),
+    ([169, 254, 0, 0], 16),
+    ([172, 16, 0, 0], 12),
+    ([192, 0, 0, 0], 24),
+    ([192, 0, 2, 0], 24),
+    ([192, 88, 99, 0], 24),
+    ([192, 168, 0, 0], 16),
+    ([198, 18, 0, 0], 15),
+    ([198, 51, 100, 0], 24),
+    ([203, 0, 113, 0], 24),
+    ([224, 0, 0, 0], 4),
+    ([240, 0, 0, 0], 4),
+];
+
+fn is_global_v4(ip: Ipv4Addr) -> bool {
+    let bits = u32::from(ip);
+    !NON_GLOBAL_V4.iter().any(|&(net, len)| {
+        let mask = u32::MAX << (32 - len);
+        bits & mask == u32::from(Ipv4Addr::from(net)) & mask
+    })
+}
+
+/// The IPv6 ranges inside global unicast (2000::/3) that are not globally
+/// routable, as `(network, prefix length)`.
+const NON_GLOBAL_V6: [(u128, u32); 3] = [
+    (0x2001_0000 << 96, 23),
+    (0x2001_0db8 << 96, 32),
+    (0x3fff_0000 << 96, 20),
+];
+
+fn is_global_v6(ip: Ipv6Addr) -> bool {
+    let bits = u128::from(ip);
+    in_v6(bits, 0x2000 << 112, 3)
+        && !NON_GLOBAL_V6
+            .iter()
+            .any(|&(net, len)| in_v6(bits, net, len))
+}
+
+fn in_v6(bits: u128, net: u128, len: u32) -> bool {
+    let mask = u128::MAX << (128 - len);
+    bits & mask == net & mask
+}
+
+/// The IPv4 address an IPv6 address wraps: IPv4-mapped, IPv4-compatible
+/// (`::a.b.c.d`), NAT64 (`64:ff9b::a.b.c.d`) or 6to4 (`2002:aabb:ccdd::`).
+fn wrapped_v4(ip: Ipv6Addr) -> Option<Ipv4Addr> {
+    let bits = u128::from(ip);
+    // The low 32 bits truncate to the wrapped address on purpose.
+    #[allow(clippy::cast_possible_truncation)]
+    let low = Ipv4Addr::from(bits as u32);
+    if in_v6(bits, 0xffff << 32, 96) || in_v6(bits, 0, 96) || in_v6(bits, 0x64_ff9b << 96, 96) {
+        return Some(low);
+    }
+    #[allow(clippy::cast_possible_truncation)]
+    let six_to_four = Ipv4Addr::from((bits >> 80) as u32);
+    in_v6(bits, 0x2002 << 112, 16).then_some(six_to_four)
 }
 
 /// Whether a `net:` grant of `host` names this machine or a private
@@ -367,9 +453,13 @@ mod tests {
         }
     }
 
+    /// Every address that is not globally routable unicast is refused,
+    /// including IPv6 forms wrapping a private IPv4 address.
     #[test]
     fn private_addresses_are_classified() {
         let private = [
+            // this network, private, loopback, link-local, unspecified
+            "0.1.2.3",
             "127.0.0.1",
             "127.255.0.9",
             "10.0.0.1",
@@ -378,13 +468,49 @@ mod tests {
             "192.168.1.1",
             "169.254.169.254",
             "0.0.0.0",
+            // shared CGNAT 100.64.0.0/10
+            "100.64.0.1",
+            "100.127.255.254",
+            // IETF protocol assignments 192.0.0.0/24
+            "192.0.0.170",
+            // documentation
+            "192.0.2.1",
+            "198.51.100.7",
+            "203.0.113.9",
+            // 6to4 relay anycast
+            "192.88.99.1",
+            // benchmarking 198.18.0.0/15
+            "198.18.0.1",
+            "198.19.255.255",
+            // multicast, reserved, broadcast
+            "224.0.0.1",
+            "239.255.255.250",
+            "240.0.0.1",
+            "255.255.255.255",
+            // IPv6: loopback, unspecified, link-local, unique-local
             "::1",
             "::",
             "fe80::1",
             "fd00::1",
             "fc00::1",
+            // site-local (deprecated), multicast, discard
+            "fec0::1",
+            "ff02::1",
+            "100::1",
+            // documentation, IETF assignments, Teredo
+            "2001:db8::1",
+            "3fff::1",
+            "2001::1",
+            // IPv4-mapped, IPv4-compatible, NAT64, 6to4 of private addresses
             "::ffff:127.0.0.1",
             "::ffff:169.254.169.254",
+            "::127.0.0.1",
+            "::10.0.0.1",
+            "64:ff9b::a9fe:a9fe",
+            "64:ff9b::127.0.0.1",
+            "2002:7f00:1::",
+            "2002:a9fe:a9fe::1",
+            "2002:c0a8:101::",
         ];
         for ip in private {
             assert!(is_private_ip(ip.parse().unwrap()), "{ip}");
@@ -392,9 +518,17 @@ mod tests {
         let public = [
             "93.184.216.34",
             "172.32.0.1",
+            "100.63.255.255",
+            "100.128.0.1",
+            "198.17.255.255",
+            "198.20.0.1",
+            "223.255.255.255",
             "8.8.8.8",
             "2606:4700::1111",
+            "2a00:1450::1",
             "::ffff:8.8.8.8",
+            "64:ff9b::808:808",
+            "2002:808:808::",
         ];
         for ip in public {
             assert!(!is_private_ip(ip.parse().unwrap()), "{ip}");

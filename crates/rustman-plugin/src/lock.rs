@@ -53,8 +53,12 @@ impl Lockfile {
     /// The lockfile of the workspace at `root`; empty when there is none.
     pub fn read(root: &Path) -> Result<Self, LoadError> {
         let path = root.join(LOCK_FILE);
-        match std::fs::read_to_string(&path) {
-            Ok(text) => Self::parse(&text),
+        let read = crate::files::read_workspace_file(root, &path, crate::files::MAX_LOCK_BYTES);
+        match read {
+            Ok(bytes) => match String::from_utf8(bytes) {
+                Ok(text) => Self::parse(&text),
+                Err(_) => Err(lock_error("not UTF-8 text")),
+            },
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::new()),
             Err(e) => Err(lock_error(&e.to_string())),
         }

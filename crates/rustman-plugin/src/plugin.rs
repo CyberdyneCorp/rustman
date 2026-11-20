@@ -65,6 +65,12 @@ struct Live {
     instance: Instance,
 }
 
+/// The hostcall fuel of a plugin's store: about the bytes one host call
+/// may copy out of the guest, the plugin's memory limit (at least 1 MiB).
+pub fn hostcall_fuel(limits: Limits) -> usize {
+    limits.memory_bytes().max(1024 * 1024)
+}
+
 /// A plugin ready to call.
 pub struct Plugin {
     name: String,
@@ -238,6 +244,10 @@ impl Plugin {
         );
         let mut store = Store::new(engine(), state);
         store.limiter(|state| &mut state.limiter);
+        // What one host call may copy out of the guest (strings and lists,
+        // aliased or not) is bounded by the plugin's memory limit, not
+        // wasmtime's 128 MiB default.
+        store.set_hostcall_fuel(hostcall_fuel(self.limits));
         store.epoch_deadline_callback(|mut store| store.data_mut().meter.on_deadline());
         let ticks = store.data_mut().meter.start();
         store.set_epoch_deadline(ticks);

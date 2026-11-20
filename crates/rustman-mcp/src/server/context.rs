@@ -292,6 +292,35 @@ impl AgentContext {
         self.ask(&message, &what, confirm).await
     }
 
+    /// Whether the request of a plugin kind `request` may run (plugins
+    /// spec, "Agents and plugin kinds"): `request` names the kind as its
+    /// method and `<kind>:<request id>` as its URL. `[agent] plugin_kinds`
+    /// must list the kind, which counts as a mutation (the plugin acts
+    /// under its own grants): it needs `allow_mutations` and the human's
+    /// confirmation. The target is recorded for the call's audit line.
+    pub async fn authorize_plugin_kind(
+        &self,
+        request: &ResolvedRequest,
+        confirm: &impl Confirm,
+        target: &Target,
+    ) -> Result<(), ToolError> {
+        let (kind, url) = (&request.method, &request.url.text);
+        target.set(kind, url);
+        self.learn(&Redactor::for_request(request));
+        let agent = self.agent_settings();
+        if !agent.allows_plugin_kind(kind) {
+            return Err(ToolError::blocked(format!(
+                "plugin kind '{kind}' not allowed for agents (list it in [agent] plugin_kinds)"
+            )));
+        }
+        check_method(agent.permission(), "POST")?;
+        let shown = self.redactor().text(url);
+        let environment = self.environment().map(|e| e.name);
+        let message = question("the plugin request", &shown, environment.as_deref());
+        self.ask(&message, &format!("{kind} {shown}"), confirm)
+            .await
+    }
+
     /// Ask the human `message` about `what` (redacted), failing closed: only
     /// a yes, or a client that cannot ask under `require_confirmation =
     /// false`, lets the call go on.

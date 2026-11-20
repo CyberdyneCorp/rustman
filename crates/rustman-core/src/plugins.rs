@@ -34,6 +34,18 @@ pub struct PluginTrustPrompt {
     pub fingerprint: String,
 }
 
+/// Admits the network requests of plugins in agent sessions (`rustman mcp
+/// serve`): on top of a plugin's `net:` grants, each request must reach
+/// an origin the agent may reach, and is audited. The agent interface
+/// (`rustman-mcp`) implements it; the plugin host calls it before every
+/// request a plugin sends.
+pub trait PluginNetGuard: Send + Sync {
+    /// Admit `method url` that `plugin` is about to send, or refuse it with
+    /// the reason. `shown` is the URL redacted, for the audit log. A
+    /// request that cannot be audited is refused.
+    fn admit(&self, plugin: &str, method: &str, url: &str, shown: &str) -> Result<(), String>;
+}
+
 /// Checks and records the trust of a workspace's plugin set. Neither call
 /// runs plugin code.
 pub trait PluginGate: Send + Sync {

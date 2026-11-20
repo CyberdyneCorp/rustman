@@ -153,7 +153,8 @@ impl Runner<'_> {
                 return Box::pin(self.execute_realtime(request, record, iteration)).await;
             }
             Request::Opaque(opaque) => {
-                return self.execute_plugin_kind(request, opaque, record, iteration);
+                return Box::pin(self.execute_plugin_kind(request, opaque, record, iteration))
+                    .await;
             }
         };
         let captured = self.lock_captures().clone();

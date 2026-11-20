@@ -9,6 +9,10 @@ pub enum LoadError {
     /// An invalid declaration, manifest, grant or limit.
     #[error("plugin {plugin}: {message}")]
     Invalid { plugin: String, message: String },
+    /// A plugin file that exists but is not read: not a regular file
+    /// inside the workspace, too large, or not readable.
+    #[error("plugin {plugin}: {message}")]
+    Unreadable { plugin: String, message: String },
     /// The plugin targets an API major this build does not support.
     #[error("plugin {plugin} targets plugin API {api}; this rustman supports {supported}")]
     UnsupportedApi {
@@ -39,8 +43,18 @@ impl LoadError {
         }
     }
 
+    /// An I/O error on `path`: a missing file is an invalid declaration,
+    /// any other error makes the file [`LoadError::Unreadable`].
     pub(crate) fn io(plugin: &str, path: &Path, err: &std::io::Error) -> Self {
-        Self::invalid(plugin, format!("{}: {err}", path.display()))
+        let message = format!("{}: {err}", path.display());
+        if err.kind() == std::io::ErrorKind::NotFound {
+            Self::invalid(plugin, message)
+        } else {
+            Self::Unreadable {
+                plugin: plugin.to_owned(),
+                message,
+            }
+        }
     }
 
     /// The exit code of a front-end that stops on this error: every load

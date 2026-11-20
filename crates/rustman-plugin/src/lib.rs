@@ -4,7 +4,8 @@
 //! - [`declare`], [`manifest`], [`grant`] and [`limits`] read what the
 //!   workspace declares and what a plugin asks for;
 //! - [`pin`], [`lock`], [`source`] and [`fetch`] make sure the bytes that
-//!   run are the pinned ones;
+//!   run are the pinned ones, and [`files`] reads what a workspace commits
+//!   without trusting it;
 //! - [`workspace`] loads a workspace's plugin set without running it;
 //! - [`sandbox`] and [`plugin`] run a verified plugin with exactly its
 //!   grants, under per-call CPU and memory limits;
@@ -20,6 +21,7 @@ pub mod edit;
 pub mod error;
 pub mod extension;
 pub mod fetch;
+pub mod files;
 #[cfg(feature = "test-fixtures")]
 pub mod fixtures;
 pub mod grant;

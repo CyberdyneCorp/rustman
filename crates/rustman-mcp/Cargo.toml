@@ -55,6 +55,8 @@ grpc = ["dep:rustman-grpc"]
 
 [dev-dependencies]
 rustman-test-support = { workspace = true, features = ["grpc"] }
+# The plugin network of agent sessions, under the agent's guard.
+rustman-plugin.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "io-util", "time", "test-util"] }
 hyper = { workspace = true, features = ["client", "http1"] }

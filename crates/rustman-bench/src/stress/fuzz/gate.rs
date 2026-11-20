@@ -222,6 +222,15 @@ fn preview(redactor: &Redactor, bytes: &[u8]) -> String {
 }
 
 impl SendGate for StressGate {
+    /// A human started this run on a trusted plugin set: a plugin kind
+    /// runs under its own `net:` grants and the workspace safety policy.
+    fn authorize_kind<'a>(
+        &'a self,
+        _request: &'a ResolvedRequest,
+    ) -> futures_util::future::BoxFuture<'a, Result<(), RequestError>> {
+        Box::pin(async { Ok(()) })
+    }
+
     fn send<'a>(
         &'a self,
         request: &'a ResolvedRequest,

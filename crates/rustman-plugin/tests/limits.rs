@@ -123,3 +123,31 @@ fn calls_on_many_threads_are_serialized() {
         }
     });
 }
+
+/// A plugin limited to 16 MiB cannot make one host call copy more than
+/// that: 50 headers aliasing one 1 MiB value (50 MiB to copy, under
+/// wasmtime's 128 MiB default) fail the call before the host sees them.
+#[test]
+fn a_host_call_copies_at_most_the_memory_limit() {
+    let manifest = fixtures::manifest("flood", &["generator"], &["net"]);
+    let limits = Limits {
+        memory_mib: 16,
+        ..Limits::default()
+    };
+    let grants = ["net:flood.example.com"];
+    let flood = fixtures::header_flood(50, 1024 * 1024);
+    let verified = verified_with("flood", flood, &manifest, &grants, limits);
+    let flooding = plugin(&verified, HostContext::new("."));
+    let err = flooding.generate("flood", &[]).unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("fuel allocated for hostcalls has been exhausted"),
+        "{err}"
+    );
+    // Within the memory limit, the host's own header caps refuse the list.
+    let flood = fixtures::header_flood(101, 1);
+    let verified = verified_with("flood", flood, &manifest, &grants, limits);
+    let flooding = plugin(&verified, HostContext::new("."));
+    let err = flooding.generate("flood", &[]).unwrap_err();
+    assert_eq!(err.to_string(), "plugin flood: at most 100 request headers");
+}

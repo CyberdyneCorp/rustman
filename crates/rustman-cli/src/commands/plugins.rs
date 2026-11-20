@@ -74,7 +74,7 @@ pub fn headless(
     if !rustman_plugin::trust::require(root, key, flags.trust_plugins).map_err(usage)? {
         return Ok(None);
     }
-    load(root, environment, store, Permission::Mutations).map(Some)
+    load(root, environment, store, Permission::Mutations, None).map(Some)
 }
 
 #[cfg(not(feature = "plugins"))]
@@ -90,14 +90,19 @@ pub fn headless(
 /// The plugins of an agent session (`rustman mcp serve`): loaded only when
 /// their set is already trusted. Agents can never trust a set, so an
 /// untrusted one is left unloaded and the server starts without it.
+/// Their network requests pass the agent's allowlist on top of their
+/// grants, and are audited.
 #[cfg(feature = "plugins")]
 pub fn agent(
-    root: &Path,
+    workspace: &rustman_core::Workspace,
     environment: Option<&Environment>,
     store: &SecretStore,
 ) -> Result<Option<Arc<dyn Extensions>>, ConfigError> {
     use rustman_core::trust::TrustKey;
+    use rustman_mcp::server::plugin_net::AgentNetGuard;
     use rustman_plugin::trust::{Trust, check};
+
+    let root = &workspace.root;
 
     rustman_plugin::verify_pins(root).map_err(usage)?;
     match check(root, TrustKey::machine()).map_err(usage)? {
@@ -108,13 +113,16 @@ pub fn agent(
         }
         // Agent mutations need the human's confirmation, which a plugin
         // call cannot ask for: plugins of agent sessions only read.
-        Trust::Trusted => load(root, environment, store, Permission::ReadOnly).map(Some),
+        Trust::Trusted => {
+            let guard = AgentNetGuard::shared(workspace, environment);
+            load(root, environment, store, Permission::ReadOnly, Some(guard)).map(Some)
+        }
     }
 }
 
 #[cfg(not(feature = "plugins"))]
 pub fn agent(
-    _root: &Path,
+    _workspace: &rustman_core::Workspace,
     _environment: Option<&Environment>,
     _store: &SecretStore,
 ) -> Result<Option<Arc<dyn Extensions>>, ConfigError> {
@@ -130,6 +138,7 @@ fn load(
     environment: Option<&Environment>,
     store: &SecretStore,
     permission: Permission,
+    guard: Option<Arc<dyn rustman_core::plugins::PluginNetGuard>>,
 ) -> Result<Arc<dyn Extensions>, ConfigError> {
     use rustman_core::trust::TrustKey;
     use rustman_plugin::LoadOptions;
@@ -145,6 +154,7 @@ fn load(
             fetch: rustman_plugin::manage::fetch_options(root).map_err(usage)?,
         },
         key: TrustKey::machine(),
+        guard,
     };
     let opened = super::exec::runtime()
         .map_err(|e| ConfigError::Usage(e.to_string()))?

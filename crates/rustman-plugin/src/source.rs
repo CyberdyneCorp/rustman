@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 use rustman_core::secrets::{STATE_DIR, ensure_private, write_private};
 
 use crate::error::LoadError;
+use crate::fetch::MAX_DOWNLOAD_BYTES;
+use crate::files::{MAX_MANIFEST_BYTES, read_workspace_file};
 use crate::grant::normalize_relative;
 use crate::manifest::{MANIFEST_FILE, MANIFEST_SECTION};
 
@@ -44,9 +46,11 @@ pub fn cache_path(root: &Path, sha256: &str) -> PathBuf {
 }
 
 /// The cached download of pin `sha256`; `None` when it is not cached.
+/// Like every plugin file, it must be a regular file inside the workspace
+/// of at most [`MAX_DOWNLOAD_BYTES`].
 pub fn read_cache(root: &Path, plugin: &str, sha256: &str) -> Result<Option<Vec<u8>>, LoadError> {
     let path = cache_path(root, sha256);
-    match std::fs::read(&path) {
+    match read_workspace_file(root, &path, MAX_DOWNLOAD_BYTES) {
         Ok(bytes) => Ok(Some(bytes)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(LoadError::io(plugin, &path, &e)),
@@ -59,21 +63,26 @@ pub fn write_cache(root: &Path, plugin: &str, sha256: &str, wasm: &[u8]) -> Resu
     ensure_private(root, CACHE_DIR)
         .map_err(|e| LoadError::invalid(plugin, format!("{STATE_DIR}: {e}")))?;
     let path = cache_path(root, sha256);
-    write_private(&path, wasm).map_err(|e| LoadError::io(plugin, &path, &e))
+    write_private(&path, wasm)
+        .map_err(|e| LoadError::invalid(plugin, format!("{}: {e}", path.display())))
 }
 
 /// Read a path source: a `.wasm` file (manifest embedded, or next to it),
 /// or a folder holding `rustman-plugin.toml` and the component it names.
+/// Each file must resolve to a regular file inside the workspace: a
+/// component of at most [`MAX_DOWNLOAD_BYTES`], a manifest of at most
+/// [`MAX_MANIFEST_BYTES`] (this runs before trust, on files the
+/// repository chose).
 pub fn read_path(root: &Path, plugin: &str, path: &str) -> Result<Package, LoadError> {
     let full = root.join(path);
     if full.is_dir() {
-        return read_folder(plugin, &full);
+        return read_folder(root, plugin, &full);
     }
-    let wasm = read(plugin, &full)?;
+    let wasm = read(root, plugin, &full)?;
     let (manifest, sidecar) = match embedded_manifest(&wasm) {
         Some(text) => (text, false),
         None => (
-            read_text(plugin, &full.with_file_name(MANIFEST_FILE))?,
+            read_text(root, plugin, &full.with_file_name(MANIFEST_FILE))?,
             true,
         ),
     };
@@ -89,13 +98,13 @@ pub fn read_path(root: &Path, plugin: &str, path: &str) -> Result<Package, LoadE
 pub fn read_path_wasm(root: &Path, plugin: &str, path: &str) -> Result<Vec<u8>, LoadError> {
     let full = root.join(path);
     if full.is_dir() {
-        return read_folder(plugin, &full).map(|package| package.wasm);
+        return read_folder(root, plugin, &full).map(|package| package.wasm);
     }
-    read(plugin, &full)
+    read(root, plugin, &full)
 }
 
-fn read_folder(plugin: &str, dir: &Path) -> Result<Package, LoadError> {
-    let manifest = read_text(plugin, &dir.join(MANIFEST_FILE))?;
+fn read_folder(root: &Path, plugin: &str, dir: &Path) -> Result<Package, LoadError> {
+    let manifest = read_text(root, plugin, &dir.join(MANIFEST_FILE))?;
     let component = component_field(&manifest).unwrap_or_else(|| DEFAULT_COMPONENT.to_owned());
     let parts = normalize_relative(&component)
         .ok()
@@ -104,7 +113,7 @@ fn read_folder(plugin: &str, dir: &Path) -> Result<Package, LoadError> {
             let message = format!("{MANIFEST_FILE}: component '{component}' escapes the plugin");
             LoadError::invalid(plugin, message)
         })?;
-    let wasm = read(plugin, &dir.join(parts.join("/")))?;
+    let wasm = read(root, plugin, &dir.join(parts.join("/")))?;
     Ok(Package {
         wasm,
         manifest,
@@ -130,18 +139,22 @@ fn component_field(manifest: &str) -> Option<String> {
     table.get("component")?.as_str().map(str::to_owned)
 }
 
-fn read(plugin: &str, path: &Path) -> Result<Vec<u8>, LoadError> {
-    std::fs::read(path).map_err(|e| LoadError::io(plugin, path, &e))
+fn read(root: &Path, plugin: &str, path: &Path) -> Result<Vec<u8>, LoadError> {
+    read_workspace_file(root, path, MAX_DOWNLOAD_BYTES).map_err(|e| LoadError::io(plugin, path, &e))
 }
 
-fn read_text(plugin: &str, path: &Path) -> Result<String, LoadError> {
-    match std::fs::read_to_string(path) {
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(LoadError::invalid(
-            plugin,
-            format!("missing {MANIFEST_FILE}"),
-        )),
-        other => other.map_err(|e| LoadError::io(plugin, path, &e)),
-    }
+fn read_text(root: &Path, plugin: &str, path: &Path) -> Result<String, LoadError> {
+    let bytes = match read_workspace_file(root, path, MAX_MANIFEST_BYTES) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            let message = format!("missing {MANIFEST_FILE}");
+            return Err(LoadError::invalid(plugin, message));
+        }
+        other => other.map_err(|e| LoadError::io(plugin, path, &e))?,
+    };
+    String::from_utf8(bytes).map_err(|_| {
+        let message = format!("{}: not UTF-8 text", path.display());
+        LoadError::invalid(plugin, message)
+    })
 }
 
 /// The manifest in the component's top-level custom section
@@ -254,5 +267,57 @@ mod tests {
         );
         let err = package_from_download("p", EMPTY.to_vec()).unwrap_err();
         assert!(err.to_string().contains("must embed it"));
+    }
+
+    /// A committed component that is a symlink to an endless device, or
+    /// an oversized file, is refused at once instead of being read whole
+    /// (before any trust: `plugin list`, the trust prompt, the pin check).
+    #[cfg(unix)]
+    #[test]
+    fn a_component_linked_to_a_device_is_refused_quickly() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("plugins")).unwrap();
+        std::os::unix::fs::symlink("/dev/zero", root.join("plugins/evil.wasm")).unwrap();
+        let started = std::time::Instant::now();
+        let err = read_path(root, "evil", "plugins/evil.wasm").unwrap_err();
+        assert!(matches!(err, LoadError::Unreadable { .. }), "{err:?}");
+        assert!(
+            err.to_string().ends_with("resolves outside the workspace"),
+            "{err}"
+        );
+        let err = read_path_wasm(root, "evil", "plugins/evil.wasm").unwrap_err();
+        assert!(matches!(err, LoadError::Unreadable { .. }), "{err:?}");
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    }
+
+    #[test]
+    fn oversized_components_and_manifests_are_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let big = std::fs::File::create(root.join("big.wasm")).unwrap();
+        big.set_len(MAX_DOWNLOAD_BYTES + 1).unwrap();
+        let err = read_path(root, "big", "big.wasm").unwrap_err();
+        assert!(matches!(err, LoadError::Unreadable { .. }), "{err:?}");
+        assert!(
+            err.to_string().ends_with("larger than 20971520 bytes"),
+            "{err}"
+        );
+        std::fs::write(root.join("p.wasm"), EMPTY).unwrap();
+        let manifest = std::fs::File::create(root.join(MANIFEST_FILE)).unwrap();
+        manifest.set_len(MAX_MANIFEST_BYTES + 1).unwrap();
+        let err = read_path(root, "p", "p.wasm").unwrap_err();
+        assert!(
+            err.to_string().ends_with("larger than 262144 bytes"),
+            "{err}"
+        );
+        let cached = cache_path(root, "ab");
+        std::fs::create_dir_all(cached.parent().unwrap()).unwrap();
+        std::fs::File::create(&cached)
+            .unwrap()
+            .set_len(MAX_DOWNLOAD_BYTES + 1)
+            .unwrap();
+        let err = read_cache(root, "p", "ab").unwrap_err();
+        assert!(matches!(err, LoadError::Unreadable { .. }), "{err:?}");
     }
 }

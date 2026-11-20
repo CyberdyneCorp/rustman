@@ -113,7 +113,20 @@ impl MonitorGate {
     }
 }
 
+/// Why a monitor refuses every request of a plugin kind: the plugin would
+/// send its own requests, outside the monitor's methods and allowlist.
+pub const PLUGIN_KIND_REFUSAL: &str = "plugin request kinds are not allowed for monitors";
+
 impl SendGate for MonitorGate {
+    /// Monitors run unattended under a read-only policy the plugin's own
+    /// network requests would not follow, so a plugin kind never runs.
+    fn authorize_kind<'a>(
+        &'a self,
+        _request: &'a ResolvedRequest,
+    ) -> BoxFuture<'a, Result<(), RequestError>> {
+        Box::pin(async { Err(RequestError::Blocked(PLUGIN_KIND_REFUSAL.to_owned())) })
+    }
+
     fn send<'a>(
         &'a self,
         request: &'a ResolvedRequest,
@@ -208,6 +221,27 @@ mod tests {
                 .check("POST", "https://api.example.com/health")
                 .is_err()
         );
+    }
+
+    #[tokio::test]
+    async fn plugin_kinds_are_refused() {
+        let origins = [Origin::parse("https://api.example.com").unwrap()];
+        let settings = SafetySettings::default();
+        let policy = policy(&settings, &origins, true).unwrap();
+        let gate = MonitorGate::new(policy, &settings, true);
+        let request = ResolvedRequest {
+            method: "soap".to_owned(),
+            url: rustman_core::vars::Resolved::literal("soap:users/get"),
+            query: Vec::new(),
+            headers: Vec::new(),
+            body: rustman_core::vars::ResolvedBody::Json(serde_json::json!({})),
+            auth: None,
+            settings: rustman_core::model::RequestSettings::default(),
+            tls: rustman_core::vars::TlsFiles::default(),
+            secrets: Vec::new(),
+        };
+        let err = gate.authorize_kind(&request).await.unwrap_err();
+        assert_eq!(err.to_string(), format!("blocked: {PLUGIN_KIND_REFUSAL}"));
     }
 
     #[test]

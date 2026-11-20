@@ -65,6 +65,7 @@ allowed_hosts = []            # empty: the hosts of the session's active environ
 allowed_origins = []          # browser origins accepted in HTTP mode, besides loopback
 max_output_bytes = 262144     # cap on one serialized tool result (256 KiB)
 max_jobs = 2                  # background jobs at once
+plugin_kinds = []             # plugin request kinds agents may run (each counts as a mutation)
 ```
 
 `allowed_hosts` and `allowed_origins` take origins written as `scheme://host[:port]`, as `[safety].allowed_hosts` does. Unknown keys and invalid values are errors, so a misspelled permission is never ignored.
@@ -77,6 +78,8 @@ Every request an agent triggers, saved or ad hoc, passes these checks before any
 2. **Allowlist.** The origin must be in `[agent].allowed_hosts`, or, when that is empty, among the `http(s)` origins of the session's active environment variables (`base_url: http://127.0.0.1:8080/api` allows `http://127.0.0.1:8080`). `[safety].allowed_hosts` doesn't apply to agents. Anything else gets `code: "blocked"` with the reason `host not allowed`, and so does every redirect hop that leaves the allowlist.
 3. **Production.** An environment marked `production: true`, or a host in `[safety].production_hosts`, is refused: agents can't confirm production hosts.
 4. **Confirmation.** See below.
+
+A request of a [plugin kind](plugins.md#request-kinds) is run by its plugin, under the plugin's own grants, not sent by the agent gate. It runs only when `plugin_kinds` lists its kind, counts as a mutation (it needs `allow_mutations` and the human's confirmation), and is audited with the kind as its method and `<kind>:<request id>` as its URL. An unlisted kind gets `code: "blocked"` with `plugin kind '<kind>' not allowed for agents (list it in [agent] plugin_kinds)`. The network requests the workspace's plugins send in an agent session must also reach an origin of the allowlist above, and each one gets an audit line (see [Plugins](plugins.md#trust)).
 
 All the requests of a session share one rate limit and one concurrency limit, from `[safety].rate` and `[safety].concurrency`, `rpc_call` calls included (over HTTP or WebSocket).
 
@@ -189,6 +192,8 @@ Every tool call appends one JSON line to `.rustman/audit/<YYYY-MM-DD>.ndjson` (U
 ```json
 {"timestamp":"2026-11-18T10:04:12.311Z","session":"9f1c…","client":"claude-code","tool":"send_request","arguments":{"method":"POST","url":"http://127.0.0.1:8080/users"},"outcome":"blocked","reason":"mutations not allowed for agents","method":"POST","url":"http://127.0.0.1:8080/users"}
 ```
+
+Plugin network requests in agent sessions get a line each too, with session `plugins`, client `plugin` and tool `plugin:<name>`.
 
 Lines are appended with one write each; the server never rewrites or deletes them. Retention is up to you (the files are small). The audit log fails closed: if it can't be written, the call is refused before it runs, or fails if the line can't be appended afterwards. A background job checks it before each request it sends, so once the log can't be written the job sends nothing more. `.rustman/` is git-ignored by `rustman init`.
 
