@@ -159,7 +159,7 @@ impl GovernedNetwork {
         redactor.merge(&self.redactor);
         if let Some(guard) = &self.guard {
             let url = &resolved.url.text;
-            let shown = redactor.text(url);
+            let shown = redactor.text(&without_userinfo(url)).into_owned();
             guard
                 .admit(plugin, &resolved.method, url, &shown)
                 .map_err(|reason| HostError::PolicyDenied(redactor.text(&reason).into_owned()))?;
@@ -426,9 +426,37 @@ fn response(exchange: &Exchange) -> Response {
     }
 }
 
+/// `url` with any userinfo (`user:password@`) replaced by a marker, for
+/// audit lines and history: the redactor only removes known secrets.
+fn without_userinfo(url: &str) -> String {
+    match url::Url::parse(url) {
+        Ok(mut parsed) if !parsed.username().is_empty() || parsed.password().is_some() => {
+            let _ = parsed.set_password(None);
+            let _ = parsed.set_username("«redacted:userinfo»");
+            parsed.to_string()
+        }
+        _ => url.to_owned(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Regression: a plugin URL's `user:password@` reached the agent
+    /// audit line, because the redactor only knows secret values.
+    #[test]
+    fn userinfo_is_hidden_in_shown_urls() {
+        assert_eq!(
+            without_userinfo("http://alice:hunter2pw@localhost:8080/x?k=v"),
+            "http://%C2%ABredacted%3Auserinfo%C2%BB@localhost:8080/x?k=v"
+        );
+        assert_eq!(
+            without_userinfo("https://api.example.com/x"),
+            "https://api.example.com/x"
+        );
+        assert_eq!(without_userinfo("not a url"), "not a url");
+    }
 
     fn network(permission: Permission) -> GovernedNetwork {
         let grant = Grant::parse("net:localhost:9").unwrap();

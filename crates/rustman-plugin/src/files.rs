@@ -142,8 +142,9 @@ mod tests {
     fn folders_are_not_read() {
         let dir = tempfile::tempdir().unwrap();
         let err = read_workspace_file(dir.path(), dir.path(), 9).unwrap_err();
+        // Windows refuses to open a folder as a file ("Access is denied").
         assert!(
-            ["not a regular file", "Is a directory"]
+            ["not a regular file", "Is a directory", "Access is denied"]
                 .iter()
                 .any(|m| err.to_string().contains(m)),
             "{err}"
