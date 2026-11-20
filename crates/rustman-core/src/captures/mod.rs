@@ -55,22 +55,37 @@ impl RunCaptures {
     /// `known` redacts (a server echoing a secret back) into a secret of its own name, so every
     /// later request using it redacts it too. Returns the new secrets.
     pub fn taint(&mut self, known: &Redactor) -> Vec<Secret<String>> {
-        let mut tainted = Vec::new();
+        self.make_secret(|_, text| known.reveals_secret(text))
+    }
+
+    /// Turn every non-secret capture `environment` lists under `secrets`
+    /// into a secret. [`apply`] does so only when it persists captures;
+    /// a run that does not (a load test) calls this instead, so those
+    /// values are redacted all the same. Returns the new secrets.
+    pub fn declare_secrets(&mut self, environment: &Environment) -> Vec<Secret<String>> {
+        self.make_secret(|name, _| environment.is_secret(name))
+    }
+
+    /// Turn the non-secret values `is_secret(name, value)` accepts into
+    /// secrets the secret store does not have.
+    fn make_secret(&mut self, is_secret: impl Fn(&str, &str) -> bool) -> Vec<Secret<String>> {
+        let mut made = Vec::new();
         for (name, value) in &mut self.values {
             let Lookup::Value(text) = value else {
                 continue;
             };
-            if known.reveals_secret(text) {
+            if is_secret(name, text) {
                 let secret = Secret::new(name.clone(), std::mem::take(text));
-                tainted.push(secret.clone());
+                made.push(secret.clone());
                 *value = Lookup::Secret(secret);
                 self.derived.push(name.clone());
             }
         }
-        tainted
+        made
     }
 
-    /// The names of the captures [`RunCaptures::taint`] made secret.
+    /// The names of the captures [`RunCaptures::taint`] or
+    /// [`RunCaptures::declare_secrets`] made secret.
     pub fn derived(&self) -> &[String] {
         &self.derived
     }

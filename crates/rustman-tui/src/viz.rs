@@ -1,55 +1,34 @@
 //! Hand-off to the viz companion (spec: Open in viz companion; design D10).
 //!
-//! `v` in the response viewer looks for `rustman-viz` the way
-//! `visual-dashboards` defines it (`RUSTMAN_VIZ`, then `PATH`, then next to
-//! the running executable), starts it, performs the `rustman-viz/1`
-//! handshake and sends the current exchange to its response inspector. The
+//! `v` in the response viewer starts `rustman-viz` and performs the
+//! `rustman-viz/1` handshake ([`crate::companion`]), then sends the current
+//! exchange to its response inspector. The
 //! exchange is already redacted (the viewer only ever holds redacted data).
 //! When no companion can be used, a toast says why and offers the HTML
 //! report instead. The TUI depends on the protocol types only.
 
-use std::ffi::OsString;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, Command, Stdio};
+use std::process::{Child, ChildStdin};
 use std::sync::{Mutex, mpsc};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use tempfile::TempPath;
 
 use rustman_viz_protocol::{
-    BlobRef, Body, Close, FrameError, Header, Hello, InspectResponse, LineDecoder, Message,
-    OpenView, PROTOCOL, VULKAN_UNAVAILABLE, View, encode_inspect, encode_line, is_compatible,
+    BlobRef, Body, Close, Header, InspectResponse, Message, OpenView, View, encode_inspect,
 };
 
 use crate::app::{Effect, State};
+pub use crate::companion::{COMPANION, Discovery, OVERRIDE_VAR, VizError};
+use crate::companion::{Companion, connect, failed, write_line, write_message as write};
 use crate::keymap::ActionId;
 use crate::response::Source;
 use crate::toast::Severity;
 
-/// The companion's executable name.
-pub const COMPANION: &str = if cfg!(windows) {
-    "rustman-viz.exe"
-} else {
-    "rustman-viz"
-};
-
-/// The environment variable that names the companion explicitly.
-pub const OVERRIDE_VAR: &str = "RUSTMAN_VIZ";
-
-/// How long the companion has to answer `hello`.
-const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
-
 /// How long the companion has to read the exchange once it has answered
 /// `hello` (a body can be up to 16 MiB on one line).
 const WRITE_TIMEOUT: Duration = Duration::from_secs(30);
-
-/// How long a companion that closed its stdout has to exit before the
-/// hand-off gives up waiting for its exit code.
-const EXIT_WAIT: Duration = Duration::from_secs(2);
-
-/// The companion's exit code when graphics cannot start.
-const EXIT_NO_GRAPHICS: i32 = 3;
 
 /// Bodies spilled for companions that are still running. Each is removed
 /// when its companion exits, and [`cleanup`] removes the rest when the TUI
@@ -109,86 +88,6 @@ impl Drop for CleanupGuard {
     fn drop(&mut self) {
         self.0.clear();
     }
-}
-
-/// Where the companion is looked for, read once when the TUI starts.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Discovery {
-    /// `RUSTMAN_VIZ`, when set and not empty.
-    pub override_path: Option<PathBuf>,
-    /// The `PATH` value.
-    pub path: Option<OsString>,
-    /// The directory of the running `rustman` executable.
-    pub exe_dir: Option<PathBuf>,
-}
-
-impl Discovery {
-    /// The process environment and executable.
-    pub fn from_env() -> Self {
-        let exe_dir = std::env::current_exe()
-            .ok()
-            .and_then(|exe| exe.parent().map(Path::to_path_buf));
-        Self {
-            override_path: std::env::var_os(OVERRIDE_VAR)
-                .filter(|v| !v.is_empty())
-                .map(PathBuf::from),
-            path: std::env::var_os("PATH"),
-            exe_dir,
-        }
-    }
-
-    /// The companion to start. An override that is not an executable file
-    /// is an error naming it; nothing else is tried then.
-    pub fn find(&self) -> Result<PathBuf, VizError> {
-        if let Some(path) = &self.override_path {
-            return if is_executable(path) {
-                Ok(path.clone())
-            } else {
-                Err(VizError::NotFound(format!(
-                    "{OVERRIDE_VAR}={} is not an executable file",
-                    path.display()
-                )))
-            };
-        }
-        let on_path = self
-            .path
-            .iter()
-            .flat_map(std::env::split_paths)
-            .map(|dir| dir.join(COMPANION));
-        let sibling = self.exe_dir.iter().map(|dir| dir.join(COMPANION));
-        on_path
-            .chain(sibling)
-            .find(|c| is_executable(c))
-            .ok_or_else(|| {
-                VizError::NotFound(format!(
-                    "no {COMPANION} on PATH or next to rustman; set {OVERRIDE_VAR}"
-                ))
-            })
-    }
-}
-
-#[cfg(unix)]
-fn is_executable(path: &Path) -> bool {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
-}
-
-#[cfg(not(unix))]
-fn is_executable(path: &Path) -> bool {
-    path.is_file()
-}
-
-/// Why the exchange could not be shown in the companion.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum VizError {
-    #[error("Viz companion not found: {0}")]
-    NotFound(String),
-    #[error("Viz companion speaks {theirs}, rustman needs {PROTOCOL}; upgrade rustman-viz")]
-    Rejected { theirs: String },
-    #[error("Graphics unavailable (Vulkan)")]
-    Graphics,
-    #[error("Viz companion failed: {0}")]
-    Failed(String),
 }
 
 /// One exchange to show, owned so it can be sent from another thread.
@@ -270,17 +169,16 @@ pub fn open(job: &VizJob) -> Result<String, VizError> {
 }
 
 fn open_with(job: &VizJob, write_timeout: Duration) -> Result<String, VizError> {
-    let program = job.discovery.find()?;
-    let mut child = Command::new(&program)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| VizError::Failed(format!("cannot start {}: {e}", program.display())))?;
-    match session(&mut child, job, write_timeout) {
-        Ok((viewer, spilled)) => {
+    let Companion {
+        mut child,
+        stdin,
+        ack,
+        ..
+    } = connect(&job.discovery)?;
+    match write_exchange(stdin, job.clone(), write_timeout) {
+        Ok(spilled) => {
             reap(child, spilled);
-            Ok(viewer)
+            Ok(ack.viewer)
         }
         Err(e) => {
             let _ = child.kill();
@@ -303,29 +201,6 @@ fn reap(mut child: Child, spilled: Option<TempPath>) {
     });
 }
 
-fn session(
-    child: &mut Child,
-    job: &VizJob,
-    write_timeout: Duration,
-) -> Result<(String, Option<TempPath>), VizError> {
-    let mut stdin = child.stdin.take().ok_or_else(|| failed("no stdin"))?;
-    let stdout = child.stdout.take().ok_or_else(|| failed("no stdout"))?;
-    let replies = read_messages(stdout);
-    let producer = format!("rustman {}", env!("CARGO_PKG_VERSION"));
-    // A companion that exits at once closes the pipe; its reply (or exit
-    // code) below says why, so a failed write is not the error to report.
-    let _ = write(&mut stdin, &Message::Hello(Hello::new(producer)));
-    let viewer = match replies.recv_timeout(HANDSHAKE_TIMEOUT) {
-        Ok(reply) => handshake(reply)?,
-        Err(mpsc::RecvTimeoutError::Disconnected) => return Err(exited(child)),
-        Err(mpsc::RecvTimeoutError::Timeout) => {
-            return Err(failed("no reply to hello within 10 s"));
-        }
-    };
-    let spilled = write_exchange(stdin, job.clone(), write_timeout)?;
-    Ok((viewer, spilled))
-}
-
 /// Write the exchange on a thread of its own so a companion that stops
 /// reading cannot hold the hand-off forever: after `timeout` it is an error
 /// (the caller then kills the companion, which ends the blocked write).
@@ -343,89 +218,6 @@ fn write_exchange(
             "the companion did not read the exchange within {timeout:?}"
         )))
     })
-}
-
-/// The companion's messages, on a thread of its own (it keeps draining the
-/// pipe after the handshake). The protocol's decoder frames them, so a line
-/// longer than its limit is skipped instead of buffered.
-fn read_messages(
-    mut stdout: std::process::ChildStdout,
-) -> mpsc::Receiver<Result<Message, FrameError>> {
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let mut decoder = LineDecoder::new();
-        let mut chunk = vec![0; 64 * 1024];
-        while let Ok(n @ 1..) = stdout.read(&mut chunk) {
-            for message in decoder.push(&chunk[..n]) {
-                // The receiver is gone after the handshake: keep draining.
-                let _ = tx.send(message);
-            }
-        }
-    });
-    rx
-}
-
-/// The viewer name from the reply to `hello`, or why it refused.
-fn handshake(reply: Result<Message, FrameError>) -> Result<String, VizError> {
-    let message = reply.map_err(|e| failed(&format!("bad reply to hello: {e}")))?;
-    match message {
-        Message::HelloAck(ack) if is_compatible(&ack.protocol) => Ok(ack.viewer),
-        Message::HelloAck(ack) => Err(VizError::Rejected {
-            theirs: ack.protocol,
-        }),
-        Message::HelloReject(reject) => Err(VizError::Rejected {
-            theirs: reject.supported.join(", "),
-        }),
-        Message::Error(e) if e.code == VULKAN_UNAVAILABLE => Err(VizError::Graphics),
-        Message::Error(e) => Err(failed(&e.message)),
-        other => Err(failed(&format!(
-            "unexpected reply {}",
-            other.kind().unwrap_or("unknown")
-        ))),
-    }
-}
-
-/// Why a companion closed its stdout before answering. One that keeps
-/// running is not waited for past [`EXIT_WAIT`] (the caller kills it).
-fn exited(child: &mut Child) -> VizError {
-    let Some(status) = wait_for_exit(child, EXIT_WAIT) else {
-        return failed("closed its output without answering hello");
-    };
-    match status.code() {
-        Some(EXIT_NO_GRAPHICS) => VizError::Graphics,
-        Some(code) => failed(&format!("exited with code {code} before the handshake")),
-        None => failed("exited before the handshake"),
-    }
-}
-
-/// The child's exit status, if it exits within `limit`.
-fn wait_for_exit(child: &mut Child, limit: Duration) -> Option<std::process::ExitStatus> {
-    let deadline = Instant::now() + limit;
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => return Some(status),
-            Ok(None) if Instant::now() < deadline => {
-                std::thread::sleep(Duration::from_millis(20));
-            }
-            _ => return None,
-        }
-    }
-}
-
-fn failed(message: &str) -> VizError {
-    VizError::Failed(message.to_owned())
-}
-
-fn write(stdin: &mut ChildStdin, message: &Message) -> Result<(), VizError> {
-    let line = encode_line(message).map_err(|e| failed(&e.to_string()))?;
-    write_line(stdin, &line)
-}
-
-fn write_line(stdin: &mut ChildStdin, line: &str) -> Result<(), VizError> {
-    stdin
-        .write_all(line.as_bytes())
-        .and_then(|()| stdin.flush())
-        .map_err(|e| failed(&format!("cannot write to the companion: {e}")))
 }
 
 /// `open_view`, `inspect_response` (or its `blob_ref`) and `close`. A body
@@ -495,72 +287,6 @@ fn spill(text: &str, media_type: Option<String>) -> std::io::Result<(BlobRef, Te
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn make_executable(path: &Path) {
-        std::fs::write(path, "").unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
-        }
-    }
-
-    #[test]
-    fn the_override_wins_over_path() {
-        let tmp = tempfile::tempdir().unwrap();
-        let (opt, bin) = (tmp.path().join("opt"), tmp.path().join("bin"));
-        std::fs::create_dir_all(&opt).unwrap();
-        std::fs::create_dir_all(&bin).unwrap();
-        make_executable(&opt.join(COMPANION));
-        make_executable(&bin.join(COMPANION));
-        let discovery = Discovery {
-            override_path: Some(opt.join(COMPANION)),
-            path: Some(bin.clone().into_os_string()),
-            exe_dir: None,
-        };
-        assert_eq!(discovery.find(), Ok(opt.join(COMPANION)));
-        let discovery = Discovery {
-            override_path: None,
-            ..discovery
-        };
-        assert_eq!(discovery.find(), Ok(bin.join(COMPANION)));
-    }
-
-    #[test]
-    fn the_sibling_is_used_last() {
-        let tmp = tempfile::tempdir().unwrap();
-        make_executable(&tmp.path().join(COMPANION));
-        let discovery = Discovery {
-            override_path: None,
-            path: Some(OsString::new()),
-            exe_dir: Some(tmp.path().to_path_buf()),
-        };
-        assert_eq!(discovery.find(), Ok(tmp.path().join(COMPANION)));
-    }
-
-    #[test]
-    fn an_invalid_override_names_the_path_and_does_not_fall_back() {
-        let tmp = tempfile::tempdir().unwrap();
-        make_executable(&tmp.path().join(COMPANION));
-        let nope = tmp.path().join("nope").join(COMPANION);
-        let discovery = Discovery {
-            override_path: Some(nope.clone()),
-            path: Some(tmp.path().as_os_str().to_owned()),
-            exe_dir: Some(tmp.path().to_path_buf()),
-        };
-        let err = discovery.find().unwrap_err();
-        assert!(
-            err.to_string().contains(&nope.display().to_string()),
-            "{err}"
-        );
-        assert!(err.to_string().starts_with("Viz companion not found"));
-    }
-
-    #[test]
-    fn nothing_found_is_not_found() {
-        let err = Discovery::default().find().unwrap_err();
-        assert!(matches!(err, VizError::NotFound(_)), "{err}");
-    }
 
     #[cfg(unix)]
     const ACK: &str =
@@ -709,21 +435,5 @@ mod tests {
         });
         assert!(unwound.is_err());
         assert!(!kept.exists(), "the spilled body outlived the panic");
-    }
-
-    #[test]
-    fn handshake_replies() {
-        let handshake = |line: &str| handshake(rustman_viz_protocol::decode_line(line));
-        let ack = r#"{"type":"hello_ack","protocol":"rustman-viz/1","viewer":"stub 1","views":[]}"#;
-        assert_eq!(handshake(ack), Ok("stub 1".to_owned()));
-        let reject = r#"{"type":"hello_reject","supported":["rustman-viz/2"]}"#;
-        let err = handshake(reject).unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "Viz companion speaks rustman-viz/2, rustman needs rustman-viz/1; upgrade rustman-viz"
-        );
-        let vulkan = r#"{"type":"error","code":"vulkan_unavailable","message":"no loader"}"#;
-        assert_eq!(handshake(vulkan), Err(VizError::Graphics));
-        assert!(matches!(handshake("not json"), Err(VizError::Failed(_))));
     }
 }

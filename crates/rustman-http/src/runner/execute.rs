@@ -331,17 +331,20 @@ impl Runner<'_> {
         });
         let mut scope = RunCaptures::new();
         let mut report = captures::apply(captures, view, &mut scope, persistence.as_ref());
+        // Without persistence `apply` cannot tell a secret capture.
+        if persistence.is_none()
+            && let Some(environment) = ctx.environment
+        {
+            mark_secret(&mut report, scope.declare_secrets(environment));
+        }
         for secret in &report.secrets {
             redactor.add(secret);
         }
-        for secret in scope.taint(redactor) {
-            let result = report.results.iter_mut().find(|r| r.var == secret.name());
-            if let Some(result) = result {
-                result.secret = true;
-            }
-            redactor.add(&secret);
-            report.secrets.push(secret);
+        let tainted = scope.taint(redactor);
+        for secret in &tainted {
+            redactor.add(secret);
         }
+        mark_secret(&mut report, tainted);
         self.remember(&report.secrets);
         self.lock_captures().merge(scope);
         report
@@ -353,6 +356,28 @@ impl Runner<'_> {
         for secret in secrets {
             known.add(secret);
         }
+    }
+
+    /// Keep what `known` holds now through [`Runner::forget_iteration_secrets`].
+    pub(super) fn keep_as_baseline(&self) {
+        let known = self.known();
+        *self.baseline.lock().unwrap_or_else(PoisonError::into_inner) = known;
+    }
+
+    /// Forget the secret values resolved or captured since the runner was
+    /// seeded, keeping the data rows' and the environment's. A load test
+    /// calls it before each iteration: a value logged in and captured anew
+    /// every iteration would otherwise stay known for the whole run, and
+    /// memory would grow with the number of iterations. A request that
+    /// resolves one of them again knows it again, so nothing it produces
+    /// goes unredacted.
+    pub fn forget_iteration_secrets(&self) {
+        let baseline = self
+            .baseline
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        *self.known.lock().unwrap_or_else(PoisonError::into_inner) = baseline;
     }
 
     /// Add every secret `redactor` knows to those every sink redacts.
@@ -477,5 +502,52 @@ fn gated_auth(request: &ResolvedRequest) -> Result<(), RequestError> {
                 .into(),
         )),
         _ => Ok(()),
+    }
+}
+
+/// Record `secrets` as secret captures of `report`.
+fn mark_secret(report: &mut CaptureReport, secrets: Vec<Secret<String>>) {
+    for secret in secrets {
+        let result = report.results.iter_mut().find(|r| r.var == secret.name());
+        if let Some(result) = result {
+            result.secret = true;
+        }
+        report.secrets.push(secret);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rustman_core::settings::Settings;
+
+    use super::*;
+    use crate::runner::{RunContext, RunOptions};
+
+    #[test]
+    fn forgetting_iteration_secrets_keeps_the_seeded_ones() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = Settings::ad_hoc();
+        let store = rustman_core::SecretStore::with_keychain(dir.path(), None);
+        let ctx = RunContext {
+            root: dir.path(),
+            settings: &settings,
+            environment: None,
+            secrets: &store,
+            in_workspace: false,
+        };
+        let runner = Runner::new(ctx, RunOptions::default()).unwrap();
+        let secret = |name: &str, value: &str| Secret::new(name, value.to_owned());
+        runner.remember(&[secret("api_key", "seeded-value-1234")]);
+        runner.keep_as_baseline();
+        for i in 0..100 {
+            runner.forget_iteration_secrets();
+            runner.remember(&[secret("token", &format!("token-of-iteration-{i:04}"))]);
+        }
+        let known = runner.known();
+        let text = known.text("seeded-value-1234 token-of-iteration-0042 token-of-iteration-0099");
+        assert_eq!(
+            text,
+            "«redacted:api_key» token-of-iteration-0042 «redacted:token»"
+        );
     }
 }

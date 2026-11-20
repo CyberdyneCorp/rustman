@@ -84,6 +84,44 @@ fn samples() -> Vec<Message> {
             kind: ReportKind::Run,
             view: None,
         }),
+        Message::OpenView(OpenView {
+            view: View::Bench,
+            title: None,
+        }),
+        Message::LoadReport(LoadReport {
+            path: "out/bench.json".into(),
+            kind: ReportKind::Bench,
+            view: Some(View::Bench),
+        }),
+        Message::BenchTick(BenchTick {
+            second: 3,
+            elapsed_ms: 3_000,
+            remaining_ms: Some(27_000),
+            active_vus: 10,
+            requests: 412,
+            errors: 2,
+            rps: 412.0,
+            p50_ms: 18.2,
+            p95_ms: 61.0,
+            p99_ms: 120.4,
+        }),
+        Message::BenchFinished(BenchFinished {
+            state: RunState::Aborted,
+            duration_ms: 12_000,
+            iterations: 40,
+            requests: 120,
+            errors: 60,
+            rps: 10.0,
+            p50_ms: 18.0,
+            p95_ms: 64.3,
+            p99_ms: 130.1,
+            thresholds: vec![BenchThreshold {
+                expression: "error_rate<1%!".into(),
+                passed: false,
+                actual: "50.00%".into(),
+            }],
+            aborted: Some("threshold".into()),
+        }),
         Message::InspectResponse(Box::new(InspectResponse {
             request: Some("users/list".into()),
             status: Some(200),
@@ -139,7 +177,7 @@ fn every_message_round_trips_and_matches_the_schema() {
         assert_valid(&validator, &value);
         kinds.insert(message.kind().unwrap());
     }
-    assert_eq!(kinds.len(), 16, "every message type has a sample");
+    assert_eq!(kinds.len(), 18, "every message type has a sample");
 }
 
 #[test]
@@ -184,7 +222,12 @@ fn findings_and_final_events_have_priority() {
         .collect();
     assert_eq!(
         priority,
-        ["run_finished", "finding", "exploration_finished"]
+        [
+            "run_finished",
+            "finding",
+            "exploration_finished",
+            "bench_finished"
+        ]
     );
 }
 
@@ -209,7 +252,7 @@ fn doc_examples() -> Vec<String> {
 fn every_example_in_the_protocol_doc_parses() {
     let validator = validator();
     let examples = doc_examples();
-    assert!(examples.len() >= 16, "{examples:?}");
+    assert!(examples.len() >= 18, "{examples:?}");
     let mut kinds = std::collections::HashSet::new();
     for line in examples {
         let message = decode_line(&line).unwrap_or_else(|e| panic!("{line}: {e}"));
@@ -218,7 +261,7 @@ fn every_example_in_the_protocol_doc_parses() {
     }
     assert_eq!(
         kinds.len(),
-        16,
+        18,
         "the doc shows every message type: {kinds:?}"
     );
 }

@@ -1,0 +1,36 @@
+[package]
+name = "rustman-bench"
+description = "Load testing for Rustman: virtual users over the request runner, executors, data feeding, caps, HDR metrics, thresholds and bench reports"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+rustman-core.workspace = true
+rustman-http.workspace = true
+rustman-report.workspace = true
+futures-util.workspace = true
+hdrhistogram.workspace = true
+rand.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "sync", "time"] }
+tokio-util.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+hdrhistogram.workspace = true
+rustman-test-support.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+
+[[bench]]
+name = "executor"
+harness = false

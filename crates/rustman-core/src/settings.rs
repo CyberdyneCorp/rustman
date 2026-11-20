@@ -7,6 +7,7 @@ use std::path::Path;
 use serde::Deserialize;
 
 use crate::agent::AgentSettings;
+use crate::bench::{BENCH_KEYS, BenchSettings};
 use crate::error::{ConfigError, LoadError, Position};
 use crate::model::Variables;
 use crate::safety::SafetySettings;
@@ -49,6 +50,8 @@ const KNOWN_KEYS: &[(&str, &[&str])] = &[
         &["allowed_hosts", "production_hosts", "rate", "concurrency"],
     ),
     ("explore", &["producers", "disabled_rules"]),
+    // Read by rustman-bench (add-load-testing).
+    ("bench", BENCH_KEYS),
     // Read by rustman-webhook (add-webhook-inspector).
     ("webhook", &["host", "port", "verifiers"]),
     // Read by rustman-mock (add-openapi-mock-server).
@@ -122,6 +125,8 @@ pub struct Settings {
     pub agent: AgentSettings,
     #[serde(default)]
     pub trace: TraceConfig,
+    #[serde(default)]
+    pub bench: BenchSettings,
     #[serde(default)]
     pub variables: Variables,
 }

@@ -1,11 +1,12 @@
 //! Reports for Rustman (`rustman.report/v1`): the canonical [`Report`] of a
-//! run (`kind: run`), an exploration (`kind: exploration`) or a contract
-//! check (`kind: contract`), its JSON
+//! run (`kind: run`), an exploration (`kind: exploration`), a contract
+//! check (`kind: contract`) or a load test (`kind: bench`), its JSON
 //! Schema, the renderers (JSON, JUnit XML, SARIF, Markdown, HTML), `report
 //! diff`, and the `rustman run --reporter` writers (pretty, json, junit,
 //! tap). Reports are built from records whose every text field is already
 //! redacted, so no renderer can show a secret.
 
+pub mod bench;
 pub mod contract;
 pub mod diff;
 pub mod exploration;

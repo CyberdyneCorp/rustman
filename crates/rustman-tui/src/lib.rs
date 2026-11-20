@@ -6,8 +6,12 @@
 //! effect runner task performs the I/O, and [`view::view`] draws the state.
 
 pub mod app;
+pub mod bench_live;
+pub mod bench_view;
+pub mod bench_viz;
 pub mod clipboard;
 mod commands;
+pub mod companion;
 pub mod config;
 pub mod copy_as;
 #[cfg(test)]

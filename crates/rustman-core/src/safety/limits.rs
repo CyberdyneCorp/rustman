@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant, SystemTime};
 
-use async_lock::{Semaphore, SemaphoreGuardArc};
+use async_lock::{Mutex as AsyncMutex, Semaphore, SemaphoreGuardArc};
 use governor::{DefaultDirectRateLimiter, Quota, RateLimiter};
 
 use super::config::SafetySettings;
@@ -122,6 +122,10 @@ pub struct Governor {
     started: Instant,
     admitted: AtomicU64,
     slots: Arc<Semaphore>,
+    /// Requests wait for the rate limit one at a time, in arrival order:
+    /// the limiter alone wakes every waiter at once and lets an arbitrary
+    /// one through, so a sender could wait for a whole run.
+    turn: AsyncMutex<()>,
     pace: Mutex<Pace>,
 }
 
@@ -145,6 +149,7 @@ impl Governor {
             started: Instant::now(),
             admitted: AtomicU64::new(0),
             slots: Arc::new(Semaphore::new(slots)),
+            turn: AsyncMutex::new(()),
             pace: Mutex::new(Pace {
                 rate: limits.rate,
                 limiter: Arc::new(limiter(limits.rate)),
@@ -200,7 +205,7 @@ impl Governor {
                 let pace = self.state();
                 (pace.limiter.clone(), pace.generation)
             };
-            limiter.until_ready().await;
+            self.wait_for_turn(&limiter).await;
             self.check_time()?;
             // A backoff while waiting replaced the limiter: wait for the new rate.
             if self.pause_left().is_none() && self.state().generation == generation {
@@ -223,8 +228,14 @@ impl Governor {
             let pace = self.state();
             (pace.limiter.clone(), pace.generation)
         };
-        limiter.until_ready().await;
+        self.wait_for_turn(&limiter).await;
         Paced { generation }
+    }
+
+    /// Wait for `limiter`, after every request that started waiting earlier.
+    async fn wait_for_turn(&self, limiter: &DefaultDirectRateLimiter) {
+        let _turn = self.turn.lock().await;
+        limiter.until_ready().await;
     }
 
     /// Account for a response to a request sent after `paced`. A 429 halves
@@ -577,5 +588,38 @@ mod tests {
         assert_eq!(BudgetExhausted::Duration.to_string(), "not run: budget");
         assert_eq!(BudgetExhausted::Probes.detail(), "probe budget reached");
         assert_eq!(BudgetExhausted::Duration.detail(), "time budget reached");
+    }
+
+    /// Senders waiting for the rate limit take turns: once a sender went
+    /// through, it waits behind the others (with the limiter alone, one
+    /// sender went through 8 times before any other).
+    #[test]
+    fn rate_limited_senders_take_turns() {
+        let governor = Governor::new(limits(100, 8, u64::MAX, HOUR));
+        let order = Mutex::new(Vec::new());
+        let sender = |id: usize| {
+            let (governor, order) = (&governor, &order);
+            async move {
+                for _ in 0..8 {
+                    governor.pace().await.unwrap();
+                    order.lock().unwrap().push(id);
+                }
+            }
+        };
+        let all = futures_lite::future::zip(
+            futures_lite::future::zip(sender(0), sender(1)),
+            futures_lite::future::zip(sender(2), sender(3)),
+        );
+        block_on(all);
+        let order = order.into_inner().unwrap();
+        // Once a sender went through, the 3 others go before it again.
+        let mut last = [None::<usize>; 4];
+        for (at, id) in order.iter().enumerate() {
+            if let Some(before) = last[*id] {
+                assert!(at - before <= 4, "sender {id} waited: {order:?}");
+            }
+            last[*id] = Some(at);
+        }
+        assert!(last.iter().all(Option::is_some), "{order:?}");
     }
 }

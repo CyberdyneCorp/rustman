@@ -15,6 +15,7 @@ use serde::Serialize;
 
 use super::RenderOptions;
 use super::view::{line_of, operations};
+use crate::bench::BenchReport;
 use crate::contract::{ContractItem, ContractReport};
 use crate::exploration::{ExplorationReport, ReportFinding, Severity};
 use crate::run::{RunReport, RunRequest, Status};
@@ -331,6 +332,53 @@ fn request_result(request: &RunRequest) -> Option<SarifResult> {
         )]),
         suppressions: Vec::new(),
         properties: BTreeMap::from([("iteration", request.iteration.to_string())]),
+    })
+}
+
+/// A bench as a SARIF log: one `error` result per breached threshold,
+/// without a location (a threshold is about the whole run).
+pub fn bench_sarif(report: &BenchReport) -> String {
+    const RULE: &str = "bench-threshold";
+    let description = "A load-test threshold was breached.";
+    let rule = Descriptor {
+        id: RULE.to_owned(),
+        short_description: text(RULE),
+        full_description: text(description),
+        help: text(description),
+        default_configuration: Configuration { level: "error" },
+        properties: DescriptorProperties {
+            tags: vec!["api", "performance"],
+            security_severity: None,
+        },
+    };
+    let results = report
+        .thresholds
+        .iter()
+        .filter(|t| !t.passed)
+        .map(|t| SarifResult {
+            rule_id: RULE.to_owned(),
+            rule_index: 0,
+            level: "error",
+            message: text(t.line()),
+            locations: Vec::new(),
+            partial_fingerprints: BTreeMap::from([(
+                "rustmanThreshold/v1",
+                format!("{}|{}", report.target, t.expression),
+            )]),
+            suppressions: Vec::new(),
+            properties: BTreeMap::from([("actual", t.actual.clone())]),
+        })
+        .collect();
+    to_text(&Log {
+        schema: SCHEMA,
+        version: VERSION,
+        runs: vec![Run {
+            tool: tool(vec![rule]),
+            results,
+            automation_details: Some(Automation {
+                id: "rustman/bench".to_owned(),
+            }),
+        }],
     })
 }
 

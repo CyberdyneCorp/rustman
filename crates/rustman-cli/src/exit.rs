@@ -90,6 +90,9 @@ pub enum CliError {
     /// A gRPC schema, target or call that failed (redacted).
     #[error(transparent)]
     Grpc(#[from] rustman_grpc::GrpcError),
+    /// A bench refused before any load: bad flags, a cap, or the policy.
+    #[error(transparent)]
+    Bench(#[from] rustman_bench::BenchError),
 }
 
 impl From<RequestSnippetError> for CliError {
@@ -108,6 +111,7 @@ impl CliError {
             Self::Request(_) | Self::Resolve(_) => REQUEST,
             Self::OpenApi(err) if err.is_request_failure() => REQUEST,
             Self::Policy(err) if err.is_refusal() => SAFETY,
+            Self::Bench(err) if err.is_refusal() => SAFETY,
             Self::Graphql(err) => graphql_code(err),
             Self::Mcp(err) => mcp_code(err),
             Self::Grpc(err) => u8::try_from(err.exit_code()).unwrap_or(REQUEST),
@@ -122,7 +126,8 @@ impl CliError {
             | Self::Exploration(_)
             | Self::ExportFindings(_)
             | Self::Webhook(_)
-            | Self::Mock(_) => CONFIG,
+            | Self::Mock(_)
+            | Self::Bench(_) => CONFIG,
         }
     }
 
@@ -357,6 +362,14 @@ mod tests {
             CliError::from(PolicyError::InvalidTarget("x".into())).code(),
             2
         );
+    }
+
+    #[test]
+    fn bench_refusals_exit_4_and_usage_errors_2() {
+        let refused = rustman_bench::BenchError::Refused("blocked".into());
+        assert_eq!(CliError::from(refused).code(), SAFETY);
+        let usage = rustman_bench::BenchError::Usage("bench: --rate".into());
+        assert_eq!(CliError::from(usage).code(), CONFIG);
     }
 
     #[test]

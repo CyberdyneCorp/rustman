@@ -1,8 +1,13 @@
 //! Report tools (spec "OpenAPI and exploration tools", `test-reports`):
-//! `get_report` and `list_findings`, over exploration reports on disk and
-//! the run reports of this session's jobs.
+//! `get_report` and `list_findings`, over exploration reports on disk, the
+//! run reports of this session's jobs, and report files of the workspace
+//! (such as a `rustman bench --report json=...` report: agents read bench
+//! reports, they never start a bench).
+
+use std::io::Read;
 
 use rustman_explore::explore::session::Session;
+use rustman_report::bench::BenchReport;
 use rustman_report::exploration::{ExplorationReport, ReportFinding, Severity};
 use rustman_report::run::Status;
 use rustman_report::{RenderFormat, RenderOptions, Report, RunReport};
@@ -20,8 +25,9 @@ use crate::server::limits::{paginate, snapshot};
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct GetReportArgs {
-    /// An exploration id (`exp-...`) or the job id of a run or exploration
-    /// (default: the latest exploration).
+    /// An exploration id (`exp-...`), the job id of a run or exploration,
+    /// or a JSON report file relative to the workspace root, such as
+    /// `out/bench.json` (default: the latest exploration).
     pub id: Option<String>,
     /// `summary` (default), or the whole report as `json`, `markdown`,
     /// `junit`, `sarif` or `html`.
@@ -32,7 +38,7 @@ pub struct GetReportArgs {
 pub struct ReportResult {
     /// The report's id: an exploration id, or a run's job id.
     pub id: String,
-    /// `run` or `exploration`.
+    /// `run`, `exploration`, `contract` or `bench`.
     pub kind: String,
     pub format: String,
     /// The whole report, also readable as a resource.
@@ -75,6 +81,9 @@ pub struct FindingList {
 /// The report `id` names: a run job's, or an exploration's (by job id,
 /// exploration id, or the latest).
 pub fn find_report(ctx: &AgentContext, id: Option<&str>) -> Result<(String, Report), ToolError> {
+    if let Some(file) = id.filter(|id| id.ends_with(".json")) {
+        return Ok((file.to_owned(), report_file(ctx, file)?));
+    }
     if let Some(job) = id.and_then(|id| ctx.jobs().get(id))
         && job.exploration.is_none()
     {
@@ -102,6 +111,45 @@ pub fn find_report(ctx: &AgentContext, id: Option<&str>) -> Result<(String, Repo
     let exploration = exploration_id(ctx, id)?;
     let report = exploration_report(ctx, &exploration)?;
     Ok((exploration, Report::Exploration(Box::new(report))))
+}
+
+/// The largest report file `get_report` reads.
+const MAX_REPORT_FILE: u64 = 32 * 1024 * 1024;
+
+/// The report in `file`, relative to the workspace root. A symlink leading
+/// out of the workspace is refused, and so is a file over
+/// [`MAX_REPORT_FILE`]. A file that is not a report is refused without the
+/// parser's message, which could quote the file.
+fn report_file(ctx: &AgentContext, file: &str) -> Result<Report, ToolError> {
+    let root = &ctx.workspace().root;
+    let not_found = || ToolError::new(ErrorCode::NotFound, format!("no report file {file}"));
+    let path = root.join(super::execute::contained(file)?);
+    let real = std::fs::canonicalize(&path).map_err(|_| not_found())?;
+    let real_root = std::fs::canonicalize(root).map_err(|_| not_found())?;
+    if !real.starts_with(&real_root) {
+        return Err(ToolError::new(
+            ErrorCode::InvalidInput,
+            format!("'{file}' is not a path inside the workspace"),
+        ));
+    }
+    let opened = std::fs::File::open(&real).map_err(|_| not_found())?;
+    let mut text = String::new();
+    opened
+        .take(MAX_REPORT_FILE + 1)
+        .read_to_string(&mut text)
+        .map_err(|_| not_found())?;
+    if text.len() as u64 > MAX_REPORT_FILE {
+        return Err(ToolError::new(
+            ErrorCode::InvalidInput,
+            format!("{file} is over 32 MiB, more than a report file may be"),
+        ));
+    }
+    Report::parse(&text).map_err(|_| {
+        ToolError::new(
+            ErrorCode::InvalidInput,
+            format!("{file} is not a rustman report (a --report json=... file)"),
+        )
+    })
 }
 
 /// The exploration `id` names: itself, the one its job drives, or the
@@ -137,10 +185,9 @@ pub fn exploration_report(ctx: &AgentContext, id: &str) -> Result<ExplorationRep
     })?;
     match Report::parse(&text) {
         Ok(Report::Exploration(report)) => Ok(*report),
-        Ok(Report::Run(_) | Report::Contract(_)) => Err(ToolError::internal(format!(
-            "{} is not an exploration report",
-            path.display()
-        ))),
+        Ok(Report::Run(_) | Report::Contract(_) | Report::Bench(_)) => Err(ToolError::internal(
+            format!("{} is not an exploration report", path.display()),
+        )),
         Err(err) => Err(ToolError::internal(err.to_string())),
     }
 }
@@ -173,6 +220,19 @@ fn exploration_summary(report: &ExplorationReport) -> Value {
     })
 }
 
+fn bench_summary(report: &BenchReport) -> Value {
+    json!({
+        "target": report.target,
+        "environment": report.environment,
+        "profile": report.profile,
+        "aborted": report.aborted,
+        "passed": report.passed(),
+        "totals": report.totals,
+        "overall": report.overall,
+        "thresholds": report.thresholds,
+    })
+}
+
 fn run_summary(report: &RunReport) -> Value {
     let problems: Vec<Value> = report
         .requests
@@ -197,6 +257,7 @@ pub fn get_report(call: &Call) -> Result<ToolOutput, ToolError> {
             Report::Run(r) => run_summary(r),
             Report::Exploration(r) => exploration_summary(r),
             Report::Contract(r) => json!({ "mode": r.mode, "summary": r.summary }),
+            Report::Bench(r) => bench_summary(r),
         };
         (Some(summary), None)
     } else {

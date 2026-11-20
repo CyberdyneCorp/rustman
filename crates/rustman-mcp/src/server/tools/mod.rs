@@ -172,7 +172,7 @@ pub fn catalog() -> Vec<Tool> {
         ),
         tool::<reports::GetReportArgs, reports::ReportResult>(
             "get_report",
-            "A report by exploration id or run job id: a summary (default), or rendered as json, markdown, junit, sarif or html.",
+            "A report by exploration id, run job id or JSON report file of the workspace (such as out/report.json): a summary (default), or rendered as json, markdown, junit, sarif or html.",
             Effect::ReadOnly,
         ),
         tool::<reports::ListFindingsArgs, reports::FindingList>(
@@ -327,6 +327,40 @@ mod tests {
             assert!(!exists(name), "{name}");
         }
         assert!(grpc_tools().is_empty());
+    }
+
+    /// load-testing "Agents cannot start a bench": no tool generates load.
+    /// Agents read bench reports through the report tools instead.
+    #[test]
+    fn no_tool_starts_a_bench() {
+        let words = [
+            "bench",
+            "load test",
+            "load-test",
+            "virtual user",
+            "vus",
+            "stress",
+        ];
+        for tool in catalog() {
+            let name = tool.name.to_lowercase();
+            let description = tool
+                .description
+                .as_deref()
+                .unwrap_or_default()
+                .to_lowercase();
+            for word in words {
+                assert!(
+                    !name.contains(word) && !description.contains(word),
+                    "{name} mentions {word}: {description}"
+                );
+            }
+            let schema = serde_json::to_string(&tool.input_schema)
+                .unwrap()
+                .to_lowercase();
+            for field in ["\"vus\"", "\"rate\"", "\"stages\"", "\"executor\""] {
+                assert!(!schema.contains(field), "{name} takes {field}");
+            }
+        }
     }
 
     #[test]

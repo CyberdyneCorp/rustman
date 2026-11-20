@@ -1,0 +1,24 @@
+---
+source: crates/rustman-tui/src/bench_view.rs
+expression: text
+---
+┌ rustman bench http://127.0.0.1 ──────────────────────────────────────────────┐
+│Time 12s   VUs 5   RPS 10.0   Requests 30   Errors 3.33%                      │
+│Latency (service)  p50 24.02ms   p95 48.03ms   p99 49.02ms                    │
+│p95 29.01ms                                                                   │
+│ █▁                                                                           │
+│▆██                                                                           │
+│RPS 10.0                                                                      │
+│▅▆█                                                                           │
+│███                                                                           │
+│ Per file ────────────────────────────────────────────────────────────────────│
+│File              Requests  RPS      p50        p95        p99        Errors  │
+│api/1-login.rman. 15        5.0      24.02ms    48.03ms    48.03ms    0.00%   │
+│api/2-list.rman.y 15        5.0      25.01ms    49.02ms    49.02ms    6.67%   │
+│overall           30        10.0     24.02ms    48.03ms    49.02ms    3.33%   │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘

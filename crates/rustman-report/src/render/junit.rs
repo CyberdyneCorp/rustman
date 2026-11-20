@@ -20,6 +20,7 @@ use std::time::Duration;
 use quick_junit::{NonSuccessKind, Property, Report, TestCase, TestCaseStatus, TestSuite};
 
 use super::view::{OperationView, operations};
+use crate::bench::{BenchReport, ThresholdResult};
 use crate::contract::{ContractItem, ContractReport};
 use crate::exploration::{ExplorationReport, ReportFinding, Severity};
 use crate::run::{RunReport, RunRequest, Status};
@@ -101,6 +102,44 @@ fn contract_case(item: &ContractItem) -> TestCase {
             None => line,
         };
         case.set_system_out(out);
+    }
+    case
+}
+
+/// A bench report as a JUnit XML document, ending in a newline: one test
+/// case per threshold, plus one for an aborted run.
+pub fn bench_junit(report: &BenchReport) -> String {
+    let mut suite = TestSuite::new("bench");
+    suite.add_property(Property::new("target", report.target.as_str()));
+    suite.add_property(Property::new("executor", report.profile.executor.as_str()));
+    suite.add_test_cases(report.thresholds.iter().map(threshold_case));
+    if let Some(aborted) = report.aborted {
+        let mut status = TestCaseStatus::non_success(NonSuccessKind::Error);
+        status.set_type("aborted");
+        status.set_message(format!("aborted: {aborted}"));
+        suite.add_test_case(TestCase::new("bench run", status));
+    }
+    let mut junit = Report::new(SUITE);
+    junit.set_time(Duration::from_secs_f64(
+        report.totals.duration_ms.max(0.0) / 1000.0,
+    ));
+    junit.add_test_suite(suite);
+    finish(&junit)
+}
+
+fn threshold_case(result: &ThresholdResult) -> TestCase {
+    let status = if result.passed {
+        TestCaseStatus::success()
+    } else {
+        let mut status = TestCaseStatus::non_success(NonSuccessKind::Failure);
+        status.set_type("threshold");
+        status.set_message(result.line());
+        status
+    };
+    let mut case = TestCase::new(result.expression.as_str(), status);
+    case.set_classname("threshold");
+    if result.passed {
+        case.set_system_out(result.line());
     }
     case
 }

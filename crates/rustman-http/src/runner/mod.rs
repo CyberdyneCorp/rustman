@@ -258,6 +258,9 @@ pub struct Runner<'a> {
     captures: Mutex<RunCaptures>,
     /// Every secret value resolved or captured so far in this run.
     known: Mutex<Redactor>,
+    /// What `known` held once seeded: the data rows' and the environment's
+    /// secrets, which [`Runner::forget_iteration_secrets`] keeps.
+    baseline: Mutex<Redactor>,
     /// Whether `known` holds the secrets of the run's requests yet.
     seeded: AtomicBool,
     bailed: AtomicBool,
@@ -302,6 +305,7 @@ impl<'a> Runner<'a> {
             state,
             captures: Mutex::new(RunCaptures::new()),
             known: Mutex::new(Redactor::new()),
+            baseline: Mutex::new(Redactor::new()),
             seeded: AtomicBool::new(false),
             bailed: AtomicBool::new(false),
             trace,
@@ -314,6 +318,7 @@ impl<'a> Runner<'a> {
         if let Some(data) = &runner.options.data {
             runner.remember(&data.rows.secrets(&data.secret));
         }
+        runner.keep_as_baseline();
         Ok(runner)
     }
 
