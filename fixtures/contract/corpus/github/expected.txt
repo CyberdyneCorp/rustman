@@ -1,0 +1,26 @@
+catalog version 2
+2 breaking, 6 non-breaking, 0 unknown
+non-breaking response-field-added | GET /repos/{owner}/{repo} | response 200 (application/json) $.permissions.maintain: added
+    old: /components/schemas/full-repository/properties/permissions/properties
+    new: /components/schemas/full-repository/properties/permissions/properties/maintain
+non-breaking response-field-added | GET /repos/{owner}/{repo} | response 200 (application/json) $.permissions.triage: added
+    old: /components/schemas/full-repository/properties/permissions/properties
+    new: /components/schemas/full-repository/properties/permissions/properties/triage
+breaking request-constraint-tightened | GET /repos/{owner}/{repo}/issues | query parameter 'per_page': maximum none -> 100
+    old: /components/parameters/per-page/schema
+    new: /components/parameters/per-page/schema
+non-breaking request-optional-parameter-added | GET /repos/{owner}/{repo}/issues | query parameter 'type': added, optional
+    old: /paths/~1repos~1{owner}~1{repo}~1issues/get
+    new: /paths/~1repos~1{owner}~1{repo}~1issues/get/parameters/3
+non-breaking response-field-added | GET /repos/{owner}/{repo}/issues | response 200 (application/json) $[].locked: added
+    old: /components/schemas/issue/properties
+    new: /components/schemas/issue/properties/locked
+non-breaking response-field-added | GET /repos/{owner}/{repo}/issues | response 200 (application/json) $[].state_reason: added
+    old: /components/schemas/issue/properties
+    new: /components/schemas/issue/properties/state_reason
+breaking operation-removed | GET /repos/{owner}/{repo}/community/code_of_conduct | operation removed
+    old: /paths/~1repos~1{owner}~1{repo}~1community~1code_of_conduct/get
+    new: /paths
+non-breaking operation-added | GET /repos/{owner}/{repo}/subscription | operation added
+    old: /paths
+    new: /paths/~1repos~1{owner}~1{repo}~1subscription/get

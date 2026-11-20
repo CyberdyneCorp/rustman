@@ -1,0 +1,21 @@
+# The spec scenario "Two versions compared": v2 adds GET /health and
+# removes DELETE /users/{id}.
+expect: [operation-removed, operation-added]
+old:
+  paths:
+    /users/{id}:
+      get:
+        parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+        responses: {'200': {description: ok}}
+      delete:
+        parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+        responses: {'204': {description: deleted}}
+new:
+  paths:
+    /users/{id}:
+      get:
+        parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+        responses: {'200': {description: ok}}
+    /health:
+      get:
+        responses: {'200': {description: ok}}

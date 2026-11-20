@@ -1,6 +1,8 @@
-//! The canonical report: a run or an exploration under `rustman.report/v1`.
+//! The canonical report: a run, an exploration or a contract check under
+//! `rustman.report/v1`.
 //! It is the only input the renderers and `report diff` receive.
 
+use crate::contract::{ContractReport, KIND_CONTRACT};
 use crate::exploration::{ExplorationReport, KIND_EXPLORATION};
 use crate::run::{KIND_RUN, RunReport};
 
@@ -17,6 +19,8 @@ pub enum Report {
     Run(Box<RunReport>),
     /// Boxed: an exploration report is several times larger than a run's.
     Exploration(Box<ExplorationReport>),
+    /// Boxed, like the others.
+    Contract(Box<ContractReport>),
 }
 
 /// Why a report cannot be read.
@@ -28,7 +32,7 @@ pub enum ReadError {
     NotAReport,
     #[error("unsupported report schema '{0}' (this version reads rustman.report/v1)")]
     UnsupportedVersion(String),
-    #[error("unknown report kind '{0}' (expected run or exploration)")]
+    #[error("unknown report kind '{0}' (expected run, exploration or contract)")]
     UnknownKind(String),
     #[error("invalid {kind} report: {error}")]
     Invalid {
@@ -59,15 +63,22 @@ impl Report {
                     kind: KIND_EXPLORATION,
                     error,
                 }),
+            Some(KIND_CONTRACT) => serde_json::from_value(value)
+                .map(|r| Self::Contract(Box::new(r)))
+                .map_err(|error| ReadError::Invalid {
+                    kind: KIND_CONTRACT,
+                    error,
+                }),
             other => Err(ReadError::UnknownKind(other.unwrap_or("").to_owned())),
         }
     }
 
-    /// `run` or `exploration`.
+    /// `run`, `exploration` or `contract`.
     pub fn kind(&self) -> &'static str {
         match self {
             Self::Run(_) => KIND_RUN,
             Self::Exploration(_) => KIND_EXPLORATION,
+            Self::Contract(_) => KIND_CONTRACT,
         }
     }
 
@@ -76,6 +87,7 @@ impl Report {
         let text = match self {
             Self::Run(r) => serde_json::to_string_pretty(r),
             Self::Exploration(r) => serde_json::to_string_pretty(r),
+            Self::Contract(r) => serde_json::to_string_pretty(r),
         };
         let mut text = text.expect("reports serialize");
         text.push('\n');

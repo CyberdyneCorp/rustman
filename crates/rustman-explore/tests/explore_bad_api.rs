@@ -13,6 +13,7 @@ use rustman_core::model::{VarValue, Variables};
 use rustman_core::safety::{
     Governor, Limits, Permission, PolicyOptions, SafetyPolicy, SafetySettings,
 };
+use rustman_core::trace::{TraceId, TracePropagation};
 use rustman_core::vars::SecretLookup;
 use rustman_explore::explore::detect::Finding;
 use rustman_explore::explore::exec::{Context, Executor, Identity, Outcome, Status};
@@ -41,6 +42,7 @@ fn environment(name: &str) -> Environment {
         variables: Variables::default(),
         secrets: vec!["bearerAuth_token".into()],
         production: false,
+        trace: Default::default(),
     }
 }
 
@@ -52,6 +54,7 @@ fn plain_environment(name: &str, token: &str) -> Environment {
         variables: Variables::new(vec![("bearerAuth_token".into(), token)]),
         secrets: Vec::new(),
         production: false,
+        trace: Default::default(),
     }
 }
 
@@ -64,6 +67,8 @@ struct Exploration {
     /// `(method, path prefix)` the server never answers; each probe is
     /// then dropped after [`STALLED_PROBE`], as a cancellation would.
     stall: Option<(&'static str, &'static str)>,
+    /// Trace propagation for every probe.
+    trace: Option<TracePropagation>,
 }
 
 /// How long a probe may wait on a stalled server.
@@ -85,6 +90,7 @@ impl Exploration {
             identity_b: false,
             plain_tokens: false,
             stall: None,
+            trace: None,
         }
     }
 
@@ -147,7 +153,10 @@ impl Exploration {
             }),
             scans: &planned.scans,
             disabled_rules: &disabled,
-            send: SendOptions::default(),
+            send: SendOptions {
+                trace: self.trace.clone(),
+                ..SendOptions::default()
+            },
         };
         let executor = Executor::new(&sender, context);
         let mut outcomes = Vec::new();
@@ -232,6 +241,27 @@ async fn conformance_finds_the_missing_required_property() {
             .find("response-schema-violation", "GET /users")
             .is_empty()
     );
+}
+
+#[tokio::test]
+async fn evidence_records_the_run_trace_of_its_exchange() {
+    let run = TraceId::from_hex("4bf92f3577b34da6a3ce929d0e0e4736").unwrap();
+    let mut exploration = Exploration::new(&DETECTOR_FAMILIES, Permission::Mutations);
+    exploration.trace = Some(TracePropagation {
+        run_trace_id: Some(run),
+        ..TracePropagation::default()
+    });
+    let explored = exploration.run().await;
+    let finding = explored.first("server-error-on-invalid-input", "POST /users");
+    let trace = finding.evidence.trace.as_ref().expect("evidence trace ids");
+    assert_eq!(trace.trace_id, run.to_string());
+    assert_eq!(trace.span_id.len(), 16);
+    assert!(trace.sampled && trace.backend_trace_id.is_none());
+    let untraced = Exploration::new(&DETECTOR_FAMILIES, Permission::Mutations)
+        .run()
+        .await;
+    let finding = untraced.first("server-error-on-invalid-input", "POST /users");
+    assert!(finding.evidence.trace.is_none());
 }
 
 #[tokio::test]
@@ -587,4 +617,26 @@ async fn a_probe_dropped_in_flight_reports_what_it_created() {
             "{id} not reported: {created:?}"
         );
     }
+}
+
+/// Regression: findings were redacted with the identities' secrets only,
+/// so a secret the trace `baggage` carried from elsewhere reached them.
+#[tokio::test]
+async fn trace_secrets_never_reach_findings() {
+    let canary = "trace-baggage-canary-5e3";
+    let mut exploration = Exploration::new(&DETECTOR_FAMILIES, Permission::Mutations);
+    exploration.trace = Some(TracePropagation {
+        baggage: vec![("tenant".into(), canary.into())],
+        secrets: vec![rustman_core::Secret::new("tenant", canary.to_owned())],
+        ..TracePropagation::default()
+    });
+    let explored = exploration.run().await;
+    let sql = explored.first("error-leakage", "GET /search");
+    assert!(
+        sql.evidence.body.contains("baggage"),
+        "{}",
+        sql.evidence.body
+    );
+    let all = serde_json::to_string(&explored.outcomes).unwrap();
+    assert!(!all.contains(canary), "a trace secret leaked");
 }

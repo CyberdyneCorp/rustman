@@ -539,3 +539,56 @@ async fn the_duration_also_bounds_the_wait_for_connection_ack() {
     let waited = started.elapsed();
     assert!(waited < Duration::from_secs(5), "{waited:?}");
 }
+
+/// Options that inject W3C trace headers (add-trace-propagation task 2.3).
+fn traced() -> SendOptions {
+    SendOptions {
+        trace: Some(rustman_core::trace::TracePropagation::default()),
+        ..SendOptions::default()
+    }
+}
+
+fn assert_traceparent(value: Option<&str>) {
+    let value = value.expect("a traceparent");
+    assert!(
+        value.starts_with("00-") && value.ends_with("-01"),
+        "{value}"
+    );
+    assert_eq!(value.len(), 55, "{value}");
+}
+
+#[tokio::test]
+async fn a_traced_websocket_upgrade_carries_a_traceparent() {
+    let server = GraphqlWsServer::start(WsScript::Modern {
+        events: 1,
+        complete: true,
+    })
+    .await;
+    let f = Fixture::new(&server.url("ws", ""), "transport: ws\n");
+    subscribe_with(&f, None, None, CancellationToken::new(), &traced())
+        .await
+        .unwrap();
+    assert_traceparent(server.sessions()[0].header("traceparent"));
+    let plain = GraphqlWsServer::start(WsScript::Modern {
+        events: 1,
+        complete: true,
+    })
+    .await;
+    let f = Fixture::new(&plain.url("ws", ""), "transport: ws\n");
+    headless(&f).await.unwrap();
+    assert_eq!(plain.sessions()[0].header("traceparent"), None);
+}
+
+#[tokio::test]
+async fn a_traced_sse_subscription_post_carries_a_traceparent() {
+    let server = GraphqlSseServer::start(SseScript {
+        events: 1,
+        end: SseEnd::Complete,
+    })
+    .await;
+    let f = Fixture::new(&server.url(""), "transport: sse\n");
+    subscribe_with(&f, None, None, CancellationToken::new(), &traced())
+        .await
+        .unwrap();
+    assert_traceparent(server.hits()[0].header("traceparent"));
+}

@@ -83,6 +83,11 @@ enum Command {
     Ws(commands::realtime::WsArgs),
     /// Listen to Server-Sent Events streams and print their events
     Sse(commands::realtime::SseArgs),
+    /// Contract testing: classify OpenAPI changes as breaking or not, Pact
+    /// contracts and passive conformance
+    Contract(commands::contract::ContractArgs),
+    /// Open the trace link of a past exchange in the browser
+    Trace(commands::trace::TraceArgs),
     /// Open a run or exploration report in the graphical viz companion (rustman-viz)
     Viz(commands::viz::VizArgs),
 }
@@ -143,6 +148,8 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
         Command::Mock(args) => commands::mock::run(&args),
         Command::Ws(args) => commands::realtime::run_ws(&args),
         Command::Sse(args) => commands::realtime::run_sse(&args),
+        Command::Contract(args) => commands::contract::run(&args),
+        Command::Trace(args) => commands::trace::run(&args),
         Command::Viz(args) => commands::viz::run(&args),
     }
 }

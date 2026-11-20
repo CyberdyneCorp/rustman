@@ -15,7 +15,8 @@ use rustman_core::model::{
     Auth, Body, HttpRequest, JsonContent, Method, NameValue, REQUEST_VERSION, Request, VarValue,
     Variables,
 };
-use rustman_core::settings::HttpDefaults;
+use rustman_core::settings::{HttpDefaults, Settings};
+use rustman_core::trace::{TRACERESPONSE, TracePropagation, TraceRecord};
 use rustman_core::vars::{
     EnvironmentSource, Layer, ResolvedBody, ResolvedRequest, Resolver, SecretLookup,
     VariablesSource, resolve_request,
@@ -37,6 +38,7 @@ use super::resources::{Creator, Resource, creators};
 use super::rules::rule;
 use crate::collection::Security;
 use crate::openapi::model::{ApiModel, Operation};
+use rustman_report::exploration::EvidenceTrace;
 
 /// Whose credentials and variables a step uses.
 #[derive(Clone, Copy)]
@@ -72,6 +74,40 @@ pub struct Context<'a> {
     /// `[explore].disabled_rules`.
     pub disabled_rules: &'a [String],
     pub send: SendOptions,
+}
+
+/// The transport options of an exploration: the defaults, with the trace
+/// propagation of `environment` over `settings` (under `scope: run`, one
+/// trace id for every probe of the exploration).
+pub fn exploration_send_options(
+    settings: &Settings,
+    environment: Option<&Environment>,
+    secrets: &dyn SecretLookup,
+) -> Result<SendOptions, String> {
+    let none = Variables::default();
+    let trace = TracePropagation::for_workspace(settings, environment, secrets, &none, false)?;
+    Ok(SendOptions {
+        trace: trace.map(|(propagation, _)| propagation),
+        ..SendOptions::default()
+    })
+}
+
+/// The warning shown when `[trace.export]` is on for an exploration:
+/// probes carry trace context, but their client spans are not exported.
+pub const EXPORT_NOT_SUPPORTED: &str =
+    "trace.export: explorations do not export client spans yet; probes still carry trace headers";
+
+/// [`EXPORT_NOT_SUPPORTED`] when the active environment's trace
+/// configuration over `settings` enables export.
+pub fn exploration_export_warning(
+    settings: &Settings,
+    environment: Option<&Environment>,
+) -> Option<&'static str> {
+    let config = match environment {
+        Some(env) => env.trace.over(&settings.trace),
+        None => settings.trace.clone(),
+    };
+    config.is_exporting().then_some(EXPORT_NOT_SUPPORTED)
 }
 
 /// How a probe ended.
@@ -163,7 +199,8 @@ pub struct Executor<'a> {
     context: Context<'a>,
     security: Security,
     creators: Vec<Creator>,
-    /// Every secret of identity A and identity B.
+    /// Every secret of identity A and identity B, and those the trace
+    /// headers carry.
     known: Redactor,
     /// What each probe in flight has created so far.
     in_flight: Mutex<BTreeMap<String, Vec<Resource>>>,
@@ -190,6 +227,9 @@ impl<'a> Executor<'a> {
         let identities = || std::iter::once(context.identity).chain(context.identity_b);
         let mut known = identity_secrets(identities());
         add_plain_credentials(&mut known, identities(), &security.secrets);
+        for secret in context.send.trace.iter().flat_map(|t| &t.secrets) {
+            known.add(secret);
+        }
         Self {
             sender,
             context,
@@ -665,7 +705,24 @@ fn evidence(method: &str, seen: &Seen<'_>) -> Evidence {
         response_headers,
         body,
         truncated,
+        trace: evidence_trace(exchange),
     }
+}
+
+/// The trace ids an evidence exchange carried, with the backend's own.
+fn evidence_trace(exchange: &Exchange) -> Option<EvidenceTrace> {
+    let sent = exchange.trace.as_ref()?;
+    let response = exchange
+        .headers
+        .get(TRACERESPONSE)
+        .and_then(|v| v.to_str().ok());
+    let record = TraceRecord::new(sent, response, (0, 0), &Redactor::new());
+    Some(EvidenceTrace {
+        trace_id: record.trace_id,
+        span_id: record.span_id,
+        sampled: record.sampled,
+        backend_trace_id: record.backend_trace_id,
+    })
 }
 
 /// A redactor of every secret the identities' environments declare and
@@ -774,6 +831,47 @@ mod tests {
         assert_eq!(
             inline_json(&value, &captures),
             serde_json::json!({"a": ["42", 1]})
+        );
+    }
+
+    #[test]
+    fn an_exploration_shares_the_run_trace_of_its_environment() {
+        let settings = Settings::ad_hoc();
+        let off = exploration_send_options(&settings, None, &rustman_core::vars::NoSecrets);
+        assert!(off.unwrap().trace.is_none());
+        let env = Environment {
+            name: "staging".into(),
+            trace: rustman_core::trace::TraceConfig {
+                enabled: Some(true),
+                scope: Some(rustman_core::trace::TraceScope::Run),
+                ..Default::default()
+            },
+            ..Environment::default()
+        };
+        let on = exploration_send_options(&settings, Some(&env), &rustman_core::vars::NoSecrets);
+        let trace = on.unwrap().trace.expect("propagation on");
+        assert!(trace.run_trace_id.is_some());
+    }
+
+    #[test]
+    fn an_exporting_exploration_is_warned_about() {
+        let settings = Settings::ad_hoc();
+        assert_eq!(exploration_export_warning(&settings, None), None);
+        let env = Environment {
+            name: "staging".into(),
+            trace: rustman_core::trace::TraceConfig {
+                export: Some(rustman_core::trace::ExportConfig {
+                    enabled: true,
+                    endpoint: Some("http://localhost:4317".into()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            ..Environment::default()
+        };
+        assert_eq!(
+            exploration_export_warning(&settings, Some(&env)),
+            Some(EXPORT_NOT_SUPPORTED)
         );
     }
 }

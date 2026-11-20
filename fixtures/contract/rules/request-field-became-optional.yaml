@@ -1,0 +1,20 @@
+# email leaves the required list of the body
+expect: [request-field-became-optional]
+old:
+  paths:
+    /users:
+      post:
+        requestBody:
+          content:
+            application/json:
+              schema: {type: object, required: [email], properties: {email: {type: string}}}
+        responses: {'200': {description: ok}}
+new:
+  paths:
+    /users:
+      post:
+        requestBody:
+          content:
+            application/json:
+              schema: {type: object, properties: {email: {type: string}}}
+        responses: {'200': {description: ok}}

@@ -5,6 +5,7 @@
 
 pub mod agent;
 pub mod assertions;
+pub mod browser;
 pub mod captures;
 pub mod collection;
 pub mod data_rows;
@@ -24,6 +25,7 @@ pub mod secret;
 pub mod secrets;
 pub mod settings;
 pub mod snapshot;
+pub mod trace;
 pub mod trust;
 pub mod vars;
 pub mod workspace;

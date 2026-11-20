@@ -16,6 +16,8 @@ mod governed;
 mod jwt;
 mod multipart;
 mod oauth2;
+#[cfg(feature = "otlp")]
+mod otlp;
 mod proxy;
 mod redirect;
 pub mod runner;
@@ -27,6 +29,7 @@ mod sse;
 mod stream;
 mod timing;
 mod tls;
+mod trace;
 mod transport;
 mod tunnel;
 mod websocket;

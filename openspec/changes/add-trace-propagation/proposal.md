@@ -32,6 +32,6 @@ None. It reuses:
 
 ## Impact
 
-- New module in `rustman-core` for trace context generation and parsing. Optional OTLP export goes through `opentelemetry-otlp` behind the cargo feature `otlp`, which is on by default but does nothing at runtime unless configured.
+- New module in `rustman-core` for trace context generation and parsing. Optional OTLP export uses the OTLP messages of `opentelemetry-proto`, sent over `rustman-http`'s own transport, behind the cargo feature `otlp`, which is off by default (the default build has no OpenTelemetry crate) and does nothing at runtime unless configured (design D1, D6).
 - A new `trace:` block in environment files and `[trace]` in `rustman.toml`.
 - The history exchange format and report exchanges gain optional `trace` fields (additive, no version bump).

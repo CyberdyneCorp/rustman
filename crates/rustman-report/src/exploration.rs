@@ -320,6 +320,20 @@ pub struct Evidence {
     /// The body was longer than the excerpt.
     #[serde(default)]
     pub truncated: bool,
+    /// The trace context the request carried; absent without one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trace: Option<EvidenceTrace>,
+}
+
+/// The trace ids of an evidence exchange (trace-propagation spec).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct EvidenceTrace {
+    pub trace_id: String,
+    pub span_id: String,
+    pub sampled: bool,
+    /// The response's `traceresponse` trace id, when it differs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backend_trace_id: Option<String>,
 }
 
 /// How to reproduce one finding.

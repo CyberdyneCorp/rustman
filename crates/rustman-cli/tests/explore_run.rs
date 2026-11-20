@@ -640,3 +640,31 @@ fn exported_regressions_fail_against_the_bad_api_and_pass_against_the_fixed_one(
         .unwrap();
     assert_eq!(unknown.status.code(), Some(2));
 }
+
+#[test]
+fn an_exploration_warns_that_it_does_not_export_spans() {
+    let api = Api::start();
+    let ws = workspace();
+    write(
+        ws.path(),
+        "rustman.toml",
+        "[workspace]\nname = \"t\"\nversion = 1\n[trace.export]\nenabled = true\nendpoint = \"http://127.0.0.1:9\"\n",
+    );
+    let args = [
+        "--env",
+        "dev",
+        "--probes",
+        "conformance",
+        "--operations",
+        "getUser",
+    ];
+    let output = explore(ws.path(), &api, &args);
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    let stderr = text(&output.stderr);
+    assert!(
+        stderr.contains(
+            "warning: trace.export: explorations do not export client spans yet; probes still carry trace headers"
+        ),
+        "{stderr}"
+    );
+}

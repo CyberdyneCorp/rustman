@@ -122,6 +122,7 @@ pub const DEFAULT: &[Builtin] = &[
     (Context::Global, "Alt+S", ActionId::GraphqlSubscriptionStart),
     (Context::Global, "Alt+X", ActionId::GraphqlSubscriptionStop),
     (Context::Global, "Alt+A", ActionId::SnapshotReview),
+    (Context::Global, "Ctrl+O", ActionId::TraceOpen),
     (Context::Editor, "Ctrl+E", ActionId::EditorExternal),
     (Context::Editor, "Alt+M", ActionId::EditorMode),
     (Context::Editor, "Ctrl+Space", ActionId::EditorComplete),
@@ -445,6 +446,7 @@ mod tests {
             ("Shift+Tab", ActionId::FocusPrev),
             ("?", ActionId::HelpOpen),
             ("Ctrl+Q", ActionId::Quit),
+            ("Ctrl+O", ActionId::TraceOpen),
         ] {
             assert_eq!(global(text), Resolution::Action(action), "{text}");
         }

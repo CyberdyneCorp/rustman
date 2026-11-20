@@ -2,13 +2,16 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/CyberdyneCorp/rustman/docs/schemas/report.schema.json",
   "title": "rustman.report/v1",
-  "description": "A Rustman report: a run (kind: run) or an exploration (kind: exploration). Every text field is redacted: secret values appear as «redacted:<name>».",
+  "description": "A Rustman report: a run (kind: run), an exploration (kind: exploration) or a contract check (kind: contract). Every text field is redacted: secret values appear as «redacted:<name>».",
   "oneOf": [
     {
       "$ref": "#/$defs/run_report"
     },
     {
       "$ref": "#/$defs/exploration_report"
+    },
+    {
+      "$ref": "#/$defs/contract_report"
     }
   ],
   "$defs": {
@@ -203,6 +206,9 @@
         },
         "duration_ms": {
           "$ref": "#/$defs/ms"
+        },
+        "trace": {
+          "$ref": "#/$defs/trace"
         }
       }
     },
@@ -723,6 +729,13 @@
         },
         "insecure": {
           "type": "boolean"
+        },
+        "server_timings": {
+          "type": "array",
+          "description": "The response's Server-Timing metrics, in order; absent when it has none. Added in v0.6.",
+          "items": {
+            "$ref": "#/$defs/server_timing"
+          }
         }
       }
     },
@@ -981,6 +994,73 @@
         },
         "old": {},
         "new": {}
+      }
+    },
+    "trace": {
+      "type": "object",
+      "description": "The trace context the request carried (trace propagation on, or a traceparent/B3 header the request set). Absent otherwise. Added in v0.6.",
+      "required": [
+        "trace_id",
+        "span_id",
+        "sampled"
+      ],
+      "properties": {
+        "trace_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "span_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$"
+        },
+        "sampled": {
+          "type": "boolean"
+        },
+        "backend_trace_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$",
+          "description": "The trace id of the response's traceresponse, when it differs from trace_id; links use it."
+        },
+        "tracestate": {
+          "type": "string",
+          "description": "The tracestate header sent, redacted."
+        },
+        "baggage": {
+          "type": "string",
+          "description": "The baggage header sent, redacted."
+        },
+        "start_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Unix milliseconds when the exchange started."
+        },
+        "end_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Unix milliseconds when the exchange ended."
+        },
+        "link": {
+          "type": "string",
+          "description": "The trace link, when a link template is configured (redacted)."
+        }
+      }
+    },
+    "server_timing": {
+      "type": "object",
+      "required": [
+        "name",
+        "dur_ms"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "dur_ms": {
+          "$ref": "#/$defs/optional_ms"
+        },
+        "desc": {
+          "type": "string"
+        }
       }
     },
     "Settings": {
@@ -1464,6 +1544,17 @@
           "type": "boolean",
           "description": "The body was longer than the excerpt.",
           "default": false
+        },
+        "trace": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EvidenceTrace"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The trace context the request carried; absent without one."
         }
       },
       "required": [
@@ -1475,6 +1566,33 @@
         "body"
       ],
       "description": "The redacted exchange behind a finding."
+    },
+    "EvidenceTrace": {
+      "type": "object",
+      "properties": {
+        "trace_id": {
+          "type": "string"
+        },
+        "span_id": {
+          "type": "string"
+        },
+        "sampled": {
+          "type": "boolean"
+        },
+        "backend_trace_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The response's `traceresponse` trace id, when it differs."
+        }
+      },
+      "required": [
+        "trace_id",
+        "span_id",
+        "sampled"
+      ],
+      "description": "The trace ids of an evidence exchange (trace-propagation spec)."
     },
     "Reproduction": {
       "type": "object",
@@ -1775,6 +1893,300 @@
         "left_behind"
       ],
       "description": "`report.json` of an exploration."
+    },
+    "ContractMode": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "diff",
+          "description": "`rustman contract diff`: differences between two OpenAPI documents."
+        },
+        {
+          "type": "string",
+          "const": "pact-verify",
+          "description": "`rustman contract pact verify`: Pact interactions replayed against a\nprovider."
+        },
+        {
+          "type": "string",
+          "const": "conformance",
+          "description": "`rustman contract verify`: recorded exchanges checked against a\ndocument."
+        }
+      ],
+      "description": "Which contract command wrote the report."
+    },
+    "ContractSource": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "description": "What it is to the command: `old`, `new`, `spec`, `pact`, `history`."
+        },
+        "name": {
+          "type": "string",
+          "description": "Its path, URL or `<git-ref>:<path>`."
+        }
+      },
+      "required": [
+        "role",
+        "name"
+      ],
+      "description": "One document or file a contract command read."
+    },
+    "ContractSummary": {
+      "type": "object",
+      "properties": {
+        "counts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StatusCount"
+          },
+          "description": "Items per status, in the mode's order (for a diff: breaking,\nnon-breaking, unknown), including statuses with no item."
+        },
+        "allowed": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "description": "Items an allowlist accepted."
+        },
+        "failing": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "description": "Items that fail the command."
+        },
+        "passed": {
+          "type": "boolean",
+          "description": "`true` when no item fails the command."
+        }
+      },
+      "required": [
+        "counts",
+        "allowed",
+        "failing",
+        "passed"
+      ],
+      "description": "The counts of a contract report."
+    },
+    "StatusCount": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "status",
+        "count"
+      ],
+      "description": "How many items have one status."
+    },
+    "ContractItem": {
+      "type": "object",
+      "properties": {
+        "rule": {
+          "type": "string",
+          "description": "The rule id, e.g. `operation-removed`."
+        },
+        "description": {
+          "type": "string",
+          "description": "The rule's one-line description."
+        },
+        "status": {
+          "type": "string",
+          "description": "The classification or verdict, e.g. `breaking`."
+        },
+        "allowed": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The allowlist entry's justification, when one accepted the item."
+        },
+        "failing": {
+          "type": "boolean",
+          "description": "Whether the item fails the command."
+        },
+        "subject": {
+          "type": "string",
+          "description": "The operation (`METHOD /path`), interaction or exchange."
+        },
+        "message": {
+          "type": "string"
+        },
+        "locations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ContractLocation"
+          },
+          "description": "Where the item is, the primary location first (for a diff, the new\ndocument)."
+        }
+      },
+      "required": [
+        "rule",
+        "description",
+        "status",
+        "failing",
+        "subject",
+        "message",
+        "locations"
+      ],
+      "description": "One difference, interaction or exchange."
+    },
+    "ContractLocation": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "description": "The source's role, e.g. `new`."
+        },
+        "document": {
+          "type": "string",
+          "description": "The source's name (path, URL or `<git-ref>:<path>`)."
+        },
+        "pointer": {
+          "type": "string",
+          "description": "A JSON pointer into it."
+        }
+      },
+      "required": [
+        "role",
+        "document",
+        "pointer"
+      ],
+      "description": "A place in one of the report's sources."
+    },
+    "ContractCoverage": {
+      "type": "object",
+      "properties": {
+        "observed": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "description": "Documented operations with at least one exchange."
+        },
+        "total": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "description": "Documented operations."
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/OperationCoverage"
+          },
+          "description": "Every documented operation, in document order."
+        }
+      },
+      "required": [
+        "observed",
+        "total",
+        "operations"
+      ],
+      "description": "Which documented operations recorded traffic exercised (passive\nconformance)."
+    },
+    "OperationCoverage": {
+      "type": "object",
+      "properties": {
+        "operation": {
+          "type": "string",
+          "description": "`METHOD /path`."
+        },
+        "exchanges": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "violations": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "description": "Exchanges of this operation with a violation."
+        }
+      },
+      "required": [
+        "operation",
+        "exchanges",
+        "violations"
+      ],
+      "description": "One documented operation and the exchanges that matched it."
+    },
+    "contract_report": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "rustman.report/v1"
+        },
+        "kind": {
+          "const": "contract"
+        },
+        "rustman_version": {
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/ContractMode"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ContractSource"
+          },
+          "description": "The documents and files checked, such as a diff's `old` and `new`."
+        },
+        "catalog_version": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0,
+          "description": "The rule catalog version a diff classified with."
+        },
+        "summary": {
+          "$ref": "#/$defs/ContractSummary"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ContractItem"
+          },
+          "description": "In the command's order (for a diff, the document order)."
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Non-fatal problems, such as expired or unused allowlist entries.",
+          "default": []
+        },
+        "coverage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContractCoverage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "For a conformance check: the documented operations the recorded\ntraffic exercised."
+        }
+      },
+      "required": [
+        "schema",
+        "kind",
+        "rustman_version",
+        "mode",
+        "sources",
+        "summary",
+        "items"
+      ],
+      "description": "A contract report."
     }
   }
 }

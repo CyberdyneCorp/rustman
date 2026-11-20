@@ -1,0 +1,48 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Check recorded exchanges (history or a run report) against an OpenAPI document without sending any request
+
+Usage: rustman contract verify [OPTIONS] --spec <OPENAPI>
+
+Options:
+      --spec <OPENAPI>
+          The OpenAPI document, a local file (URLs are refused: this command opens no network connection)
+
+      --from <SOURCE>
+          `history` (the default) or a run report written by `rustman run --report json=...`
+          
+          [default: history]
+
+      --since <AGE>
+          Only history entries at most this old, as in 30m, 2h or 7d
+
+      --grep <TEXT>
+          Only history entries with this text in the URL, the request body or the response body (case-insensitive)
+
+      --limit <N>
+          At most this many history entries, newest first
+
+      --fail-on-undocumented
+          Exit 1 when an exchange matches no documented operation
+
+      --report <FORMAT[=PATH]>
+          Also write the report as json, junit, markdown, html or sarif, to a file or stdout, as in markdown=out/conformance.md (repeatable)
+
+      --env <NAME>
+          Environment whose secret values are redacted from the output (default: RUSTMAN_ENV, then default_environment)
+
+      --workspace <DIR>
+          Workspace directory, whose history is read (default: search from the current directory upwards; outside one, the ad-hoc history)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

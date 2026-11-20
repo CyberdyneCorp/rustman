@@ -1,0 +1,22 @@
+# nickname appears in a closed 200 body
+expect: [response-field-added-to-closed-schema]
+old:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            content:
+              application/json:
+                schema: {type: object, additionalProperties: false, properties: {id: {type: integer}}}
+new:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            content:
+              application/json:
+                schema: {type: object, additionalProperties: false, properties: {id: {type: integer}, nickname: {type: string}}}

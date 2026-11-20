@@ -380,3 +380,36 @@ async fn login_reports_where_the_token_was_stored() {
     assert_eq!(stored, StoredIn::Keychain);
     assert!(!dir.path().join(".rustman/secrets.yaml").exists());
 }
+
+#[tokio::test]
+async fn the_token_endpoint_gets_no_trace_headers() {
+    use rustman_core::trace::{PropagationFormat, TracePropagation};
+    let server = OAuthServer::start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let store = SecretStore::with_keychain(dir.path(), None);
+    let config = config(&server, OAuth2Grant::ClientCredentials);
+    let ctx = context(&store, non_interactive());
+    let options = SendOptions {
+        trace: Some(TracePropagation {
+            formats: vec![PropagationFormat::W3c, PropagationFormat::B3],
+            tracestate: vec![("rojo".into(), "st4te-c4n4ry".into())],
+            baggage: vec![("tenant".into(), "bgg-c4n4ry-Qz9".into())],
+            ..TracePropagation::default()
+        }),
+        ..SendOptions::default()
+    };
+    let mut request = api_request(&server, config);
+    let exchange = HttpEngine::new()
+        .send_authorized(&mut request, &options, &ctx)
+        .await
+        .unwrap();
+    assert_eq!(exchange.status, 200);
+    let tokens = server.headers("/token");
+    assert_eq!(tokens.len(), 1);
+    for name in ["traceparent", "tracestate", "baggage", "b3"] {
+        assert!(!tokens[0].contains_key(name), "{name}: {:?}", tokens[0]);
+    }
+    let api = server.headers("/api");
+    assert!(api[0].contains_key("traceparent"), "{:?}", api[0]);
+    assert_eq!(api[0]["baggage"], "tenant=bgg-c4n4ry-Qz9");
+}

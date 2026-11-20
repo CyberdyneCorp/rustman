@@ -136,6 +136,7 @@ impl Session {
             jsonrpc.close().await;
             sent
         });
+        crate::commands::exec::finish_spans(&runner);
         if let Err(e) = runner.finish() {
             print_warnings(&[e.to_string()]);
         }

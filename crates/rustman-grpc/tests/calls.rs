@@ -297,3 +297,41 @@ async fn an_unreachable_target_is_a_request_error() {
     );
     assert_eq!(err.exit_code(), 3);
 }
+
+/// With trace propagation on, a native call carries `traceparent` and B3
+/// as request metadata; metadata the call sets itself wins
+/// (add-trace-propagation task 2.3).
+#[tokio::test(flavor = "multi_thread")]
+async fn trace_context_is_sent_as_request_metadata() {
+    use rustman_core::trace::{PropagationFormat, TracePropagation};
+    let server = GrpcServer::start(Reflection::None).await;
+    let fixture = Fixture::new();
+    let explicit = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+    let plain = request_file(&server.target(), GET, "message: {id: p-1}\n");
+    let own = format!(
+        "message: {{id: p-1}}\nmetadata:\n  - {{name: traceparent, value: '{explicit}'}}\n"
+    );
+    let own = request_file(&server.target(), GET, &own);
+    for text in [&plain, &own] {
+        let (call, mut options) = fixture.prepare(text).unwrap();
+        options.http.trace = Some(TracePropagation {
+            formats: vec![PropagationFormat::W3c, PropagationFormat::B3],
+            ..TracePropagation::default()
+        });
+        call.send(&options).await.unwrap();
+    }
+    fixture.send(&plain).await.unwrap();
+    let calls = server.calls();
+    let traceparent = calls[0].text("traceparent").unwrap();
+    assert!(traceparent.starts_with("00-") && traceparent.len() == 55);
+    assert!(
+        calls[0]
+            .text("b3")
+            .unwrap()
+            .starts_with(&traceparent[3..35])
+    );
+    assert_eq!(calls[1].text("traceparent").as_deref(), Some(explicit));
+    let b3 = calls[1].text("b3").unwrap();
+    assert!(b3.starts_with("4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7"));
+    assert_eq!(calls[2].text("traceparent"), None);
+}

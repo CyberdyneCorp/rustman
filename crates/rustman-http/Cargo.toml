@@ -49,6 +49,12 @@ tower-service.workspace = true
 tracing.workspace = true
 url.workspace = true
 uuid.workspace = true
+# `otlp`: OTLP export of client spans (add-trace-propagation section 4).
+opentelemetry-proto = { workspace = true, optional = true }
+prost = { workspace = true, optional = true }
+
+[features]
+otlp = ["dep:opentelemetry-proto", "dep:prost", "rustman-test-support/otlp"]
 
 [dev-dependencies]
 rustman-test-support.workspace = true

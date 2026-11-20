@@ -1,0 +1,21 @@
+# Parameters moved from the path item into the operation (and a shared one
+# overridden by the operation) are the same parameters: no difference.
+expect: []
+old:
+  paths:
+    /users/{id}:
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+        - {name: X-Trace, in: header, schema: {type: string}}
+      get:
+        parameters:
+          - {name: X-Trace, in: header, required: true, schema: {type: string}}
+        responses: {'200': {description: ok}}
+new:
+  paths:
+    /users/{id}:
+      get:
+        parameters:
+          - {name: id, in: path, required: true, schema: {type: string}}
+          - {name: X-Trace, in: header, required: true, schema: {type: string}}
+        responses: {'200': {description: ok}}

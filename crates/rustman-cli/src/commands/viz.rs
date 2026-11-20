@@ -62,6 +62,13 @@ pub fn run(args: &VizArgs) -> Result<u8, CliError> {
     let kind = match report {
         Report::Run(_) => ReportKind::Run,
         Report::Exploration(_) => ReportKind::Exploration,
+        Report::Contract(_) => {
+            return Err(ConfigError::Usage(format!(
+                "{shown} is a contract report; the viz companion shows run and exploration reports \
+                 (render it with rustman report render {shown} --format html)"
+            ))
+            .into());
+        }
     };
     let view = match (args.view, kind) {
         (Some(ViewArg::Graph), ReportKind::Exploration) => View::ApiGraph,
@@ -419,6 +426,7 @@ mod tests {
                 binary: false,
             },
             timings: TimingsRecord::default(),
+            server_timings: Vec::new(),
             redirects: Vec::new(),
             insecure: false,
         });

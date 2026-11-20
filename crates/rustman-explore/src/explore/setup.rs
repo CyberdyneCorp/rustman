@@ -181,6 +181,7 @@ mod tests {
             variables: Variables::new(vec![("base_url".into(), VarValue::String("x".into()))]),
             secrets: vec!["token".into()],
             production: false,
+            trace: Default::default(),
         }
     }
 

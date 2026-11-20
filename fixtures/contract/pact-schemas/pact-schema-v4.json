@@ -1,0 +1,1442 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "title": "Pact V4",
+  "description": "Schema for a Pact file",
+  "definitions": {
+    "body": {
+      "$id": "#/definitions/body",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "content",
+        "contentType",
+        "contentTypeHint",
+        "encoded"
+      ],
+      "properties": {
+        "content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {}
+          ]
+        },
+        "contentType": {
+          "type": "string"
+        },
+        "contentTypeHint": {
+          "anyOf": [
+            {
+              "const": "BINARY",
+              "type": "string"
+            },
+            {
+              "const": "TEXT",
+              "type": "string"
+            }
+          ]
+        },
+        "encoded": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "genDate": {
+      "$id": "#/definitions/genDate",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "const": "Date",
+          "type": "string"
+        },
+        "format": {
+          "type": "string"
+        }
+      }
+    },
+    "genDateTime": {
+      "$id": "#/definitions/genDateTime",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "const": "DateTime",
+          "type": "string"
+        },
+        "format": {
+          "type": "string"
+        }
+      }
+    },
+    "genMockServerURL": {
+      "$id": "#/definitions/genMockServerURL",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "regex",
+        "example"
+      ],
+      "properties": {
+        "type": {
+          "const": "MockServerURL",
+          "type": "string"
+        },
+        "regex": {
+          "type": "string"
+        },
+        "example": {
+          "type": "string"
+        }
+      }
+    },
+    "genProviderState": {
+      "$id": "#/definitions/genProviderState",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "expression"
+      ],
+      "properties": {
+        "type": {
+          "const": "ProviderState",
+          "type": "string"
+        },
+        "expression": {
+          "type": "string"
+        }
+      }
+    },
+    "genRandomBoolean": {
+      "$id": "#/definitions/genRandomBoolean",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "const": "RandomBoolean",
+          "type": "string"
+        }
+      }
+    },
+    "genRandomDecimal": {
+      "$id": "#/definitions/genRandomDecimal",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "digits"
+      ],
+      "properties": {
+        "type": {
+          "const": "RandomDecimal",
+          "type": "string"
+        },
+        "digits": {
+          "type": "number"
+        }
+      }
+    },
+    "genRandomHexadecimal": {
+      "$id": "#/definitions/genRandomHexadecimal",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "digits"
+      ],
+      "properties": {
+        "type": {
+          "const": "RandomHexadecimal",
+          "type": "string"
+        },
+        "digits": {
+          "type": "number"
+        }
+      }
+    },
+    "genRandomInt": {
+      "$id": "#/definitions/genRandomInt",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "min",
+        "max"
+      ],
+      "properties": {
+        "type": {
+          "const": "RandomInt",
+          "type": "string"
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        }
+      }
+    },
+    "genRandomString": {
+      "$id": "#/definitions/genRandomString",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "size"
+      ],
+      "properties": {
+        "type": {
+          "const": "RandomString",
+          "type": "string"
+        },
+        "size": {
+          "type": "number"
+        }
+      }
+    },
+    "genRegex": {
+      "$id": "#/definitions/genRegex",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "regex"
+      ],
+      "properties": {
+        "type": {
+          "const": "Regex",
+          "type": "string"
+        },
+        "regex": {
+          "type": "string"
+        }
+      }
+    },
+    "genTime": {
+      "$id": "#/definitions/genTime",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "const": "Time",
+          "type": "string"
+        },
+        "format": {
+          "type": "string"
+        }
+      }
+    },
+    "genUuid": {
+      "$id": "#/definitions/genUuid",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "const": "Uuid",
+          "type": "string"
+        }
+      }
+    },
+    "genUuidFormat": {
+      "$id": "#/definitions/genUuidFormat",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "format"
+      ],
+      "properties": {
+        "type": {
+          "const": "Uuid",
+          "type": "string"
+        },
+        "format": {
+          "anyOf": [
+            {
+              "const": "simple",
+              "type": "string"
+            },
+            {
+              "const": "lower-case-hyphenated",
+              "type": "string"
+            },
+            {
+              "const": "upper-case-hyphenated",
+              "type": "string"
+            },
+            {
+              "const": "URN",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "bodyGenerator": {
+      "$id": "#/definitions/bodyGenerator",
+      "additionalProperties": false,
+      "type": "object",
+      "patternProperties": {
+        "^\\$.*$": {
+          "$ref": "#/definitions/generator"
+        }
+      }
+    },
+    "recordGenerator": {
+      "$id": "#/definitions/recordGenerator",
+      "additionalProperties": false,
+      "type": "object",
+      "patternProperties": {
+        "^(.*)$": {
+          "$ref": "#/definitions/generator"
+        }
+      }
+    },
+    "generator": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/genDate"
+        },
+        {
+          "$ref": "#/definitions/genDateTime"
+        },
+        {
+          "$ref": "#/definitions/genRandomBoolean"
+        },
+        {
+          "$ref": "#/definitions/genRandomDecimal"
+        },
+        {
+          "$ref": "#/definitions/genRandomHexadecimal"
+        },
+        {
+          "$ref": "#/definitions/genRandomInt"
+        },
+        {
+          "$ref": "#/definitions/genRandomString"
+        },
+        {
+          "$ref": "#/definitions/genRegex"
+        },
+        {
+          "$ref": "#/definitions/genTime"
+        },
+        {
+          "$ref": "#/definitions/genUuid"
+        },
+        {
+          "$ref": "#/definitions/genMockServerURL"
+        },
+        {
+          "$ref": "#/definitions/genProviderState"
+        },
+        {
+          "$ref": "#/definitions/genUuidFormat"
+        }
+      ],
+      "$id": "#/definitions/generator"
+    },
+    "headers": {
+      "$id": "#/definitions/headers",
+      "anyOf": [
+        {
+          "type": "object",
+          "patternProperties": {
+            "^(.*)$": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "patternProperties": {
+            "^(.*)$": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "interaction": {
+      "$id": "#/definitions/interaction",
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "description",
+            "request",
+            "response",
+            "type"
+          ],
+          "properties": {
+            "comments": {
+              "type": "object",
+              "properties": {
+                "testname": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "interactionMarkup": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "markup",
+                "markupType"
+              ],
+              "properties": {
+                "markup": {
+                  "type": "string"
+                },
+                "markupType": {
+                  "anyOf": [
+                    {
+                      "const": "COMMON_MARK",
+                      "type": "string"
+                    },
+                    {
+                      "const": "HTML",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            "key": {
+              "type": "string"
+            },
+            "pending": {
+              "type": "boolean"
+            },
+            "pluginConfiguration": {
+              "type": "object",
+              "patternProperties": {
+                "^(.*)$": {
+                  "type": "object",
+                  "patternProperties": {
+                    "^(.*)$": {}
+                  }
+                }
+              }
+            },
+            "description": {
+              "type": "string"
+            },
+            "request": {
+              "$ref": "#/definitions/request"
+            },
+            "response": {
+              "$ref": "#/definitions/response"
+            },
+            "providerStates": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "name"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "params": {
+                        "type": "object",
+                        "patternProperties": {
+                          "^(.*)$": {}
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "type": {
+              "const": "Synchronous/HTTP",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "description",
+            "contents",
+            "type"
+          ],
+          "properties": {
+            "comments": {
+              "type": "object",
+              "properties": {
+                "testname": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "interactionMarkup": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "markup",
+                "markupType"
+              ],
+              "properties": {
+                "markup": {
+                  "type": "string"
+                },
+                "markupType": {
+                  "anyOf": [
+                    {
+                      "const": "COMMON_MARK",
+                      "type": "string"
+                    },
+                    {
+                      "const": "HTML",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            "key": {
+              "type": "string"
+            },
+            "pending": {
+              "type": "boolean"
+            },
+            "pluginConfiguration": {
+              "type": "object",
+              "patternProperties": {
+                "^(.*)$": {
+                  "type": "object",
+                  "patternProperties": {
+                    "^(.*)$": {}
+                  }
+                }
+              }
+            },
+            "description": {
+              "type": "string"
+            },
+            "providerStates": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "name"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "params": {
+                        "type": "object",
+                        "patternProperties": {
+                          "^(.*)$": {}
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "contents": {},
+            "metadata": {
+              "type": "object",
+              "patternProperties": {
+                "^(.*)$": {}
+              }
+            },
+            "metaData": {
+              "type": "object",
+              "patternProperties": {
+                "^(.*)$": {}
+              }
+            },
+            "matchingRules": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "body"
+              ],
+              "properties": {
+                "body": {
+                  "$ref": "#/definitions/bodyMatcher"
+                }
+              }
+            },
+            "generators": {
+              "additionalProperties": false,
+              "type": "object",
+              "properties": {
+                "body": {
+                  "$ref": "#/definitions/bodyGenerator"
+                },
+                "metadata": {
+                  "$ref": "#/definitions/recordGenerator"
+                }
+              }
+            },
+            "type": {
+              "const": "Asynchronous/Messages",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "description",
+            "request",
+            "response",
+            "type"
+          ],
+          "properties": {
+            "comments": {
+              "type": "object",
+              "properties": {
+                "testname": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "interactionMarkup": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "markup",
+                "markupType"
+              ],
+              "properties": {
+                "markup": {
+                  "type": "string"
+                },
+                "markupType": {
+                  "anyOf": [
+                    {
+                      "const": "COMMON_MARK",
+                      "type": "string"
+                    },
+                    {
+                      "const": "HTML",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            "key": {
+              "type": "string"
+            },
+            "pending": {
+              "type": "boolean"
+            },
+            "pluginConfiguration": {
+              "type": "object",
+              "patternProperties": {
+                "^(.*)$": {
+                  "type": "object",
+                  "patternProperties": {
+                    "^(.*)$": {}
+                  }
+                }
+              }
+            },
+            "description": {
+              "type": "string"
+            },
+            "providerStates": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "name"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "params": {
+                        "type": "object",
+                        "patternProperties": {
+                          "^(.*)$": {}
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "request": {
+              "$ref": "#/definitions/messageContents"
+            },
+            "response": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/messageContents"
+              }
+            },
+            "type": {
+              "const": "Synchronous/Messages",
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "interactions": {
+      "$id": "#/definitions/interactions",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/interaction"
+      }
+    },
+    "matchArrayContains": {
+      "$id": "#/definitions/matchArrayContains",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "match",
+        "variants"
+      ],
+      "properties": {
+        "match": {
+          "const": "arrayContains",
+          "type": "string"
+        },
+        "variants": {
+          "type": "array",
+          "items": {}
+        }
+      }
+    },
+    "matchBoolean": {
+      "$id": "#/definitions/matchBoolean",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "match"
+      ],
+      "properties": {
+        "match": {
+          "const": "boolean",
+          "type": "string"
+        }
+      }
+    },
+    "matchContentType": {
+      "$id": "#/definitions/matchContentType",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "match",
+        "value"
+      ],
+      "properties": {
+        "match": {
+          "const": "contentType",
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "matchDate": {
+      "$id": "#/definitions/matchDate",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "match",
+        "format"
+      ],
+      "properties": {
+        "match": {
+          "const": "date",
+          "type": "string"
+        },
+        "format": {
+          "type": "string"
+        }
+      }
+    },
+    "matchDatetime": {
+      "$id": "#/definitions/matchDatetime",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "match",
+        "format"
+      ],
+      "properties": {
+        "match": {
+          "const": "datetime",
+          "type": "string"
+        },
+        "format": {
+          "type": "string"
+        }
+      }
+    },
+    "matchDecimal": {
+      "$id": "#/definitions/matchDecimal",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "match"
+      ],
+      "properties": {
+        "match": {
+          "const": "decimal",
+          "type": "string"
+        }
+      }
+    },
+    "matchEachKey": {
+      "$id": "#/definitions/matchEachKey",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "match",
+        "rules",
+        "value"
+      ],
+      "properties": {
+        "match": {
+          "const": "eachKey",
+          "type": "string"
+        },
+        "rules": {
+          "type": "array",
+          "items": {}
+        },
+        "value": {
+          "pattern": "^\\$.*$",
+          "type": "string"
+        }
+      }
+    },
+    "matchEachValue": {
+      "$id": "#/definitions/matchEachValue",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "match",
+        "rules",
+        "value"
+      ],
+      "properties": {
+        "match": {
+          "const": "eachValue",
+          "type": "string"
+        },
+        "rules": {
+          "type": "array",
+          "items": {}
+        },
+        "value": {
+          "pattern": "^\\$.*$",
+          "type": "string"
+        }
+      }
+    },
+    "matchEquality": {
+      "$id": "#/definitions/matchEquality",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "match"
+      ],
+      "properties": {
+        "match": {
+          "const": "equality",
+          "type": "string"
+        }
+      }
+    },
+    "matchInclude": {
+      "$id": "#/definitions/matchInclude",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "match",
+        "value"
+      ],
+      "properties": {
+        "match": {
+          "const": "include",
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "matchInteger": {
+      "$id": "#/definitions/matchInteger",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "match"
+      ],
+      "properties": {
+        "match": {
+          "const": "integer",
+          "type": "string"
+        }
+      }
+    },
+    "matchNotEmpty": {
+      "$id": "#/definitions/matchNotEmpty",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "match"
+      ],
+      "properties": {
+        "match": {
+          "const": "notEmpty",
+          "type": "string"
+        }
+      }
+    },
+    "matchNull": {
+      "$id": "#/definitions/matchNull",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "match"
+      ],
+      "properties": {
+        "match": {
+          "const": "null",
+          "type": "string"
+        }
+      }
+    },
+    "matchNumber": {
+      "$id": "#/definitions/matchNumber",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "match"
+      ],
+      "properties": {
+        "match": {
+          "const": "number",
+          "type": "string"
+        }
+      }
+    },
+    "matchRegex": {
+      "$id": "#/definitions/matchRegex",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "match",
+        "regex"
+      ],
+      "properties": {
+        "match": {
+          "const": "regex",
+          "type": "string"
+        },
+        "regex": {
+          "type": "string"
+        }
+      }
+    },
+    "matchSemver": {
+      "$id": "#/definitions/matchSemver",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "match"
+      ],
+      "properties": {
+        "match": {
+          "const": "semver",
+          "type": "string"
+        }
+      }
+    },
+    "matchStatusCode": {
+      "$id": "#/definitions/matchStatusCode",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "match",
+        "status"
+      ],
+      "properties": {
+        "match": {
+          "const": "statusCode",
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        }
+      }
+    },
+    "matchTime": {
+      "$id": "#/definitions/matchTime",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "match",
+        "format"
+      ],
+      "properties": {
+        "match": {
+          "const": "time",
+          "type": "string"
+        },
+        "format": {
+          "type": "string"
+        }
+      }
+    },
+    "matchType": {
+      "$id": "#/definitions/matchType",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "match"
+      ],
+      "properties": {
+        "match": {
+          "const": "type",
+          "type": "string"
+        },
+        "max": {
+          "type": "number"
+        },
+        "min": {
+          "type": "number"
+        }
+      }
+    },
+    "matchValues": {
+      "$id": "#/definitions/matchValues",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "match"
+      ],
+      "properties": {
+        "match": {
+          "const": "values",
+          "type": "string"
+        }
+      }
+    },
+    "matchers": {
+      "$id": "#/definitions/matchers",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "matchers"
+      ],
+      "properties": {
+        "combine": {
+          "anyOf": [
+            {
+              "const": "AND",
+              "type": "string"
+            },
+            {
+              "const": "OR",
+              "type": "string"
+            }
+          ]
+        },
+        "matchers": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/matchRegex"
+              },
+              {
+                "$ref": "#/definitions/matchType"
+              },
+              {
+                "$ref": "#/definitions/matchBoolean"
+              },
+              {
+                "$ref": "#/definitions/matchContentType"
+              },
+              {
+                "$ref": "#/definitions/matchDate"
+              },
+              {
+                "$ref": "#/definitions/matchDatetime"
+              },
+              {
+                "$ref": "#/definitions/matchDecimal"
+              },
+              {
+                "$ref": "#/definitions/matchEquality"
+              },
+              {
+                "$ref": "#/definitions/matchInclude"
+              },
+              {
+                "$ref": "#/definitions/matchInteger"
+              },
+              {
+                "$ref": "#/definitions/matchNull"
+              },
+              {
+                "$ref": "#/definitions/matchNumber"
+              },
+              {
+                "$ref": "#/definitions/matchTime"
+              },
+              {
+                "$ref": "#/definitions/matchValues"
+              },
+              {
+                "$ref": "#/definitions/matchArrayContains"
+              },
+              {
+                "$ref": "#/definitions/matchEachKey"
+              },
+              {
+                "$ref": "#/definitions/matchEachValue"
+              },
+              {
+                "$ref": "#/definitions/matchNotEmpty"
+              },
+              {
+                "$ref": "#/definitions/matchSemver"
+              },
+              {
+                "$ref": "#/definitions/matchStatusCode"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "matchingRules": {
+      "$id": "#/definitions/matchingRules",
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "body": {
+          "$ref": "#/definitions/bodyMatcher"
+        },
+        "header": {
+          "$ref": "#/definitions/recordMatcher"
+        },
+        "path": {
+          "$ref": "#/definitions/matchers"
+        },
+        "query": {
+          "$ref": "#/definitions/recordMatcher"
+        }
+      }
+    },
+    "messageContents": {
+      "$id": "#/definitions/messageContents",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "contents"
+      ],
+      "properties": {
+        "contents": {},
+        "metadata": {
+          "type": "object",
+          "patternProperties": {
+            "^(.*)$": {}
+          }
+        },
+        "metaData": {
+          "type": "object",
+          "patternProperties": {
+            "^(.*)$": {}
+          }
+        },
+        "matchingRules": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "body"
+          ],
+          "properties": {
+            "body": {
+              "$ref": "#/definitions/bodyMatcher"
+            }
+          }
+        },
+        "generators": {
+          "additionalProperties": false,
+          "type": "object",
+          "properties": {
+            "body": {
+              "$ref": "#/definitions/bodyGenerator"
+            },
+            "metadata": {
+              "$ref": "#/definitions/recordGenerator"
+            }
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "pactSpecification": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "version"
+          ],
+          "properties": {
+            "version": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "$id": "#/definitions/metadata"
+    },
+    "bodyMatcher": {
+      "$id": "#/definitions/bodyMatcher",
+      "type": "object",
+      "patternProperties": {
+        "^\\$.*$": {
+          "$ref": "#/definitions/matchers"
+        }
+      }
+    },
+    "recordMatcher": {
+      "$id": "#/definitions/recordMatcher",
+      "type": "object",
+      "patternProperties": {
+        "^(.*)$": {
+          "$ref": "#/definitions/matchers"
+        }
+      }
+    },
+    "pacticipant": {
+      "$id": "#/definitions/pacticipant",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "request": {
+      "$id": "#/definitions/request",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "method",
+        "path"
+      ],
+      "properties": {
+        "headers": {
+          "$ref": "#/definitions/headers"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "connect",
+            "CONNECT",
+            "delete",
+            "DELETE",
+            "get",
+            "GET",
+            "head",
+            "HEAD",
+            "options",
+            "OPTIONS",
+            "post",
+            "POST",
+            "put",
+            "PUT",
+            "trace",
+            "TRACE"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "matchingRules": {
+          "$ref": "#/definitions/matchingRules"
+        },
+        "generators": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "$ref": "#/definitions/bodyGenerator"
+            },
+            "headers": {
+              "$ref": "#/definitions/recordGenerator"
+            },
+            "path": {
+              "$ref": "#/definitions/recordGenerator"
+            },
+            "query": {
+              "$ref": "#/definitions/generator"
+            }
+          }
+        },
+        "query": {
+          "anyOf": [
+            {
+              "type": "object",
+              "patternProperties": {
+                "^(.*)$": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "patternProperties": {
+                "^(.*)$": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "body": {
+          "$ref": "#/definitions/body"
+        }
+      }
+    },
+    "response": {
+      "$id": "#/definitions/response",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "headers": {
+          "$ref": "#/definitions/headers"
+        },
+        "status": {
+          "minimum": 100,
+          "maximum": 599,
+          "type": "integer"
+        },
+        "matchingRules": {
+          "$ref": "#/definitions/matchingRules"
+        },
+        "generators": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "$ref": "#/definitions/bodyGenerator"
+            },
+            "headers": {
+              "$ref": "#/definitions/recordGenerator"
+            },
+            "status": {
+              "$ref": "#/definitions/generator"
+            }
+          }
+        },
+        "body": {
+          "$ref": "#/definitions/body"
+        }
+      }
+    }
+  },
+  "type": "object",
+  "required": [
+    "consumer",
+    "interactions",
+    "provider"
+  ],
+  "properties": {
+    "consumer": {
+      "$ref": "#/definitions/pacticipant"
+    },
+    "interactions": {
+      "$ref": "#/definitions/interactions"
+    },
+    "metadata": {
+      "$ref": "#/definitions/metadata"
+    },
+    "provider": {
+      "$ref": "#/definitions/pacticipant"
+    }
+  }
+}

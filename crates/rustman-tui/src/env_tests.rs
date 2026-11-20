@@ -312,3 +312,80 @@ fn tls_insecure_badge_follows_the_active_request() {
     press(&mut state, "Alt+1");
     assert!(status_line(&state).contains("TLS: INSECURE"));
 }
+
+#[test]
+fn otlp_badge_while_exporting() {
+    // add-trace-propagation task 4.4: `OTLP →<host>` while spans are
+    // exported, in builds with the `otlp` feature.
+    let tmp = workspace(&[
+        (
+            "rustman.toml",
+            "[workspace]\nname = \"demo\"\nversion = 1\n\n[defaults]\n\
+             default_environment = \"dev\"\n\n[trace.export]\nenabled = true\n\
+             endpoint = \"http://collector.local:4317\"\n",
+        ),
+        ("environments/dev.yaml", "variables: {}\n"),
+    ]);
+    let mut state = load(&tmp, 120, 24);
+    press(&mut state, "Ctrl+t");
+    let badge = status_line(&state).contains("OTLP →collector.local:4317");
+    assert_eq!(badge, cfg!(feature = "otlp"), "{}", status_line(&state));
+    let plain = workspace(&[
+        ("rustman.toml", TOML),
+        ("environments/dev.yaml", "variables: {}\n"),
+    ]);
+    let mut state = load(&plain, 120, 24);
+    press(&mut state, "Ctrl+t");
+    assert!(!status_line(&state).contains("OTLP"));
+}
+
+/// The URLs the stand-in opener was handed.
+static OPENED: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+fn record_url(url: &str) -> std::io::Result<()> {
+    OPENED.lock().unwrap().push(url.to_owned());
+    Ok(())
+}
+
+#[test]
+fn ctrl_o_opens_the_real_link_when_the_recorded_one_hides_a_secret() {
+    let toml =
+        format!("{TOML}\n[trace]\nlink = \"https://ui.local/{{{{token}}}}/trace/{{trace_id}}\"\n");
+    let tmp = secret_workspace();
+    fs::write(tmp.path().join("ws/rustman.toml"), toml).unwrap();
+    let mut state = load(&tmp, 120, 40);
+    crate::workbench::open_path(&mut state, Path::new("me.rman.yaml"));
+    let trace_id = "4bf92f3577b34da6a3ce929d0e0e4736";
+    let shown = format!("https://ui.local/«redacted:token»/trace/{trace_id}");
+    let mut received = crate::response::received::fixtures::received(200, "text/plain", b"ok");
+    received.record.trace = Some(rustman_core::trace::TraceRecord {
+        trace_id: trace_id.into(),
+        span_id: "00f067aa0ba902b7".into(),
+        sampled: true,
+        backend_trace_id: None,
+        tracestate: None,
+        baggage: None,
+        start_ms: 0,
+        end_ms: 0,
+        link: Some(shown.clone()),
+    });
+    state.tabs.active_mut().unwrap().show(received);
+    let chord = crate::keymap::chord::parse_chord("Ctrl+O").unwrap();
+    let effects = crate::commands::shell_key(&mut state, chord);
+    let [crate::app::Effect::OpenUrl(job)] = effects.as_slice() else {
+        panic!("{effects:?}");
+    };
+    let done = crate::trace_link::execute(job.clone(), record_url);
+    assert_eq!(
+        *OPENED.lock().unwrap(),
+        [format!("https://ui.local/{CANARY}/trace/{trace_id}")]
+    );
+    update(&mut state, done);
+    let toasts: Vec<_> = state
+        .notifications
+        .log()
+        .map(|e| e.message.clone())
+        .collect();
+    assert!(toasts.contains(&format!("Opened {shown}")), "{toasts:?}");
+    assert!(toasts.iter().all(|t| !t.contains(CANARY)), "{toasts:?}");
+}

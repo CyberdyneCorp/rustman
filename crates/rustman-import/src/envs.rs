@@ -214,6 +214,7 @@ mod tests {
             variables: Variables::new(vec![("host".into(), VarValue::String("old".into()))]),
             secrets: vec!["api_key".into()],
             production: true,
+            trace: Default::default(),
         }]
     }
 

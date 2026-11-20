@@ -8,6 +8,11 @@
 //!   operation. Findings at or above `--fail-on` become a `<failure>` whose
 //!   type is the rule id; an operation whose probes were all blocked or
 //!   skipped is `<skipped>`; findings below the threshold go to system-out.
+//! - A contract check: one `<testsuite>` named after the mode and one
+//!   `<testcase>` per difference, interaction or exchange, named after its
+//!   rule and subject. An item that fails the command is a `<failure>`
+//!   whose type is the rule id; the others pass with their status (and an
+//!   allowlist justification) in system-out.
 
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -15,6 +20,7 @@ use std::time::Duration;
 use quick_junit::{NonSuccessKind, Property, Report, TestCase, TestCaseStatus, TestSuite};
 
 use super::view::{OperationView, operations};
+use crate::contract::{ContractItem, ContractReport};
 use crate::exploration::{ExplorationReport, ReportFinding, Severity};
 use crate::run::{RunReport, RunRequest, Status};
 
@@ -59,6 +65,44 @@ pub fn exploration_junit(report: &ExplorationReport, fail_on: Severity) -> Strin
     junit.set_time(Duration::from_millis(report.summary.duration_ms));
     junit.add_test_suites(suites.into_values());
     finish(&junit)
+}
+
+/// A contract report as a JUnit XML document, ending in a newline.
+pub fn contract_junit(report: &ContractReport) -> String {
+    let mut suite = TestSuite::new(format!("contract {}", report.mode));
+    for source in &report.sources {
+        suite.add_property(Property::new(source.role.as_str(), source.name.as_str()));
+    }
+    if let Some(version) = report.catalog_version {
+        suite.add_property(Property::new("catalog_version", version.to_string()));
+    }
+    suite.add_test_cases(report.items.iter().map(contract_case));
+    let mut junit = Report::new(SUITE);
+    junit.add_test_suite(suite);
+    finish(&junit)
+}
+
+fn contract_case(item: &ContractItem) -> TestCase {
+    let line = format!("{}: {}", item.label(), item.message);
+    let status = if item.failing {
+        let mut status = TestCaseStatus::non_success(NonSuccessKind::Failure);
+        status.set_type(item.rule.as_str());
+        status.set_message(line.as_str());
+        status.set_description(item.description.as_str());
+        status
+    } else {
+        TestCaseStatus::success()
+    };
+    let mut case = TestCase::new(format!("{} {}", item.rule, item.subject), status);
+    case.set_classname(item.subject.as_str());
+    if !item.failing {
+        let out = match &item.allowed {
+            Some(why) => format!("{line}\nallowed: {why}"),
+            None => line,
+        };
+        case.set_system_out(out);
+    }
+    case
 }
 
 fn finish(report: &Report) -> String {

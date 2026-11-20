@@ -1,0 +1,12 @@
+# a 429 response is declared
+expect: [response-status-added]
+old:
+  paths:
+    /users:
+      get:
+        responses: {'200': {description: ok}}
+new:
+  paths:
+    /users:
+      get:
+        responses: {'200': {description: ok}, '429': {description: slow down}}

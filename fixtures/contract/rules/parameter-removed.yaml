@@ -1,0 +1,13 @@
+# the page parameter is gone
+expect: [parameter-removed]
+old:
+  paths:
+    /users:
+      get:
+        parameters: [{name: page, in: query, schema: {type: integer}}]
+        responses: {'200': {description: ok}}
+new:
+  paths:
+    /users:
+      get:
+        responses: {'200': {description: ok}}

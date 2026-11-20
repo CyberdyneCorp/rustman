@@ -1,0 +1,12 @@
+# v2 no longer declares 404
+expect: [response-status-removed]
+old:
+  paths:
+    /users:
+      get:
+        responses: {'200': {description: ok}, '404': {description: missing}}
+new:
+  paths:
+    /users:
+      get:
+        responses: {'200': {description: ok}}

@@ -1,0 +1,20 @@
+# an optional nickname is accepted (spec scenario)
+expect: [request-optional-field-added]
+old:
+  paths:
+    /users:
+      post:
+        requestBody:
+          content:
+            application/json:
+              schema: {type: object, properties: {name: {type: string}}}
+        responses: {'200': {description: ok}}
+new:
+  paths:
+    /users:
+      post:
+        requestBody:
+          content:
+            application/json:
+              schema: {type: object, properties: {name: {type: string}, nickname: {type: string}}}
+        responses: {'200': {description: ok}}

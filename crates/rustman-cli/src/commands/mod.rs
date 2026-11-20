@@ -2,6 +2,7 @@
 
 pub mod auth;
 pub mod completions;
+pub mod contract;
 pub mod cookies;
 pub mod env;
 pub mod exec;
@@ -23,6 +24,7 @@ pub mod secret;
 pub mod send;
 pub(crate) mod session;
 pub mod snapshot;
+pub mod trace;
 pub mod tui;
 pub mod viz;
 pub mod webhook;

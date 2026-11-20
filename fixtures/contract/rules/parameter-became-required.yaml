@@ -1,0 +1,14 @@
+# limit becomes required
+expect: [parameter-became-required]
+old:
+  paths:
+    /users:
+      get:
+        parameters: [{name: limit, in: query, schema: {type: integer}}]
+        responses: {'200': {description: ok}}
+new:
+  paths:
+    /users:
+      get:
+        parameters: [{name: limit, in: query, required: true, schema: {type: integer}}]
+        responses: {'200': {description: ok}}

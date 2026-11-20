@@ -94,13 +94,13 @@ pub fn run(args: &HistoryArgs) -> Result<u8, CliError> {
 }
 
 /// The store, and the workspace it belongs to (`None`: ad-hoc history).
-struct History {
-    ws: Option<Workspace>,
-    store: HistoryStore,
+pub(super) struct History {
+    pub ws: Option<Workspace>,
+    pub store: HistoryStore,
 }
 
 impl History {
-    fn open(workspace: Option<&Path>) -> Result<Self, CliError> {
+    pub(super) fn open(workspace: Option<&Path>) -> Result<Self, CliError> {
         let ws = match Workspace::discover(&current_dir()?, workspace) {
             Ok(ws) => ws,
             Err(ConfigError::NoWorkspace) if workspace.is_none() => {
@@ -197,6 +197,7 @@ impl History {
             cancel_on_ctrl_c(&cancel);
             runner.replay(&entry, resolved).await
         });
+        crate::commands::exec::finish_spans(&runner);
         if let Err(e) = runner.finish() {
             print_warnings(&[e.to_string()]);
         }
@@ -271,6 +272,10 @@ fn details(entry: &Entry) -> String {
     out.push('\n');
     out.push_str(&response_text(entry));
     out.push_str(&outcome_text(entry));
+    for line in entry.trace().iter().flat_map(super::trace::details) {
+        out.push_str(&line);
+        out.push('\n');
+    }
     out
 }
 

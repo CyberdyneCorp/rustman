@@ -9,6 +9,7 @@ use rustman_core::run::{
 use rustman_core::snapshot::{
     Change, ChangeKind, SnapshotCounts, SnapshotDiff, SnapshotResult, SnapshotState,
 };
+use rustman_core::trace::{ServerTiming, TraceRecord};
 use rustman_report::{Format, KIND_RUN, Reporter, SCHEMA, json, junit, pretty, pretty_styled, tap};
 
 fn exchange(method: &str, status: u16) -> ExchangeRecord {
@@ -39,6 +40,7 @@ fn exchange(method: &str, status: u16) -> ExchangeRecord {
         },
         redirects: Vec::new(),
         insecure: false,
+        server_timings: Vec::new(),
     }
 }
 
@@ -96,6 +98,60 @@ fn the_json_report_validates_against_the_published_schema() {
     assert!(errors.is_empty(), "{errors:#?}");
     assert_eq!(report["schema"], SCHEMA);
     assert_eq!(report["kind"], KIND_RUN);
+}
+
+/// A run whose first request carries a trace and server timings.
+fn traced_run() -> RunRecord {
+    let mut run = run();
+    let passed = &mut run.requests[0];
+    passed.trace = Some(TraceRecord {
+        trace_id: "4bf92f3577b34da6a3ce929d0e0e4736".into(),
+        span_id: "00f067aa0ba902b7".into(),
+        sampled: true,
+        backend_trace_id: Some("0af7651916cd43dd8448eb211c80319c".into()),
+        tracestate: Some("rojo=00f067aa0ba902b7".into()),
+        baggage: Some("api_key=«redacted:api_key»".into()),
+        start_ms: 1_700_000_000_000,
+        end_ms: 1_700_000_000_004,
+        link: Some("http://localhost:16686/trace/0af7651916cd43dd8448eb211c80319c".into()),
+    });
+    passed.exchange.as_mut().unwrap().server_timings = vec![
+        ServerTiming {
+            name: "db".into(),
+            dur_ms: Some(53.2),
+            desc: Some("query".into()),
+        },
+        ServerTiming {
+            name: "miss".into(),
+            dur_ms: None,
+            desc: None,
+        },
+    ];
+    run
+}
+
+#[test]
+fn a_report_with_traces_validates_and_old_reports_have_none() {
+    let report: serde_json::Value = serde_json::from_str(&json(&traced_run())).unwrap();
+    let errors: Vec<String> = schema()
+        .iter_errors(&report)
+        .map(|e| e.to_string())
+        .collect();
+    assert!(errors.is_empty(), "{errors:#?}");
+    let first = &report["requests"][0];
+    assert_eq!(
+        first["trace"]["trace_id"],
+        "4bf92f3577b34da6a3ce929d0e0e4736"
+    );
+    assert_eq!(first["trace"]["span_id"], "00f067aa0ba902b7");
+    assert_eq!(first["exchange"]["server_timings"][0]["dur_ms"], 53.2);
+    // Requests without a trace leave the fields out.
+    let second = &report["requests"][1];
+    assert!(second.get("trace").is_none());
+    assert!(second["exchange"].get("server_timings").is_none());
+    let mut bad = report.clone();
+    bad["requests"][0]["trace"]["trace_id"] = "XYZ".into();
+    assert!(!schema().is_valid(&bad));
 }
 
 #[test]

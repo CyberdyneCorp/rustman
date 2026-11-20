@@ -1,9 +1,12 @@
-//! The Timing tab: the phase waterfall and the latency sparkline (spec:
-//! Timing waterfall, Latency sparkline from history).
+//! The Timing tab: the phase waterfall with the server's `Server-Timing`
+//! metrics under the waiting phase, the trace ids and link, and the latency
+//! sparkline (spec: Timing waterfall, Latency sparkline from history;
+//! trace-propagation spec).
 
 use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
 use rustman_core::run::TimingsRecord;
+use rustman_core::trace::{ServerTiming, TraceRecord};
 
 use crate::config::UiOptions;
 use crate::theme::Token;
@@ -62,17 +65,56 @@ pub fn ms_text(ms: f64) -> String {
     }
 }
 
-/// The waterfall rows: name, duration and a bar placed on a `width`-column
-/// time axis.
-pub fn waterfall(t: &TimingsRecord, width: usize, ui: &UiOptions) -> Vec<Line<'static>> {
-    let total = t.total_ms.max(f64::EPSILON);
-    let bar_width = width.saturating_sub(22).max(1);
+/// `53.2 ms`, `12 ms`: a server metric as the server wrote it, to 0.1 ms.
+pub fn server_ms_text(ms: f64) -> String {
+    let rounded = (ms * 10.0).round() / 10.0;
+    if rounded.fract() == 0.0 {
+        format!("{rounded:.0} ms")
+    } else {
+        format!("{rounded:.1} ms")
+    }
+}
+
+/// Places bars on a `bar_width`-column axis of `total` milliseconds.
+struct Axis {
+    total: f64,
+    bar_width: usize,
+}
+
+impl Axis {
     #[allow(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
         clippy::cast_precision_loss
     )]
-    let column = |ms: f64| ((ms / total) * bar_width as f64).round() as usize;
+    fn column(&self, ms: f64) -> usize {
+        ((ms / self.total) * self.bar_width as f64).round() as usize
+    }
+
+    /// Spaces up to the bar of `ms` starting at `start`, and the bar.
+    fn bar(&self, start: f64, ms: f64, ui: &UiOptions) -> [Span<'static>; 2] {
+        let start = self.column(start).min(self.bar_width - 1);
+        let len = self.column(ms).max(1).min(self.bar_width - start);
+        [
+            Span::raw(" ".repeat(start)),
+            Span::styled(bar(len, ui), ui.theme.fg(Token::Accent)),
+        ]
+    }
+}
+
+/// The waterfall rows: name, duration and a bar placed on a `width`-column
+/// time axis, with each `server` metric as a sub-bar under the waiting
+/// phase.
+pub fn waterfall(
+    t: &TimingsRecord,
+    server: &[ServerTiming],
+    width: usize,
+    ui: &UiOptions,
+) -> Vec<Line<'static>> {
+    let axis = Axis {
+        total: t.total_ms.max(f64::EPSILON),
+        bar_width: width.saturating_sub(22).max(1),
+    };
     let mut lines = vec![Line::styled(
         format!("Total {}", ms_text(t.total_ms)),
         ui.theme.fg(Token::Text).add_modifier(Modifier::BOLD),
@@ -83,15 +125,65 @@ pub fn waterfall(t: &TimingsRecord, width: usize, ui: &UiOptions) -> Vec<Line<'s
             lines.push(Line::from(vec![label, Span::raw(format!("{:>10}", "—"))]));
             continue;
         };
-        let start = column(phase.start).min(bar_width - 1);
-        let len = column(ms).max(1).min(bar_width - start);
-        lines.push(Line::from(vec![
+        let mut spans = vec![
             label,
             Span::raw(format!("{:>10}", ms_text(ms))),
             Span::raw("   "),
-            Span::raw(" ".repeat(start)),
-            Span::styled(bar(len, ui), ui.theme.fg(Token::Accent)),
-        ]));
+        ];
+        spans.extend(axis.bar(phase.start, ms, ui));
+        lines.push(Line::from(spans));
+        if phase.name == "Waiting" {
+            lines.extend(server.iter().map(|m| server_row(m, phase.start, &axis, ui)));
+        }
+    }
+    lines
+}
+
+/// One server metric under the waiting phase: `  db 53.2 ms` and a bar
+/// from the start of the wait.
+fn server_row(metric: &ServerTiming, start: f64, axis: &Axis, ui: &UiOptions) -> Line<'static> {
+    let dur = metric.dur_ms.map_or_else(|| "—".to_owned(), server_ms_text);
+    let label = format!("  {} {dur}", metric.name);
+    let mut spans = vec![Span::styled(
+        format!("{label:<19}   "),
+        ui.theme.fg(Token::Muted),
+    )];
+    if let Some(ms) = metric.dur_ms {
+        spans.extend(axis.bar(start, ms, ui));
+    }
+    if let Some(desc) = &metric.desc {
+        spans.push(Span::styled(format!(" {desc}"), ui.theme.fg(Token::Muted)));
+    }
+    Line::from(spans)
+}
+
+/// The trace ids and link of an exchange; a link longer than `width`
+/// columns wraps, so it can be read (and copied) whole.
+pub fn trace_lines(trace: &TraceRecord, width: usize, ui: &UiOptions) -> Vec<Line<'static>> {
+    let row = |name: &str, value: &str| {
+        Line::from(vec![
+            Span::styled(format!("{name:<9}"), ui.theme.fg(Token::Muted)),
+            Span::styled(value.to_owned(), ui.theme.fg(Token::Text)),
+        ])
+    };
+    let mut lines = vec![
+        Line::styled(
+            "Trace",
+            ui.theme.fg(Token::Text).add_modifier(Modifier::BOLD),
+        ),
+        row("Trace id", &trace.trace_id),
+        row("Span id", &trace.span_id),
+    ];
+    if let Some(backend) = &trace.backend_trace_id {
+        lines.push(row("Backend", backend));
+    }
+    if let Some(link) = &trace.link {
+        let chars: Vec<char> = link.chars().collect();
+        let pieces = chars.chunks(width.saturating_sub(9).max(20));
+        for (i, piece) in pieces.enumerate() {
+            let name = if i == 0 { "Link" } else { "" };
+            lines.push(row(name, &piece.iter().collect::<String>()));
+        }
     }
     lines
 }

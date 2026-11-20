@@ -73,6 +73,34 @@
 </ul>
 {%- endif %}
 <script>{{ js | safe }}</script>
+{%- elif kind == "contract" -%}
+<dl class="meta">
+{% for s in r.sources -%}
+<dt>{{ s.role | capitalize }}</dt><dd><code>{{ s.name }}</code></dd>
+{% endfor -%}
+{% if r.catalog_version %}<dt>Rule catalog</dt><dd>version {{ r.catalog_version }}</dd>{% endif %}
+</dl>
+
+<h2>Summary</h2>
+<p>{{ summary }}. <strong class="status-{{ "passed" if r.summary.passed else "failed" }}">{{ "Passed" if r.summary.passed else "Failed" }}</strong>: {{ r.summary.failing }} failing.</p>
+{% for g in groups -%}
+<h2>{{ g.status | capitalize }} ({{ g.items | length }})</h2>
+<table>
+<thead><tr><th>Rule</th><th>{{ subject }}</th><th>Description</th><th>Pointer</th></tr></thead>
+<tbody>
+{% for i in g.items -%}
+<tr><td><code>{{ i.rule }}</code>{% if i.allowed %} <span class="muted">(allowed: {{ i.allowed }})</span>{% elif i.failing %} <span class="status-failed">(failing)</span>{% endif %}</td><td><code>{{ i.subject }}</code></td><td>{{ i.message }}</td><td><code>{{ i.pointer }}</code></td></tr>
+{% endfor -%}
+</tbody>
+</table>
+{% endfor -%}
+{% if r.warnings -%}
+<h2>Warnings</h2>
+<ul>
+{% for w in r.warnings %}<li>{{ w }}</li>
+{% endfor -%}
+</ul>
+{%- endif %}
 {%- else -%}
 <dl class="meta">
 <dt>Started</dt><dd>{{ r.started_at }}</dd>

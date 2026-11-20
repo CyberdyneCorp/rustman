@@ -1,0 +1,20 @@
+# the body no longer declares nickname
+expect: [request-field-removed]
+old:
+  paths:
+    /users:
+      post:
+        requestBody:
+          content:
+            application/json:
+              schema: {type: object, properties: {name: {type: string}, nickname: {type: string}}}
+        responses: {'200': {description: ok}}
+new:
+  paths:
+    /users:
+      post:
+        requestBody:
+          content:
+            application/json:
+              schema: {type: object, properties: {name: {type: string}}}
+        responses: {'200': {description: ok}}

@@ -46,6 +46,7 @@ fn evidence(method: &str, path: &str, status: u16) -> Evidence {
         response_headers: vec![("content-type".into(), "text/plain".into())],
         body: format!("echo: authorization: Bearer {PLACEHOLDER}\n<script>alert(1)</script>"),
         truncated: false,
+        trace: None,
     }
 }
 

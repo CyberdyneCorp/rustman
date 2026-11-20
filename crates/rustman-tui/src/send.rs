@@ -172,7 +172,10 @@ pub fn cancel(state: &mut State) -> bool {
 }
 
 /// A send finished: show it in its tab unless it was cancelled meanwhile.
-pub fn finished(state: &mut State, tab: TabId, seq: u64, received: Received) {
+pub fn finished(state: &mut State, tab: TabId, seq: u64, mut received: Received) {
+    for warning in std::mem::take(&mut received.export_warnings) {
+        state.notify(Severity::Warn, warning);
+    }
     let warnings = received.record.warnings.clone();
     let shown = state
         .tabs
@@ -436,6 +439,7 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
     if let Err(e) = runner.finish() {
         sent.record.warnings.push(e.to_string());
     }
+    let export_warnings = runner.export_warnings();
     let warnings = store.take_warnings();
     sent.record
         .warnings
@@ -446,6 +450,7 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
     };
     let reviews = std::mem::take(&mut sent.snapshots);
     let mut received = prepare(sent, http);
+    received.export_warnings = export_warnings;
     received.snapshots = Reviews::new(reviews, job.snapshots);
     received.graphql = graphql_view(&received);
     received.jsonrpc = received

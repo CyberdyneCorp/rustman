@@ -434,3 +434,24 @@ async fn a_message_over_max_body_bytes_is_refused() {
     assert_eq!(exchange.attempts.len(), 1);
     assert!(exchange.calls.is_empty());
 }
+
+/// A traced call over WebSocket carries `traceparent` on the handshake
+/// (add-trace-propagation task 2.3).
+#[tokio::test]
+async fn a_traced_handshake_carries_a_traceparent() {
+    let server = JsonrpcWsServer::start(node(0, Duration::ZERO)).await;
+    let options = SendOptions {
+        trace: Some(rustman_core::trace::TracePropagation::default()),
+        ..SendOptions::default()
+    };
+    let exchange = send(
+        &target(&server.url("/"), vec![call("eth_blockNumber")], false),
+        &options,
+    )
+    .await;
+    assert!(exchange.passed(), "{:?}", exchange.error);
+    let traceparent = server.sessions()[0]
+        .header("traceparent")
+        .map(str::to_owned);
+    assert!(traceparent.is_some_and(|t| t.starts_with("00-") && t.len() == 55));
+}

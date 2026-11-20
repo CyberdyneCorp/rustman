@@ -651,6 +651,7 @@ mod tests {
             ]),
             secrets: vec!["api_key".into()],
             production: false,
+            trace: Default::default(),
         };
         let text = environment_to_yaml(&env);
         assert_eq!(

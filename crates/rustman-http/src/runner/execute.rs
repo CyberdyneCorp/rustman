@@ -25,7 +25,7 @@ use crate::exchange::Exchange;
 use crate::oauth2::{Login, OAuth2Context, cache_key};
 use crate::timing::millis;
 
-use super::record::{exchange_record, redact_capture_messages};
+use super::record::{exchange_record, redact_capture_messages, trace_record};
 
 impl Sent {
     pub(super) fn skipped(record: RequestRecord, reason: SkipReason) -> Self {
@@ -84,6 +84,7 @@ impl Runner<'_> {
         let file = (!self.options.ad_hoc).then(|| sent.record.file.clone());
         let redactor = self.sink_redactor(&sent);
         redact_error(&mut sent.record, &redactor);
+        self.record_trace(&mut sent, &redactor);
         if let Some(graphql) = sent.record.graphql.take() {
             sent.record.graphql = Some(graphql.redacted(&redactor));
         }
@@ -101,6 +102,7 @@ impl Runner<'_> {
         let kept = self.record_history(&mut sent, &redactor, file, Some(cache_key(request)));
         sent.discard_spill_unless(kept);
         log_record(&sent.record);
+        self.export.record(&sent.record);
         let failed = matches!(
             sent.record.status,
             RequestStatus::Failed | RequestStatus::Errored
@@ -123,24 +125,25 @@ impl Runner<'_> {
         if self.bailed.load(Ordering::SeqCst) {
             return Sent::skipped(record, SkipReason::Bail);
         }
+        // Every kind's future is boxed: inline, they make this one and its
+        // poll frames, which the CLI drives on its main thread, too large
+        // for the 1 MiB stack of Windows in debug builds.
         let http = match request.request() {
             Request::Http(http) => http,
             Request::Graphql(graphql) => {
-                return self
-                    .execute_graphql(request, graphql, record, iteration)
-                    .await;
+                return Box::pin(self.execute_graphql(request, graphql, record, iteration)).await;
             }
             Request::Jsonrpc(jsonrpc) => {
-                return self
-                    .execute_jsonrpc(request, jsonrpc, record, iteration)
-                    .await;
+                return Box::pin(self.execute_jsonrpc(request, jsonrpc, record, iteration)).await;
             }
-            Request::Mcp(mcp) => return self.execute_mcp(request, mcp, record, iteration).await,
+            Request::Mcp(mcp) => {
+                return Box::pin(self.execute_mcp(request, mcp, record, iteration)).await;
+            }
             Request::Grpc(grpc) => {
-                return self.execute_grpc(request, grpc, record, iteration).await;
+                return Box::pin(self.execute_grpc(request, grpc, record, iteration)).await;
             }
             Request::Ws(_) | Request::Sse(_) => {
-                return self.execute_realtime(request, record, iteration).await;
+                return Box::pin(self.execute_realtime(request, record, iteration)).await;
             }
             Request::Opaque(_) => return Sent::skipped(record, SkipReason::UnsupportedKind),
         };
@@ -156,7 +159,7 @@ impl Runner<'_> {
             request: request.entry.id(),
             cache_key: cache_key(request),
         };
-        let exchange = match self.exchange(target, &mut resolved).await {
+        let exchange = match Box::pin(self.exchange(target, &mut resolved)).await {
             Some(Ok(exchange)) => exchange,
             Some(Err(e)) => return Sent::errored(record, e.to_string()).with_resolved(resolved),
             None => return Sent::skipped(record, SkipReason::Interrupted),
@@ -216,8 +219,8 @@ impl Runner<'_> {
         }
     }
 
-    /// The request's options with the run's `--timeout`, `--insecure` and
-    /// cookie jar applied.
+    /// The request's options with the run's `--timeout`, `--insecure`,
+    /// cookie jar and trace propagation applied.
     pub(super) fn send_options(
         &self,
         resolved: &ResolvedRequest,
@@ -233,6 +236,7 @@ impl Runner<'_> {
         if self.options.insecure {
             options.tls.verify = false;
         }
+        options.trace = self.trace.clone();
         Ok(options.with_cookie_jar(&resolved.settings, &self.jar))
     }
 
@@ -365,6 +369,14 @@ impl Runner<'_> {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clone()
+    }
+
+    /// Record the trace context `sent` carried, with its link.
+    pub(super) fn record_trace(&self, sent: &mut Sent, redactor: &Redactor) {
+        sent.record.trace = sent
+            .exchange
+            .as_ref()
+            .and_then(|e| trace_record(e, self.link.as_ref(), redactor));
     }
 
     /// The redactor for everything recorded about `sent`: the run's secrets,

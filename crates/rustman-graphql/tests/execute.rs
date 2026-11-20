@@ -447,3 +447,23 @@ async fn a_result_of_exactly_max_body_bytes_is_read() {
     let err = run_with(&f, &capped(size - 1)).await.unwrap_err();
     assert_eq!(err, GraphqlError::BodyTooLarge(size - 1));
 }
+
+/// A traced query POST carries `traceparent` (add-trace-propagation task
+/// 2.3); an untraced one carries none.
+#[tokio::test]
+async fn a_traced_query_post_carries_a_traceparent() {
+    let server = GraphqlHttpServer::start(|_| Reply::graphql(json!({"data": {"user": 1}}))).await;
+    let f = Fixture::new(&server.url(""));
+    f.request("document: '{ user }'\n");
+    let options = SendOptions {
+        trace: Some(rustman_core::trace::TracePropagation::default()),
+        ..SendOptions::default()
+    };
+    run_with(&f, &options).await.unwrap();
+    run(&f).await.unwrap();
+    let hits = server.hits();
+    assert_eq!(hits[0].method, "POST");
+    let traceparent = hits[0].header("traceparent").expect("a traceparent");
+    assert!(traceparent.starts_with("00-") && traceparent.ends_with("-01"));
+    assert_eq!(hits[1].header("traceparent"), None);
+}

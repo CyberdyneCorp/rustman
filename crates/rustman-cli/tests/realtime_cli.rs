@@ -148,3 +148,42 @@ fn a_saved_request_runs_and_an_echoed_secret_is_printed_redacted() {
     let stderr = String::from_utf8_lossy(&wrong_kind.stderr);
     assert!(stderr.contains("is not a kind: sse request"), "{stderr}");
 }
+
+/// trace-propagation task 2.5: `--trace` on `rustman ws connect` and
+/// `rustman sse listen` sends `traceparent` on the WebSocket upgrade and on
+/// the SSE request.
+#[test]
+fn trace_flag_sends_traceparent_on_the_handshake_and_the_stream_request() {
+    let rt = runtime();
+    let ws = rt.block_on(RealtimeWsServer::start(WsBehavior::echo()));
+    let sse = rt.block_on(RealtimeSseServer::start(vec![SseReply::events(
+        "data: one\n\n",
+    )]));
+    let dir = tempfile::tempdir().unwrap();
+    rustman(dir.path())
+        .args(["ws", "connect", &ws.url("/echo"), "--trace", "--no-history"])
+        .args(["--max-messages", "1"])
+        .write_stdin("a\n")
+        .timeout(Duration::from_secs(60))
+        .assert()
+        .code(0);
+    rustman(dir.path())
+        .args([
+            "sse",
+            "listen",
+            &sse.url("/events"),
+            "--trace",
+            "--no-history",
+        ])
+        .args(["--max-messages", "1"])
+        .timeout(Duration::from_secs(60))
+        .assert()
+        .code(0);
+    for value in [
+        ws.sessions()[0].header("traceparent").map(str::to_owned),
+        sse.hits()[0].header("traceparent").map(str::to_owned),
+    ] {
+        let value = value.expect("traceparent sent");
+        assert!(value.starts_with("00-") && value.len() == 55, "{value}");
+    }
+}

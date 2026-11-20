@@ -163,7 +163,7 @@ impl<'a> Normalizer<'a> {
 
     /// The JSON pipeline: redact, ignore, presets, replace, sort, canonical.
     pub fn json(&self, mut value: Value) -> Value {
-        redact_value(&mut value, self.redactor);
+        self.redactor.json(&mut value);
         for path in &self.ignore {
             for pointer in pointers(path, &value) {
                 if let Some(slot) = value.pointer_mut(&pointer) {
@@ -216,29 +216,6 @@ impl<'a> Normalizer<'a> {
         self.presets.contains(&Preset::EpochMs)
             && key.is_some_and(presets::epoch_ms_field)
             && presets::is_epoch_ms(digits)
-    }
-}
-
-/// Redact every string, key and number that holds a known secret. A number
-/// that held one becomes a string.
-fn redact_value(value: &mut Value, redactor: &Redactor) {
-    match value {
-        Value::String(s) => *s = redactor.text(s).into_owned(),
-        Value::Number(n) => {
-            let text = n.to_string();
-            if redactor.finds_secret(&text) {
-                *value = Value::String(redactor.text(&text).into_owned());
-            }
-        }
-        Value::Array(items) => items.iter_mut().for_each(|v| redact_value(v, redactor)),
-        Value::Object(map) => {
-            let entries = std::mem::take(map);
-            for (key, mut v) in entries {
-                redact_value(&mut v, redactor);
-                map.insert(redactor.text(&key).into_owned(), v);
-            }
-        }
-        Value::Null | Value::Bool(_) => {}
     }
 }
 

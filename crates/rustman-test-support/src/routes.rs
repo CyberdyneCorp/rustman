@@ -26,6 +26,7 @@
 //! | `/aws-skew` | `403` with an AWS `RequestTimeTooSkewed` error body |
 //! | `/aws-credential` | `200` text: the `Credential=` scope and the `SignedHeaders=` list of a SigV4 `Authorization`, one per line (no signature) |
 //! | `/openapi/<name>` | an OpenAPI document from [`crate::openapi`] |
+//! | `/traced` | `200 traced` with `Server-Timing: db;dur=53.2, app;dur=12` and `traceresponse` naming [`BACKEND_TRACE_ID`] |
 
 use std::convert::Infallible;
 use std::pin::Pin;
@@ -56,6 +57,10 @@ pub const PNG: &[u8] = &[
 
 /// The user `/users/42` returns.
 pub const USER: &str = r#"{"id":42,"name":"Ana","email":"ana@example.com","roles":["admin","dev"],"address":{"city":"Lisbon"}}"#;
+
+/// The trace id `/traced` answers in `traceresponse`, as a backend that
+/// ignores the incoming context and starts its own trace.
+pub const BACKEND_TRACE_ID: &str = "0af7651916cd43dd8448eb211c80319c";
 
 /// The access token `/token` issues and `/me` requires.
 pub const TOKEN: &str = "tok-7f3a";
@@ -161,6 +166,7 @@ pub async fn handle(req: Request<Incoming>) -> Result<Response<TestBody>, Infall
             .unwrap(),
         ["users", "42"] => user(),
         ["orders"] => order(),
+        ["traced"] => traced(),
         ["openapi", name] => openapi(name),
         _ => text(StatusCode::NOT_FOUND, "no such route"),
     };
@@ -410,6 +416,18 @@ fn user() -> Response<TestBody> {
         .header(header::CONTENT_TYPE, "application/json")
         .header("X-Request-Id", "req-1")
         .body(Full::new(Bytes::from_static(USER.as_bytes())).boxed())
+        .unwrap()
+}
+
+fn traced() -> Response<TestBody> {
+    Response::builder()
+        .header(header::CONTENT_TYPE, "text/plain")
+        .header("Server-Timing", "db;dur=53.2, app;dur=12")
+        .header(
+            "traceresponse",
+            format!("00-{BACKEND_TRACE_ID}-b7ad6b7169203331-01"),
+        )
+        .body(Full::new(Bytes::from_static(b"traced")).boxed())
         .unwrap()
 }
 

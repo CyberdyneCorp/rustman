@@ -22,6 +22,7 @@ use rustman_core::run::{
 };
 use rustman_core::settings::Settings;
 use rustman_core::snapshot::{CheckedSnapshots, Exchange};
+use rustman_core::trace::TracePropagation;
 use rustman_core::vars::{ResolvedMcp, Resolver, resolve_mcp};
 use rustman_core::workspace::RequestRef;
 use serde_json::Value;
@@ -45,6 +46,9 @@ pub struct McpCall<'a> {
     pub timeout: Option<Duration>,
     /// Cancelled on Ctrl+C.
     pub cancel: &'a CancellationToken,
+    /// The run's trace propagation, for the HTTP requests of a session
+    /// the call opens; stdio servers have no HTTP layer and ignore it.
+    pub trace: Option<&'a TracePropagation>,
 }
 
 /// What sending an mcp request produced. Nothing here is redacted yet: the
@@ -105,6 +109,7 @@ impl Runner<'_> {
             settings: self.ctx.settings,
             timeout: self.options.timeout,
             cancel: &self.options.cancel,
+            trace: self.trace.as_ref(),
         };
         let outcome = tokio::select! {
             biased;

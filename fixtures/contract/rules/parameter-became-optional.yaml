@@ -1,0 +1,14 @@
+# X-Tenant is no longer required
+expect: [parameter-became-optional]
+old:
+  paths:
+    /users:
+      get:
+        parameters: [{name: X-Tenant, in: header, required: true, schema: {type: string}}]
+        responses: {'200': {description: ok}}
+new:
+  paths:
+    /users:
+      get:
+        parameters: [{name: x-tenant, in: header, schema: {type: string}}]
+        responses: {'200': {description: ok}}

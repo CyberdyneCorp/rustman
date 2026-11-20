@@ -669,3 +669,33 @@ fn sigterm_cancels_and_stops_the_server_tree() {
     assert!(stderr.contains("interrupted"), "{stderr}");
     assert_stopped(&heartbeat);
 }
+
+/// A run polls its requests on the main thread, whose stack is 1 MiB on
+/// Windows; in a debug build an MCP request used to need about that much,
+/// so the run boxes its large futures. Unix only: `ulimit -s` sets the
+/// main thread's stack there.
+#[cfg(unix)]
+#[test]
+fn an_mcp_run_fits_a_small_main_thread_stack() {
+    let served = serve();
+    let dir = secret_workspace(&served.server.url());
+    let bin = assert_cmd::cargo::cargo_bin("rustman");
+    let script = format!(
+        "ulimit -s 896 && exec {} run echo.rman.yaml --env dev",
+        shell_quote(&bin)
+    );
+    let output = std::process::Command::new("sh")
+        .args(["-c", &script])
+        .current_dir(dir.path())
+        .env("RUSTMAN_SECRET_STORE", "file")
+        .env("RUSTMAN_DATA_DIR", common::test_data_dir())
+        .env_remove("RUSTMAN_ENV")
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "{output:?}\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

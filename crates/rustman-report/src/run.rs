@@ -10,6 +10,7 @@ use rustman_core::run::{
     RequestStatus, RunRecord, SentRequest, SkipReason, Summary,
 };
 use rustman_core::snapshot::{SnapshotCounts, SnapshotResult};
+use rustman_core::trace::{ServerTiming, TraceRecord};
 use serde::{Deserialize, Serialize};
 
 use crate::SCHEMA;
@@ -87,6 +88,9 @@ pub struct RunRequest {
     pub captures: Vec<Capture>,
     pub warnings: Vec<String>,
     pub duration_ms: f64,
+    /// The trace context the request carried (additive); absent without one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trace: Option<TraceRecord>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -96,6 +100,9 @@ pub struct Exchange {
     pub timings: Timings,
     pub redirects: Vec<Redirect>,
     pub insecure: bool,
+    /// The response's `Server-Timing` metrics (additive); absent without any.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub server_timings: Vec<ServerTiming>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -279,6 +286,7 @@ fn request(r: &RequestRecord) -> RunRequest {
         captures: r.captures.iter().map(capture).collect(),
         warnings: r.warnings.clone(),
         duration_ms: r.duration_ms,
+        trace: r.trace.clone(),
     }
 }
 
@@ -330,6 +338,7 @@ fn exchange(e: &ExchangeRecord) -> Exchange {
             })
             .collect(),
         insecure: e.insecure,
+        server_timings: e.server_timings.clone(),
     }
 }
 

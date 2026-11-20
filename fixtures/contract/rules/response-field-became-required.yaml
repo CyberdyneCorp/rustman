@@ -1,0 +1,22 @@
+# nickname joins the required list of the 200 body
+expect: [response-field-became-required]
+old:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            content:
+              application/json:
+                schema: {type: object, properties: {nickname: {type: string}}}
+new:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            content:
+              application/json:
+                schema: {type: object, required: [nickname], properties: {nickname: {type: string}}}

@@ -1,0 +1,22 @@
+# nickname leaves a closed POST /users body
+expect: [request-field-removed-from-closed-schema]
+old:
+  paths:
+    /users:
+      post:
+        requestBody:
+          content:
+            application/json:
+              schema: {type: object, additionalProperties: false, properties: {name: {type: string}, nickname: {type: string}}}
+        responses:
+          '201': {description: created}
+new:
+  paths:
+    /users:
+      post:
+        requestBody:
+          content:
+            application/json:
+              schema: {type: object, additionalProperties: false, properties: {name: {type: string}}}
+        responses:
+          '201': {description: created}

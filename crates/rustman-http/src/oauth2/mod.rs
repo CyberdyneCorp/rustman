@@ -173,10 +173,13 @@ impl<'a> Flow<'a> {
         context: &'a OAuth2Context<'a>,
     ) -> Self {
         // A redirect from the token URL would carry the form, with the client
-        // secret and codes in it, to wherever `Location` points.
+        // secret and codes in it, to wherever `Location` points. The token
+        // endpoint (often a third-party identity provider) gets no trace
+        // headers: baggage may hold secrets meant for the API only.
         let options = SendOptions {
             cookies: None,
             follow_redirects: false,
+            trace: None,
             ..options.clone()
         };
         Self {

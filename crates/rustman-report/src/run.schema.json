@@ -190,6 +190,9 @@
       },
       "duration_ms": {
         "$ref": "#/$defs/ms"
+      },
+      "trace": {
+        "$ref": "#/$defs/trace"
       }
     }
   },
@@ -710,6 +713,13 @@
       },
       "insecure": {
         "type": "boolean"
+      },
+      "server_timings": {
+        "type": "array",
+        "description": "The response's Server-Timing metrics, in order; absent when it has none. Added in v0.6.",
+        "items": {
+          "$ref": "#/$defs/server_timing"
+        }
       }
     }
   },
@@ -968,6 +978,73 @@
       },
       "old": {},
       "new": {}
+    }
+  },
+  "trace": {
+    "type": "object",
+    "description": "The trace context the request carried (trace propagation on, or a traceparent/B3 header the request set). Absent otherwise. Added in v0.6.",
+    "required": [
+      "trace_id",
+      "span_id",
+      "sampled"
+    ],
+    "properties": {
+      "trace_id": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{32}$"
+      },
+      "span_id": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{16}$"
+      },
+      "sampled": {
+        "type": "boolean"
+      },
+      "backend_trace_id": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{32}$",
+        "description": "The trace id of the response's traceresponse, when it differs from trace_id; links use it."
+      },
+      "tracestate": {
+        "type": "string",
+        "description": "The tracestate header sent, redacted."
+      },
+      "baggage": {
+        "type": "string",
+        "description": "The baggage header sent, redacted."
+      },
+      "start_ms": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Unix milliseconds when the exchange started."
+      },
+      "end_ms": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Unix milliseconds when the exchange ended."
+      },
+      "link": {
+        "type": "string",
+        "description": "The trace link, when a link template is configured (redacted)."
+      }
+    }
+  },
+  "server_timing": {
+    "type": "object",
+    "required": [
+      "name",
+      "dur_ms"
+    ],
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "dur_ms": {
+        "$ref": "#/$defs/optional_ms"
+      },
+      "desc": {
+        "type": "string"
+      }
     }
   }
 }

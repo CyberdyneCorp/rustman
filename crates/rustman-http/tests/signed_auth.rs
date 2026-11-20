@@ -41,6 +41,15 @@ impl Sender {
         request: &mut ResolvedRequest,
         env: Option<&str>,
     ) -> Result<Exchange, RequestError> {
+        self.send_with(request, env, &SendOptions::default()).await
+    }
+
+    async fn send_with(
+        &self,
+        request: &mut ResolvedRequest,
+        env: Option<&str>,
+        options: &SendOptions,
+    ) -> Result<Exchange, RequestError> {
         let context = OAuth2Context {
             store: &self.store,
             env,
@@ -50,7 +59,7 @@ impl Sender {
             },
         };
         self.engine
-            .send_authorized(request, &SendOptions::default(), &context)
+            .send_authorized(request, options, &context)
             .await
     }
 }
@@ -346,6 +355,35 @@ async fn a_same_origin_redirect_is_signed_for_its_own_url() {
     assert_eq!(
         headers["host"],
         recorder.url("").trim_start_matches("http://")
+    );
+}
+
+/// Trace headers are injected before signing, so the signature covers
+/// `traceparent` (add-trace-propagation task 2.1).
+#[tokio::test]
+async fn sigv4_signs_the_injected_traceparent() {
+    let recorder = Recorder::start().await;
+    let mut request = sigv4(&recorder.url("/ok"), "execute-api");
+    let options = SendOptions {
+        trace: Some(rustman_core::trace::TracePropagation::default()),
+        ..SendOptions::default()
+    };
+    let sender = Sender::new();
+    let exchange = sender
+        .send_with(&mut request, Some("staging"), &options)
+        .await
+        .unwrap();
+    assert_eq!(exchange.status, 200);
+    let hits = recorder.hits();
+    let headers = &hits[0].headers;
+    let authorization = headers["authorization"].to_str().unwrap();
+    let signed = field(authorization, "SignedHeaders");
+    assert!(signed.split(';').any(|h| h == "traceparent"), "{signed}");
+    let traceparent = headers["traceparent"].to_str().unwrap();
+    assert!(traceparent.contains(&exchange.trace.unwrap().context.trace_id.to_string()));
+    assert_eq!(
+        field(authorization, "Signature"),
+        expected_signature(headers, "/ok", "us-east-1/execute-api")
     );
 }
 

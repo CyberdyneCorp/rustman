@@ -34,9 +34,12 @@ impl Web {
     pub fn new(engine: Arc<HttpEngine>, options: &SendOptions) -> Self {
         Self {
             engine,
+            // The authorization server gets no trace headers: baggage may
+            // hold secrets meant for the MCP server only.
             options: SendOptions {
                 cookies: None,
                 follow_redirects: false,
+                trace: None,
                 ..options.clone()
             },
         }
@@ -97,5 +100,27 @@ impl Web {
     pub async fn post_json(&self, url: &str, body: serde_json::Value) -> Result<Answer, String> {
         self.send("POST", url, ResolvedBody::Json(body), Vec::new())
             .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rustman_core::trace::TracePropagation;
+
+    use super::*;
+
+    #[test]
+    fn authorization_server_requests_carry_no_trace_context() {
+        let options = SendOptions {
+            trace: Some(TracePropagation {
+                baggage: vec![("tenant".into(), "bgg-c4n4ry-Qz9".into())],
+                ..TracePropagation::default()
+            }),
+            follow_redirects: true,
+            ..SendOptions::default()
+        };
+        let web = Web::new(Arc::new(HttpEngine::new()), &options);
+        assert_eq!(web.options.trace, None);
+        assert!(web.options.cookies.is_none() && !web.options.follow_redirects);
     }
 }

@@ -1,0 +1,29 @@
+# Moving an inline schema into components is not a change.
+expect: []
+old:
+  paths:
+    /users:
+      post:
+        requestBody:
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [name]
+                properties: {name: {type: string}}
+        responses: {'200': {description: ok}}
+new:
+  components:
+    schemas:
+      NewUser:
+        type: object
+        required: [name]
+        properties: {name: {type: string}}
+  paths:
+    /users:
+      post:
+        requestBody:
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NewUser'}
+        responses: {'200': {description: ok}}

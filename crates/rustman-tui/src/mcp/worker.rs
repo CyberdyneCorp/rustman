@@ -150,7 +150,11 @@ pub fn intercept(effect: Effect, actions: &UnboundedSender<Action>) -> Option<Ef
                 root,
                 backend,
             } => {
-                let oauth = oauth_options(root.as_deref(), backend, actions, open_browser);
+                let open = |url: &str| {
+                    // The toast shows the URL when no browser starts.
+                    let _ = open_browser(url);
+                };
+                let oauth = oauth_options(root.as_deref(), backend, actions, open);
                 spawn_session(*server, approved, oauth, actions.clone());
                 None
             }

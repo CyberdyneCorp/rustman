@@ -16,6 +16,8 @@ pub mod mcp_http;
 pub mod mcp_oauth;
 pub mod oauth;
 pub mod openapi;
+#[cfg(feature = "otlp")]
+pub mod otlp;
 pub mod proxy;
 pub mod raw;
 pub mod realtime_sse;
@@ -35,6 +37,8 @@ pub use grpc::{CATALOG_SERVICE, GrpcServer, Reflection, ServerTls};
 pub use jsonrpc::{JsonrpcHttpServer, JsonrpcWsServer, RpcReply, RpcWsSession, WsFrame};
 pub use mcp_http::McpHttpServer;
 pub use oauth::OAuthServer;
+#[cfg(feature = "otlp")]
+pub use otlp::{CollectedSpan, OtlpCollector};
 pub use proxy::TestProxy;
 pub use realtime_sse::{RealtimeSseServer, SseChunk, SseReply, SseTail};
 pub use realtime_ws::{RealtimeWsServer, RecordedWs, WsAction, WsBehavior};

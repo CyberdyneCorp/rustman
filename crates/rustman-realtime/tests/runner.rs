@@ -438,3 +438,68 @@ async fn a_jar_cookie_echoed_by_a_websocket_server_is_redacted_everywhere() {
     assert!(fed.contains("cookie «redacted:Cookie»"), "{fed}");
     assert!(!fed.contains(SESSION), "{fed}");
 }
+
+/// The trace id of a W3C `traceparent` value, checking its shape.
+fn traceparent_trace_id(value: Option<&str>) -> String {
+    let value = value.unwrap_or_else(|| panic!("no traceparent sent"));
+    let parts: Vec<&str> = value.split('-').collect();
+    assert_eq!(parts.len(), 4, "{value}");
+    assert_eq!(parts[0], "00", "{value}");
+    assert_eq!(parts[1].len(), 32, "{value}");
+    assert_eq!(parts[2].len(), 16, "{value}");
+    assert_eq!(parts[3], "01", "{value}");
+    parts[1].to_owned()
+}
+
+/// trace-propagation task 2.5: with `[trace]` on, the WebSocket upgrade
+/// request and the SSE request carry `traceparent`, and with `scope = "run"`
+/// both share the run's trace id.
+#[tokio::test]
+async fn trace_context_reaches_the_websocket_handshake_and_the_sse_request() {
+    let ws_server = RealtimeWsServer::start(WsBehavior::echo()).await;
+    let sse_server = RealtimeSseServer::start(vec![SseReply::events("data: one\n\n")]).await;
+    let sse = "\
+version: 1
+kind: sse
+name: Events
+url: '{{sse_url}}/events'
+reconnect: {max_attempts: 0}
+limits: {max_messages: 1}
+";
+    let dir = workspace(
+        &ws_server.url(""),
+        &[("a-feed.rman.yaml", FEED), ("b-events.rman.yaml", sse)],
+    );
+    let config = dir.path().join("rustman.toml");
+    let text = fs::read_to_string(&config).unwrap().replace(
+        "[variables]\n",
+        &format!("[variables]\nsse_url = \"{}\"\n", sse_server.url("")),
+    );
+    fs::write(
+        &config,
+        format!("{text}[trace]\nenabled = true\nscope = \"run\"\n"),
+    )
+    .unwrap();
+    let records = run(dir.path()).await;
+    for record in &records {
+        assert_eq!(record.status, RequestStatus::Passed, "{:?}", record.error);
+    }
+    let ws_trace = traceparent_trace_id(ws_server.sessions()[0].header("traceparent"));
+    let sse_trace = traceparent_trace_id(sse_server.hits()[0].header("traceparent"));
+    assert_eq!(ws_trace, sse_trace, "scope = run shares one trace id");
+}
+
+/// Without `[trace]`, realtime requests carry no trace context.
+#[tokio::test]
+async fn realtime_requests_carry_no_trace_context_by_default() {
+    let server = RealtimeWsServer::start(WsBehavior::echo()).await;
+    let dir = workspace(&server.url(""), &[("feed.rman.yaml", FEED)]);
+    let records = run(dir.path()).await;
+    assert_eq!(
+        records[0].status,
+        RequestStatus::Passed,
+        "{:?}",
+        records[0].error
+    );
+    assert_eq!(server.sessions()[0].header("traceparent"), None);
+}

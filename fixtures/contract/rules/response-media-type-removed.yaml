@@ -1,0 +1,18 @@
+# the 200 response drops application/xml
+expect: [response-media-type-removed]
+old:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            content: {application/json: {schema: {type: object}}, application/xml: {schema: {type: object}}}
+new:
+  paths:
+    /users:
+      get:
+        responses:
+          '200':
+            description: ok
+            content: {application/json: {schema: {type: object}}}

@@ -364,6 +364,7 @@ fn a_different_existing_secret_is_never_replaced() {
         variables: Variables::new(vec![("base".into(), VarValue::String("x".into()))]),
         secrets: vec!["token".into()],
         production: false,
+        trace: Default::default(),
     }];
     let lookup = |_: &str, n: &str| Some(Secret::new(n, "other".to_owned()));
     let dir = tempfile::tempdir().unwrap();
