@@ -196,6 +196,43 @@ fn add_list_and_remove_a_path_source() {
         ));
 }
 
+/// A committed plugin that is a symlink to `/dev/zero` is refused at once
+/// (exit code 2) by `plugin list` and by a headless run, before trust,
+/// instead of being read without end.
+#[cfg(unix)]
+#[test]
+fn a_plugin_linked_to_dev_zero_is_refused_before_trust() {
+    let dir = workspace();
+    let root = dir.path();
+    let settings = std::fs::read_to_string(root.join("rustman.toml")).unwrap();
+    let pin = "0".repeat(64);
+    write(
+        root,
+        "rustman.toml",
+        &format!(
+            "{settings}\n[plugins.evil]\nsource = \"plugins/evil.wasm\"\nsha256 = \"{pin}\"\n"
+        ),
+    );
+    std::fs::create_dir_all(root.join("plugins")).unwrap();
+    std::os::unix::fs::symlink("/dev/zero", root.join("plugins/evil.wasm")).unwrap();
+    write(
+        root,
+        "get.rman.yaml",
+        "version: 1\nkind: http\nname: Get\nmethod: GET\nurl: http://127.0.0.1:9/\n",
+    );
+    for args in [&["plugin", "list"][..], &["run", "--trust-plugins"][..]] {
+        rustman(root)
+            .args(args)
+            .timeout(std::time::Duration::from_secs(60))
+            .assert()
+            .code(2)
+            .stderr(
+                predicate::str::contains("plugin evil: ")
+                    .and(predicate::str::contains("resolves outside the workspace")),
+            );
+    }
+}
+
 /// "Verify in CI": exit 0 when every hash matches, 2 on a mismatch.
 #[test]
 fn verify_in_ci() {

@@ -34,6 +34,11 @@ pub struct AgentSettings {
     pub max_output_bytes: usize,
     /// Background jobs that may run at once.
     pub max_jobs: NonZeroU32,
+    /// The plugin request kinds agents may execute (a trusted plugin
+    /// runs them under its own grants). Each counts as a mutation: it
+    /// also needs `allow_mutations` and the human's confirmation. Empty:
+    /// none.
+    pub plugin_kinds: Vec<String>,
 }
 
 impl Default for AgentSettings {
@@ -46,6 +51,7 @@ impl Default for AgentSettings {
             allowed_origins: Vec::new(),
             max_output_bytes: DEFAULT_MAX_OUTPUT_BYTES,
             max_jobs: DEFAULT_MAX_JOBS,
+            plugin_kinds: Vec::new(),
         }
     }
 }
@@ -54,6 +60,11 @@ impl AgentSettings {
     /// The methods agents may send.
     pub fn permission(&self) -> Permission {
         Permission::from_flags(self.allow_mutations, self.allow_destructive)
+    }
+
+    /// Whether `[agent] plugin_kinds` lists the request kind `kind`.
+    pub fn allows_plugin_kind(&self, kind: &str) -> bool {
+        self.plugin_kinds.iter().any(|k| k == kind)
     }
 }
 
@@ -86,6 +97,7 @@ mod tests {
         assert_eq!(agent.max_output_bytes, 262_144);
         assert_eq!(agent.max_jobs.get(), 2);
         assert_eq!(agent.permission(), Permission::ReadOnly);
+        assert!(agent.plugin_kinds.is_empty());
         assert_eq!(parse("[agent]\n").unwrap(), AgentSettings::default());
     }
 
@@ -101,6 +113,7 @@ allowed_hosts = ["http://127.0.0.1:9000"]
 allowed_origins = ["https://inspector.example.com"]
 max_output_bytes = 4096
 max_jobs = 1
+plugin_kinds = ["soap"]
 "#,
         )
         .unwrap();
@@ -114,6 +127,8 @@ max_jobs = 1
         assert_eq!(agent.max_output_bytes, 4096);
         assert_eq!(agent.max_jobs.get(), 1);
         assert_eq!(agent.permission(), Permission::Mutations);
+        assert!(agent.allows_plugin_kind("soap"));
+        assert!(!agent.allows_plugin_kind("ldap"));
     }
 
     #[test]

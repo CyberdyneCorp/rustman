@@ -7,6 +7,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use rustman_core::plugins::PluginNetGuard;
 use rustman_core::safety::Permission;
 use rustman_core::trust::TrustKey;
 use rustman_core::{Environment, Secret, SecretStore};
@@ -28,6 +29,9 @@ pub struct Session<'a> {
     pub load: LoadOptions,
     /// The machine key the trust approval is sealed with.
     pub key: TrustKey,
+    /// Agent sessions: admits and audits every plugin request on top of
+    /// the grants (the agent's allowlist and audit log).
+    pub guard: Option<Arc<dyn PluginNetGuard>>,
 }
 
 /// A session's compiled plugins, and those skipped because this build
@@ -42,13 +46,12 @@ pub struct Opened {
 pub async fn open(session: Session<'_>) -> Result<Opened, LoadError> {
     let set = crate::trust::load_trusted(session.root, session.key, &session.load).await?;
     let context = HostContext::new(session.root).with_secrets(session.secrets);
-    let context = with_network(
-        session.root,
-        session.environment,
-        &set,
-        context,
-        session.permission,
-    )?;
+    let network = Network {
+        environment: session.environment,
+        permission: session.permission,
+        guard: session.guard,
+    };
+    let context = with_network(session.root, &set, context, network)?;
     let runtime = PluginRuntime::new(&set, context)?;
     Ok(Opened {
         runtime,
@@ -56,15 +59,23 @@ pub async fn open(session: Session<'_>) -> Result<Opened, LoadError> {
     })
 }
 
+/// How a session's plugins reach the network.
+struct Network<'a> {
+    environment: Option<&'a Environment>,
+    /// The methods plugin requests may use.
+    permission: Permission,
+    guard: Option<Arc<dyn PluginNetGuard>>,
+}
+
 /// `context` with the network of the set's `net:` grants: plugin requests
 /// go through the safety policy of the workspace, limited to the methods
-/// `permission` allows, and are recorded in its history.
+/// `network.permission` allows (and admitted by its guard, if any), and
+/// are recorded in its history.
 fn with_network(
     root: &Path,
-    environment: Option<&Environment>,
     set: &PluginSet,
     context: HostContext,
-    permission: Permission,
+    network: Network<'_>,
 ) -> Result<HostContext, LoadError> {
     let (settings, _) = rustman_core::settings::Settings::load(root)
         .map_err(|e| LoadError::Workspace(e.to_string()))?;
@@ -73,16 +84,20 @@ fn with_network(
         .enabled
         .then(|| rustman_core::history::HistoryStore::for_workspace(root, &settings.history));
     let grants = set.plugins.iter().flat_map(|plugin| &plugin.grants);
-    let network = GovernedNetwork::for_grants(
+    let governed = GovernedNetwork::for_grants(
         &settings.safety,
-        permission,
-        environment,
+        network.permission,
+        network.environment,
         grants,
         history,
         context.redactor(),
     )
     .map_err(LoadError::Workspace)?;
-    let services = SystemServices { network };
+    let governed = match network.guard {
+        Some(guard) => governed.map(|n| n.with_guard(guard)),
+        None => governed,
+    };
+    let services = SystemServices { network: governed };
     Ok(context.with_services(Arc::new(services)))
 }
 

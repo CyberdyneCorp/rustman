@@ -38,6 +38,17 @@ pub const MAX_SECRET_NAME_BYTES: usize = 256;
 /// The most resources (secret handles) one instance may hold at once.
 pub const MAX_RESOURCES: usize = 1024;
 
+/// The most headers one `http.fetch` request may carry.
+pub const MAX_REQUEST_HEADERS: usize = 100;
+
+/// The most bytes of header names and values one `http.fetch` request may
+/// carry.
+pub const MAX_REQUEST_HEADER_BYTES: usize = 64 * 1024;
+
+/// The longest URL (and method) one `http.fetch` request may carry, in
+/// bytes.
+pub const MAX_REQUEST_URL_BYTES: usize = 16 * 1024;
+
 /// Cut `text` to at most `max` bytes, on a character boundary.
 pub(crate) fn truncate(text: &mut String, max: usize) {
     if text.len() > max {
@@ -119,32 +130,50 @@ impl fs_read::Host for HostState {
 
     fn list_dir(&mut self, path: String) -> Result<Vec<String>, HostError> {
         let full = self.fs_path(&path)?;
-        let entries = std::fs::read_dir(&full).map_err(|e| HostError::Failed(e.to_string()))?;
-        let mut names: Vec<String> = entries
-            .filter_map(Result::ok)
-            .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .filter(|name| !name.eq_ignore_ascii_case(rustman_core::secrets::STATE_DIR))
-            .collect();
-        names.sort();
-        Ok(names)
+        list_checked(&full)
     }
 }
 
-/// The file at `path`, refused when larger than `limit` bytes (it could
-/// not fit in the plugin's memory anyway). At most `limit + 1` bytes are
-/// read, however the file grows meanwhile.
-pub(crate) fn read_capped(path: &std::path::Path, limit: u64) -> Result<Vec<u8>, HostError> {
-    use std::io::Read as _;
+/// The entry names of the folder at the canonical `path`, refused unless
+/// `path` still resolves to itself after the listing (a component swapped
+/// for a symlink meanwhile).
+fn list_checked(path: &std::path::Path) -> Result<Vec<String>, HostError> {
     let failed = |e: std::io::Error| HostError::Failed(e.to_string());
-    let file = std::fs::File::open(path).map_err(failed)?;
-    let mut bytes = Vec::new();
-    file.take(limit.saturating_add(1))
-        .read_to_end(&mut bytes)
-        .map_err(failed)?;
-    if bytes.len() as u64 > limit {
-        return Err(HostError::Failed(format!("file larger than {limit} bytes")));
+    let entries = std::fs::read_dir(path).map_err(failed)?;
+    let mut names: Vec<String> = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| !name.eq_ignore_ascii_case(rustman_core::secrets::STATE_DIR))
+        .collect();
+    if dunce::canonicalize(path).map_err(failed)? != path {
+        return Err(HostError::Failed(SWAPPED.to_owned()));
     }
-    Ok(bytes)
+    names.sort();
+    Ok(names)
+}
+
+/// The error of a path that changed between its grant check and the read.
+const SWAPPED: &str = "the path changed while it was read";
+
+/// The file at the canonical `path`, refused when larger than `limit`
+/// bytes (it could not fit in the plugin's memory anyway). At most
+/// `limit + 1` bytes are read, however the file grows meanwhile. Only a
+/// regular file is read, opened without following a symlink, and only
+/// when it is still the file at `path` once open: a path swapped for a
+/// symlink between the grant check and the open is refused.
+pub(crate) fn read_capped(path: &std::path::Path, limit: u64) -> Result<Vec<u8>, HostError> {
+    use crate::files::{is_checked_file, open_regular, read_capped as read_file};
+    let failed = |e: std::io::Error| HostError::Failed(e.to_string());
+    let file = open_regular(path).map_err(failed)?;
+    if !is_checked_file(&file, path).map_err(failed)? {
+        return Err(HostError::Failed(SWAPPED.to_owned()));
+    }
+    read_file(file, limit).map_err(|e| match e.kind() {
+        std::io::ErrorKind::InvalidData => {
+            HostError::Failed(format!("file larger than {limit} bytes"))
+        }
+        _ => failed(e),
+    })
 }
 
 impl secrets::HostSecretRef for HostState {
@@ -204,6 +233,7 @@ impl log::Host for HostState {
 
 impl http::Host for HostState {
     fn fetch(&mut self, request: http::Request) -> Result<http::Response, HostError> {
+        check_request_size(&request)?;
         let Some((host, port)) = host_and_port(&request.url) else {
             return Err(HostError::Failed(format!("invalid URL '{}'", request.url)));
         };
@@ -219,6 +249,32 @@ impl http::Host for HostState {
         self.meter.add_host_time(started.elapsed());
         response
     }
+}
+
+/// Refuse a request with more than [`MAX_REQUEST_HEADERS`] headers, more
+/// than [`MAX_REQUEST_HEADER_BYTES`] of them, or a URL or method longer
+/// than [`MAX_REQUEST_URL_BYTES`], before anything else is done with it.
+/// (What the guest can make the host copy into the call at all is bounded
+/// by the store's hostcall fuel, the plugin's memory limit.)
+fn check_request_size(request: &http::Request) -> Result<(), HostError> {
+    if request.headers.len() > MAX_REQUEST_HEADERS {
+        let message = format!("at most {MAX_REQUEST_HEADERS} request headers");
+        return Err(HostError::Failed(message));
+    }
+    let header_bytes: usize = request
+        .headers
+        .iter()
+        .map(|h| h.name.len().saturating_add(h.value.len()))
+        .fold(0, usize::saturating_add);
+    if header_bytes > MAX_REQUEST_HEADER_BYTES {
+        let message = format!("at most {MAX_REQUEST_HEADER_BYTES} bytes of request headers");
+        return Err(HostError::Failed(message));
+    }
+    if request.url.len() > MAX_REQUEST_URL_BYTES || request.method.len() > MAX_REQUEST_URL_BYTES {
+        let message = format!("a URL or method of at most {MAX_REQUEST_URL_BYTES} bytes");
+        return Err(HostError::Failed(message));
+    }
+    Ok(())
 }
 
 /// The host and port of an `http` or `https` URL.
@@ -324,13 +380,103 @@ mod tests {
     #[test]
     fn reads_are_capped() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("f.txt");
+        let path = dunce::canonicalize(dir.path()).unwrap().join("f.txt");
         std::fs::write(&path, "0123456789").unwrap();
         assert_eq!(read_capped(&path, 10).unwrap(), b"0123456789");
         assert_eq!(
             read_capped(&path, 9).unwrap_err(),
             HostError::Failed("file larger than 9 bytes".into())
         );
+    }
+
+    /// A granted folder swapped for a symlink out of the workspace between
+    /// the grant check (`resolve`) and the open is not followed.
+    #[cfg(unix)]
+    #[test]
+    fn a_path_swapped_after_the_grant_check_is_not_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        std::fs::create_dir_all(root.join("data")).unwrap();
+        std::fs::write(root.join("data/a.txt"), "inside").unwrap();
+        std::fs::write(outside.path().join("a.txt"), "outside").unwrap();
+        let grants = [Grant::FsRead("data".to_owned())];
+        let checked = resolve(&root, &grants, "data/a.txt").unwrap();
+        let listed = resolve(&root, &grants, "data").unwrap();
+        assert_eq!(read_capped(&checked, 100).unwrap(), b"inside");
+        std::fs::rename(root.join("data"), root.join("old")).unwrap();
+        std::os::unix::fs::symlink(outside.path(), root.join("data")).unwrap();
+        let refused = HostError::Failed(SWAPPED.to_owned());
+        assert_eq!(read_capped(&checked, 100).unwrap_err(), refused);
+        assert_eq!(list_checked(&listed).unwrap_err(), refused);
+    }
+
+    /// A FIFO in a granted folder fails at once instead of blocking the
+    /// call until a writer comes.
+    #[cfg(unix)]
+    #[test]
+    fn non_regular_files_are_not_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        let fifo = root.join("p");
+        let made = std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .is_ok_and(|s| s.success());
+        if !made {
+            eprintln!("skipped: mkfifo is not available");
+            return;
+        }
+        let err = read_capped(&fifo, 100).unwrap_err();
+        assert_eq!(err, HostError::Failed("not a regular file".to_owned()));
+    }
+
+    /// Header lists are capped in count and size before the request is
+    /// checked against the grants or reaches the network.
+    #[test]
+    fn fetch_requests_are_capped_in_headers_and_url() {
+        use super::http::Host as _;
+        let header = |name: &str, len: usize| types::Header {
+            name: name.to_owned(),
+            value: "v".repeat(len),
+        };
+        let request = |headers: Vec<types::Header>, url: String| super::http::Request {
+            method: "GET".to_owned(),
+            url,
+            headers,
+            body: Vec::new(),
+        };
+        let url = "https://api.example.com/".to_owned();
+        let mut state = state(&["net:api.example.com"]);
+        let many = (0..=MAX_REQUEST_HEADERS)
+            .map(|i| header(&format!("h{i}"), 1))
+            .collect();
+        assert_eq!(
+            state.fetch(request(many, url.clone())).unwrap_err(),
+            HostError::Failed("at most 100 request headers".into())
+        );
+        let large = vec![
+            header("a", MAX_REQUEST_HEADER_BYTES / 2),
+            header("b", MAX_REQUEST_HEADER_BYTES / 2),
+        ];
+        assert_eq!(
+            state.fetch(request(large, url.clone())).unwrap_err(),
+            HostError::Failed("at most 65536 bytes of request headers".into())
+        );
+        let long = format!("{url}{}", "x".repeat(MAX_REQUEST_URL_BYTES));
+        assert_eq!(
+            state.fetch(request(Vec::new(), long)).unwrap_err(),
+            HostError::Failed("a URL or method of at most 16384 bytes".into())
+        );
+        // At the caps, the request goes on (to a session without network).
+        let full: Vec<_> = (0..MAX_REQUEST_HEADERS)
+            .map(|i| header(&format!("h{i:02}"), 600))
+            .collect();
+        assert_eq!(
+            state.fetch(request(full, url)).unwrap_err(),
+            HostError::Failed("this session has no network for plugins".into())
+        );
+        assert!(state.denials.is_empty());
     }
 
     #[test]

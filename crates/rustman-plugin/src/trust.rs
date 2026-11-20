@@ -137,6 +137,7 @@ pub fn check(root: &Path, key: TrustKey) -> Result<Trust, LoadError> {
     if declared.is_empty() {
         return Ok(Trust::NoPlugins);
     }
+    refuse_unreadable(root, &declared)?;
     let store = TrustStore::load_with_key(root, key).map_err(workspace)?;
     let fingerprint = fingerprint(root, &declared);
     let changed = match store.state(SUBJECT, &fingerprint) {
@@ -150,6 +151,24 @@ pub fn check(root: &Path, key: TrustKey) -> Result<Trust, LoadError> {
         changed,
         fingerprint,
     }))
+}
+
+/// Refuse a plugin file on disk that is not read (plugins spec, "Plugin
+/// package and manifest"): a component, manifest or cached download that
+/// is not a regular file inside the workspace, or is too large. A missing
+/// file is left to the prompt (`unknown`) and to the load.
+fn refuse_unreadable(root: &Path, declared: &[Declaration]) -> Result<(), LoadError> {
+    for declaration in declared {
+        let name = &declaration.name;
+        let read = match &declaration.source {
+            Source::Path(path) => read_path(root, name, path).map(drop),
+            Source::Url(_) => read_cache(root, name, &declaration.sha256).map(drop),
+        };
+        if let Err(error @ LoadError::Unreadable { .. }) = read {
+            return Err(error);
+        }
+    }
+    Ok(())
 }
 
 /// Record the user's trust in the set with `fingerprint`, which must still
@@ -310,6 +329,7 @@ impl PluginGate for TrustGate {
                 allow_fetch: false,
             },
             key: self.key.clone(),
+            guard: None,
         };
         // Its own thread and runtime: the caller may run inside one.
         let opened = std::thread::scope(|scope| {
@@ -394,10 +414,55 @@ mod tests {
                 "net:10.1.2.3",
                 "send HTTP requests to 10.1.2.3 (this machine or a private network)",
             ),
+            (
+                "net:100.64.0.1",
+                "send HTTP requests to 100.64.0.1 (this machine or a private network)",
+            ),
+            (
+                "net:198.18.0.1",
+                "send HTTP requests to 198.18.0.1 (this machine or a private network)",
+            ),
+            (
+                "net:[64:ff9b::a9fe:a9fe]",
+                "send HTTP requests to [64:ff9b::a9fe:a9fe] (this machine or a private network)",
+            ),
             ("net:93.184.216.34", "send HTTP requests to 93.184.216.34"),
         ];
         for (grant, text) in cases {
             assert_eq!(describe_text(grant), text, "{grant}");
         }
+    }
+
+    /// "A committed symlink to `/dev/zero`": the trust check (`plugin
+    /// list`, the TUI on open), the pin check and the load of headless
+    /// commands all refuse it at once with a clear error.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_plugin_linked_to_a_device_is_refused_before_trust() {
+        let dir = tempfile::tempdir().unwrap();
+        let keys = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let pin = "0".repeat(64);
+        std::fs::write(
+            root.join("rustman.toml"),
+            format!(
+                "[workspace]\nname = \"t\"\nversion = 1\n\n[plugins.evil]\nsource = \"plugins/evil.wasm\"\nsha256 = \"{pin}\"\n"
+            ),
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join("plugins")).unwrap();
+        std::os::unix::fs::symlink("/dev/zero", root.join("plugins/evil.wasm")).unwrap();
+        let started = std::time::Instant::now();
+        let expected = "plugin evil: ";
+        let err = check(root, TrustKey::in_dir(keys.path())).unwrap_err();
+        assert!(err.to_string().starts_with(expected), "{err}");
+        assert!(err.to_string().ends_with("resolves outside the workspace"));
+        let err = crate::verify_pins(root).unwrap_err();
+        assert!(err.to_string().ends_with("resolves outside the workspace"));
+        let err = crate::load(root, &LoadOptions::default())
+            .await
+            .unwrap_err();
+        assert!(err.to_string().ends_with("resolves outside the workspace"));
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
     }
 }

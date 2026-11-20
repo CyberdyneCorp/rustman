@@ -230,15 +230,41 @@ impl<C: Confirm> SendGate for AgentGate<'_, C> {
                 .await;
             let audited = self.audit(request, sent.as_ref().err());
             sent.and_then(|exchange| audited.map(|()| exchange))
-                .map_err(|err| {
-                    if is_refusal(err.code) {
-                        self.refuse(&err);
-                        RequestError::Blocked(err.message)
-                    } else {
-                        RequestError::Network(err.message)
-                    }
-                })
+                .map_err(|err| self.request_error(err))
         })
+    }
+
+    /// A plugin kind request: the agent permissions and the human admit
+    /// it ([`AgentContext::authorize_plugin_kind`]), and it is audited like
+    /// any request (the job's own line, or the call's method and URL).
+    fn authorize_kind<'a>(
+        &'a self,
+        request: &'a ResolvedRequest,
+    ) -> BoxFuture<'a, Result<(), RequestError>> {
+        Box::pin(async move {
+            if let Err(err) = self.audit_ready() {
+                self.refuse(&err);
+                return Err(RequestError::Blocked(err.message));
+            }
+            let admitted = self
+                .ctx
+                .authorize_plugin_kind(request, self.confirm, self.target)
+                .await;
+            let audited = self.audit(request, admitted.as_ref().err());
+            admitted.and(audited).map_err(|err| self.request_error(err))
+        })
+    }
+}
+
+impl<C: Confirm> AgentGate<'_, C> {
+    /// The runner's error for `err`, remembering a refusal.
+    fn request_error(&self, err: ToolError) -> RequestError {
+        if is_refusal(err.code) {
+            self.refuse(&err);
+            RequestError::Blocked(err.message)
+        } else {
+            RequestError::Network(err.message)
+        }
     }
 }
 
@@ -461,6 +487,17 @@ impl SendGate for Counting<'_> {
             let sent = self.inner.send(request, options).await;
             self.job.advance();
             sent
+        })
+    }
+
+    fn authorize_kind<'a>(
+        &'a self,
+        request: &'a ResolvedRequest,
+    ) -> BoxFuture<'a, Result<(), RequestError>> {
+        Box::pin(async move {
+            let admitted = self.inner.authorize_kind(request).await;
+            self.job.advance();
+            admitted
         })
     }
 }

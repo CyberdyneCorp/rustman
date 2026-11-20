@@ -118,6 +118,7 @@ const KNOWN_KEYS: &[(&str, &[&str])] = &[
             "allowed_origins",
             "max_output_bytes",
             "max_jobs",
+            "plugin_kinds",
         ],
     ),
 ];

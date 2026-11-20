@@ -62,9 +62,10 @@ impl Runner<'_> {
     }
 
     /// Execute `opaque`, a request of a plugin kind: its fields are
-    /// interpolated, then the plugin that registers the kind runs it. A
-    /// kind no loaded plugin registers is skipped as unsupported.
-    pub(super) fn execute_plugin_kind(
+    /// interpolated, the run's [`super::SendGate`] (the agent interface)
+    /// admits it, then the plugin that registers the kind runs it. A kind
+    /// no loaded plugin registers is skipped as unsupported.
+    pub(super) async fn execute_plugin_kind(
         &self,
         request: &RequestRef<'_>,
         opaque: &OpaqueRequest,
@@ -78,15 +79,21 @@ impl Runner<'_> {
         };
         let captured = self.lock_captures().clone();
         let resolver = self.resolver(request, &captured, iteration);
-        let value = match opaque.to_json(&request.entry.path) {
-            Ok(value) => value,
-            Err(e) => return Sent::errored(record, e.to_string()),
-        };
-        let (value, secrets) = match resolve_value(&value, &resolver) {
+        let resolved = opaque
+            .to_json(&request.entry.path)
+            .map_err(|e| e.to_string())
+            .and_then(|value| resolve_value(&value, &resolver).map_err(|e| e.to_string()));
+        let (value, secrets) = match resolved {
             Ok(resolved) => resolved,
-            Err(e) => return Sent::errored(record, e.to_string()),
+            Err(e) => return Sent::errored(record, e),
         };
         self.remember(&secrets);
+        let sent_request = kind_request(request, &opaque.kind, value.clone(), secrets);
+        if let Some(gate) = self.options.gate
+            && let Err(e) = gate.authorize_kind(&sent_request).await
+        {
+            return Sent::errored(record, e.to_string()).with_resolved(sent_request);
+        }
         let sent = match plugins.execute_kind(&opaque.kind, &value) {
             Ok(outcome) => {
                 let mut record = record;
@@ -96,7 +103,7 @@ impl Runner<'_> {
             }
             Err(e) => Sent::errored(record, e),
         };
-        sent.with_resolved(kind_request(request, &opaque.kind, value, secrets))
+        sent.with_resolved(sent_request)
     }
 }
 

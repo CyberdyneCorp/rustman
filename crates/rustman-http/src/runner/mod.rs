@@ -173,6 +173,17 @@ pub trait SendGate: Send + Sync {
         request: &'a ResolvedRequest,
         options: &'a SendOptions,
     ) -> BoxFuture<'a, Result<Exchange, RequestError>>;
+
+    /// Admit a request of a plugin kind before its plugin executes it, or
+    /// refuse it with [`RequestError::Blocked`]. `request` is what history
+    /// records for it: the kind as the method, `<kind>:<request id>` as the
+    /// URL and the resolved fields as a JSON body. The plugin sends its own
+    /// network requests (under its `net:` grants), so the gate cannot send
+    /// it: it only decides, and audits.
+    fn authorize_kind<'a>(
+        &'a self,
+        request: &'a ResolvedRequest,
+    ) -> BoxFuture<'a, Result<(), RequestError>>;
 }
 
 impl Default for RunOptions<'_> {

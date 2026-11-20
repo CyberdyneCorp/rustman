@@ -403,6 +403,52 @@ pub fn fetcher() -> Vec<u8> {
     component("generator", imports, &data, &body)
 }
 
+/// A generator (`flood`) that calls `http.fetch` with `count` headers
+/// whose values all alias one zeroed region of `value_len` bytes, so the
+/// host would copy `count * value_len` bytes out of a small memory. It
+/// returns `sent` when the call returns, or the host error's message.
+pub fn header_flood(count: u32, value_len: u32) -> Vec<u8> {
+    let imports = r#"
+      (import "rustman:plugin/http@1.0.0" "fetch"
+        (func $fetch (param i32 i32 i32 i32 i32 i32 i32 i32 i32)))
+    "#;
+    let mut data = Data::default();
+    let names = generator_names(&mut data, &["flood"]);
+    let (get, get_len) = data.string("GET");
+    let (url, url_len) = data.string("https://flood.example.com/");
+    let (name, name_len) = data.string("X-Flood");
+    let (sent, sent_len) = data.string("sent");
+    let records_len = count * 16;
+    let body = format!(
+        r#"
+      {names}
+      (func (export "{GENERATOR}#generate") (param i32 i32 i32 i32) (result i32)
+        (local $value i32) (local $records i32) (local $at i32) (local $i i32)
+        (local.set $value (call $alloc (i32.const {value_len}) (i32.const 1)))
+        (local.set $records (call $alloc (i32.const {records_len}) (i32.const 4)))
+        (block $done
+          (loop $fill
+            (br_if $done (i32.ge_u (local.get $i) (i32.const {count})))
+            (local.set $at (i32.add (local.get $records) (i32.mul (local.get $i) (i32.const 16))))
+            (i32.store (local.get $at) (i32.const {name}))
+            (i32.store (i32.add (local.get $at) (i32.const 4)) (i32.const {name_len}))
+            (i32.store (i32.add (local.get $at) (i32.const 8)) (local.get $value))
+            (i32.store (i32.add (local.get $at) (i32.const 12)) (i32.const {value_len}))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $fill)))
+        (call $fetch (i32.const {get}) (i32.const {get_len}) (i32.const {url}) (i32.const {url_len})
+          (local.get $records) (i32.const {count}) (i32.const 0) (i32.const 0) (i32.const {RET}))
+        (if (i32.load8_u (i32.const {RET}))
+          (then (return (call $err_string
+            (i32.load (i32.const {err_ptr})) (i32.load (i32.const {err_len}))))))
+        (call $ok_string (i32.const {sent}) (i32.const {sent_len})))
+    "#,
+        err_ptr = RET + 8,
+        err_len = RET + 12,
+    );
+    component("generator", imports, &data, &body)
+}
+
 /// A transformer (`echo` both ways) that returns the message it is given.
 pub fn echo_transformer() -> Vec<u8> {
     const TRANSFORMER: &str = "rustman:plugin/body-transformer@1.0.0";

@@ -19,6 +19,23 @@ A plugin SHALL be a WebAssembly component (`.wasm`) shipped next to a `rustman-p
 - **WHEN** the plugin is loaded
 - **THEN** loading SHALL fail with `plugin aws-sigv4: unknown extension point 'telemetry'`
 
+### Requirement: Reading plugin files before trust
+Plugin components, `rustman-plugin.toml` files, cached downloads and `rustman.lock` SHALL be read only when they resolve to a regular file inside the workspace (a symbolic link is followed only to such a file), without blocking on a FIFO or device. Anything else SHALL be refused at once with an error naming the plugin and the file, before trust: by `plugin list`, the trust check and the pin check of headless commands.
+
+#### Scenario: Component linked to an endless device
+- **GIVEN** a committed `plugins/evil.wasm` that is a symbolic link to `/dev/zero`, declared as `[plugins.evil]`
+- **WHEN** the user runs `rustman plugin list` or `rustman run --trust-plugins`
+- **THEN** the command SHALL exit with code 2 at once with `plugin evil: <path>: resolves outside the workspace`
+- **AND** no more than the size cap SHALL ever be read from any plugin file
+
+### Requirement: Plugin file size caps
+Plugin files SHALL be read through a size cap, never more than one byte past it: 20 MiB for a component or cached download, 256 KiB for a `rustman-plugin.toml` and 1 MiB for `rustman.lock`. A larger file SHALL be refused with an error naming the plugin, the file and the cap.
+
+#### Scenario: Oversized manifest
+- **GIVEN** a `rustman-plugin.toml` of more than 256 KiB next to a component
+- **WHEN** the plugin set is checked or loaded
+- **THEN** it SHALL be refused with `plugin <name>: <path>: larger than 262144 bytes`
+
 ### Requirement: Plugin API versioning
 The host SHALL support one or more plugin API majors, listed by `rustman plugin api`. A plugin whose `api` major is unsupported SHALL NOT load, and SHALL fail with `plugin <name> targets plugin API <n>; this rustman supports <list>`. Within a major, the host SHALL accept components built against any older minor.
 
@@ -76,6 +93,18 @@ The CLI SHALL provide these commands:
 - **WHEN** the user runs `rustman plugin add http://example.com/p.wasm`
 - **THEN** it SHALL fail with `plugin sources must use https` and exit code 2
 
+### Requirement: Download address guard
+Downloads run before trust, so a URL source's host name SHALL NOT connect to an address that is not public (as the non-public address rule defines it) unless the URL names that address or `localhost` itself, and redirects SHALL be followed only on `https` to the same host and port.
+
+#### Scenario: Download URL resolving to a private address
+- **GIVEN** a declared URL source `https://plugins.example.com/p.wasm` whose host resolves to `169.254.169.254`
+- **WHEN** `rustman plugin verify` downloads it
+- **THEN** the connection SHALL be refused with `plugins.example.com resolves to the non-public address 169.254.169.254 (download from the address itself to reach it)` and exit code 2
+
+#### Scenario: Redirect to another host
+- **WHEN** a URL source redirects to another host
+- **THEN** the download SHALL fail with `redirect to another host refused`
+
 ### Requirement: Workspace plugin trust
 The first time a workspace's plugin set is loaded (or after any plugin's sha256 or grants change), the TUI SHALL show each plugin's name, version, source and granted capabilities, and SHALL ask the user to trust them. Approval SHALL be stored in `.rustman/trust.yaml`, keyed by a hash of the plugin set. Declining SHALL leave every plugin unloaded.
 
@@ -128,6 +157,12 @@ A plugin SHALL start with no access to the filesystem, network, environment vari
 - **THEN** the call SHALL fail with `capability_denied: fs`
 - **AND** no host file SHALL be read
 
+#### Scenario: Path swapped after the grant check
+- **GIVEN** `grants = ["fs:read:data"]`
+- **WHEN** `data` is replaced by a symbolic link out of the workspace between the grant check of `data/a.txt` and its read
+- **THEN** the call SHALL fail with `the path changed while it was read` and the file outside SHALL NOT be returned
+- **AND** a FIFO or device under a granted folder SHALL fail with `not a regular file` without blocking
+
 #### Scenario: Granted folder symlinked out of the workspace
 - **GIVEN** `grants = ["fs:read:data"]` and `data` a symbolic link to a folder outside the workspace
 - **WHEN** the plugin reads `data/<file>`
@@ -170,14 +205,30 @@ A plugin with `net:<host>` SHALL send requests only through a host-provided HTTP
 - **WHEN** the same plugin fetches `https://evil.example.net/`
 - **THEN** the call SHALL fail with `capability_denied: net evil.example.net`
 
+### Requirement: Host call size limits
+One host call SHALL copy at most about the plugin's memory limit out of the guest, however its strings and lists alias each other. `http.fetch` SHALL refuse more than 100 request headers, more than 64 KiB of header names and values, or a URL longer than 16 KiB, before anything else.
+
+#### Scenario: Aliased header flood
+- **GIVEN** a plugin limited to 16 MiB of memory
+- **WHEN** it calls `http.fetch` with 50 headers whose values all point at one 1 MiB region
+- **THEN** the call SHALL trap before the host copies the list, and the plugin's next call SHALL run on a fresh instance
+
 ### Requirement: Resolved address check
-A granted host name SHALL NOT reach a loopback, private, link-local or unspecified address it resolves to, checked on the addresses connected to, unless the grant names that address or `localhost` literally.
+A granted host name SHALL NOT reach an address it resolves to that is not public, checked on the addresses connected to, unless the grant names that address or `localhost` literally. The trust prompt SHALL mark grants naming such an address.
 
 #### Scenario: Granted name resolving to a private address
 - **GIVEN** `grants = ["net:api.example.com"]` and `api.example.com` resolving to `169.254.169.254`
 - **WHEN** the plugin fetches `https://api.example.com/`
 - **THEN** the connection SHALL be refused with `policy_denied: api.example.com resolves to the private address 169.254.169.254 (grant the address itself to reach it)`
 - **AND** a grant naming the address itself (`net:169.254.169.254`) or `localhost` SHALL still reach it
+
+### Requirement: Non-public addresses
+"Not public" SHALL be deny-by-default: every address that is not globally routable unicast, including loopback, private, shared (`100.64.0.0/10`), link-local, unspecified, `192.0.0.0/24`, documentation, benchmarking (`198.18.0.0/15`), multicast, reserved (`240.0.0.0/4`), broadcast, IPv6 site-local (`fec0::/10`) and everything outside `2000::/3`. An IPv6 address wrapping an IPv4 address (IPv4-mapped, IPv4-compatible, NAT64, 6to4) SHALL be judged as that IPv4 address.
+
+#### Scenario: NAT64 form of the metadata address
+- **GIVEN** `grants = ["net:api.example.com"]` and `api.example.com` resolving to `64:ff9b::a9fe:a9fe`
+- **WHEN** the plugin fetches `https://api.example.com/`
+- **THEN** the connection SHALL be refused like `169.254.169.254`
 
 ### Requirement: Secrets inside plugins
 A plugin SHALL receive a secret value in clear only when it holds `secrets:read:<name>` for that secret. Otherwise, values passed to the plugin SHALL carry the placeholder `«redacted:<name>»`. Anything a plugin returns, logs or reports SHALL pass through the redaction invariant of `environments`.
@@ -302,6 +353,24 @@ The agent interface SHALL NOT expose tools to add, remove, trust or grant plugin
 - **GIVEN** a trusted plugin with a `net:` grant, loaded by `rustman mcp serve`
 - **WHEN** it sends a `POST` to its granted host during an agent's request
 - **THEN** the host SHALL refuse it with `policy-denied`, since an agent's mutations need the human's confirmation, which a plugin call cannot ask for
+
+### Requirement: Plugin kinds in agent sessions
+A request of a plugin kind SHALL pass the agent gate before its plugin runs: it SHALL run only when `[agent] plugin_kinds` lists its kind, count as a mutation (needing `allow_mutations` and the human's confirmation), and be audited with the kind as its method and `<kind>:<request id>` as its URL, by the tool call and, in a background job, by a line of its own.
+
+#### Scenario: Plugin kind not allowed for agents
+- **GIVEN** a trusted plugin registering the kind `soap`, and no `[agent] plugin_kinds`
+- **WHEN** an agent calls `send_request` on a `kind: soap` request
+- **THEN** the call SHALL fail with `plugin kind 'soap' not allowed for agents (list it in [agent] plugin_kinds)` before the plugin runs
+- **AND** the audit line SHALL record method `soap` and URL `soap:<request id>`
+
+### Requirement: Plugin network in agent sessions
+In an agent session, every request a plugin sends SHALL also reach only an origin the agent may reach (on top of the plugin's `net:` grants), and SHALL be audited with its method and redacted URL; a request that cannot be audited SHALL NOT be sent.
+
+#### Scenario: Plugin request outside the agent allowlist
+- **GIVEN** a trusted plugin granted `net:127.0.0.1:8080`, and `[agent] allowed_hosts` not listing it
+- **WHEN** the plugin sends a request there during an agent session
+- **THEN** it SHALL be refused with `policy-denied` (`host not allowed`)
+- **AND** an audit line with tool `plugin:<name>`, the method and the redacted URL SHALL record the refusal
 
 ### Requirement: Plugin SDK and template
 A `rustman-plugin-sdk` crate SHALL provide Rust bindings for the WIT world of each extension point. `rustman plugin new <name> --kind <extension point>` SHALL scaffold a buildable project with a manifest, a sample implementation, tests and a `cargo build --target wasm32-wasip2` recipe.

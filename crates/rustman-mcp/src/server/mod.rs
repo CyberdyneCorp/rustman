@@ -12,6 +12,7 @@ pub mod handler;
 pub mod http;
 pub mod jobs;
 pub mod limits;
+pub mod plugin_net;
 pub mod policy;
 pub mod prompts;
 pub mod redact;

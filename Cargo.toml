@@ -125,6 +125,9 @@ tempfile = "3"
 proptest = { version = "1", default-features = false, features = ["std"] }
 # The current user id (safe `geteuid`), for per-user private temp folders on Unix.
 rustix = { version = "1.1", default-features = false, features = ["std", "process"] }
+# `O_NOFOLLOW` and `O_NONBLOCK` for opening plugin files without following a
+# final symlink or blocking on a FIFO or device (rustman-plugin).
+libc = "0.2"
 # Peak heap usage in the body memory-ceiling test (a counting global allocator).
 peak_alloc = "0.3"
 

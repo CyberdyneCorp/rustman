@@ -19,8 +19,8 @@ pub use context::{HostContext, HostServices, LogLevel, PluginLog, SystemServices
 pub use engine::{TICK, engine, linker};
 pub(crate) use host::read_capped;
 pub use host::{
-    MAX_DENIALS, MAX_DETAIL_BYTES, MAX_LOG_LINE_BYTES, MAX_LOG_LINES, MAX_RESOURCES,
-    MAX_SECRET_NAME_BYTES,
+    MAX_DENIALS, MAX_DETAIL_BYTES, MAX_LOG_LINE_BYTES, MAX_LOG_LINES, MAX_REQUEST_HEADER_BYTES,
+    MAX_REQUEST_HEADERS, MAX_REQUEST_URL_BYTES, MAX_RESOURCES, MAX_SECRET_NAME_BYTES,
 };
 pub use limits::{CpuMeter, Exceeded, MemoryLimiter};
 
