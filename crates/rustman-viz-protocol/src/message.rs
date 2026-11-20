@@ -23,6 +23,10 @@ pub enum Message {
     Finding(Finding),
     ExplorationFinished(ExplorationFinished),
     LoadReport(LoadReport),
+    /// One second of a bench (add-load-testing): sent once a second.
+    BenchTick(BenchTick),
+    /// The end of a bench; never dropped.
+    BenchFinished(BenchFinished),
     InspectResponse(Box<InspectResponse>),
     /// A payload too large for one line, written to a file.
     BlobRef(BlobRef),
@@ -66,6 +70,8 @@ pub enum View {
     ExplorationDashboard,
     ApiGraph,
     ResponseInspector,
+    /// The live load-test dashboard (`rustman bench --viz`).
+    Bench,
     /// A view added by a later minor version.
     #[serde(other)]
     Unknown,
@@ -215,6 +221,7 @@ pub struct ExplorationFinished {
 pub enum ReportKind {
     Run,
     Exploration,
+    Bench,
     #[serde(other)]
     Unknown,
 }
@@ -226,6 +233,58 @@ pub struct LoadReport {
     pub kind: ReportKind,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub view: Option<View>,
+}
+
+/// One second of a bench. It holds counts, timings and VUs only, never
+/// request or response content.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BenchTick {
+    /// 1 for the first second of the bench.
+    pub second: u32,
+    pub elapsed_ms: u64,
+    /// How long load still runs, when the bench has a fixed duration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remaining_ms: Option<u64>,
+    /// VUs running at the end of the second.
+    pub active_vus: u32,
+    /// Requests that finished in this second.
+    pub requests: u64,
+    /// Requests of this second that failed.
+    pub errors: u64,
+    pub rps: f64,
+    /// Latency percentiles of this second, in milliseconds.
+    pub p50_ms: f64,
+    pub p95_ms: f64,
+    pub p99_ms: f64,
+}
+
+/// How one threshold of a bench ended.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BenchThreshold {
+    /// As written, such as `p95<300ms`.
+    pub expression: String,
+    pub passed: bool,
+    /// The measured value, such as `412ms`.
+    pub actual: String,
+}
+
+/// The end of a bench: totals over the whole run.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BenchFinished {
+    pub state: RunState,
+    pub duration_ms: u64,
+    pub iterations: u64,
+    pub requests: u64,
+    pub errors: u64,
+    pub rps: f64,
+    pub p50_ms: f64,
+    pub p95_ms: f64,
+    pub p99_ms: f64,
+    #[serde(default)]
+    pub thresholds: Vec<BenchThreshold>,
+    /// Why the bench stopped early: `threshold` or `interrupted`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aborted: Option<String>,
 }
 
 /// One response header, as received.
@@ -307,6 +366,8 @@ impl Message {
             Self::Finding(_) => "finding",
             Self::ExplorationFinished(_) => "exploration_finished",
             Self::LoadReport(_) => "load_report",
+            Self::BenchTick(_) => "bench_tick",
+            Self::BenchFinished(_) => "bench_finished",
             Self::InspectResponse(_) => "inspect_response",
             Self::BlobRef(_) => "blob_ref",
             Self::Error(_) => "error",
@@ -320,7 +381,10 @@ impl Message {
     pub fn is_priority(&self) -> bool {
         matches!(
             self,
-            Self::Finding(_) | Self::RunFinished(_) | Self::ExplorationFinished(_)
+            Self::Finding(_)
+                | Self::RunFinished(_)
+                | Self::ExplorationFinished(_)
+                | Self::BenchFinished(_)
         )
     }
 }

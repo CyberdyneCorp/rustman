@@ -99,6 +99,8 @@ match sender.send(&request, &send_options).await {
 
 The rate limit and budgets (`Governor`) live in `rustman-core` and do no I/O, so other governed senders (load tests, monitors, agents) can reuse them for non-HTTP transports.
 
+[`rustman bench`](bench.md#safety) uses this policy with the allowlist pinned to its `--target` origin (`[safety].allowed_hosts` is ignored), and a `Governor` built from the `[bench]` caps instead of `[safety]` `rate` and `concurrency`.
+
 ## `[safety]` in rustman.toml
 
 Every key is optional:

@@ -62,9 +62,14 @@ pub fn run(args: &VizArgs) -> Result<u8, CliError> {
     let kind = match report {
         Report::Run(_) => ReportKind::Run,
         Report::Exploration(_) => ReportKind::Exploration,
-        Report::Contract(_) => {
+        Report::Contract(_) | Report::Bench(_) => {
+            let other = if matches!(report, Report::Contract(_)) {
+                "contract"
+            } else {
+                "bench"
+            };
             return Err(ConfigError::Usage(format!(
-                "{shown} is a contract report; the viz companion shows run and exploration reports \
+                "{shown} is a {other} report; the viz companion shows run and exploration reports \
                  (render it with rustman report render {shown} --format html)"
             ))
             .into());

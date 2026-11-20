@@ -70,7 +70,7 @@ Additive. `[bench]` defaults apply when absent. There are no changes to existing
 
 ## Open Questions
 
-- Whether to support a profile file (`bench.toml`) alongside flags in v1, or only `[bench]` in `rustman.toml`. The spec already allows stages in a profile; the file name can be settled during implementation.
-- `Governor` halves its rate on `429` responses. Should bench keep that backoff (safer for the target, but it silently lowers offered load and skews results) or count `429`s as errors at the configured rate?
-- A `Runner` per VU reuses the whole executor but also re-runs per-`Runner` setup (persisted captures, login, seeding secrets). Is that cost acceptable at 50 VUs, or should `runner/execute.rs` expose a per-request entry point with an explicit VU scope?
+- Whether to support a profile file (`bench.toml`) alongside flags in v1, or only `[bench]` in `rustman.toml`. Resolved for v1: no separate file; ramping stages live in `rustman.toml` as `[[bench.stages]]` (next to the caps, so a ramp is reviewed like a cap) and `--stage` flags replace them.
+- `Governor` halves its rate on `429` responses. Should bench keep that backoff (safer for the target, but it silently lowers offered load and skews results) or count `429`s as errors at the configured rate? Resolved for v1: bench keeps the backoff (it sends through `GovernedSender`), counts `429`s as `4xx` errors, and warns in the summary when the rate was halved.
+- A `Runner` per VU reuses the whole executor but also re-runs per-`Runner` setup (persisted captures, login, seeding secrets). Is that cost acceptable at 50 VUs, or should `runner/execute.rs` expose a per-request entry point with an explicit VU scope? Resolved: a `Runner` per VU, built with `in_workspace: false` (no persisted captures or cookie jar to load, nothing written), so the per-VU setup is only seeding the redactor; the measured overhead is in `docs/bench-internals.md`.
 - Task 6.3 needs the `rustman-viz` companion from `add-raven-visualizer`, which hasn't landed. Ship bench without it (warning `viz companion has no bench view`) and move 6.3 to that change?

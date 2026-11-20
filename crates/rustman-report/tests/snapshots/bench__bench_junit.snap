@@ -1,0 +1,19 @@
+---
+source: crates/rustman-report/tests/bench.rs
+expression: rendered(format)
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="rustman" tests="2" skipped="0" failures="1" errors="0" time="3.012">
+    <testsuite name="bench" tests="2" skipped="0" errors="0" failures="1">
+        <properties>
+            <property name="target" value="https://staging.example.com"/>
+            <property name="executor" value="constant-vus"/>
+        </properties>
+        <testcase name="p95&lt;300ms" classname="threshold">
+            <failure message="✗ p95&lt;300ms (412ms)" type="threshold"/>
+        </testcase>
+        <testcase name="error_rate&lt;5%!" classname="threshold">
+            <system-out>✓ error_rate&lt;5%! (2.50%)</system-out>
+        </testcase>
+    </testsuite>
+</testsuites>

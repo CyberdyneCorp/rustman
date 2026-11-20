@@ -1,0 +1,7 @@
+[workspace]
+name = "todo-api"
+version = 1
+
+[defaults]
+timeout_ms = 5000
+default_environment = "local"

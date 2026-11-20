@@ -161,7 +161,41 @@ pub fn runtime() -> Result<tokio::runtime::Runtime, RequestError> {
 /// on its own thread, so it is heard whatever the main thread is doing; it
 /// is registered before this returns.
 pub fn cancel_on_ctrl_c(token: &CancellationToken) {
-    let token = token.clone();
+    listen(OnCtrlC::CancelThenQuit(token.clone()));
+}
+
+/// For `rustman bench`: the first Ctrl+C cancels `stop` (no new
+/// iteration, a partial report), the second cancels `cancel` (requests in
+/// flight); the process ends normally so the report is written. Watched
+/// like [`cancel_on_ctrl_c`]. `notice` is printed to stderr on the first;
+/// `None` when a full-screen dashboard shows the interruption itself.
+pub fn stop_then_cancel_on_ctrl_c(
+    stop: &CancellationToken,
+    cancel: &CancellationToken,
+    notice: Option<String>,
+) {
+    listen(OnCtrlC::StopThenCancel(Stops {
+        stop: stop.clone(),
+        cancel: cancel.clone(),
+        notice,
+    }));
+}
+
+/// The tokens a bench's Ctrl+C cancel, and what the first one prints.
+struct Stops {
+    stop: CancellationToken,
+    cancel: CancellationToken,
+    notice: Option<String>,
+}
+
+/// What successive Ctrl+C do.
+enum OnCtrlC {
+    CancelThenQuit(CancellationToken),
+    StopThenCancel(Stops),
+}
+
+/// Watch Ctrl+C on a thread of its own, registered before this returns.
+fn listen(on: OnCtrlC) {
     let (ready, registered) = std::sync::mpsc::channel();
     let spawned = std::thread::Builder::new()
         .name("ctrl-c".into())
@@ -172,13 +206,37 @@ pub fn cancel_on_ctrl_c(token: &CancellationToken) {
                     return;
                 };
                 let _ = ready.send(());
-                watch_interrupts(&mut interrupts, &token, quit_interrupted).await;
+                match on {
+                    OnCtrlC::CancelThenQuit(token) => {
+                        watch_interrupts(&mut interrupts, &token, quit_interrupted).await;
+                    }
+                    OnCtrlC::StopThenCancel(stops) => {
+                        watch_stops(&mut interrupts, &stops).await;
+                    }
+                }
             });
         });
     if spawned.is_ok() {
         // An error means the thread could not listen; Ctrl+C then keeps
         // its default behavior and still ends the process.
         let _ = registered.recv();
+    }
+}
+
+/// The first interrupt cancels `stop`, the second `cancel`.
+async fn watch_stops(interrupts: &mut impl Interrupts, stops: &Stops) {
+    if interrupts.recv().await.is_none() {
+        return;
+    }
+    if let Some(notice) = &stops.notice {
+        eprintln!("{notice}");
+    }
+    stops.stop.cancel();
+    if interrupts.recv().await.is_some() {
+        if stops.notice.is_some() {
+            eprintln!("interrupted again: cancelling in-flight requests");
+        }
+        stops.cancel.cancel();
     }
 }
 
@@ -278,6 +336,24 @@ mod tests {
             quit = true
         }));
         (token.is_cancelled(), quit)
+    }
+
+    fn stops(count: u32) -> (bool, bool) {
+        let stops = Stops {
+            stop: CancellationToken::new(),
+            cancel: CancellationToken::new(),
+            notice: None,
+        };
+        let runtime = runtime().unwrap();
+        runtime.block_on(watch_stops(&mut Scripted(count), &stops));
+        (stops.stop.is_cancelled(), stops.cancel.is_cancelled())
+    }
+
+    #[test]
+    fn a_bench_stops_on_the_first_ctrl_c_and_cancels_on_the_second() {
+        assert_eq!(stops(0), (false, false));
+        assert_eq!(stops(1), (true, false));
+        assert_eq!(stops(2), (true, true));
     }
 
     #[test]

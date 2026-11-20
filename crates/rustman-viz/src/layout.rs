@@ -27,7 +27,8 @@ impl ViewKind {
             View::ExplorationDashboard => Some(Self::Exploration),
             View::ApiGraph => Some(Self::Graph),
             View::ResponseInspector => Some(Self::Inspector),
-            View::Unknown => None,
+            // No bench dashboard yet: the companion does not advertise it.
+            View::Bench | View::Unknown => None,
         }
     }
 

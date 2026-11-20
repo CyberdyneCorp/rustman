@@ -1,0 +1,62 @@
+---
+source: crates/rustman-report/tests/bench.rs
+expression: rendered(format)
+---
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "rustman",
+          "version": "0.1.0",
+          "informationUri": "https://github.com/CyberdyneCorp/rustman",
+          "rules": [
+            {
+              "id": "bench-threshold",
+              "shortDescription": {
+                "text": "bench-threshold"
+              },
+              "fullDescription": {
+                "text": "A load-test threshold was breached."
+              },
+              "help": {
+                "text": "A load-test threshold was breached."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "api",
+                  "performance"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "bench-threshold",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "✗ p95<300ms (412ms)"
+          },
+          "locations": [],
+          "partialFingerprints": {
+            "rustmanThreshold/v1": "https://staging.example.com|p95<300ms"
+          },
+          "properties": {
+            "actual": "412ms"
+          }
+        }
+      ],
+      "automationDetails": {
+        "id": "rustman/bench"
+      }
+    }
+  ]
+}

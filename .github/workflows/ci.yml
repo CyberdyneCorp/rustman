@@ -53,6 +53,17 @@ jobs:
             echo "a JavaScript engine is in the dependency tree"; exit 1
           fi
 
+  # add-load-testing task 1.3: the VU path may add at most 50 µs per
+  # request at p50 over the bare engine; the bench fails past that.
+  bench-overhead:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo bench -p rustman-bench --bench executor --locked
+
   test:
     name: test (${{ matrix.os }})
     strategy:

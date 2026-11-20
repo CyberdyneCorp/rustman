@@ -1,0 +1,38 @@
+---
+source: crates/rustman-report/tests/bench.rs
+expression: rendered(format)
+---
+# Bench report
+
+| | |
+|---|---|
+| Target | `https://staging.example.com` |
+| Environment | staging |
+| Executor | constant-vus |
+| Started | 2026-11-19T10:00:00Z |
+| Duration | 3.0 s |
+
+**Summary:** 60 iterations (0 interrupted), 120 requests (39.8/s). Failed.
+
+## Thresholds
+
+- ✗ p95\<300ms \(412ms\)
+- ✓ error\_rate\<5%\! \(2.50%\)
+
+## Latency (service, ms)
+
+| File | min | avg | p50 | p90 | p95 | p99 | max | Requests | Errors |
+|---|---|---|---|---|---|---|---|---|---|
+| `checkout/login.rman.yaml` | 2.00 | 60.00 | 60.00 | 108.00 | 120.00 | 180.00 | 240.00 | 60 | 0.00% |
+| `checkout/pay.rman.yaml` | 2.00 | 206.00 | 206.00 | 370.80 | 412.00 | 618.00 | 824.00 | 60 | 5.00% (5xx 3) |
+| `overall` | 2.00 | 206.00 | 206.00 | 370.80 | 412.00 | 618.00 | 824.00 | 120 | 2.50% (5xx 3) |
+
+## Error samples
+
+| Class | File | Message |
+|---|---|---|
+| 5xx | `checkout/pay.rman.yaml` | POST https://staging.example.com/pay -\> 503 \<b\>«redacted:card»\</b\> |
+
+## Warnings
+
+- results may be generator-bound

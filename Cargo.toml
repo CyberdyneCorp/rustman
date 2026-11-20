@@ -32,6 +32,7 @@ rustman-viz-client = { path = "crates/rustman-viz-client", version = "0.1.0" }
 rustman-webhook = { path = "crates/rustman-webhook", version = "0.1.0" }
 rustman-mock = { path = "crates/rustman-mock", version = "0.1.0" }
 rustman-contract = { path = "crates/rustman-contract", version = "0.1.0" }
+rustman-bench = { path = "crates/rustman-bench", version = "0.1.0" }
 
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
@@ -269,6 +270,14 @@ tokio-stream = { version = "0.1.17", default-features = false }
 # opentelemetry and opentelemetry_sdk crates (types only, no global state is
 # set up); the default build has none of them.
 opentelemetry-proto = { version = "0.33.1", default-features = false, features = ["gen-tonic-messages", "trace"] }
+# Load testing (add-load-testing design D3): HDR histograms, 1 us to 10 min at
+# 3 significant digits, so memory is bounded whatever the request count.
+# Without the default `serialization` (flate2, nom) and `sync` features.
+# Storing every sample and t-digest (approximate tails) are rejected.
+hdrhistogram = { version = "7.5", default-features = false }
+# Executor overhead benchmark (add-load-testing task 1.3), dev-only; no
+# plots, rayon or HTML reports.
+criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

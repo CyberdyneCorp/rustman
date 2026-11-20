@@ -1,7 +1,8 @@
-//! The canonical report: a run, an exploration or a contract check under
-//! `rustman.report/v1`.
+//! The canonical report: a run, an exploration, a contract check or a
+//! bench under `rustman.report/v1`.
 //! It is the only input the renderers and `report diff` receive.
 
+use crate::bench::{BenchReport, KIND_BENCH};
 use crate::contract::{ContractReport, KIND_CONTRACT};
 use crate::exploration::{ExplorationReport, KIND_EXPLORATION};
 use crate::run::{KIND_RUN, RunReport};
@@ -21,6 +22,8 @@ pub enum Report {
     Exploration(Box<ExplorationReport>),
     /// Boxed, like the others.
     Contract(Box<ContractReport>),
+    /// Boxed, like the others.
+    Bench(Box<BenchReport>),
 }
 
 /// Why a report cannot be read.
@@ -32,7 +35,7 @@ pub enum ReadError {
     NotAReport,
     #[error("unsupported report schema '{0}' (this version reads rustman.report/v1)")]
     UnsupportedVersion(String),
-    #[error("unknown report kind '{0}' (expected run, exploration or contract)")]
+    #[error("unknown report kind '{0}' (expected run, exploration, contract or bench)")]
     UnknownKind(String),
     #[error("invalid {kind} report: {error}")]
     Invalid {
@@ -69,16 +72,23 @@ impl Report {
                     kind: KIND_CONTRACT,
                     error,
                 }),
+            Some(KIND_BENCH) => serde_json::from_value(value)
+                .map(|r| Self::Bench(Box::new(r)))
+                .map_err(|error| ReadError::Invalid {
+                    kind: KIND_BENCH,
+                    error,
+                }),
             other => Err(ReadError::UnknownKind(other.unwrap_or("").to_owned())),
         }
     }
 
-    /// `run`, `exploration` or `contract`.
+    /// `run`, `exploration`, `contract` or `bench`.
     pub fn kind(&self) -> &'static str {
         match self {
             Self::Run(_) => KIND_RUN,
             Self::Exploration(_) => KIND_EXPLORATION,
             Self::Contract(_) => KIND_CONTRACT,
+            Self::Bench(_) => KIND_BENCH,
         }
     }
 
@@ -88,6 +98,7 @@ impl Report {
             Self::Run(r) => serde_json::to_string_pretty(r),
             Self::Exploration(r) => serde_json::to_string_pretty(r),
             Self::Contract(r) => serde_json::to_string_pretty(r),
+            Self::Bench(r) => serde_json::to_string_pretty(r),
         };
         let mut text = text.expect("reports serialize");
         text.push('\n');
@@ -133,8 +144,8 @@ mod tests {
     fn unknown_major_versions_and_kinds_are_refused() {
         let v9 = Report::parse(r#"{"schema":"rustman.report/v9","kind":"run"}"#).unwrap_err();
         assert!(v9.to_string().contains("rustman.report/v9"), "{v9}");
-        let kind = Report::parse(r#"{"schema":"rustman.report/v1","kind":"bench"}"#).unwrap_err();
-        assert!(matches!(kind, ReadError::UnknownKind(k) if k == "bench"));
+        let kind = Report::parse(r#"{"schema":"rustman.report/v1","kind":"stress"}"#).unwrap_err();
+        assert!(matches!(kind, ReadError::UnknownKind(k) if k == "stress"));
         assert!(matches!(
             Report::parse(r#"{"kind":"run"}"#),
             Err(ReadError::NotAReport)

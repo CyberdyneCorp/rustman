@@ -48,6 +48,7 @@ impl Runner<'_> {
         }
         let seen = recording.seen.into_inner();
         self.remember(&seen.unwrap_or_else(PoisonError::into_inner));
+        self.keep_as_baseline();
     }
 }
 

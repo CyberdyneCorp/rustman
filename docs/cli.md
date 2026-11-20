@@ -39,6 +39,7 @@ This page covers sending and running requests, reporters, terminal behavior, log
 | `rustman export snippet --lang <lang> <request>` | Print a request as code for one of 11 languages and tools (redacted); `--list` lists them | [Code snippets](snippets.md) |
 | `rustman send` | Send one request and print the response | [below](#rustman-send) |
 | `rustman run` | Run the requests under files and folders and report the results | [below](#rustman-run) |
+| `rustman bench [path]... --target <url>` | Load test request files and collections as virtual-user iterations under the safety policy pinned to `--target`; `--executor` (`constant-vus`, `ramping-vus`, `constant-arrival-rate`), `--vus`, `--duration`, `--iterations`, `--think-time`, `--stage` (or `rustman.toml [[bench.stages]]`), `--rate`, `--max-vus`, `--data`, `--data-mode`, `--data-exhaust`, `--secret-columns`, `--allow-mutations`, `--allow-destructive`, `--production`, `--timeout`, `--insecure`/`-k`, `--env`, `--var`, `--threshold`, `--report json=<file>`/`html=<file>`, `--viz`; shows a live dashboard on a terminal (a progress line every 10 s otherwise); capped by `rustman.toml [bench]`; exits 1 when a threshold fails, 2 on a usage error or a cap, 4 when the policy refuses, 130 on Ctrl+C | [Load testing](bench.md) |
 | `rustman graphql introspect <endpoint\|request>` | Fetch a GraphQL schema by introspection and cache it in `.rustman/graphql/schemas/`; `--out <file>` also writes it as SDL | [GraphQL](graphql.md#rustman-graphql-introspect) |
 | `rustman graphql query <request>` / `--endpoint <url> --query <text>` | Validate, send and print a GraphQL operation or subscription; `--no-validate`, `--json`, `--max-events`, `--duration` | [GraphQL](graphql.md#rustman-graphql-query) |
 | `rustman rpc call <endpoint\|request> [method] [params-json]` | Send one JSON-RPC call (or a `kind: jsonrpc` request) and print its result or error object; `--header`, `--id`, `--notify`, `--subscribe` / `--unsubscribe`, `--raw`, `--json`, `--no-validate` | [JSON-RPC](jsonrpc.md#rustman-rpc-call) |
@@ -281,10 +282,10 @@ Sending to the companion never slows a run down. When it falls behind, progress 
 | Code | Meaning |
 |------|---------|
 | 0 | Every executed request passed. |
-| 1 | At least one request failed (an assertion, or a required capture) and none errored. |
+| 1 | At least one request failed (an assertion, or a required capture) and none errored; for `rustman bench`, a threshold failed. |
 | 2 | Usage or configuration error: a bad flag, no workspace, an invalid file, a missing environment, an ambiguous request name, no request to run. |
 | 3 | At least one request errored: network, TLS, timeout, auth or unresolved variable. It wins over 1. |
-| 4 | Refused by the [safety policy](safety.md#production-guard) (`rustman explore`). |
+| 4 | Refused by the [safety policy](safety.md#production-guard) (`rustman explore`, `rustman bench`). |
 | 130 | Interrupted by Ctrl+C (SIGINT), or on Unix by SIGTERM or SIGHUP, handled the same way. |
 
 `rustman import` has its own: 0 when the import completed (even with unsupported features, unless `--fail-on-unsupported`), 1 with `--fail-on-unsupported` when a feature was unsupported, dropped or unmapped, and 2 for an unreadable, invalid, oversized or undetectable source (see [Importing collections](import.md#exit-codes)). `rustman import openapi` exits 0 on success, 3 when fetching the document failed, and 2 otherwise.

@@ -1,0 +1,95 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Load test request files and collections against one target origin
+
+Usage: rustman bench [OPTIONS] [PATH]...
+
+Arguments:
+  [PATH]...
+          Request files or folders: one iteration runs them in collection order (default: the current directory)
+
+Options:
+      --target <URL>
+          The origin under load, scheme://host[:port]; the only one requests may go to (required)
+
+      --env <NAME>
+          Environment (default: RUSTMAN_ENV, then default_environment)
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --var <K=V>
+          Set a variable, above every other source (repeatable): --var k=v
+
+      --executor <EXECUTOR>
+          constant-vus (default), ramping-vus or constant-arrival-rate
+
+      --vus <N>
+          Virtual users of constant-vus (default 1)
+
+      --duration <DURATION>
+          How long load runs: 30s (default), 2m, 500ms
+
+      --iterations <N>
+          Iterations in total across every VU, instead of a duration
+
+      --think-time <TIME>
+          Pause between a VU's iterations: 0 (default), 1s, or a uniform range such as 1s..3s
+
+      --stage <DURATION:VUS>
+          A ramping-vus stage, <duration>:<vus>, as in 30s:20 (repeatable; replaces rustman.toml [[bench.stages]])
+
+      --rate <N>
+          Iterations started per second by constant-arrival-rate
+
+      --max-vus <N>
+          VU pool of constant-arrival-rate (default 50)
+
+      --data <FILE>
+          Feed each iteration a row of a CSV or JSON file as variables
+
+      --data-mode <MODE>
+          sequential (default, one shared cursor), per-vu (VU n uses row n) or random
+
+      --data-exhaust <WHEN>
+          At the last row: recycle (default) or stop
+
+      --secret-columns <A,B>
+          Data columns whose values are secrets and are redacted in every output, besides those named like password, token, secret or api_key
+
+      --allow-mutations
+          Also allow POST, PUT and PATCH
+
+      --allow-destructive
+          Also allow DELETE (implies --allow-mutations; never against production)
+
+      --production <HOST>
+          Confirm a production target by repeating its exact host
+
+      --timeout <DURATION>
+          Total timeout per request, replacing settings.timeout_ms
+
+  -k, --insecure
+          Do not verify TLS certificates
+
+      --threshold <EXPR>
+          Fail the bench (exit 1) unless <metric><op><value> holds at the end, as in p95<300ms, error_rate<1% or file:login:p99<1s; a trailing ! stops the bench as soon as it is breached (repeatable)
+
+      --report <FORMAT[=PATH]>
+          Also write the report as json, html, markdown, junit or sarif, to a file or stdout, as in html=out/bench.html (repeatable)
+
+      --viz
+          Stream per-second metrics to the viz companion (rustman-viz); the bench runs the same without it
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

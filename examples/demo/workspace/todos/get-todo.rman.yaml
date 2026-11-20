@@ -1,0 +1,15 @@
+version: 1
+kind: http
+name: Get todo
+method: GET
+url: '{{base_url}}/todos/{{id}}'
+assertions:
+  - status: 200
+  - json:
+      path: $.id
+      equals: '{{id}}'
+  - json:
+      path: $.title
+      equals: Ship it
+  - latency:
+      total_lt: 500

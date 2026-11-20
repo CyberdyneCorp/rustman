@@ -1,0 +1,114 @@
+---
+source: crates/rustman-report/tests/bench.rs
+expression: rendered(format)
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Bench report</title>
+<style>:root { --fg: #1f2328; --muted: #59636e; --bg: #ffffff; --panel: #f6f8fa; --line: #d1d9e0;
+  --critical: #a40e26; --high: #d1242f; --medium: #9a6700; --low: #0969da; --info: #59636e; --ok: #1a7f37; }
+@media (prefers-color-scheme: dark) {
+  :root { --fg: #e6edf3; --muted: #9198a1; --bg: #0d1117; --panel: #151b23; --line: #3d444d;
+    --critical: #ff8182; --high: #f85149; --medium: #d29922; --low: #4493f8; --info: #9198a1; --ok: #3fb950; }
+}
+* { box-sizing: border-box; }
+body { margin: 0 auto; max-width: 72rem; padding: 1.5rem 1rem 3rem; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--fg); background: var(--bg); }
+h1 { font-size: 1.5rem; margin: 0 0 1rem; }
+h2 { font-size: 1.15rem; margin: 2rem 0 0.75rem; border-bottom: 1px solid var(--line); padding-bottom: 0.25rem; }
+code, pre { font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+pre { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 0.75rem; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+table { border-collapse: collapse; width: 100%; margin: 0.5rem 0; }
+th, td { text-align: left; padding: 0.35rem 0.6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.meta { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem; margin: 0; }
+.meta dt { color: var(--muted); }
+.meta dd { margin: 0; word-break: break-all; }
+.sev { display: inline-block; min-width: 4.5rem; font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.03em; }
+.sev-critical { color: var(--critical); } .sev-high { color: var(--high); } .sev-medium { color: var(--medium); }
+.sev-low { color: var(--low); } .sev-info { color: var(--info); }
+.state-observed, .status-passed { color: var(--ok); } .state-blocked, .status-skipped { color: var(--muted); }
+.state-not-observed { color: var(--medium); } .status-failed, .status-errored { color: var(--high); }
+.filters { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0.5rem 0 1rem; }
+.filters label { color: var(--muted); }
+.filters select { margin-left: 0.35rem; font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 0.15rem 0.35rem; }
+.finding { border: 1px solid var(--line); border-radius: 6px; margin: 0.5rem 0; background: var(--bg); }
+.finding > summary { cursor: pointer; padding: 0.5rem 0.75rem; display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; align-items: baseline; }
+.finding > div { padding: 0 0.75rem 0.75rem; }
+.finding .op { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.muted { color: var(--muted); }
+[hidden] { display: none !important; }
+.chart { margin: 0.5rem 0 1rem; }
+.chart svg { width: 100%; height: 12rem; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+.chart .axis { stroke: var(--line); stroke-width: 1; }
+.chart .line { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.chart figcaption { font-size: 0.85rem; display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.line-p50, .key.line-p50 { stroke: var(--ok); color: var(--ok); } .line-p95, .key.line-p95 { stroke: var(--medium); color: var(--medium); }
+.line-p99, .key.line-p99 { stroke: var(--high); color: var(--high); } .line-rps, .key.line-rps { stroke: var(--low); color: var(--low); }
+.thresholds { list-style: none; padding: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+</style>
+</head>
+<body>
+<h1>Bench report</h1>
+<dl class="meta">
+<dt>Target</dt><dd><code>https:&#x2f;&#x2f;staging.example.com</code></dd>
+<dt>Environment</dt><dd>staging</dd>
+<dt>Executor</dt><dd>constant-vus</dd>
+<dt>Started</dt><dd>2026-11-19T10:00:00Z</dd>
+<dt>Duration</dt><dd>3.0 s</dd>
+
+</dl>
+
+<h2>Summary</h2>
+<p><strong class="status-failed">Failed</strong>: 60 iterations (0 interrupted), 120 requests (39.8/s).</p>
+<ul class="thresholds">
+<li>✗ p95&lt;300ms (412ms)</li>
+<li>✓ error_rate&lt;5%! (2.50%)</li>
+</ul>
+
+<h2>Latency over time (service)</h2>
+<figure class="chart">
+<svg viewBox="-4 -4 648 188" preserveAspectRatio="none" role="img" aria-label="p50, p95, p99 per second">
+<line class="axis" x1="0" y1="180" x2="640" y2="180"/>
+<polyline class="line line-p50" points="0.0,153.0 320.0,142.9 640.0,145.8"/>
+<polyline class="line line-p95" points="0.0,126.0 320.0,105.8 640.0,111.6"/>
+<polyline class="line line-p99" points="0.0,99.0 320.0,68.8 640.0,77.4"/>
+</svg>
+<figcaption><span class="muted">top 1000 ms, 3 s</span> <span class="key line-p50">p50</span> <span class="key line-p95">p95</span> <span class="key line-p99">p99</span></figcaption>
+</figure>
+<h2>Requests per second</h2>
+<figure class="chart">
+<svg viewBox="-4 -4 648 188" preserveAspectRatio="none" role="img" aria-label="rps per second">
+<line class="axis" x1="0" y1="180" x2="640" y2="180"/>
+<polyline class="line line-rps" points="0.0,43.2 320.0,32.4 640.0,36.0"/>
+</svg>
+<figcaption><span class="muted">top 50 req&#x2f;s, 3 s</span> <span class="key line-rps">rps</span></figcaption>
+</figure>
+
+
+<h2>Latency (service, ms)</h2>
+<table>
+<thead><tr><th>File</th><th class="n">min</th><th class="n">avg</th><th class="n">p50</th><th class="n">p90</th><th class="n">p95</th><th class="n">p99</th><th class="n">max</th><th class="n">Requests</th><th>Errors</th></tr></thead>
+<tbody>
+<tr><td><code>checkout&#x2f;login.rman.yaml</code></td><td class="n">2.00</td><td class="n">60.00</td><td class="n">60.00</td><td class="n">108.00</td><td class="n">120.00</td><td class="n">180.00</td><td class="n">240.00</td><td class="n">60</td><td>0.00%</td></tr>
+<tr><td><code>checkout&#x2f;pay.rman.yaml</code></td><td class="n">2.00</td><td class="n">206.00</td><td class="n">206.00</td><td class="n">370.80</td><td class="n">412.00</td><td class="n">618.00</td><td class="n">824.00</td><td class="n">60</td><td>5.00% <span class="muted">(5xx 3)</span></td></tr>
+<tr><td><code>overall</code></td><td class="n">2.00</td><td class="n">206.00</td><td class="n">206.00</td><td class="n">370.80</td><td class="n">412.00</td><td class="n">618.00</td><td class="n">824.00</td><td class="n">120</td><td>2.50% <span class="muted">(5xx 3)</span></td></tr>
+</tbody>
+</table>
+<h2>Error samples</h2>
+<table>
+<thead><tr><th>Class</th><th>File</th><th>Message</th></tr></thead>
+<tbody>
+<tr><td>5xx</td><td><code>checkout&#x2f;pay.rman.yaml</code></td><td>POST https:&#x2f;&#x2f;staging.example.com&#x2f;pay -&gt; 503 &lt;b&gt;«redacted:card»&lt;&#x2f;b&gt;</td></tr>
+</tbody>
+</table>
+<h2>Warnings</h2>
+<ul>
+<li>results may be generator-bound</li>
+</ul>
+</body>
+</html>

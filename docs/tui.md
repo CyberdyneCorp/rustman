@@ -477,6 +477,8 @@ crates/rustman-tui/examples/screenshots/render.sh
 | `tui-grpc-timeline` | a gRPC request message and the call's timeline |
 | `tui-mcp` | the MCP inspector asking for workspace trust before running a stdio server |
 
+The animated GIF at the top of the README (`docs/images/demo.gif`) is a real session recorded with [VHS](https://github.com/charmbracelet/vhs): [`examples/demo/`](../examples/demo/) holds the todo backend it talks to, its workspace, the `demo.tape` script and a `render.sh` that builds Rustman, starts the backend and records the tape.
+
 To render a single frame:
 
 ```bash

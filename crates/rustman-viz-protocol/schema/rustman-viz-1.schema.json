@@ -63,7 +63,7 @@
             "type": "array",
             "items": {
               "type": "string",
-              "description": "run_dashboard, exploration_dashboard, api_graph, response_inspector"
+              "description": "run_dashboard, exploration_dashboard, api_graph, response_inspector, bench"
             }
           }
         }
@@ -108,7 +108,7 @@
         "properties": {
           "view": {
             "type": "string",
-            "description": "run_dashboard, exploration_dashboard, api_graph, response_inspector"
+            "description": "run_dashboard, exploration_dashboard, api_graph, response_inspector, bench"
           },
           "title": {
             "type": "string"
@@ -423,11 +423,163 @@
           },
           "kind": {
             "type": "string",
-            "description": "run or exploration"
+            "description": "run, exploration or bench"
           },
           "view": {
             "type": "string",
-            "description": "run_dashboard, exploration_dashboard, api_graph, response_inspector"
+            "description": "run_dashboard, exploration_dashboard, api_graph, response_inspector, bench"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "bench_tick"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "second",
+          "elapsed_ms",
+          "active_vus",
+          "requests",
+          "errors",
+          "rps",
+          "p50_ms",
+          "p95_ms",
+          "p99_ms"
+        ],
+        "properties": {
+          "second": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "elapsed_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "remaining_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "active_vus": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "requests": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "errors": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "rps": {
+            "type": "number",
+            "minimum": 0
+          },
+          "p50_ms": {
+            "type": "number",
+            "minimum": 0
+          },
+          "p95_ms": {
+            "type": "number",
+            "minimum": 0
+          },
+          "p99_ms": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "bench_finished"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "state",
+          "duration_ms",
+          "iterations",
+          "requests",
+          "errors",
+          "rps",
+          "p50_ms",
+          "p95_ms",
+          "p99_ms"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "description": "completed or aborted"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "iterations": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "requests": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "errors": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "rps": {
+            "type": "number",
+            "minimum": 0
+          },
+          "p50_ms": {
+            "type": "number",
+            "minimum": 0
+          },
+          "p95_ms": {
+            "type": "number",
+            "minimum": 0
+          },
+          "p99_ms": {
+            "type": "number",
+            "minimum": 0
+          },
+          "thresholds": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "expression",
+                "passed",
+                "actual"
+              ],
+              "properties": {
+                "expression": {
+                  "type": "string"
+                },
+                "passed": {
+                  "type": "boolean"
+                },
+                "actual": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "aborted": {
+            "type": "string",
+            "description": "threshold or interrupted"
           }
         }
       }

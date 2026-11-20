@@ -1,9 +1,8 @@
 //! Hand-off to the viz companion (spec: Open in viz companion; design D10).
 //!
-//! `v` in the response viewer looks for `rustman-viz` the way
-//! `visual-dashboards` defines it (`RUSTMAN_VIZ`, then `PATH`, then next to
-//! the running executable), starts it, performs the `rustman-viz/1`
-//! handshake and sends the current exchange to its response inspector. The
+//! `v` in the response viewer starts `rustman-viz` and performs the
+//! `rustman-viz/1` handshake ([`crate::companion`]), then sends the current
+//! exchange to its response inspector. The
 //! exchange is already redacted (the viewer only ever holds redacted data).
 //! When no companion can be used, a toast says why and offers the HTML
 //! report instead. The TUI depends on the protocol types only.
@@ -16,15 +15,13 @@ use std::time::Duration;
 
 use tempfile::TempPath;
 
-use rustman_viz_client::{ConnectOptions, connect};
 use rustman_viz_protocol::{
     BlobRef, Body, Close, Header, InspectResponse, Message, OpenView, View, encode_inspect,
-    encode_line,
 };
 
-pub use rustman_viz_client::{COMPANION, Discovery, OVERRIDE_VAR, VizError};
-
 use crate::app::{Effect, State};
+pub use crate::companion::{COMPANION, Discovery, OVERRIDE_VAR, VizError};
+use crate::companion::{Companion, connect, failed, write_line, write_message as write};
 use crate::keymap::ActionId;
 use crate::response::Source;
 use crate::toast::Severity;
@@ -172,14 +169,16 @@ pub fn open(job: &VizJob) -> Result<String, VizError> {
 }
 
 fn open_with(job: &VizJob, write_timeout: Duration) -> Result<String, VizError> {
-    let program = job.discovery.locate()?;
-    let options = ConnectOptions::new(format!("rustman {}", env!("CARGO_PKG_VERSION")));
-    let connection = connect(&program, &options)?;
-    let (mut child, stdin) = (connection.child, connection.stdin);
+    let Companion {
+        mut child,
+        stdin,
+        ack,
+        ..
+    } = connect(&job.discovery)?;
     match write_exchange(stdin, job.clone(), write_timeout) {
         Ok(spilled) => {
             reap(child, spilled);
-            Ok(connection.viewer)
+            Ok(ack.viewer)
         }
         Err(e) => {
             let _ = child.kill();
@@ -219,22 +218,6 @@ fn write_exchange(
             "the companion did not read the exchange within {timeout:?}"
         )))
     })
-}
-
-fn failed(message: &str) -> VizError {
-    VizError::Failed(message.to_owned())
-}
-
-fn write(stdin: &mut ChildStdin, message: &Message) -> Result<(), VizError> {
-    let line = encode_line(message).map_err(|e| failed(&e.to_string()))?;
-    write_line(stdin, &line)
-}
-
-fn write_line(stdin: &mut ChildStdin, line: &str) -> Result<(), VizError> {
-    stdin
-        .write_all(line.as_bytes())
-        .and_then(|()| stdin.flush())
-        .map_err(|e| failed(&format!("cannot write to the companion: {e}")))
 }
 
 /// `open_view`, `inspect_response` (or its `blob_ref`) and `close`. A body
@@ -314,10 +297,7 @@ mod tests {
     fn companion(dir: &Path, rest: &str) -> PathBuf {
         use std::os::unix::fs::PermissionsExt;
         let script = dir.join("stub-viz");
-        let text = format!(
-            "#!/bin/sh\n[ \"$1\" = --protocol-check ] && {{ echo rustman-viz/1; exit 0; }}\n\
-             IFS= read -r hello\nprintf '%s\\n' '{ACK}'\n{rest}\n"
-        );
+        let text = format!("#!/bin/sh\nIFS= read -r hello\nprintf '%s\\n' '{ACK}'\n{rest}\n");
         std::fs::write(&script, text).unwrap();
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
         script
@@ -393,6 +373,40 @@ mod tests {
         );
         assert_eq!(lines.next(), Some("present"), "the companion could read it");
         wait_until("the spilled body was not removed", || !path.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_companion_that_closes_stdout_but_keeps_running_is_not_waited_for() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let script = tmp.path().join("stub-viz");
+        std::fs::write(&script, "#!/bin/sh\nexec >&- 2>&-\nexec sleep 60\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let started = std::time::Instant::now();
+        let err = open(&job(script, 10)).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("closed its output without answering hello"),
+            "{err}"
+        );
+        assert!(started.elapsed() < Duration::from_secs(8));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_endless_line_from_the_companion_is_not_buffered() {
+        // More than the protocol's 16 MiB line limit, with no newline until
+        // the end: the decoder skips it and the handshake fails cleanly.
+        let tmp = tempfile::tempdir().unwrap();
+        let script = tmp.path().join("stub-viz");
+        let text = "#!/bin/sh\nIFS= read -r hello\n\
+                    head -c 17000000 /dev/zero | tr '\\0' x\necho\nexec sleep 60\n";
+        std::fs::write(&script, text).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let err = open(&job(script, 10)).unwrap_err();
+        assert!(err.to_string().contains("exceeds the"), "{err}");
     }
 
     #[test]

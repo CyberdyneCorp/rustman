@@ -10,11 +10,14 @@ use minijinja::{AutoEscape, Environment, Value};
 use serde::Serialize;
 
 use super::RenderOptions;
+use super::chart::{Chart, line_chart};
+use crate::bench::{BenchReport, ErrorSample, StatsSummary};
 use crate::contract::{ContractItem, ContractMode, ContractReport};
 use crate::exploration::{Evidence, ExplorationReport, ReportFinding, Severity};
 use crate::report::Report;
 use crate::run::{RunReport, RunRequest, Status};
 
+const BENCH_MD: &str = include_str!("templates/bench.md.jinja");
 const CONTRACT_MD: &str = include_str!("templates/contract.md.jinja");
 const EXPLORATION_MD: &str = include_str!("templates/exploration.md.jinja");
 const RUN_MD: &str = include_str!("templates/run.md.jinja");
@@ -28,6 +31,7 @@ pub fn markdown(report: &Report, options: &RenderOptions) -> String {
         Report::Run(_) => ("run.md", RUN_MD),
         Report::Exploration(_) => ("exploration.md", EXPLORATION_MD),
         Report::Contract(_) => ("contract.md", CONTRACT_MD),
+        Report::Bench(_) => ("bench.md", BENCH_MD),
     };
     finish(tidy(&render(name, source, context(report, options))))
 }
@@ -140,6 +144,88 @@ fn context(report: &Report, options: &RenderOptions) -> Value {
         Report::Run(r) => Value::from(Serde(run_view(r))),
         Report::Exploration(r) => Value::from(Serde(exploration_view(r, options))),
         Report::Contract(r) => Value::from(Serde(contract_view(r))),
+        Report::Bench(r) => Value::from(Serde(bench_view(r))),
+    }
+}
+
+#[derive(Serialize)]
+struct BenchView<'a> {
+    kind: &'static str,
+    title: &'static str,
+    r: &'a BenchReport,
+    duration: String,
+    latency_kind: &'static str,
+    passed: bool,
+    /// Each request file, then `overall`.
+    rows: Vec<BenchRow<'a>>,
+    thresholds: Vec<String>,
+    /// Latency over time, then requests per second.
+    charts: [TitledChart; 2],
+    samples: &'a [ErrorSample],
+    css: &'static str,
+}
+
+#[derive(Serialize)]
+struct TitledChart {
+    title: String,
+    chart: Chart,
+}
+
+#[derive(Serialize)]
+struct BenchRow<'a> {
+    name: &'a str,
+    s: &'a StatsSummary,
+    error_rate: String,
+    /// `5xx 3, timeout 1`.
+    errors: String,
+}
+
+fn bench_row<'a>(name: &'a str, s: &'a StatsSummary) -> BenchRow<'a> {
+    let errors: Vec<String> = s.errors.iter().map(|(c, n)| format!("{c} {n}")).collect();
+    BenchRow {
+        name,
+        s,
+        error_rate: format!("{:.2}%", s.error_rate * 100.0),
+        errors: errors.join(", "),
+    }
+}
+
+fn bench_view(r: &BenchReport) -> BenchView<'_> {
+    let rows = r
+        .files
+        .iter()
+        .map(|f| bench_row(&f.file, &f.stats))
+        .chain(std::iter::once(bench_row("overall", &r.overall)))
+        .collect();
+    let column = |f: fn(&crate::bench::BenchSecond) -> f64| r.series.iter().map(f).collect();
+    BenchView {
+        kind: "bench",
+        title: "Bench report",
+        r,
+        duration: seconds(r.totals.duration_ms),
+        latency_kind: r.totals.latency_kind.as_str(),
+        passed: r.passed(),
+        rows,
+        thresholds: r.thresholds.iter().map(|t| t.line()).collect(),
+        charts: [
+            TitledChart {
+                title: format!("Latency over time ({})", r.totals.latency_kind.as_str()),
+                chart: line_chart(
+                    &[
+                        ("p50", column(|s| s.p50_ms)),
+                        ("p95", column(|s| s.p95_ms)),
+                        ("p99", column(|s| s.p99_ms)),
+                    ],
+                    "ms",
+                ),
+            },
+            TitledChart {
+                title: "Requests per second".into(),
+                chart: line_chart(&[("rps", column(|s| s.rps))], "req/s"),
+            },
+        ],
+        samples: &r.error_samples,
+        css: CSS,
     }
 }
 

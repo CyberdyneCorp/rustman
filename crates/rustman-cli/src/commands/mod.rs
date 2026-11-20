@@ -1,6 +1,7 @@
 //! One module per subcommand.
 
 pub mod auth;
+pub mod bench;
 pub mod completions;
 pub mod contract;
 pub mod cookies;
