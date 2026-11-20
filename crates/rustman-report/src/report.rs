@@ -6,6 +6,7 @@ use crate::bench::{BenchReport, KIND_BENCH};
 use crate::contract::{ContractReport, KIND_CONTRACT};
 use crate::exploration::{ExplorationReport, KIND_EXPLORATION};
 use crate::run::{KIND_RUN, RunReport};
+use crate::stress::{KIND_STRESS, StressReport};
 
 /// The `schema` of every report this version writes.
 pub const SCHEMA: &str = "rustman.report/v1";
@@ -24,7 +25,18 @@ pub enum Report {
     Contract(Box<ContractReport>),
     /// Boxed, like the others.
     Bench(Box<BenchReport>),
+    /// Boxed, like the others.
+    Stress(Box<StressReport>),
 }
+
+/// Every kind this version reads, in the order errors list them.
+pub const KINDS: [&str; 5] = [
+    KIND_RUN,
+    KIND_EXPLORATION,
+    KIND_CONTRACT,
+    KIND_BENCH,
+    KIND_STRESS,
+];
 
 /// Why a report cannot be read.
 #[derive(Debug, thiserror::Error)]
@@ -35,7 +47,7 @@ pub enum ReadError {
     NotAReport,
     #[error("unsupported report schema '{0}' (this version reads rustman.report/v1)")]
     UnsupportedVersion(String),
-    #[error("unknown report kind '{0}' (expected run, exploration, contract or bench)")]
+    #[error("unknown report kind '{0}' (expected {expected})", expected = expected(&KINDS))]
     UnknownKind(String),
     #[error("invalid {kind} report: {error}")]
     Invalid {
@@ -47,13 +59,24 @@ pub enum ReadError {
 impl Report {
     /// Read a report from its JSON text, refusing unknown major versions.
     pub fn parse(text: &str) -> Result<Self, ReadError> {
+        Self::parse_known(text, &KINDS)
+    }
+
+    /// Read a report as a reader that knows only `known` kinds would: a
+    /// newer kind is an [`ReadError::UnknownKind`], never a crash (how an
+    /// older reader meets a `stress` report).
+    pub fn parse_known(text: &str, known: &[&str]) -> Result<Self, ReadError> {
         let value: serde_json::Value = serde_json::from_str(text).map_err(ReadError::Json)?;
         let schema = value
             .get("schema")
             .and_then(serde_json::Value::as_str)
             .ok_or(ReadError::NotAReport)?;
         check_version(schema)?;
-        match value.get("kind").and_then(serde_json::Value::as_str) {
+        let kind = value.get("kind").and_then(serde_json::Value::as_str);
+        if let Some(kind) = kind.filter(|k| !known.contains(k)) {
+            return Err(ReadError::UnknownKind(kind.to_owned()));
+        }
+        match kind {
             Some(KIND_RUN) => serde_json::from_value(value)
                 .map(|r| Self::Run(Box::new(r)))
                 .map_err(|error| ReadError::Invalid {
@@ -78,13 +101,20 @@ impl Report {
                     kind: KIND_BENCH,
                     error,
                 }),
+            Some(KIND_STRESS) => serde_json::from_value(value)
+                .map(|r| Self::Stress(Box::new(r)))
+                .map_err(|error| ReadError::Invalid {
+                    kind: KIND_STRESS,
+                    error,
+                }),
             other => Err(ReadError::UnknownKind(other.unwrap_or("").to_owned())),
         }
     }
 
-    /// `run`, `exploration`, `contract` or `bench`.
+    /// `run`, `exploration`, `contract`, `bench` or `stress`.
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::Stress(_) => KIND_STRESS,
             Self::Run(_) => KIND_RUN,
             Self::Exploration(_) => KIND_EXPLORATION,
             Self::Contract(_) => KIND_CONTRACT,
@@ -99,10 +129,20 @@ impl Report {
             Self::Exploration(r) => serde_json::to_string_pretty(r),
             Self::Contract(r) => serde_json::to_string_pretty(r),
             Self::Bench(r) => serde_json::to_string_pretty(r),
+            Self::Stress(r) => serde_json::to_string_pretty(r),
         };
         let mut text = text.expect("reports serialize");
         text.push('\n');
         text
+    }
+}
+
+/// `run, exploration, contract, bench or stress`.
+fn expected(kinds: &[&str]) -> String {
+    match kinds.split_last() {
+        Some((last, [])) => (*last).to_owned(),
+        Some((last, rest)) => format!("{} or {last}", rest.join(", ")),
+        None => String::new(),
     }
 }
 
@@ -144,8 +184,17 @@ mod tests {
     fn unknown_major_versions_and_kinds_are_refused() {
         let v9 = Report::parse(r#"{"schema":"rustman.report/v9","kind":"run"}"#).unwrap_err();
         assert!(v9.to_string().contains("rustman.report/v9"), "{v9}");
-        let kind = Report::parse(r#"{"schema":"rustman.report/v1","kind":"stress"}"#).unwrap_err();
-        assert!(matches!(kind, ReadError::UnknownKind(k) if k == "stress"));
+        let kind = Report::parse(r#"{"schema":"rustman.report/v1","kind":"chaos"}"#).unwrap_err();
+        assert!(matches!(kind, ReadError::UnknownKind(k) if k == "chaos"));
+        // A reader from before `kind: stress` refuses it without crashing.
+        let older = ["run", "exploration", "contract", "bench"];
+        let stress = r#"{"schema":"rustman.report/v1","kind":"stress"}"#;
+        let err = Report::parse_known(stress, &older).unwrap_err();
+        assert!(matches!(err, ReadError::UnknownKind(ref k) if k == "stress"));
+        assert!(
+            err.to_string().starts_with("unknown report kind 'stress'"),
+            "{err}"
+        );
         assert!(matches!(
             Report::parse(r#"{"kind":"run"}"#),
             Err(ReadError::NotAReport)

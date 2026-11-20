@@ -25,6 +25,7 @@ const STUB_LOG: &str = "RUSTMAN_TEST_VIZ_STUB_LOG";
 
 const CANARY: &str = "canary-Vz9k-bench-viz-secret";
 const NO_BENCH_VIEW: &str = "viz companion has no bench view";
+const NO_STRESS_VIEW: &str = "viz companion has no stress view";
 
 type Test = (&'static str, fn());
 
@@ -40,6 +41,10 @@ const TESTS: &[Test] = &[
     (
         "a_ramping_bench_of_a_collection_end_to_end",
         a_ramping_bench_of_a_collection_end_to_end,
+    ),
+    (
+        "a_stress_run_warns_once_without_a_stress_view",
+        a_stress_run_warns_once_without_a_stress_view,
     ),
 ];
 
@@ -175,6 +180,83 @@ fn bench(dir: &Path, args: &[&str], stub: Option<(&str, &Path)>) -> Outcome {
         );
     }
     outcome
+}
+
+/// `rustman stress` in `dir`, like [`bench`].
+fn stress(dir: &Path, args: &[&str], stub: Option<(&str, &Path)>) -> Outcome {
+    let mut cmd = rustman(dir);
+    cmd.arg("stress").args(args).env_remove("RUSTMAN_VIZ");
+    if let Some((views, log)) = stub {
+        cmd.arg("--viz")
+            .env("RUSTMAN_VIZ", std::env::current_exe().unwrap())
+            .env(STUB, views)
+            .env(STUB_LOG, log);
+    }
+    let output = cmd.output().unwrap();
+    let outcome = Outcome {
+        code: output.status.code(),
+        stdout: String::from_utf8(output.stdout).unwrap(),
+        stderr: String::from_utf8(output.stderr).unwrap(),
+    };
+    for text in [&outcome.stdout, &outcome.stderr] {
+        assert!(!text.contains(CANARY), "{text}");
+        assert!(
+            !text.contains('\x1b'),
+            "no dashboard off a terminal: {text:?}"
+        );
+    }
+    outcome
+}
+
+/// add-stress-testing task 6.4: a companion without the `stress` view gets
+/// one warning and the run is unchanged; one with it gets the stream.
+fn a_stress_run_warns_once_without_a_stress_view() {
+    let counting = Counting::start();
+    let origin = counting.server.origin();
+    let ws = workspace(&origin);
+    let root = ws.path();
+    write(
+        root,
+        "rustman.toml",
+        &format!("[workspace]\nname = \"t\"\nversion = 1\n[stress]\ntargets = [\"{origin}\"]\n"),
+    );
+    write(
+        root,
+        "orders/create.rman.yaml",
+        "version: 1\nkind: http\nname: create\nmethod: POST\nurl: \"{{base_url}}/items?t={{api_token}}\"\n",
+    );
+    let args = [
+        "soak",
+        "orders/",
+        "--env",
+        "dev",
+        "--target",
+        &origin,
+        "--rps",
+        "2",
+        "--duration",
+        "1s",
+        "--allow-mutations",
+    ];
+    let plain = stress(root, &args, None);
+    assert_eq!(plain.code, Some(0), "{}", plain.stderr);
+    let without_log = root.join("stress-without.jsonl");
+    let without = stress(root, &args, Some(("run_dashboard,bench", &without_log)));
+    assert_eq!(without.code, plain.code, "{}", without.stderr);
+    assert_eq!(
+        without.stderr.matches(NO_STRESS_VIEW).count(),
+        1,
+        "{}",
+        without.stderr
+    );
+    let with_log = root.join("stress-with.jsonl");
+    let with = stress(root, &args, Some(("stress", &with_log)));
+    assert_eq!(with.code, plain.code, "{}", with.stderr);
+    assert!(!with.stderr.contains(NO_STRESS_VIEW), "{}", with.stderr);
+    let messages = received(&with_log);
+    assert_eq!(messages[0]["type"], "open_view");
+    assert_eq!(messages[0]["view"], "stress");
+    assert_eq!(messages.last().unwrap()["type"], "close");
 }
 
 /// The messages the stub received, once it has saved them.

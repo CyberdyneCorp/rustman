@@ -10,10 +10,14 @@
 //! [`explore`] plans and runs probes against a target under the safety
 //! policy and turns what it observes into findings.
 //!
+//! [`mutate`] mutates saved JSON bodies for stress fuzzing, schema-less or
+//! from a document's schemas.
+//!
 //! This crate holds no UI code; the CLI and TUI are thin adapters over it.
 
 pub mod collection;
 pub mod explore;
+pub mod mutate;
 pub mod openapi;
 pub mod store;
 pub mod sync;

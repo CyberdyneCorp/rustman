@@ -8,7 +8,6 @@
 
 use std::io;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
@@ -22,16 +21,11 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::handshake::client::{Request, Response};
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 
-use crate::connect::{Connector, ConnectorConfig};
-use crate::dns::Dns;
 use crate::engine::{SendOptions, add_credentials, header_pairs};
 use crate::error::RequestError;
+use crate::raw_stream::open_raw_stream;
 use crate::stream::request_head;
-use crate::tls::TlsSettings;
 use crate::tunnel::BoxIo;
-
-/// The only ALPN protocol a WebSocket handshake can use.
-const ALPN_WEBSOCKET: &[&[u8]] = &[b"http/1.1"];
 
 /// Handshake headers the WebSocket client sets itself, or that do not
 /// belong in a handshake.
@@ -269,24 +263,11 @@ fn client_request(
     Ok(request)
 }
 
-/// A connection to the host of `uri` through the engine's connector:
-/// proxies, the connect timeout and TLS (`http/1.1` only) apply.
+/// The handshake's connection: a raw HTTP/1.1 stream from the engine's
+/// connector (an upgrade cannot be forwarded by an HTTP proxy, so proxies
+/// always tunnel).
 async fn connect(uri: &Uri, options: &SendOptions) -> Result<WsIo, WebSocketError> {
-    let proxy_tls = TlsSettings {
-        client_auth: None,
-        ..options.tls.clone()
-    };
-    let config = ConnectorConfig {
-        tls: Arc::new(options.tls.client_config(ALPN_WEBSOCKET)?),
-        proxy_tls: Arc::new(proxy_tls.client_config(ALPN_WEBSOCKET)?),
-        proxies: options.proxy.clone(),
-        // An upgrade cannot be forwarded by an HTTP proxy: always tunnel.
-        tunnel_plain: true,
-        timeout: options.connect_timeout,
-    };
-    let mut connector = Connector::new(Arc::new(Dns::default()), config);
-    let conn = tower_service::Service::call(&mut connector, uri.clone()).await?;
-    Ok(WsIo(conn.into_io()))
+    Ok(WsIo(open_raw_stream(uri, options).await?.into_io()))
 }
 
 fn handshake(message: String) -> WebSocketError {

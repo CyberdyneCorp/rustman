@@ -1,0 +1,135 @@
+---
+source: crates/rustman-report/tests/stress.rs
+expression: rendered(format)
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Stress report</title>
+<style>:root { --fg: #1f2328; --muted: #59636e; --bg: #ffffff; --panel: #f6f8fa; --line: #d1d9e0;
+  --critical: #a40e26; --high: #d1242f; --medium: #9a6700; --low: #0969da; --info: #59636e; --ok: #1a7f37; }
+@media (prefers-color-scheme: dark) {
+  :root { --fg: #e6edf3; --muted: #9198a1; --bg: #0d1117; --panel: #151b23; --line: #3d444d;
+    --critical: #ff8182; --high: #f85149; --medium: #d29922; --low: #4493f8; --info: #9198a1; --ok: #3fb950; }
+}
+* { box-sizing: border-box; }
+body { margin: 0 auto; max-width: 72rem; padding: 1.5rem 1rem 3rem; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--fg); background: var(--bg); }
+h1 { font-size: 1.5rem; margin: 0 0 1rem; }
+h2 { font-size: 1.15rem; margin: 2rem 0 0.75rem; border-bottom: 1px solid var(--line); padding-bottom: 0.25rem; }
+code, pre { font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+pre { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 0.75rem; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+table { border-collapse: collapse; width: 100%; margin: 0.5rem 0; }
+th, td { text-align: left; padding: 0.35rem 0.6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.meta { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem; margin: 0; }
+.meta dt { color: var(--muted); }
+.meta dd { margin: 0; word-break: break-all; }
+.sev { display: inline-block; min-width: 4.5rem; font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.03em; }
+.sev-critical { color: var(--critical); } .sev-high { color: var(--high); } .sev-medium { color: var(--medium); }
+.sev-low { color: var(--low); } .sev-info { color: var(--info); }
+.state-observed, .status-passed { color: var(--ok); } .state-blocked, .status-skipped { color: var(--muted); }
+.state-not-observed { color: var(--medium); } .status-failed, .status-errored { color: var(--high); }
+.filters { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0.5rem 0 1rem; }
+.filters label { color: var(--muted); }
+.filters select { margin-left: 0.35rem; font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 0.15rem 0.35rem; }
+.finding { border: 1px solid var(--line); border-radius: 6px; margin: 0.5rem 0; background: var(--bg); }
+.finding > summary { cursor: pointer; padding: 0.5rem 0.75rem; display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; align-items: baseline; }
+.finding > div { padding: 0 0.75rem 0.75rem; }
+.finding .op { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.muted { color: var(--muted); }
+[hidden] { display: none !important; }
+.chart { margin: 0.5rem 0 1rem; }
+.chart svg { width: 100%; height: 12rem; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+.chart .axis { stroke: var(--line); stroke-width: 1; }
+.chart .line { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.chart figcaption { font-size: 0.85rem; display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.line-p50, .key.line-p50 { stroke: var(--ok); color: var(--ok); } .line-p95, .key.line-p95 { stroke: var(--medium); color: var(--medium); }
+.line-p99, .key.line-p99 { stroke: var(--high); color: var(--high); } .line-rps, .key.line-rps { stroke: var(--low); color: var(--low); }
+.thresholds { list-style: none; padding: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.line-errors, .key.line-errors { stroke: var(--high); color: var(--high); } .line-latency, .key.line-latency { stroke: var(--medium); color: var(--medium); }
+.chart .marker { stroke: var(--high); stroke-width: 1; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
+</style>
+</head>
+<body>
+<h1>Stress report</h1>
+<dl class="meta">
+<dt>Target</dt><dd><code>https:&#x2f;&#x2f;staging.example.com</code></dd>
+<dt>Environment</dt><dd>staging</dd>
+<dt>Mode</dt><dd>breakpoint</dd>
+<dt>Seed</dt><dd>42</dd>
+<dt>SLOs</dt><dd><code>p95&lt;300ms</code>, <code>error_rate&lt;1%</code></dd>
+<dt>Started</dt><dd>2026-11-20T10:00:00Z</dd>
+<dt>Duration</dt><dd>180.0 s</dd>
+
+<dt>Recovery</dt><dd>recovered 4s after load stopped</dd>
+</dl>
+
+<h2>Summary</h2>
+<p>4000 valid requests, 400 fuzzed. Findings by severity: 0 critical, 1 high, 0 medium, 0 low, 0 info.</p>
+<ul class="thresholds">
+<li>max_sustainable_rps: 18.75</li>
+<li>breaking_rps: 22.50 (latency; first failing endpoint: api&#x2f;orders.rman.yaml, p95 410ms, errors 2.00%)</li>
+<li>stopped: refined (max_rps 500)</li>
+</ul>
+
+
+<h2>Latency against offered load</h2>
+<figure class="chart">
+<svg viewBox="-4 -4 648 188" preserveAspectRatio="none" role="img" aria-label="p50, p95, p99">
+<line class="axis" x1="0" y1="180" x2="640" y2="180"/>
+<line class="marker" x1="288.0" y1="0" x2="288.0" y2="180"><title>breaking_rps</title></line>
+<polyline class="line line-p50" points="128.0,178.2 192.0,177.8 240.0,174.6 288.0,143.1"/>
+<polyline class="line line-p95" points="128.0,176.4 192.0,175.5 240.0,169.2 288.0,106.2"/>
+<polyline class="line line-p99" points="128.0,174.6 192.0,173.2 240.0,163.8 288.0,69.3"/>
+</svg>
+<figcaption><span class="muted">top 1000 ms, up to 50 req&#x2f;s</span> <span class="key line-p50">p50</span> <span class="key line-p95">p95</span> <span class="key line-p99">p99</span> <span class="key line-errors">breakpoint</span></figcaption>
+</figure>
+<h2>Errors against offered load</h2>
+<figure class="chart">
+<svg viewBox="-4 -4 648 188" preserveAspectRatio="none" role="img" aria-label="errors">
+<line class="axis" x1="0" y1="180" x2="640" y2="180"/>
+<line class="marker" x1="288.0" y1="0" x2="288.0" y2="180"><title>breaking_rps</title></line>
+<polyline class="line line-errors" points="128.0,180.0 192.0,180.0 240.0,180.0 288.0,0.0"/>
+</svg>
+<figcaption><span class="muted">top 2 %, up to 50 req&#x2f;s</span> <span class="key line-errors">errors</span> <span class="key line-errors">breakpoint</span></figcaption>
+</figure>
+<h2>Recovery timeline (recovered 4s after load stopped)</h2>
+<figure class="chart">
+<svg viewBox="-4 -4 648 188" preserveAspectRatio="none" role="img" aria-label="latency">
+<line class="axis" x1="0" y1="180" x2="640" y2="180"/>
+<polyline class="line line-latency" points="0.0,18.0 49.2,18.0 98.5,18.0 147.7,18.0 196.9,177.7 246.2,177.7 295.4,177.7 344.6,177.7 393.8,177.7 443.1,177.7 492.3,177.7 541.5,177.7 590.8,177.7 640.0,177.7"/>
+</svg>
+<figcaption><span class="muted">top 1000 ms, up to 14 s</span> <span class="key line-latency">latency</span></figcaption>
+</figure>
+
+
+<h2>Steps</h2>
+<table>
+<thead><tr><th class="n">Offered</th><th class="n">Achieved</th><th class="n">p50</th><th class="n">p95</th><th class="n">p99</th><th>Errors</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr><td class="n">10.00</td><td class="n">9.90</td><td class="n">10.00</td><td class="n">20.00</td><td class="n">30.00</td><td>0.00%</td><td>ok</td></tr>
+<tr><td class="n">15.00</td><td class="n">14.85</td><td class="n">12.50</td><td class="n">25.00</td><td class="n">37.50</td><td>0.00%</td><td>ok</td></tr>
+<tr><td class="n">22.50</td><td class="n">22.27</td><td class="n">205.00</td><td class="n">410.00</td><td class="n">615.00</td><td>2.00%</td><td>broken (latency)</td></tr>
+<tr><td class="n">18.75</td><td class="n">18.56</td><td class="n">30.00</td><td class="n">60.00</td><td class="n">90.00</td><td>0.00%</td><td>ok</td></tr>
+</tbody>
+</table>
+
+<h2>Findings</h2>
+<details class="finding">
+<summary><span class="sev sev-high">high</span> <span>f001</span> <strong>server-error-on-malformed-input</strong> <span class="op">api&#x2f;orders.rman.yaml</span></summary>
+<div>
+<p>mutation input on api&#x2f;orders.rman.yaml answered 500 (3 times)</p>
+<p>Minimized (7 replays): <code>{&quot;qty&quot;:&quot;2&quot;}</code></p>
+<pre>POST https:&#x2f;&#x2f;staging.example.com&#x2f;orders
+Authorization: Bearer «redacted:api_token»
+
+{&quot;qty&quot;:&quot;2&quot;,&quot;note&quot;:&quot;&lt;b&gt;hi&lt;&#x2f;b&gt;&quot;}</pre>
+</div>
+</details>
+
+</body>
+</html>

@@ -34,7 +34,7 @@ fn relative_links(text: &str) -> Vec<String> {
 #[test]
 fn the_pages_are_in_the_index_and_their_links_resolve() {
     let index = read("README.md");
-    for page in ["bench.md", "bench-internals.md"] {
+    for page in ["bench.md", "bench-internals.md", "stress.md"] {
         assert!(
             index.contains(&format!("]({page})")),
             "{page} is not linked"

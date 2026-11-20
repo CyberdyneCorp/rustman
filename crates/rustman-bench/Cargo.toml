@@ -15,21 +15,33 @@ workspace = true
 rustman-core.workspace = true
 rustman-http.workspace = true
 rustman-report.workspace = true
+# Fuzz mixing: schema-less and schema-aware mutations (add-stress-testing).
+rustman-explore.workspace = true
+# The gzip encoder of the compression-bomb family.
+async-compression = { workspace = true, features = ["tokio", "gzip"] }
+bytes.workspace = true
 futures-util.workspace = true
 hdrhistogram.workspace = true
+http.workspace = true
 rand.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["macros", "sync", "time"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "sync", "time"] }
 tokio-util.workspace = true
 url.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+# The open-file limit of the stress pre-flight check (add-stress-testing).
+rustix.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
 hdrhistogram.workspace = true
+insta.workspace = true
 rustman-test-support.workspace = true
 tempfile.workspace = true
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "test-util"] }
 
 [[bench]]
 name = "executor"

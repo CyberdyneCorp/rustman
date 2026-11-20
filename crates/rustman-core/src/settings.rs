@@ -11,6 +11,7 @@ use crate::bench::{BENCH_KEYS, BenchSettings};
 use crate::error::{ConfigError, LoadError, Position};
 use crate::model::Variables;
 use crate::safety::SafetySettings;
+use crate::stress::{STRESS_KEYS, StressSettings};
 use crate::trace::TraceConfig;
 
 pub const SETTINGS_FILE: &str = "rustman.toml";
@@ -52,6 +53,8 @@ const KNOWN_KEYS: &[(&str, &[&str])] = &[
     ("explore", &["producers", "disabled_rules"]),
     // Read by rustman-bench (add-load-testing).
     ("bench", BENCH_KEYS),
+    // Read by rustman-bench's stress module (add-stress-testing).
+    ("stress", STRESS_KEYS),
     // Read by rustman-webhook (add-webhook-inspector).
     ("webhook", &["host", "port", "verifiers"]),
     // Read by rustman-mock (add-openapi-mock-server).
@@ -127,6 +130,8 @@ pub struct Settings {
     pub trace: TraceConfig,
     #[serde(default)]
     pub bench: BenchSettings,
+    #[serde(default)]
+    pub stress: StressSettings,
     #[serde(default)]
     pub variables: Variables,
 }
@@ -550,13 +555,13 @@ base_url = "http://localhost"
 
     #[test]
     fn unknown_keys_warn_without_failing() {
-        let text = "[workspace]\nname = \"a\"\nversion = 1\ncolour = 1\n[defaults]\nretries = 2\n[stress]\nx = 1\n";
+        let text = "[workspace]\nname = \"a\"\nversion = 1\ncolour = 1\n[defaults]\nretries = 2\n[chaos]\nx = 1\n";
         let (_, warnings) = parse(text).unwrap();
         assert_eq!(
             warnings,
             [
+                "rustman.toml: unknown key 'chaos' ignored",
                 "rustman.toml: unknown key 'defaults.retries' ignored",
-                "rustman.toml: unknown key 'stress' ignored",
                 "rustman.toml: unknown key 'workspace.colour' ignored",
             ]
         );

@@ -72,6 +72,9 @@ pub enum View {
     ResponseInspector,
     /// The live load-test dashboard (`rustman bench --viz`).
     Bench,
+    /// Load against latency and errors (`rustman stress --viz`): the
+    /// stream is the bench's (`bench_tick` per second, then `close`).
+    Stress,
     /// A view added by a later minor version.
     #[serde(other)]
     Unknown,
@@ -221,6 +224,7 @@ pub enum ReportKind {
     Run,
     Exploration,
     Bench,
+    Stress,
     #[serde(other)]
     Unknown,
 }

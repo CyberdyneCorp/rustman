@@ -39,3 +39,5 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
 .line-p50, .key.line-p50 { stroke: var(--ok); color: var(--ok); } .line-p95, .key.line-p95 { stroke: var(--medium); color: var(--medium); }
 .line-p99, .key.line-p99 { stroke: var(--high); color: var(--high); } .line-rps, .key.line-rps { stroke: var(--low); color: var(--low); }
 .thresholds { list-style: none; padding: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.line-errors, .key.line-errors { stroke: var(--high); color: var(--high); } .line-latency, .key.line-latency { stroke: var(--medium); color: var(--medium); }
+.chart .marker { stroke: var(--high); stroke-width: 1; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }

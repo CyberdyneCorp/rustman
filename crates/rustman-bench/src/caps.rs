@@ -58,8 +58,14 @@ pub fn run_time(profile: &Profile, caps: &BenchSettings) -> Duration {
 }
 
 fn over(asked: String, key: &str, cap: String) -> BenchError {
+    exceeds("bench", &asked, key, &cap)
+}
+
+/// `<section>: <asked> exceeds <key> = <cap> (raise it in rustman.toml
+/// [<section>])`: a request over a cap of `[bench]` or `[stress]`.
+pub(crate) fn exceeds(section: &str, asked: &str, key: &str, cap: &str) -> BenchError {
     BenchError::Usage(format!(
-        "bench: {asked} exceeds {key} = {cap} (raise it in rustman.toml [bench])"
+        "{section}: {asked} exceeds {key} = {cap} (raise it in rustman.toml [{section}])"
     ))
 }
 

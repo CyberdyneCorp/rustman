@@ -157,7 +157,7 @@ fn a_kind_this_reader_does_not_know_is_refused() {
     assert!(matches!(err, ReadError::UnknownKind(ref k) if k == "contract-next"));
     assert_eq!(
         err.to_string(),
-        "unknown report kind 'contract-next' (expected run, exploration, contract or bench)"
+        "unknown report kind 'contract-next' (expected run, exploration, contract, bench or stress)"
     );
 }
 

@@ -1,0 +1,82 @@
+---
+source: crates/rustman-report/tests/stress.rs
+expression: rendered(format)
+---
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "rustman",
+          "version": "0.1.0",
+          "informationUri": "https://github.com/CyberdyneCorp/rustman",
+          "rules": [
+            {
+              "id": "server-error-on-malformed-input",
+              "shortDescription": {
+                "text": "server-error-on-malformed-input"
+              },
+              "fullDescription": {
+                "text": "A malformed or mutated input made the server fail with a 5xx."
+              },
+              "help": {
+                "text": "Validate input and answer 4xx instead of failing."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "api"
+                ],
+                "security-severity": "8.0"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "server-error-on-malformed-input",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "api/orders.rman.yaml: mutation input on api/orders.rman.yaml answered 500 (3 times)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "api/orders.rman.yaml"
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "api/orders.rman.yaml",
+                  "fullyQualifiedName": "",
+                  "kind": "object"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "rustmanFinding/v1": "server-error-on-malformed-input|api/orders.rman.yaml"
+          },
+          "properties": {
+            "finding": "f001",
+            "occurrences": "1",
+            "operation": "api/orders.rman.yaml",
+            "pointer": "",
+            "severity": "high"
+          }
+        }
+      ],
+      "automationDetails": {
+        "id": "rustman/stress/str-20261120-abc123"
+      }
+    }
+  ]
+}

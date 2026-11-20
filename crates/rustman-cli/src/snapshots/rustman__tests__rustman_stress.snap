@@ -1,0 +1,144 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Find where a target listed in rustman.toml [stress] breaks, how, and whether it recovers
+
+Usage: rustman stress [OPTIONS] <MODE> [PATH]...
+       rustman stress <COMMAND>
+
+Commands:
+  export  Write findings of a stress run as regression request files for `rustman run`
+  help    Print this message or the help of the given subcommand(s)
+
+Arguments:
+  <MODE>
+          breakpoint, spike, soak or fuzz
+
+          Possible values:
+          - breakpoint: Step the rate up until an SLO breaks, then narrow down the last sustainable rate
+          - spike:      Baseline, a sudden multiple of it, baseline again: errors and recovery time
+          - soak:       A steady rate for a long time: latency and error drift
+          - fuzz:       A steady rate with a share of mutated requests
+
+  [PATH]...
+          Request files or folders: one iteration runs them in collection order (default: the current directory)
+
+Options:
+      --target <URL>
+          The origin under stress, scheme://host[:port]; it must be listed in rustman.toml [stress] targets (required)
+
+      --env <NAME>
+          Environment (default: RUSTMAN_ENV, then default_environment)
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --var <K=V>
+          Set a variable, above every other source (repeatable): --var k=v
+
+      --slo <EXPR>
+          An SLO judged over each 5 s window, such as p95<300ms, error_rate<1% or "file:checkout p99<800ms" (repeatable; after rustman.toml [stress.slo]; default p95<1s and error_rate<5% for breakpoint and spike)
+
+      --start-rps <N>
+          breakpoint: the first rate, in iterations per second (default 10)
+
+      --step-factor <X>
+          breakpoint: the factor between steps (default 1.5)
+
+      --step-duration <DURATION>
+          breakpoint: how long each step lasts (default 30s)
+
+      --refine <N>
+          breakpoint: bisection steps after the first break (default 3)
+
+      --baseline-rps <N>
+          spike: the rate before and after the spike (default 10)
+
+      --baseline <DURATION>
+          spike: how long the baseline lasts, before and after the spike; with fuzzing: the clean phase run first at the same rate (default 30s)
+
+      --spike-factor <X>
+          spike: the spike as a multiple of the baseline rate (default 10)
+
+      --spike-duration <DURATION>
+          spike: how long the spike lasts (default 30s)
+
+      --rps <N>
+          soak and fuzz: the rate, in iterations per second (required)
+
+      --duration <DURATION>
+          soak and fuzz: how long load runs, such as 2h or 30m (required for soak; fuzz default 1m)
+
+      --drift-threshold <PCT>
+          soak: the p95 slope that is a drift, as a share of the baseline p95 per hour (default 5%)
+
+      --fuzz-ratio <R>
+          Replace this share of requests with mutated variants, 0 < r <= 1 (fuzz default 0.2; never against production)
+
+      --malformed <A,B>
+          Malformed payload families to mix in: json-syntax, deep-nesting, large-body, wide, encoding, content-type-mismatch, duplicate-keys, numbers, compression-bomb (never against production; compression-bomb needs rustman.toml [stress] families)
+
+      --spec <FILE>
+          An OpenAPI document: fuzzed variants break one of its schema constraints instead of mutating the saved body
+
+      --seed <N>
+          The seed of fuzzed slots and variants: the same seed and plan fuzz the same requests the same way (default: random, printed)
+
+      --wire <A,B>
+          Wire-fault families, sent as raw HTTP/1.1 after the load: oversized-headers, many-headers, slow-body, cl-te-conflict, invalid-chunked, invalid-request-line (needs --allow-wire-faults; never against production)
+
+      --allow-wire-faults
+          Allow --wire to send raw, invalid HTTP to the target
+
+      --health <FILE>
+          The health request file, sent once per second during and after load (default: the first GET request of the plan)
+
+      --recovery-timeout <DURATION>
+          How long the target may take to recover after load (default 2m)
+
+      --report <FORMAT[=PATH]>
+          Also write the report as json, html, markdown, junit or sarif, to a file (FORMAT=PATH) or to stdout (repeatable)
+
+      --viz
+          Stream per-second metrics to the viz companion's stress view (rustman-viz); a companion without it is a warning
+
+      --max-vus <N>
+          The VU pool (default: max_rps of rustman.toml [stress])
+
+      --allow-mutations
+          Also allow POST, PUT and PATCH
+
+      --allow-destructive
+          Also allow DELETE (implies --allow-mutations; never against production)
+
+      --production <HOST>
+          Confirm a production target by repeating its exact host (it must also be in rustman.toml [stress] allow_production)
+
+      --timeout <DURATION>
+          Total timeout per request, replacing settings.timeout_ms
+
+  -k, --insecure
+          Do not verify TLS certificates
+
+      --treat-throttling-as-failure
+          Count 429 (and 503 with Retry-After) as failures instead of reporting the target as rate limited
+
+      --require-rps <N>
+          breakpoint: exit 1 unless max_sustainable_rps reaches N
+
+      --fail-on <SEVERITY>
+          Exit 1 on a finding of this severity or above: critical, high (default), medium, low or info
+          
+          [default: high]
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help (see a summary with '-h')

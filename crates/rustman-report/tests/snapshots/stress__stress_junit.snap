@@ -1,0 +1,17 @@
+---
+source: crates/rustman-report/tests/stress.rs
+expression: rendered(format)
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="rustman" tests="1" skipped="0" failures="1" errors="0" time="180.000">
+    <testsuite name="stress" tests="1" skipped="0" errors="0" failures="1">
+        <properties>
+            <property name="target" value="https://staging.example.com"/>
+            <property name="mode" value="breakpoint"/>
+            <property name="seed" value="42"/>
+        </properties>
+        <testcase name="server-error-on-malformed-input api/orders.rman.yaml" classname="api/orders.rman.yaml">
+            <failure message="f001 [high] server-error-on-malformed-input: mutation input on api/orders.rman.yaml answered 500 (3 times)" type="server-error-on-malformed-input"/>
+        </testcase>
+    </testsuite>
+</testsuites>

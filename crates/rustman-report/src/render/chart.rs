@@ -18,6 +18,8 @@ pub struct Chart {
     pub top: String,
     /// The last second, formatted (`42 s`).
     pub end: String,
+    /// A vertical marker's x (a breakpoint), in SVG user units.
+    pub marker: Option<f64>,
 }
 
 /// One series of a chart.
@@ -47,6 +49,48 @@ pub fn line_chart(series: &[(&'static str, Vec<f64>)], unit: &str) -> Chart {
         lines,
         top: format!("{} {unit}", trim(top)),
         end: format!("{len} s"),
+        marker: None,
+    }
+}
+
+/// A chart of `series` against `xs` (one x per value, such as the
+/// offered load of each step), drawn in increasing x, with a vertical
+/// marker at `marker` when given.
+pub fn xy_chart(
+    xs: &[f64],
+    series: &[(&'static str, Vec<f64>)],
+    unit: &str,
+    x_unit: &str,
+    marker: Option<f64>,
+) -> Chart {
+    let right = nice_ceiling(xs.iter().copied().chain(marker));
+    let top = nice_ceiling(series.iter().flat_map(|(_, v)| v.iter().copied()));
+    let mut order: Vec<usize> = (0..xs.len()).collect();
+    order.sort_by(|a, b| xs[*a].total_cmp(&xs[*b]));
+    let (width, height) = (f64::from(WIDTH), f64::from(HEIGHT));
+    let lines = series
+        .iter()
+        .map(|(name, values)| Line {
+            name,
+            points: order
+                .iter()
+                .filter_map(|i| Some((xs[*i], *values.get(*i)?)))
+                .map(|(x, v)| {
+                    let x = x / right * width;
+                    let y = height - (v.max(0.0) / top) * height;
+                    format!("{x:.1},{y:.1}")
+                })
+                .collect::<Vec<_>>()
+                .join(" "),
+        })
+        .collect();
+    Chart {
+        width: WIDTH,
+        height: HEIGHT,
+        lines,
+        top: format!("{} {unit}", trim(top)),
+        end: format!("{} {x_unit}", trim(right)),
+        marker: marker.map(|m| m / right * width),
     }
 }
 
@@ -93,6 +137,20 @@ fn trim(value: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn xy_charts_follow_x_with_a_marker() {
+        let chart = xy_chart(
+            &[20.0, 10.0, 40.0],
+            &[("p95", vec![5.0, 2.0, 10.0])],
+            "ms",
+            "req/s",
+            Some(40.0),
+        );
+        assert_eq!(chart.lines[0].points, "128.0,144.0 256.0,90.0 512.0,0.0");
+        assert_eq!(chart.end, "50 req/s");
+        assert_eq!(chart.marker, Some(512.0));
+    }
 
     #[test]
     fn ceilings_are_round() {

@@ -40,6 +40,8 @@ Every mode is a controller that sets the target rate of `constant-arrival-rate` 
 
 An open model is required, because closed models hide saturation: the server slows down, VUs wait, and the offered load falls. Coordinated-omission correction stays on, so queuing shows up in the percentiles.
 - *Rejected:* a separate stress engine (it would duplicate the executor and metrics), and `ramping-vus` for breakpoints (closed-model latency hides the knee).
+- *Implementation note:* the bench's `Open` executor (`crates/rustman-bench/src/open.rs`) runs every VU inside the calling future on a fixed `interval_at` ticker, and its `LagProbe` reports lag per run. Stress needs a rate the controller changes every second (a `watch` channel), each VU as a tokio task of its own on dedicated worker threads for higher concurrency, and lag taken per tick for the client-saturation guard. Its scheduler (`stress/executor.rs`: `Scheduler`, `Pool`, `LagMeter`) is therefore a second open-model scheduler, kept small; the HDR metrics, coordinated-omission correction, thresholds, caps messages, safety gate and reports are the bench's. The `[stress]` governor allows a burst of a tenth of a second of `max_rps` (at least 2), so offering exactly the cap is not throttled below it by scheduler jitter.
+- *Breakpoint cool-down:* after a broken step, the next step starts once a window closes with no iteration in flight (at most 6 windows); those windows belong to no step, so the broken step's late answers are not measured in the next one.
 
 ### D2. Breakpoint search: geometric steps, then bisection
 Steps start at `--start-rps` (default 10) and multiply by `--step-factor` (default 1.5). Each step lasts `--step-duration` (default 30 s) and the first 5 s of each step aren't evaluated. SLOs are evaluated over 5 s windows. A step **breaks** when any SLO fails in 2 consecutive windows. After the first broken step, `--refine <n>` (default 3) bisection steps run between the last good and first broken rate.
@@ -61,7 +63,7 @@ Each broken window is classified by its dominant symptom:
 ### D4. Fuzz mixing replaces requests rather than adding them
 With `--fuzz-ratio r`, each request is replaced by a mutated variant with probability `r`, decided by the seeded RNG. Offered load stays the same, so the impact on valid traffic can be compared directly.
 
-Valid and fuzzed exchanges are measured separately. Every mode with fuzzing first runs a clean baseline phase (`--baseline 30s`) at the same rate. `fuzz-degrades-valid-traffic` fires when valid p95 rises more than 50% above the baseline, or when the valid error rate rises more than 1 point.
+Valid and fuzzed exchanges are measured separately. Every mode with fuzzing first runs a clean baseline phase (`--baseline 30s`) at the same rate. `fuzz-degrades-valid-traffic` fires when valid p95 rises more than 50% above the baseline and by more than 10 ms (a floor that keeps a fast target's jitter out), or when the valid error rate rises more than 1 point.
 
 Mutations come from:
 - **Schema-aware generation** (`--spec openapi.yaml`): the existing `api-exploration` generators (`proptest` strategies from JSON Schema).
@@ -87,6 +89,8 @@ Malformed bodies are raw `Bytes` sent through the normal executor with a `body_o
 ### D6. Wire faults use a raw connection
 `hyper` correctly refuses to send invalid framing, so wire faults use a small raw writer over a stream from `rustman-http`'s connector (TCP, plus TLS from `TlsSettings` with ALPN pinned to `http/1.1`, as WebSocket handshakes already do). It writes hand-built requests and reads the status line with a 10 s timeout. The writer never parses responses beyond the status line and connection state, which keeps the "never hand-roll HTTP parsing" lesson intact for real traffic.
 
+The VU pool (`--max-vus`, default `max_rps`) is capped by `[stress] max_vus` (default 1000), and the large body-independent malformed payloads (`deep-nesting`, `large-body`, `wide`) are built once per run and shared as `Bytes`, so in-flight body memory does not grow with the VUs.
+
 Wire faults run at a fixed low concurrency (`max_wire_connections`, default 20) regardless of mode. `slow-body` is bounded to 20 connections × 60 s, so it measures the server's slow-client timeouts without becoming a slowloris attack.
 - *Rejected:* patching `hyper`, or using a C client such as libcurl (violates the build constraint).
 
@@ -98,7 +102,7 @@ A target is considered **down** when any of these holds for 5 s:
 
 On down, load stops at once and the report records `killed: target down at <rps>`.
 
-After every mode, and after a kill, the recovery monitor sends the health request once per second. **Recovered** means 10 consecutive successes with latency within 20% of the pre-stress baseline. The monitor gives up after `--recovery-timeout` (default 2 m) and records `no-recovery`.
+After every mode, and after a kill, the recovery monitor sends the health request once per second. **Recovered** means 10 consecutive successes with latency within 20% of the pre-stress baseline. The monitor gives up after `--recovery-timeout` (default 2 m) and records `no-recovery`. Latency counts as within 20% of the baseline with a 20 ms floor, so a fast local target's jitter does not hold recovery back. A health request that already fails before load cannot judge recovery: the check is then skipped (and so is the kill switch's health rule). The health request, minimization replays and wire faults use a governor of their own built from the `[stress]` caps, so the load's run-time cap does not cut the recovery check short.
 
 ### D8. Stress has its own, stricter safety rules
 - Targets are listed in `rustman.toml [stress] targets` and can't be added from the CLI.
@@ -124,6 +128,6 @@ The report reuses the bench time series, the step table, `breakpoint`, `failure_
 
 ## Open Questions
 
-- Wire faults and proxies: an HTTP proxy would reject or normalize broken framing. Send wire faults only directly or through `CONNECT`/SOCKS5 tunnels, and refuse them when the target is reached through a forwarding HTTP proxy?
-- Malformed bodies: add a raw-bytes `ResolvedBody` variant (visible to history, snippets and redaction) or a send-path override that only stress uses?
-- `rustman.toml` unknown keys warn and never fail today. Should `[stress]` be stricter (an error for unknown keys, since it holds consent), or follow the warning rule?
+- ~~Wire faults and proxies: an HTTP proxy would reject or normalize broken framing. Send wire faults only directly or through `CONNECT`/SOCKS5 tunnels, and refuse them when the target is reached through a forwarding HTTP proxy?~~ Resolved: the raw stream helper (`rustman_http::open_raw_stream`) always tunnels (`CONNECT` for HTTP proxies, as WebSocket handshakes do; SOCKS5), so no proxy ever forwards wire faults; a proxy the safety policy does not allow is refused (exit 4).
+- ~~Malformed bodies: add a raw-bytes `ResolvedBody` variant (visible to history, snippets and redaction) or a send-path override that only stress uses?~~ Resolved: a send-path override (`SendOptions::body_override`, a `BodyOverride` of bytes, `Content-Type` and `Content-Encoding`) that only the stress VU gate sets. Headers, auth, cookies and timing are the request's; nothing else in the workspace can produce such a body. The recorded request keeps its own body; the finding's evidence holds a redacted preview of the variant.
+- ~~`rustman.toml` unknown keys warn and never fail today. Should `[stress]` be stricter (an error for unknown keys, since it holds consent), or follow the warning rule?~~ Resolved: stricter. An unknown key in `[stress]` is an error naming the key and its line (as `[bench]` already does), since a misspelt cap must not silently fall back to its default.

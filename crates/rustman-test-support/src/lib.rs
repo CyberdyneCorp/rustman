@@ -25,6 +25,8 @@ pub mod realtime_sse;
 pub mod realtime_ws;
 pub mod routes;
 pub mod server;
+pub mod stress;
+pub mod wire;
 
 pub use bad_api::BadApi;
 pub use bench::{BenchHit, BenchServer};
@@ -45,3 +47,5 @@ pub use proxy::TestProxy;
 pub use realtime_sse::{RealtimeSseServer, SseChunk, SseReply, SseTail};
 pub use realtime_ws::{RealtimeWsServer, RecordedWs, WsAction, WsBehavior};
 pub use server::{TestServer, Tls};
+pub use stress::StressServer;
+pub use wire::{HyperWireServer, WireConfig, WireServer};

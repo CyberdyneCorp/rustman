@@ -113,3 +113,55 @@ fn completion_snapshot_covers_rpc() {
         .map_or(script.len(), |n| start + n);
     insta::assert_snapshot!("completions_zsh_rpc", &script[start..end]);
 }
+
+/// The fenced code blocks of `doc`, with their language.
+fn code_blocks(doc: &str) -> Vec<(String, String)> {
+    let mut blocks = Vec::new();
+    let mut open: Option<(String, String)> = None;
+    for line in doc.lines() {
+        match (&mut open, line.strip_prefix("```")) {
+            (None, Some(lang)) => open = Some((lang.trim().to_owned(), String::new())),
+            (Some(_), Some(_)) => blocks.extend(open.take()),
+            (Some((_, text)), None) => {
+                text.push_str(line);
+                text.push('\n');
+            }
+            (None, None) => {}
+        }
+    }
+    blocks
+}
+
+/// add-stress-testing task 6.7: every `rustman stress` command in
+/// `docs/stress.md` parses, and every TOML example is a valid
+/// `rustman.toml` with no unknown key.
+#[test]
+fn every_stress_doc_example_parses() {
+    use clap::Parser;
+    let doc = include_str!("../../../docs/stress.md");
+    let mut commands = 0;
+    let mut tables = 0;
+    for (lang, text) in code_blocks(doc) {
+        if lang == "toml" {
+            let toml = format!("[workspace]\nname = \"t\"\nversion = 1\n{text}");
+            let path = std::path::Path::new("rustman.toml");
+            let (_, warnings) = rustman_core::settings::Settings::parse(path, &toml)
+                .unwrap_or_else(|e| panic!("{e}\n{text}"));
+            assert!(warnings.is_empty(), "{warnings:?}");
+            tables += 1;
+            continue;
+        }
+        for line in text.lines() {
+            let Some(at) = line.find("rustman stress ") else {
+                continue;
+            };
+            let words = shell_words::split(&line[at..]).unwrap();
+            if let Err(e) = Cli::try_parse_from(&words) {
+                panic!("{line}\n{e}");
+            }
+            commands += 1;
+        }
+    }
+    assert!(commands >= 4, "{commands} commands");
+    assert_eq!(tables, 1);
+}

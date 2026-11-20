@@ -92,6 +92,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y zsh fish
           echo "RUSTMAN_REQUIRE_SHELLS=1" >> "$GITHUB_ENV"
+      # The Ghostman wire regression corpus (add-stress-testing task 4.7)
+      # runs a Python fixture server; RUSTMAN_REQUIRE_PYTHON turns a missing
+      # interpreter into a test failure instead of a skip, on every OS.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Require Python for the wire regression corpus
+        shell: bash
+        run: echo "RUSTMAN_REQUIRE_PYTHON=1" >> "$GITHUB_ENV"
       - run: cargo test --workspace --locked
       # add-trace-propagation section 4: everything again with OTLP export
       # built in on Linux; macOS and Windows run the export tests against

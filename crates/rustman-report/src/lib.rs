@@ -1,6 +1,7 @@
 //! Reports for Rustman (`rustman.report/v1`): the canonical [`Report`] of a
 //! run (`kind: run`), an exploration (`kind: exploration`), a contract
-//! check (`kind: contract`) or a load test (`kind: bench`), its JSON
+//! check (`kind: contract`), a load test (`kind: bench`) or a stress
+//! test (`kind: stress`), its JSON
 //! Schema, the renderers (JSON, JUnit XML, SARIF, Markdown, HTML), `report
 //! diff`, and the `rustman run --reporter` writers (pretty, json, junit,
 //! tap). Reports are built from records whose every text field is already
@@ -17,6 +18,7 @@ mod report;
 mod reporter;
 pub mod run;
 mod schema;
+pub mod stress;
 mod tap;
 
 pub use diff::{Diff, KindMismatch, diff};

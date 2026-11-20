@@ -155,3 +155,13 @@ pub async fn bench(
     let (outcome, samples) = tokio::join!(bench.run(), sampler);
     Ok((outcome?, samples))
 }
+
+/// The recovery check, 5 times faster than real time: the health request
+/// every 200 ms (it still needs 10 good answers in a row).
+pub fn fast_recovery() -> rustman_bench::stress::recovery::RecoveryTuning {
+    rustman_bench::stress::recovery::RecoveryTuning {
+        interval: Duration::from_millis(200),
+        replay_interval: Duration::from_millis(20),
+        ..Default::default()
+    }
+}
