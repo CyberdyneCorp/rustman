@@ -5,6 +5,9 @@
 > [!NOTE]
 > **Status: pre-1.0, under active development.** Releases v0.1 to v0.5 of the [roadmap](#roadmap) are implemented: the HTTP engine and CLI runner, the terminal UI, importers, the OpenAPI explorer, the agent MCP server, GraphQL, the MCP client, the webhook inspector, snapshot tests and the mock server. v0.5 added the JSON-RPC, gRPC and WebSocket/SSE clients. Sections marked _Planned_ below describe behavior that is specified in the [OpenSpec](https://github.com/Fission-AI/OpenSpec) changes in [`openspec/`](openspec/) but not built yet. Commands and file formats may still change before v1.
 
+<p align="center"><img src="docs/images/demo.gif" alt="Rustman's terminal UI sending requests to a local todo API: the environment switcher with the token masked, a JSON response tree, a 201 with a captured id, the timing waterfall and passed assertions, then rustman run passing every request" width="100%"></p>
+<p align="center"><sub>The TUI and <code>rustman run</code> against a small local todo API. Regenerate it with <a href="examples/demo/"><code>examples/demo/render.sh</code></a>.</sub></p>
+
 ## Install and quick start
 
 There are no release binaries yet. Build from source with [rustup](https://rustup.rs); the pinned toolchain (Rust 1.97, see `rust-toolchain.toml`) is installed automatically. No system libraries are needed.
