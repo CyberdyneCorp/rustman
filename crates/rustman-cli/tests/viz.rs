@@ -161,6 +161,24 @@ fn viz_rejects_a_file_that_is_not_a_report() {
     }
 }
 
+/// Stress reports landed next to the viz producer; the companion does not
+/// show them, so `rustman viz` points at the HTML report instead.
+#[test]
+fn viz_refuses_a_stress_report_with_the_html_hint() {
+    let dir = tempfile::tempdir().unwrap();
+    let snapshot = include_str!("../../rustman-report/tests/snapshots/stress__stress_json.snap");
+    let json = snapshot.splitn(3, "---\n").nth(2).unwrap();
+    write(dir.path(), "stress.json", json);
+    let output = rustman(dir.path())
+        .args(["viz", "stress.json"])
+        .output()
+        .unwrap();
+    let err = stderr(&output);
+    assert_eq!(output.status.code(), Some(2), "{err}");
+    assert!(err.contains("stress.json is a stress report"), "{err}");
+    assert!(err.contains("--format html"), "{err}");
+}
+
 #[test]
 fn viz_without_a_companion_offers_the_html_report() {
     let server = Server::http();
