@@ -5,6 +5,7 @@
 
 pub mod agent;
 pub mod assertions;
+pub mod bench;
 pub mod browser;
 pub mod captures;
 pub mod collection;

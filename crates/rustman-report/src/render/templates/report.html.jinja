@@ -101,6 +101,65 @@
 {% endfor -%}
 </ul>
 {%- endif %}
+{%- elif kind == "bench" -%}
+<dl class="meta">
+<dt>Target</dt><dd><code>{{ r.target }}</code></dd>
+<dt>Environment</dt><dd>{{ r.environment or "none" }}</dd>
+<dt>Executor</dt><dd>{{ r.profile.executor }}</dd>
+<dt>Started</dt><dd>{{ r.started_at }}</dd>
+<dt>Duration</dt><dd>{{ duration }}</dd>
+{% if r.aborted %}<dt>Aborted</dt><dd class="status-failed">{{ r.aborted }}: the results are partial</dd>{% endif %}
+</dl>
+
+<h2>Summary</h2>
+<p><strong class="status-{{ "passed" if passed else "failed" }}">{{ "Passed" if passed else "Failed" }}</strong>: {{ r.totals.iterations }} iterations ({{ r.totals.interrupted }} interrupted{% if r.totals.scheduled %}, {{ r.totals.scheduled }} scheduled, {{ r.totals.dropped }} dropped{% endif %}), {{ r.overall.requests }} requests ({{ "%.1f" | format(r.totals.rps) }}/s).</p>
+{% if thresholds -%}
+<ul class="thresholds">
+{% for t in thresholds %}<li>{{ t }}</li>
+{% endfor -%}
+</ul>
+{%- endif %}
+
+{% for c in charts -%}
+<h2>{{ c.title }}</h2>
+<figure class="chart">
+<svg viewBox="-4 -4 {{ c.chart.width + 8 }} {{ c.chart.height + 8 }}" preserveAspectRatio="none" role="img" aria-label="{% for l in c.chart.lines %}{{ l.name }}{% if not loop.last %}, {% endif %}{% endfor %} per second">
+<line class="axis" x1="0" y1="{{ c.chart.height }}" x2="{{ c.chart.width }}" y2="{{ c.chart.height }}"/>
+{% for l in c.chart.lines -%}
+<polyline class="line line-{{ l.name }}" points="{{ l.points }}"/>
+{% endfor -%}
+</svg>
+<figcaption><span class="muted">top {{ c.chart.top }}, {{ c.chart.end }}</span>{% for l in c.chart.lines %} <span class="key line-{{ l.name }}">{{ l.name }}</span>{% endfor %}</figcaption>
+</figure>
+{% endfor %}
+
+<h2>Latency ({{ latency_kind }}, ms)</h2>
+<table>
+<thead><tr><th>File</th><th class="n">min</th><th class="n">avg</th><th class="n">p50</th><th class="n">p90</th><th class="n">p95</th><th class="n">p99</th><th class="n">max</th><th class="n">Requests</th><th>Errors</th></tr></thead>
+<tbody>
+{% for row in rows -%}
+<tr><td><code>{{ row.name }}</code></td><td class="n">{{ "%.2f" | format(row.s.latency.min_ms) }}</td><td class="n">{{ "%.2f" | format(row.s.latency.avg_ms) }}</td><td class="n">{{ "%.2f" | format(row.s.latency.p50_ms) }}</td><td class="n">{{ "%.2f" | format(row.s.latency.p90_ms) }}</td><td class="n">{{ "%.2f" | format(row.s.latency.p95_ms) }}</td><td class="n">{{ "%.2f" | format(row.s.latency.p99_ms) }}</td><td class="n">{{ "%.2f" | format(row.s.latency.max_ms) }}</td><td class="n">{{ row.s.requests }}</td><td>{{ row.error_rate }}{% if row.errors %} <span class="muted">({{ row.errors }})</span>{% endif %}</td></tr>
+{% endfor -%}
+</tbody>
+</table>
+{% if samples -%}
+<h2>Error samples</h2>
+<table>
+<thead><tr><th>Class</th><th>File</th><th>Message</th></tr></thead>
+<tbody>
+{% for e in samples -%}
+<tr><td>{{ e.class }}</td><td><code>{{ e.file }}</code></td><td>{{ e.message }}</td></tr>
+{% endfor -%}
+</tbody>
+</table>
+{%- endif %}
+{% if r.warnings -%}
+<h2>Warnings</h2>
+<ul>
+{% for w in r.warnings %}<li>{{ w }}</li>
+{% endfor -%}
+</ul>
+{%- endif %}
 {%- else -%}
 <dl class="meta">
 <dt>Started</dt><dd>{{ r.started_at }}</dd>

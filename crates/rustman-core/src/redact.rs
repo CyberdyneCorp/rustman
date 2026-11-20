@@ -616,10 +616,20 @@ fn log_secrets() -> &'static RwLock<LogSecrets> {
     SECRETS.get_or_init(RwLock::default)
 }
 
+/// How many values the logs absorb before starting a new generation: the
+/// process keeps at most two generations, so memory stays bounded however
+/// many distinct secrets a long run (a load test logging in on every
+/// iteration) resolves.
+const LOG_GENERATION: usize = 16_384;
+
 /// The values logs redact, and the layers they were taken from.
 #[derive(Default)]
 struct LogSecrets {
     redactor: Redactor,
+    /// The generation before `redactor`, still redacted from logs.
+    previous: Redactor,
+    /// Values absorbed into `redactor`.
+    held: usize,
     /// Layers already absorbed. A run's redactor shares its layers with
     /// every request's, so each is read once, not once per request (which
     /// made a run quadratic in its number of secrets). Holding a `Weak`
@@ -630,13 +640,15 @@ struct LogSecrets {
 
 impl LogSecrets {
     /// Absorb the values of every layer of `redactor` not seen yet; how
-    /// many values were read.
+    /// many values were read. Past [`LOG_GENERATION`] values the current
+    /// generation becomes the previous one and the oldest is dropped; the
+    /// layers seen are forgotten, so values still in use (a run's
+    /// environment secrets) are read again by the next request.
     fn remember(&mut self, redactor: &Redactor) -> usize {
         self.seen.retain(|layer| layer.strong_count() > 0);
         let mut read = 0;
         for layer in &redactor.layers {
-            let ptr = Arc::as_ptr(layer);
-            if self.seen.iter().any(|seen| seen.as_ptr() == ptr) {
+            if self.has_seen(layer) {
                 continue;
             }
             for (name, value) in layer.entries() {
@@ -645,7 +657,37 @@ impl LogSecrets {
             read += layer.entries().len();
             self.seen.push(Arc::downgrade(layer));
         }
+        self.held += read;
+        if self.held > LOG_GENERATION {
+            self.previous = std::mem::take(&mut self.redactor);
+            self.seen.clear();
+            self.held = 0;
+        }
         read
+    }
+
+    fn has_seen(&self, layer: &Arc<Layer>) -> bool {
+        let ptr = Arc::as_ptr(layer);
+        self.seen
+            .iter()
+            .any(|seen| seen.as_ptr() == ptr && seen.strong_count() > 0)
+    }
+
+    /// Whether every layer of `redactor` was absorbed already.
+    fn knows(&self, redactor: &Redactor) -> bool {
+        redactor.layers.iter().all(|layer| self.has_seen(layer))
+    }
+
+    fn text(&self, line: &str) -> String {
+        let current = self.redactor.text(line);
+        self.previous.text(&current).into_owned()
+    }
+
+    /// How many values both generations hold.
+    #[cfg(test)]
+    fn values(&self) -> usize {
+        let count = |r: &Redactor| r.layers.iter().map(|l| l.entries().len()).sum::<usize>();
+        count(&self.redactor) + count(&self.previous)
     }
 }
 
@@ -657,7 +699,16 @@ pub fn remember_for_logs(redactor: &Redactor) {
     if redactor.is_empty() {
         return;
     }
-    log_secrets()
+    let secrets = log_secrets();
+    // Most requests bring no new layer: a shared read lock is enough.
+    if secrets
+        .read()
+        .unwrap_or_else(PoisonError::into_inner)
+        .knows(redactor)
+    {
+        return;
+    }
+    secrets
         .write()
         .unwrap_or_else(PoisonError::into_inner)
         .remember(redactor);
@@ -669,9 +720,7 @@ pub fn redact_logs(line: &str) -> String {
     log_secrets()
         .read()
         .unwrap_or_else(PoisonError::into_inner)
-        .redactor
         .text(line)
-        .into_owned()
 }
 
 /// Whether a literal credential is worth redacting: long enough, and not
@@ -1169,5 +1218,29 @@ mod tests {
         run.add(&Secret::new("two", "second-secret".to_owned()));
         assert!(logs.remember(&run) >= 1);
         assert_eq!(logs.redactor.text("second-secret"), "«redacted:two»");
+    }
+
+    /// A run resolving a new token on every iteration does not grow the
+    /// logs' secrets without bound, and what it still uses stays redacted.
+    #[test]
+    fn log_secrets_stay_bounded_over_many_distinct_values() {
+        let env = Redactor::new().with(&Secret::new("api_key", "env-api-key-value".to_owned()));
+        let mut logs = LogSecrets::default();
+        let per_token = values_of("token-of-iteration-000000");
+        let iterations = 3 * LOG_GENERATION / per_token;
+        for i in 0..iterations {
+            let mut request = env.clone();
+            request.add(&Secret::new("token", format!("token-of-iteration-{i:06}")));
+            logs.remember(&request);
+            assert!(logs.values() <= 2 * (LOG_GENERATION + 2 * per_token));
+        }
+        let last = format!("token-of-iteration-{:06}", iterations - 1);
+        let text = logs.text(&format!(
+            "env-api-key-value {last} token-of-iteration-000000"
+        ));
+        assert_eq!(
+            text,
+            "«redacted:api_key» «redacted:token» token-of-iteration-000000"
+        );
     }
 }

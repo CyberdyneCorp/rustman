@@ -365,3 +365,25 @@ fn a_capture_straddling_or_masking_a_secret_is_not_persisted() {
     assert!(!root.join(".rustman/state/dev.yaml").exists());
     assert_eq!(scope.taint(&redactor).len(), 2);
 }
+
+#[test]
+fn declared_secret_captures_become_secrets_without_persistence() {
+    let rules =
+        captures("- {var: token, from: json, path: $.t}\n- {var: id, from: json, path: $.id}\n");
+    let mut scope = RunCaptures::new();
+    let report = apply(
+        &rules,
+        &response(r#"{"t":"tok-canary","id":"7"}"#),
+        &mut scope,
+        None,
+    );
+    assert!(report.secrets.is_empty(), "apply alone cannot tell");
+    let declared = scope.declare_secrets(&environment(&["token"]));
+    assert_eq!(declared.len(), 1);
+    assert_eq!(declared[0].name(), "token");
+    assert_eq!(declared[0].expose(), "tok-canary");
+    assert!(matches!(scope.get("token"), Some(Lookup::Secret(_))));
+    assert!(matches!(scope.get("id"), Some(Lookup::Value(_))));
+    assert_eq!(scope.derived(), ["token"]);
+    assert!(scope.declare_secrets(&environment(&["token"])).is_empty());
+}

@@ -3,6 +3,7 @@
 //! every text was redacted when it was built, so no rendering can recover a
 //! secret.
 
+mod chart;
 mod human;
 pub(crate) mod junit;
 mod sarif;
@@ -112,6 +113,8 @@ pub fn render(report: &Report, format: RenderFormat, options: &RenderOptions) ->
         (RenderFormat::Sarif, Report::Exploration(r)) => sarif::exploration_sarif(r, options),
         (RenderFormat::Junit, Report::Contract(r)) => junit::contract_junit(r),
         (RenderFormat::Sarif, Report::Contract(r)) => sarif::contract_sarif(r, options),
+        (RenderFormat::Junit, Report::Bench(r)) => junit::bench_junit(r),
+        (RenderFormat::Sarif, Report::Bench(r)) => sarif::bench_sarif(r),
         (RenderFormat::Markdown, _) => human::markdown(report, options),
         (RenderFormat::Html, _) => human::html(report, options),
     }

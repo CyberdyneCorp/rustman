@@ -56,6 +56,8 @@ enum Command {
     Send(commands::send::SendArgs),
     /// Run the requests under files or folders and report the results
     Run(commands::run::RunArgs),
+    /// Load test request files and collections against one target origin
+    Bench(commands::bench::BenchArgs),
     /// Introspect GraphQL schemas and send GraphQL operations
     Graphql(commands::graphql::GraphqlArgs),
     /// List and describe gRPC services, call methods and check health
@@ -130,6 +132,7 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
         Command::Report(args) => commands::report::run(&args),
         Command::Send(args) => commands::send::run(&args),
         Command::Run(args) => commands::run::run(&args),
+        Command::Bench(args) => commands::bench::run(&args),
         Command::Graphql(args) => commands::graphql::run(&args),
         Command::Grpc(args) => commands::grpc::run(&args),
         Command::Rpc(args) => commands::rpc::run(&args),

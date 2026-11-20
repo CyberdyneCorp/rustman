@@ -12,6 +12,11 @@ publish = false
 name = "rustman"
 path = "src/main.rs"
 
+# Its own executable is the stub viz companion, so it runs without libtest.
+[[test]]
+name = "bench_viz"
+harness = false
+
 [dependencies]
 rustman-core.workspace = true
 rustman-http.workspace = true
@@ -27,6 +32,7 @@ rustman-tui.workspace = true
 rustman-webhook.workspace = true
 rustman-mock.workspace = true
 rustman-contract.workspace = true
+rustman-bench.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
 anstream.workspace = true

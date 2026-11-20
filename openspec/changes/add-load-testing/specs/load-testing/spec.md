@@ -13,7 +13,7 @@ Lets users load test their APIs by reusing existing request files, environments 
 - **THEN** each of 5 VUs SHALL repeatedly execute `login`, `add-item`, `pay` in that order for 30 seconds
 
 ### Requirement: Target is mandatory and pins the allowlist
-`--target` SHALL be required. The safety policy host allowlist for the bench SHALL be exactly the target's origin. Any request resolving to another origin, including redirects, SHALL be refused before load starts (exit code 4) when known statically, or counted as a `blocked` error at runtime.
+`--target` SHALL be required. The safety policy host allowlist for the bench SHALL be exactly the target's origin. Any request resolving to another origin, including redirects, or routed through a proxy whose origin is not the target's, SHALL be refused before load starts (exit code 4) when known statically, or counted as a `blocked` error at runtime. A refusal of a foreign host SHALL name its bare host, with the port only when it is not the scheme's default.
 
 #### Scenario: Missing target
 - **WHEN** the user runs `rustman bench api/`
@@ -23,6 +23,18 @@ Lets users load test their APIs by reusing existing request files, environments 
 - **GIVEN** a request file whose URL resolves to `https://other.example.com/x`
 - **WHEN** the user benches it with `--target https://staging.example.com`
 - **THEN** the command SHALL exit with code 4 and `blocked: host not allowed (other.example.com)` before sending any request
+
+#### Scenario: Proxy outside the target
+- **GIVEN** a request file for the target whose `settings.proxy` is `http://proxy.example.com:3128`
+- **WHEN** the user benches it with `--target https://staging.example.com`
+- **THEN** the command SHALL exit with code 4 and `blocked: proxy not allowed (proxy.example.com)` before sending any request
+
+### Requirement: Target is a bare origin
+The target is shown in the report and the dashboards, so a `--target` holding credentials (userinfo), or with a path other than `/`, a query or a fragment, SHALL be refused with exit code 2 before any request is sent or report written, without echoing it.
+
+#### Scenario: Target with a query
+- **WHEN** the user runs `rustman bench api/ --target "https://staging.example.com/?token=abc"`
+- **THEN** the command SHALL fail with exit code 2, naming `--target must be an origin`, and `abc` SHALL appear in no output
 
 ### Requirement: Method gating
 Bench SHALL apply the safety policy's method gating: GET, HEAD and OPTIONS run by default, POST/PUT/PATCH need `--allow-mutations`, and DELETE needs `--allow-destructive`. A blocked method SHALL stop the bench before any load is generated, with exit code 4.
@@ -60,11 +72,16 @@ Bench SHALL cap load at 50 VUs, 5 minutes total duration and 200 requests/second
 - **THEN** each VU SHALL pause a uniformly random 1–3 seconds between iterations
 
 ### Requirement: Ramping VUs executor
-`--executor ramping-vus` SHALL follow stages given as `--stage <duration>:<target_vus>` (repeatable) or `[[bench.stages]]` in a profile file, linearly changing the VU count during each stage. VUs removed during ramp-down SHALL finish their current iteration (graceful stop, max 30s).
+`--executor ramping-vus` SHALL follow stages given as `--stage <duration>:<target_vus>` (repeatable) or, when no `--stage` is given, as `[[bench.stages]]` (`duration`, `target`) in `rustman.toml`, linearly changing the VU count during each stage. VUs removed during ramp-down SHALL finish their current iteration (graceful stop, max 30s).
 
 #### Scenario: Ramp up and down
 - **WHEN** the user runs `--executor ramping-vus --stage 30s:20 --stage 1m:20 --stage 30s:0`
 - **THEN** VUs SHALL grow linearly from 0 to 20 over 30s, hold 20 for 1 minute, and drop to 0 over 30s
+
+#### Scenario: Stages from rustman.toml
+- **GIVEN** `rustman.toml` with `[[bench.stages]]` entries and no `--stage` flag
+- **WHEN** the user runs `--executor ramping-vus`
+- **THEN** the VU count SHALL follow those stages, and any `--stage` flag SHALL replace them all
 
 ### Requirement: Constant arrival rate executor
 `--executor constant-arrival-rate --rate R` SHALL start R iterations per second regardless of response times (open model), using a pre-allocated VU pool (`--max-vus`, default 50). When no VU is free, the iteration SHALL be counted as `dropped` and reported.
@@ -95,9 +112,14 @@ Bench SHALL record, per request file and overall:
 - latency min, avg, p50, p90, p95, p99 and max, from HDR histograms with 3 significant digits;
 - requests per second;
 - iteration count and duration;
-- errors by class (4xx, 5xx, timeout, connect, TLS, blocked, assertion failure);
+- errors by class: `4xx`, `5xx`, `timeout`, `connect`, `tls`, `blocked`, `assertion` and `other` (any other failure, such as an unresolved variable);
 - per-phase timings from `http-requests`;
 - bytes sent and received.
+
+#### Scenario: Unresolved variable
+- **GIVEN** a request file using `{{token}}`, which no environment, `--var` or data row defines
+- **WHEN** it is benched
+- **THEN** each of its requests SHALL count as an `other` error, with the resolution error as the error sample
 
 #### Scenario: Per-request breakdown
 - **WHEN** a bench of `login` and `list-items` completes

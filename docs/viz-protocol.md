@@ -27,7 +27,7 @@ The producer opens every session with `hello`. The companion answers with `hello
 
 ## Messages
 
-Opening a view, and loading a saved report (`kind` is `run` or `exploration`; `view` is optional, e.g. `api_graph` for `--view graph`):
+Opening a view, and loading a saved report (`kind` is `run`, `exploration` or `bench`; `view` is optional, e.g. `api_graph` for `--view graph`):
 
 ```json
 {"type":"open_view","view":"run_dashboard","title":"smoke/"}
@@ -52,6 +52,14 @@ An exploration. Severities are `critical`, `high`, `medium`, `low` and `info`:
 {"type":"exploration_finished","state":"completed","operations_total":24,"operations_exercised":18,"status_codes_documented":40,"status_codes_seen":31}
 ```
 
+A bench (`rustman bench --viz`, see [Load testing](bench.md)) opens the `bench` view, then sends one `bench_tick` per second with that second's requests, errors, rate, latency percentiles (milliseconds) and active VUs, and a final `bench_finished` with the totals and thresholds. `remaining_ms` is left out when the bench has no fixed duration, and `aborted` (`threshold` or `interrupted`) when it ran to its end. Bench events hold counts, timings and threshold expressions only, never request or response content:
+
+```json
+{"type":"open_view","view":"bench","title":"rustman bench https://staging.example.com"}
+{"type":"bench_tick","second":3,"elapsed_ms":3000,"remaining_ms":27000,"active_vus":10,"requests":412,"errors":2,"rps":412.0,"p50_ms":18.2,"p95_ms":61.0,"p99_ms":120.4}
+{"type":"bench_finished","state":"completed","duration_ms":30000,"iterations":4100,"requests":12300,"errors":41,"rps":410.0,"p50_ms":18.0,"p95_ms":64.3,"p99_ms":130.1,"thresholds":[{"expression":"p95<300ms","passed":true,"actual":"64.3ms"}]}
+```
+
 A response for the inspector, inline or by reference. Header values and bodies are redacted by the producer before they are written (secrets appear as `«redacted:name»`); the companion has no reveal function:
 
 ```json
@@ -69,7 +77,7 @@ Errors and the end of a session:
 
 ## Priorities
 
-A companion whose queue is full may coalesce progress messages (`exchange_completed`, `probe_completed`), but never drops `finding`, `run_finished` or `exploration_finished`.
+A companion whose queue is full may coalesce progress messages (`exchange_completed`, `probe_completed`), but never drops `finding`, `run_finished`, `exploration_finished` or `bench_finished`. Producers apply the same rule to their own queue: `rustman bench --viz` drops a `bench_tick` rather than wait for a slow companion, never the `bench_finished`.
 
 ## Exit codes of the companion
 

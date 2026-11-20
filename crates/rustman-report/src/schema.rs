@@ -3,14 +3,15 @@
 //!
 //! The `kind: run` part is the contract `bootstrap-core-engine` published,
 //! kept verbatim in `run.schema.json` so every old run report stays valid.
-//! The `kind: exploration` and `kind: contract` parts are generated with
-//! `schemars` from [`ExplorationReport`] and [`ContractReport`], so they
-//! cannot drift from the Rust types.
+//! The `kind: exploration`, `kind: contract` and `kind: bench` parts are
+//! generated with `schemars` from [`ExplorationReport`], [`ContractReport`]
+//! and [`BenchReport`], so they cannot drift from the Rust types.
 
 use schemars::JsonSchema;
 use schemars::generate::SchemaSettings;
 use serde_json::{Map, Value, json};
 
+use crate::bench::{BenchReport, KIND_BENCH};
 use crate::contract::{ContractReport, KIND_CONTRACT};
 use crate::exploration::{ExplorationReport, KIND_EXPLORATION};
 use crate::report::SCHEMA;
@@ -26,15 +27,18 @@ pub fn report_schema() -> String {
     defs.insert("exploration_report".to_owned(), exploration);
     let contract = generated::<ContractReport>(KIND_CONTRACT, &mut defs);
     defs.insert("contract_report".to_owned(), contract);
+    let bench = generated::<BenchReport>(KIND_BENCH, &mut defs);
+    defs.insert("bench_report".to_owned(), bench);
     let schema = json!({
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": ID,
         "title": SCHEMA,
-        "description": "A Rustman report: a run (kind: run), an exploration (kind: exploration) or a contract check (kind: contract). Every text field is redacted: secret values appear as «redacted:<name>».",
+        "description": "A Rustman report: a run (kind: run), an exploration (kind: exploration), a contract check (kind: contract) or a load test (kind: bench). Every text field is redacted: secret values appear as «redacted:<name>».",
         "oneOf": [
             { "$ref": "#/$defs/run_report" },
             { "$ref": "#/$defs/exploration_report" },
-            { "$ref": "#/$defs/contract_report" }
+            { "$ref": "#/$defs/contract_report" },
+            { "$ref": "#/$defs/bench_report" }
         ],
         "$defs": defs,
     });
@@ -80,6 +84,8 @@ mod tests {
             "contract"
         );
         assert!(defs.contains_key("ReportFinding"));
+        assert_eq!(defs["bench_report"]["properties"]["kind"]["const"], "bench");
+        assert!(defs.contains_key("ThresholdResult"));
         assert_eq!(
             defs["exploration_report"]["properties"]["kind"]["const"],
             "exploration"

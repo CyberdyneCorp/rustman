@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/CyberdyneCorp/rustman/docs/schemas/report.schema.json",
   "title": "rustman.report/v1",
-  "description": "A Rustman report: a run (kind: run), an exploration (kind: exploration) or a contract check (kind: contract). Every text field is redacted: secret values appear as «redacted:<name>».",
+  "description": "A Rustman report: a run (kind: run), an exploration (kind: exploration), a contract check (kind: contract) or a load test (kind: bench). Every text field is redacted: secret values appear as «redacted:<name>».",
   "oneOf": [
     {
       "$ref": "#/$defs/run_report"
@@ -12,6 +12,9 @@
     },
     {
       "$ref": "#/$defs/contract_report"
+    },
+    {
+      "$ref": "#/$defs/bench_report"
     }
   ],
   "$defs": {
@@ -2152,6 +2155,633 @@
         "items"
       ],
       "description": "A contract report."
+    },
+    "BenchProfile": {
+      "type": "object",
+      "properties": {
+        "executor": {
+          "type": "string",
+          "description": "`constant-vus`, `ramping-vus` or `constant-arrival-rate`."
+        },
+        "vus": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "duration_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "iterations": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "think_time": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "`0`, `500ms` or a range such as `1s..3s`."
+        },
+        "stages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StageProfile"
+          }
+        },
+        "rate": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0,
+          "description": "Iterations started per second (`constant-arrival-rate`)."
+        },
+        "max_vus": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "executor"
+      ],
+      "description": "The load profile, as the flags gave it."
+    },
+    "StageProfile": {
+      "type": "object",
+      "properties": {
+        "duration_ms": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "target": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "duration_ms",
+        "target"
+      ],
+      "description": "One `ramping-vus` stage."
+    },
+    "Aborted": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "threshold",
+          "description": "An abort-on-fail (`!`) threshold was breached."
+        },
+        {
+          "type": "string",
+          "const": "interrupted",
+          "description": "Ctrl+C."
+        }
+      ],
+      "description": "Why a bench stopped before its end."
+    },
+    "BenchTotals": {
+      "type": "object",
+      "properties": {
+        "latency_kind": {
+          "$ref": "#/$defs/LatencyKind"
+        },
+        "duration_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "iterations": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "Iterations that ran to their end."
+        },
+        "iteration_duration": {
+          "$ref": "#/$defs/LatencySummary",
+          "description": "How long those iterations took, from their first request's start to\ntheir last one's end (think time excluded).",
+          "default": {
+            "min_ms": 0.0,
+            "avg_ms": 0.0,
+            "p50_ms": 0.0,
+            "p90_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0
+          }
+        },
+        "interrupted": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "Iterations cancelled before their end."
+        },
+        "scheduled": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "Iterations the open model scheduled (0 for closed models)."
+        },
+        "dropped": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "Scheduled iterations that found no free VU."
+        },
+        "rps": {
+          "type": "number",
+          "format": "double",
+          "description": "Requests per second over the whole run."
+        },
+        "generator_lag_p99_ms": {
+          "type": "number",
+          "format": "double",
+          "description": "The 99th percentile of the load generator's scheduling lag: how\nlate its timers fired. Above 10 ms the results may be\ngenerator-bound."
+        }
+      },
+      "required": [
+        "latency_kind",
+        "duration_ms",
+        "iterations",
+        "interrupted",
+        "scheduled",
+        "dropped",
+        "rps",
+        "generator_lag_p99_ms"
+      ],
+      "description": "The counts of a whole bench."
+    },
+    "LatencyKind": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "service",
+          "description": "Closed models: the time each request took."
+        },
+        {
+          "type": "string",
+          "const": "corrected",
+          "description": "The open model: measured from the scheduled start (coordinated\nomission corrected)."
+        }
+      ],
+      "description": "Whether latencies include queuing before the iteration started."
+    },
+    "LatencySummary": {
+      "type": "object",
+      "properties": {
+        "min_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "avg_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "p50_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "p90_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "p95_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "p99_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "max_ms": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "min_ms",
+        "avg_ms",
+        "p50_ms",
+        "p90_ms",
+        "p95_ms",
+        "p99_ms",
+        "max_ms"
+      ],
+      "description": "Latency percentiles in milliseconds, from an HDR histogram with 3\nsignificant digits; all 0 without requests."
+    },
+    "StatsSummary": {
+      "type": "object",
+      "properties": {
+        "requests": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "errors": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "description": "Errors by class: `4xx`, `5xx`, `timeout`, `connect`, `tls`,\n`blocked`, `assertion`, `other`."
+        },
+        "error_rate": {
+          "type": "number",
+          "format": "double",
+          "description": "Errors over requests, from 0 to 1."
+        },
+        "latency": {
+          "$ref": "#/$defs/LatencySummary"
+        },
+        "checks": {
+          "$ref": "#/$defs/Checks",
+          "description": "Assertions that passed and failed."
+        },
+        "phases": {
+          "$ref": "#/$defs/PhaseSummary",
+          "description": "Average time of each phase, over the requests that had it."
+        },
+        "bytes_sent": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "Approximate: the request line, headers and text body as recorded."
+        },
+        "bytes_received": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "Response body bytes."
+        }
+      },
+      "required": [
+        "requests",
+        "errors",
+        "error_rate",
+        "latency",
+        "checks",
+        "phases",
+        "bytes_sent",
+        "bytes_received"
+      ],
+      "description": "The statistics of one request file, or of every file together."
+    },
+    "Checks": {
+      "type": "object",
+      "properties": {
+        "passed": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "passed",
+        "failed"
+      ],
+      "description": "Assertion outcomes."
+    },
+    "PhaseSummary": {
+      "type": "object",
+      "properties": {
+        "dns_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "connect_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "tls_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "ttfb_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "download_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      },
+      "description": "Average phase timings in milliseconds; a phase no request went\nthrough (no new connection, no TLS) is absent."
+    },
+    "FileSummary": {
+      "type": "object",
+      "properties": {
+        "file": {
+          "type": "string",
+          "description": "The request file, relative to the workspace root, with `/`."
+        },
+        "requests": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "errors": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "description": "Errors by class: `4xx`, `5xx`, `timeout`, `connect`, `tls`,\n`blocked`, `assertion`, `other`."
+        },
+        "error_rate": {
+          "type": "number",
+          "format": "double",
+          "description": "Errors over requests, from 0 to 1."
+        },
+        "latency": {
+          "$ref": "#/$defs/LatencySummary"
+        },
+        "checks": {
+          "$ref": "#/$defs/Checks",
+          "description": "Assertions that passed and failed."
+        },
+        "phases": {
+          "$ref": "#/$defs/PhaseSummary",
+          "description": "Average time of each phase, over the requests that had it."
+        },
+        "bytes_sent": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "Approximate: the request line, headers and text body as recorded."
+        },
+        "bytes_received": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "Response body bytes."
+        }
+      },
+      "required": [
+        "file",
+        "requests",
+        "errors",
+        "error_rate",
+        "latency",
+        "checks",
+        "phases",
+        "bytes_sent",
+        "bytes_received"
+      ],
+      "description": "The statistics of one request file."
+    },
+    "BenchSecond": {
+      "type": "object",
+      "properties": {
+        "second": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "description": "1 for the first second of the run."
+        },
+        "requests": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "errors": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "rps": {
+          "type": "number",
+          "format": "double"
+        },
+        "p50_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "p95_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "p99_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "active_vus": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "description": "VUs running at the end of the second."
+        }
+      },
+      "required": [
+        "second",
+        "requests",
+        "errors",
+        "rps",
+        "p50_ms",
+        "p95_ms",
+        "p99_ms",
+        "active_vus"
+      ],
+      "description": "One second of a bench."
+    },
+    "ThresholdResult": {
+      "type": "object",
+      "properties": {
+        "expression": {
+          "type": "string",
+          "description": "As written, such as `p95<300ms` or `error_rate<5%!`."
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "actual": {
+          "type": "string",
+          "description": "The measured value, such as `412ms` or `0.20%`; `n/a` when there\nwas nothing to measure (`checks` without assertions)."
+        },
+        "abort": {
+          "type": "boolean",
+          "description": "An abort-on-fail (`!`) threshold."
+        }
+      },
+      "required": [
+        "expression",
+        "passed",
+        "actual",
+        "abort"
+      ],
+      "description": "How one threshold ended."
+    },
+    "ErrorSample": {
+      "type": "object",
+      "properties": {
+        "class": {
+          "type": "string",
+          "description": "The error class: `4xx`, `5xx`, `timeout`, ..."
+        },
+        "file": {
+          "type": "string",
+          "description": "The request file."
+        },
+        "message": {
+          "type": "string"
+        },
+        "at_ms": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "Milliseconds since the start of the run."
+        }
+      },
+      "required": [
+        "class",
+        "file",
+        "message",
+        "at_ms"
+      ],
+      "description": "One error, as it happened (redacted)."
+    },
+    "bench_report": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "rustman.report/v1"
+        },
+        "kind": {
+          "const": "bench"
+        },
+        "rustman_version": {
+          "type": "string"
+        },
+        "started_at": {
+          "type": "string",
+          "description": "RFC 3339."
+        },
+        "finished_at": {
+          "type": "string",
+          "description": "RFC 3339."
+        },
+        "target": {
+          "type": "string",
+          "description": "The `--target` origin: the only one requests could go to."
+        },
+        "environment": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "profile": {
+          "$ref": "#/$defs/BenchProfile"
+        },
+        "aborted": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Aborted"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Why the bench stopped early; absent when it ran to its end."
+        },
+        "totals": {
+          "$ref": "#/$defs/BenchTotals"
+        },
+        "overall": {
+          "$ref": "#/$defs/StatsSummary",
+          "description": "Every request file together."
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FileSummary"
+          },
+          "description": "One entry per request file, in collection order."
+        },
+        "series": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BenchSecond"
+          },
+          "description": "One point per second of the run."
+        },
+        "thresholds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ThresholdResult"
+          },
+          "description": "Every threshold, in the order given."
+        },
+        "error_samples": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ErrorSample"
+          },
+          "description": "At most 20 per error class, in the order they happened (redacted)."
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Non-fatal problems, such as a generator-bound run.",
+          "default": []
+        }
+      },
+      "required": [
+        "schema",
+        "kind",
+        "rustman_version",
+        "started_at",
+        "finished_at",
+        "target",
+        "profile",
+        "totals",
+        "overall",
+        "files",
+        "series",
+        "thresholds",
+        "error_samples"
+      ],
+      "description": "A bench report."
     }
   }
 }

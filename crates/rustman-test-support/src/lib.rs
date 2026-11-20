@@ -3,6 +3,7 @@
 //! beyond the loopback interface. Never published.
 
 pub mod bad_api;
+pub mod bench;
 pub mod certs;
 pub mod digest;
 pub mod graphql;
@@ -26,6 +27,7 @@ pub mod routes;
 pub mod server;
 
 pub use bad_api::BadApi;
+pub use bench::{BenchHit, BenchServer};
 pub use certs::TestCerts;
 pub use digest::DigestServer;
 pub use graphql::{GraphqlServer, Introspection};

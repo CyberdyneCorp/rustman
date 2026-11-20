@@ -11,8 +11,9 @@ A report has a top-level `schema` (`rustman.report/v1`) and a `kind`:
 | `run` | `rustman run --reporter json`, `rustman send` | Every request with its file, redacted exchange, timings, assertion results and captures; see [the CLI reference](cli.md#rustman-run) |
 | `exploration` | `rustman explore run` (always, as `.rustman/explorations/<id>/report.json`) | The seed, safety settings, probe totals by outcome, the coverage matrix, the findings with evidence and reproduction, and the resources left behind; see [Exploration](exploration.md#findings-and-the-report) |
 | `contract` | `rustman contract diff --report json` | What a contract command checked, as one list of items, with a `mode` (`diff`, `pact-verify` or `conformance`); see [Contract reports](#contract-reports) |
+| `bench` | `rustman bench --report json=<file>` | The load profile, the target, latency and error statistics per request file and overall, a per-second time series, the threshold results and error samples; see [Bench reports](#bench-reports) |
 
-`rustman report schema` prints the JSON Schema (draft 2020-12) that every kind validates against. The same file is published at [`schemas/report.schema.json`](schemas/report.schema.json). Its `kind: run` part is the contract the first reporters published, kept as is; its `kind: exploration` and `kind: contract` parts are generated from the Rust types with `schemars`, and a test fails if the published file drifts from them.
+`rustman report schema` prints the JSON Schema (draft 2020-12) that every kind validates against. The same file is published at [`schemas/report.schema.json`](schemas/report.schema.json). Its `kind: run` part is the contract the first reporters published, kept as is; its `kind: exploration`, `kind: contract` and `kind: bench` parts are generated from the Rust types with `schemars`, and a test fails if the published file drifts from them.
 
 A reader built before a kind existed refuses it instead of misreading it: `rustman report render` exits 2 with `unknown report kind '<kind>'`.
 
@@ -142,6 +143,16 @@ A conformance report also has a `coverage`: how many documented operations the e
 - **SARIF**: one `reportingDescriptor` per rule id and one result per item, located in the primary document (`artifactLocation`) at the JSON pointer of the changed element (`logicalLocations[].fullyQualifiedName`). An item that fails the command is at level `error`, an unaccepted `unknown` one at `warning`, the others at `note`; an allowlisted item carries its justification as an `external` suppression.
 
 `report diff` does not compare contract reports (exit 2).
+
+### Bench reports
+
+A `kind: bench` report ([`rustman bench`](bench.md#reports)) has the `target`, the `environment`, the `profile` (the `executor` and its flags), `aborted` when the run stopped early (`threshold` or `interrupted`; absent otherwise), the `totals` (the latency kind `service` or `corrected`, duration, iterations completed and interrupted, scheduled and dropped iterations, requests per second and the generator's p99 lag), the `overall` statistics and those of each request file in `files` (requests, errors by class, `error_rate`, latency min/avg/p50/p90/p95/p99/max in milliseconds, assertion `checks` passed and failed, average `phases`, `bytes_sent` and `bytes_received`), the per-second `series` (requests, errors, rps, p50/p95/p99 and active VUs), the `thresholds` (each `expression`, `passed`, the `actual` value and whether it is an `abort` one), up to 20 `error_samples` per error class (class, file, redacted message and time since the start) and the `warnings`.
+
+- **Markdown** and **HTML**: the target, executor and duration, a summary line (passed or failed, iterations, requests and rate), the thresholds as `✓ p95<300ms (212ms)` or `✗ p95<300ms (412ms)`, a latency table per file plus an `overall` row, the error samples and the warnings. The HTML page adds two inline SVG charts, latency over time (p50, p95, p99) and requests per second; it needs no script and works offline.
+- **JUnit XML**: one `<testsuite>` named `bench` with one `<testcase>` per threshold, a breached one being a `<failure>` of type `threshold`, plus an `<error>` test case when the run was aborted.
+- **SARIF**: one `error` result per breached threshold (rule `bench-threshold`), without a location.
+
+`report diff` does not compare bench reports (exit 2).
 
 ## Comparing reports
 
