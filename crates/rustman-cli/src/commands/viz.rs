@@ -62,11 +62,11 @@ pub fn run(args: &VizArgs) -> Result<u8, CliError> {
     let kind = match report {
         Report::Run(_) => ReportKind::Run,
         Report::Exploration(_) => ReportKind::Exploration,
-        Report::Contract(_) | Report::Bench(_) => {
-            let other = if matches!(report, Report::Contract(_)) {
-                "contract"
-            } else {
-                "bench"
+        Report::Contract(_) | Report::Bench(_) | Report::Stress(_) => {
+            let other = match report {
+                Report::Contract(_) => "contract",
+                Report::Bench(_) => "bench",
+                _ => "stress",
             };
             return Err(ConfigError::Usage(format!(
                 "{shown} is a {other} report; the viz companion shows run and exploration reports \
