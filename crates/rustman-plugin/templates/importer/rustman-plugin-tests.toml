@@ -1,0 +1,15 @@
+# Cases for `rustman plugin test .`.
+[[case]]
+name = "each line becomes a request"
+convert = { format = "lines", source_path = "requests.txt", source = "GET https://api.example.com/users\n" }
+expect = { "request.1-get.rman.yaml" = "version: 1\nkind: http\nname: request 1\nmethod: 'GET'\nurl: 'https://api.example.com/users'\n" }
+
+[[case]]
+name = "urls with variables stay valid YAML"
+convert = { format = "lines", source_path = "requests.txt", source = "post {{base_url}}/a?x=1#top\n" }
+expect = { "request.1-post.rman.yaml" = "version: 1\nkind: http\nname: request 1\nmethod: 'POST'\nurl: '{{base_url}}/a?x=1#top'\n" }
+
+[[case]]
+name = "other lines are refused"
+convert = { format = "lines", source_path = "requests.txt", source = "nonsense\n" }
+expect_error = "'nonsense' is not METHOD URL"

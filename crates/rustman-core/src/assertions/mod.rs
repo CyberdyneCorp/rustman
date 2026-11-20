@@ -15,6 +15,7 @@ mod header;
 mod json;
 mod jsonrpc;
 mod mcp;
+mod plugin;
 mod realtime;
 mod response;
 mod schema;
@@ -32,6 +33,7 @@ use crate::vars::Resolver;
 use crate::workspace::RequestRef;
 
 pub use mcp::McpFacts;
+pub use plugin::PluginCalls;
 pub use realtime::{RealtimeFacts, wait_matches};
 pub use response::{GrpcView, ResponseView};
 pub use schema::MAX_VIOLATIONS;
@@ -107,6 +109,9 @@ pub struct Context<'r, 'a> {
     pub request: Option<&'r RequestRef<'a>>,
     /// Redacts messages; secrets used in expected values are added to it.
     pub redactor: &'r Redactor,
+    /// The loaded plugins, for `plugin` assertions; without them a
+    /// `plugin` assertion is an error.
+    pub plugins: Option<&'r PluginCalls<'r>>,
 }
 
 /// Whether evaluating `assertions` reads the response body.
@@ -119,6 +124,7 @@ pub fn needs_body(assertions: &[Assertion]) -> bool {
                 | Assertion::Body(_)
                 | Assertion::RpcError(_)
                 | Assertion::Snapshot(_)
+                | Assertion::Plugin(_)
         ) || graphql::reads_result(a)
             || mcp::reads_result(a)
     })
@@ -200,6 +206,7 @@ fn evaluate_one(
         Assertion::RpcError(expected) => jsonrpc::evaluate(expected, response, interp),
         Assertion::GrpcStatus(expected) => grpc::evaluate(*expected, view),
         Assertion::Metadata(metadata) => header::metadata(metadata, view, interp),
+        Assertion::Plugin(plugin) => plugin::evaluate(plugin, response, ctx.plugins),
         Assertion::Snapshot(snapshot) => {
             Check::new("snapshot", format!("snapshot {}", snapshot.name()))
                 .error(SNAPSHOT_NEEDS_RUNNER)
@@ -276,7 +283,7 @@ impl Check {
         }
     }
 
-    fn result(
+    pub(crate) fn result(
         self,
         outcome: Outcome,
         expected: Option<String>,

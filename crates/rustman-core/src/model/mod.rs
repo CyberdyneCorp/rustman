@@ -19,10 +19,10 @@ pub mod ws;
 
 pub use assertion::{
     Assertion, BodyAssertion, CountExpectation, CountOp, GrpcStatusExpectation, HeaderAssertion,
-    JsonAssertion, LatencyAssertion, MessagesAssertion, MetadataAssertion, RpcErrorExpectation,
-    SchemaAssertion, StatusExpectation,
+    JsonAssertion, LatencyAssertion, MessagesAssertion, MetadataAssertion, PluginAssertion,
+    RpcErrorExpectation, SchemaAssertion, StatusExpectation,
 };
-pub use auth::{ApiKeyLocation, Auth, OAuth2, OAuth2Grant};
+pub use auth::{ApiKeyLocation, Auth, OAuth2, OAuth2Grant, PluginAuth};
 pub use body::{Body, JsonContent, Part, PartSource};
 pub use capture::{Capture, CaptureSource};
 pub use common::{Checked, NameValue, Validate, VarValue, Variables};
@@ -36,12 +36,14 @@ pub use grpc::{
     GrpcRequest, GrpcSchema, GrpcTls, GrpcTransport, NO_MESSAGE_ERROR, StreamLimits,
     grpc_code_name, parse_grpc_code,
 };
-pub use http::{HttpRequest, Method, RequestSettings};
+pub use http::{HttpRequest, Method, RequestSettings, Transform};
 pub use jsonrpc::{
     BatchCall, CallFields, EndpointScheme, JsonrpcRequest, JsonrpcSettings, MAX_BATCH_CALLS,
     RetrySettings, SubscriptionSpec, jsonrpc_as_http, unlocated,
 };
-pub use kind::{KindLoader, KindRegistry, OpaqueRequest, REQUEST_VERSION, Request};
+pub use kind::{
+    BUILTIN_KINDS, COMMON_FIELDS, KindLoader, KindRegistry, OpaqueRequest, REQUEST_VERSION, Request,
+};
 pub use mcp::{McpOperation, McpRequest};
 pub use signed_auth::{AwsCredentials, AwsSigV4, Jwt, JwtAlgorithm};
 pub use snapshot::{

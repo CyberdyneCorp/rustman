@@ -59,6 +59,9 @@ Options:
       --ci
           CI mode: never write snapshots, and fail on a missing one (also on when the CI variable is true or 1)
 
+      --trust-plugins
+          Load the workspace plugins even when this machine has not trusted them yet, and record the approval (for CI)
+
       --color <WHEN>
           Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
           

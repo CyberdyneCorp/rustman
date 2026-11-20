@@ -18,6 +18,8 @@ mod multipart;
 mod oauth2;
 #[cfg(feature = "otlp")]
 mod otlp;
+mod plugin_auth;
+mod plugin_transform;
 mod proxy;
 mod raw_stream;
 mod redirect;
@@ -46,6 +48,7 @@ pub use curl::{
     COMPRESSED_ACCEPT_ENCODING, CurlError, Exported, Imported, export_curl, import_curl,
     import_curl_words,
 };
+pub use dns::AddressGuard;
 pub use engine::{BodyOverride, DEFAULT_CONNECT_TIMEOUT, HttpEngine, SendOptions, header_pairs};
 pub use error::{Phase, RequestError};
 pub use exchange::{Exchange, HttpVersion};
@@ -55,6 +58,7 @@ pub use oauth2::{
     cache_key as oauth2_cache_key, interactive_login_required,
     login_warnings as oauth2_login_warnings,
 };
+pub use plugin_auth::PluginHooks;
 pub use proxy::{NoProxy, ProxyKind, ProxySettings, ProxyUrl};
 pub use raw_stream::{ALPN_HTTP1, RawStream, open_raw_stream};
 pub use redirect::RedirectHop;

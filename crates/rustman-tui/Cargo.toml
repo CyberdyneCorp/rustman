@@ -48,6 +48,8 @@ http.workspace = true
 otlp = ["rustman-http/otlp"]
 
 [dev-dependencies]
+# The plugin trust store and test plugins (add-plugin-system task 4.1).
+rustman-plugin = { workspace = true, features = ["test-fixtures"] }
 bytes.workspace = true
 time.workspace = true
 insta.workspace = true

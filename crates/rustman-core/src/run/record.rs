@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use super::graphql::GraphqlRecord;
 use super::jsonrpc::JsonrpcRecord;
 use super::mcp::McpRecord;
+use super::plugin::{PluginKindRecord, TransformRecord};
 use super::realtime::RealtimeRecord;
 use crate::assertions::AssertionResult;
 use crate::captures::CaptureResult;
@@ -269,6 +270,14 @@ pub struct RequestRecord {
     /// on or the request set its own; absent otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trace: Option<TraceRecord>,
+    /// The plugin transformers the request went through, and the response
+    /// body as received; absent without `transform:`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transform: Option<TransformRecord>,
+    /// The exchange of a request of a plugin kind; absent for every other
+    /// kind.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plugin_kind: Option<PluginKindRecord>,
 }
 
 impl RequestRecord {
@@ -295,6 +304,8 @@ impl RequestRecord {
             mcp: None,
             grpc: None,
             realtime: None,
+            transform: None,
+            plugin_kind: None,
         }
     }
 

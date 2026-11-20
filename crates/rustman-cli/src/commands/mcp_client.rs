@@ -192,7 +192,7 @@ struct Place {
 impl Place {
     fn find(explicit: Option<&Path>, target: &ServerTarget) -> Result<Self, ConfigError> {
         let cwd = current_dir()?;
-        match Workspace::discover(&cwd, explicit) {
+        match super::plugins::discover(&cwd, explicit) {
             Ok(ws) => {
                 print_warnings(&ws.warnings);
                 Ok(Self {

@@ -96,16 +96,23 @@ impl Reporter {
 
 /// Write a report to `path`, creating its folder (see [`write_report`]).
 pub(crate) fn write_file(path: &Path, text: &str) -> std::io::Result<()> {
+    write_file_bytes(path, text.as_bytes())
+}
+
+/// Write report bytes to `path` like the built-in reporters do: creating
+/// its folder, and replacing a regular file atomically. Report plugins'
+/// output is written with it.
+pub fn write_file_bytes(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     if let Some(folder) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
         std::fs::create_dir_all(folder)?;
     }
-    write_report(path, text)
+    write_report(path, bytes)
 }
 
 /// Write a report to `path`. A device or pipe (`/dev/stdout`) is written in
 /// place; a symlink is followed, so the file it points to gets the report;
 /// a regular file is replaced atomically.
-fn write_report(path: &Path, text: &str) -> std::io::Result<()> {
+fn write_report(path: &Path, text: &[u8]) -> std::io::Result<()> {
     match std::fs::metadata(path) {
         Ok(meta) if !meta.is_file() => std::fs::write(path, text),
         Ok(_) => write_atomic(&std::fs::canonicalize(path)?, text),
@@ -119,7 +126,7 @@ fn write_report(path: &Path, text: &str) -> std::io::Result<()> {
 /// write never leaves half a report. The temporary name is unique to this
 /// write (process id and a ULID), so parallel runs writing the same report
 /// never share one.
-fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
+fn write_atomic(path: &Path, text: &[u8]) -> std::io::Result<()> {
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
     let temp = path.with_file_name(format!(
         ".{}.{}-{}.tmp",
@@ -170,7 +177,7 @@ mod tests {
         std::thread::scope(|scope| {
             for i in 0..8 {
                 let path = &path;
-                scope.spawn(move || write_atomic(path, &format!("report {i}")).unwrap());
+                scope.spawn(move || write_atomic(path, format!("report {i}").as_bytes()).unwrap());
             }
         });
         assert!(
@@ -187,6 +194,22 @@ mod tests {
             std::io::ErrorKind::PermissionDenied
         )));
         assert!(!in_use(&std::io::Error::from(std::io::ErrorKind::NotFound)));
+    }
+
+    /// Plugin reports are bytes: written like the built-in reports, into a
+    /// new folder, replacing a file atomically with nothing left behind.
+    #[test]
+    fn report_bytes_are_written_atomically() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("out/r.xlsx");
+        write_file_bytes(&path, b"old").unwrap();
+        write_file_bytes(&path, &[0, 159, 146, 150]).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), [0, 159, 146, 150]);
+        let names: Vec<String> = std::fs::read_dir(dir.path().join("out"))
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["r.xlsx"]);
     }
 
     #[test]

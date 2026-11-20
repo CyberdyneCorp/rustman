@@ -378,6 +378,7 @@ pub(crate) fn auth(a: &Auth) -> ImportedAuth {
         }),
         Auth::Digest { .. } => ImportedAuth::Unsupported("digest".to_owned()),
         Auth::AwsSigV4(_) => ImportedAuth::Unsupported("aws_sigv4".to_owned()),
+        Auth::Plugin(_) => ImportedAuth::Unsupported("plugin".to_owned()),
         Auth::Jwt(_) => ImportedAuth::Unsupported("jwt".to_owned()),
     }
 }

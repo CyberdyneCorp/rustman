@@ -108,6 +108,7 @@ fn http_request(r: &ImportedRequest, target: &Target<'_>, notes: &mut Vec<Note>)
         headers: name_values(&r.headers),
         body: r.body.as_ref().map(|b| body(b, target, &r.location, notes)),
         auth: r.auth.as_ref().map(auth),
+        transform: None,
         settings: None,
         variables: variables(&r.variables),
         assertions: (!r.checks.is_empty()).then(|| r.checks.iter().filter_map(assertion).collect()),

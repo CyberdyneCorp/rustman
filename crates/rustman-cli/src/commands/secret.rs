@@ -81,7 +81,7 @@ impl Context {
             path: PathBuf::from("."),
             source: e,
         })?;
-        let ws = Workspace::discover(&cwd, common.workspace.as_deref())?;
+        let ws = super::plugins::discover(&cwd, common.workspace.as_deref())?;
         super::print_warnings(&ws.warnings);
         let backend = SecretBackend::from_env_value(std::env::var(BACKEND_VAR).ok().as_deref())?;
         let store = SecretStore::open(&ws.root, backend);

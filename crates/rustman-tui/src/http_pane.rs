@@ -742,6 +742,7 @@ fn auth_state(auth: Option<&Auth>) -> (AuthKind, KvTable) {
         Some(Auth::Digest { .. }) => (AuthKind::Other("digest"), vec![]),
         Some(Auth::AwsSigV4(_)) => (AuthKind::Other("aws_sigv4"), vec![]),
         Some(Auth::Jwt(_)) => (AuthKind::Other("jwt"), vec![]),
+        Some(Auth::Plugin(_)) => (AuthKind::Other("plugin"), vec![]),
     };
     let rows = kind
         .fields()

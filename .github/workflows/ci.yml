@@ -54,6 +54,15 @@ jobs:
           if cargo tree --workspace --locked --edges normal --prefix none | grep -E '^opentelemetry'; then
             echo "an OpenTelemetry crate is in the default build"; exit 1
           fi
+      # add-plugin-system task 1.2: the plugin API's WIT package parses
+      # with wasm-tools (the additive-only check is the wit_api test).
+      # Pinned, so a wasm-tools release cannot change what the check
+      # accepts (it matches the wit-parser 0.247 of Cargo.lock).
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-tools@1.247.0
+      - name: Plugin WIT package parses
+        run: wasm-tools component wit crates/rustman-plugin-sdk/wit/plugin.wit > /dev/null
       # add-importers task 2.3: imported scripts are never executed, so no
       # JavaScript engine may enter the dependency tree.
       - name: No JavaScript engine in the dependency tree
@@ -146,6 +155,12 @@ jobs:
         run: |
           cargo test -p rustman-secrets --no-default-features --locked --test builtin cloud_type_in_a_minimal_build
           cargo build -p rustman-cli --no-default-features --locked
+      # add-plugin-system task 1.1: plugins (wasmtime) are a default
+      # feature; the binary also builds without them.
+      - name: Build and test without plugins
+        run: |
+          cargo build -p rustman-cli --no-default-features --locked
+          cargo test -p rustman-cli --no-default-features --locked --bin rustman
       # add-trace-propagation section 4: everything again with OTLP export
       # built in on Linux; macOS and Windows run the export tests against
       # the in-process collector (task 5.1's in-process variant).
@@ -570,6 +585,21 @@ jobs:
           chmod +x pact-verifier
           echo "PACT_VERIFIER_CLI=$RUNNER_TEMP/pact/pact-verifier" >> "$GITHUB_ENV"
       - run: cargo test -p rustman-contract --test pact_interop --locked -- --nocapture
+
+  # add-plugin-system task 6.2 ("Scaffold builds"): every `rustman plugin
+  # new` template scaffolds, builds to wasm32-wasip2 against this
+  # repository's SDK, passes `rustman plugin test` and is accepted by
+  # `rustman plugin add`; the SDK's guest bindings pass clippy on wasm.
+  plugin-templates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+      - name: Add the plugin target
+        run: rustup target add wasm32-wasip2
+      - uses: Swatinem/rust-cache@v2
+      - run: python3 scripts/check_plugin_templates.py
 
   deny:
     runs-on: ubuntu-latest

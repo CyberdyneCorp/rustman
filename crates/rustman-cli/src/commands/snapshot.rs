@@ -58,7 +58,7 @@ struct PruneArgs {
 }
 
 pub fn run(args: &SnapshotArgs) -> Result<u8, CliError> {
-    let ws = Workspace::discover(&current_dir()?, args.workspace.as_deref())?;
+    let ws = super::plugins::discover(&current_dir()?, args.workspace.as_deref())?;
     print_warnings(&ws.warnings);
     match &args.command {
         SnapshotCommand::List(list) => {

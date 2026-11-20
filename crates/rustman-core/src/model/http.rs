@@ -33,10 +33,38 @@ pub struct HttpRequest {
     pub body: Option<Body>,
     pub auth: Option<Auth>,
     pub settings: Option<RequestSettings>,
+    /// Plugin transformers of the request and response bodies.
+    pub transform: Option<Transform>,
     pub variables: Option<Variables>,
     #[serde(default, deserialize_with = "super::snapshot::unique_snapshot_names")]
     pub assertions: Option<Vec<Assertion>>,
     pub captures: Option<Vec<Checked<Capture>>>,
+}
+
+/// `transform: {request: [...], response: [...]}`: plugin transformers
+/// (`<plugin>/<name>`), applied in order. Request transformers run after
+/// interpolation and before auth; response transformers before assertions
+/// and captures (plugins spec, "Transformer extension point").
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Transform {
+    #[serde(default, deserialize_with = "qualified_names")]
+    pub request: Vec<String>,
+    #[serde(default, deserialize_with = "qualified_names")]
+    pub response: Vec<String>,
+}
+
+fn qualified_names<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<String>, D::Error> {
+    let names = Vec::<String>::deserialize(deserializer)?;
+    if let Some(bad) = names
+        .iter()
+        .find(|n| crate::plugins::split_qualified(n).is_none())
+    {
+        return Err(de::Error::custom(format!(
+            "invalid transformer '{bad}' (expected <plugin>/<name>)"
+        )));
+    }
+    Ok(names)
 }
 
 impl HttpRequest {

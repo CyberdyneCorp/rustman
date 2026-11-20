@@ -1,0 +1,317 @@
+/// The Rustman plugin API, major 1 (add-plugin-system design D2).
+///
+/// Every world imports all host interfaces; each host function checks the
+/// plugin's grants when it is called and returns `capability-denied` when
+/// the grant is missing. Within major 1 the package only grows: new
+/// functions, types and worlds may be added, and nothing that exists may be
+/// removed or changed (see `wit/frozen/`).
+package rustman:plugin@1.0.0;
+
+/// Types shared by the host interfaces and the extension points.
+interface types {
+    /// Why a host call failed.
+    variant host-error {
+        /// The plugin holds no grant for this call, for example `fs` or
+        /// `net evil.example.net`.
+        capability-denied(string),
+        /// The workspace safety policy refused the request.
+        policy-denied(string),
+        /// The call was allowed but did not succeed.
+        failed(string),
+    }
+
+    /// One HTTP header, in the order it was written.
+    record header {
+        name: string,
+        value: string,
+    }
+
+    /// A name and a value: a query parameter or an argument.
+    record param {
+        name: string,
+        value: string,
+    }
+}
+
+/// Outgoing HTTP, granted per host with `net:<host>[:port]`. Requests go
+/// through the workspace safety policy and are recorded in history.
+/// Redirects are not followed: the plugin sees the redirect response.
+interface http {
+    use types.{header, host-error};
+
+    record request {
+        method: string,
+        url: string,
+        headers: list<header>,
+        body: list<u8>,
+    }
+
+    record response {
+        status: u16,
+        headers: list<header>,
+        body: list<u8>,
+    }
+
+    fetch: func(request: request) -> result<response, host-error>;
+}
+
+/// Wall-clock time, granted with `clock`.
+interface clock {
+    use types.{host-error};
+
+    record datetime {
+        /// Seconds since 1970-01-01T00:00:00Z.
+        seconds: u64,
+        nanoseconds: u32,
+    }
+
+    now: func() -> result<datetime, host-error>;
+}
+
+/// Random bytes, granted with `random`.
+interface random {
+    use types.{host-error};
+
+    /// At most 65536 bytes per call.
+    bytes: func(len: u32) -> result<list<u8>, host-error>;
+}
+
+/// Environment variables, granted one at a time with `env:<NAME>`.
+interface env {
+    use types.{host-error};
+
+    get: func(name: string) -> result<option<string>, host-error>;
+}
+
+/// Workspace files, granted per folder with `fs:read:<dir>`. Paths are
+/// relative to the workspace root, use `/`, and never resolve outside the
+/// workspace or into `.rustman/`.
+interface fs-read {
+    use types.{host-error};
+
+    read: func(path: string) -> result<list<u8>, host-error>;
+    list-dir: func(path: string) -> result<list<string>, host-error>;
+}
+
+/// Secrets as handles. A handle names a secret; its value is revealed only
+/// with `secrets:read:<name>`.
+interface secrets {
+    use types.{host-error};
+
+    resource secret-ref {
+        name: func() -> string;
+        reveal: func() -> result<string, host-error>;
+    }
+
+    /// The handle of a secret of the session; `none` when no such secret
+    /// exists. Looking a secret up needs no grant; revealing it does.
+    lookup: func(name: string) -> option<secret-ref>;
+}
+
+/// Plugin log lines, redacted and shown with `-v`. Always available.
+interface log {
+    enum level {
+        debug,
+        info,
+        warn,
+        error,
+    }
+
+    write: func(level: level, message: string);
+}
+
+/// `auth: {type: plugin, scheme: <plugin>/<scheme>, ...params}`.
+interface auth-scheme {
+    use types.{header, param};
+
+    /// The fully resolved request to sign.
+    record auth-request {
+        scheme: string,
+        method: string,
+        url: string,
+        headers: list<header>,
+        body: list<u8>,
+        params: list<param>,
+    }
+
+    /// What signing adds. A `url` may only change the path and query: a
+    /// different method, host or body is refused by the host.
+    record auth-output {
+        set-headers: list<header>,
+        add-query: list<param>,
+        url: option<string>,
+    }
+
+    schemes: func() -> list<string>;
+    sign: func(request: auth-request) -> result<auth-output, string>;
+}
+
+/// `- plugin: {fn: <plugin>/<fn>, ...args}` in `assertions`.
+interface assertion-fn {
+    use types.{header};
+
+    /// The redacted exchange.
+    record exchange {
+        method: string,
+        url: string,
+        request-headers: list<header>,
+        request-body: list<u8>,
+        status: u16,
+        response-headers: list<header>,
+        response-body: list<u8>,
+        duration-ms: u64,
+    }
+
+    variant verdict {
+        pass,
+        fail(string),
+        error(string),
+    }
+
+    functions: func() -> list<string>;
+    /// `args` is a JSON object.
+    check: func(function: string, exchange: exchange, args: string) -> verdict;
+}
+
+/// Dynamic variables `{{$<plugin>.<name> args...}}`.
+interface value-generator {
+    names: func() -> list<string>;
+    generate: func(name: string, args: list<string>) -> result<string, string>;
+}
+
+/// `transform: {request: [...], response: [...]}`.
+interface body-transformer {
+    use types.{header};
+
+    record message {
+        headers: list<header>,
+        body: list<u8>,
+    }
+
+    request-transformers: func() -> list<string>;
+    response-transformers: func() -> list<string>;
+    transform-request: func(name: string, url: string, message: message) -> result<message, string>;
+    transform-response: func(name: string, status: u16, message: message) -> result<message, string>;
+}
+
+/// `rustman import <format> <src>`.
+interface format-importer {
+    /// A file the host validates and writes, relative to the import folder.
+    record imported-file {
+        path: string,
+        content: string,
+    }
+
+    record import-output {
+        requests: list<imported-file>,
+        environments: list<imported-file>,
+    }
+
+    formats: func() -> list<string>;
+    convert: func(format: string, source-path: string, source: list<u8>) -> result<import-output, string>;
+}
+
+/// New request kinds in the workspace kind registry.
+interface request-kind {
+    use types.{header};
+
+    variant editor {
+        text,
+        /// Code with a language for highlighting.
+        code(string),
+        key-value,
+        select(list<string>),
+    }
+
+    record pane-field {
+        name: string,
+        label: string,
+        editor: editor,
+    }
+
+    enum response-view {
+        raw,
+        json-tree,
+        table,
+    }
+
+    /// The declarative TUI pane of a kind.
+    record pane {
+        fields: list<pane-field>,
+        views: list<response-view>,
+    }
+
+    record kind-info {
+        name: string,
+        /// A JSON Schema for the request file's fields.
+        schema: string,
+        pane: pane,
+    }
+
+    record kind-exchange {
+        /// What was sent, in one line.
+        summary: string,
+        request-body: list<u8>,
+        status: option<u16>,
+        headers: list<header>,
+        body: list<u8>,
+    }
+
+    kinds: func() -> list<kind-info>;
+    /// `request` is the resolved request file as JSON.
+    execute: func(kind: string, request: string) -> result<kind-exchange, string>;
+}
+
+/// `--reporter <plugin>/<format>:path` and `report render --format`.
+interface report-renderer {
+    formats: func() -> list<string>;
+    /// `report` is the redacted `rustman.report/v1` JSON document.
+    render: func(format: string, report: string) -> result<list<u8>, string>;
+}
+
+/// The host functions every plugin can call.
+world host {
+    import types;
+    import http;
+    import clock;
+    import random;
+    import env;
+    import fs-read;
+    import secrets;
+    import log;
+}
+
+world auth {
+    include host;
+    export auth-scheme;
+}
+
+world assertion {
+    include host;
+    export assertion-fn;
+}
+
+world generator {
+    include host;
+    export value-generator;
+}
+
+world transformer {
+    include host;
+    export body-transformer;
+}
+
+world importer {
+    include host;
+    export format-importer;
+}
+
+world kind {
+    include host;
+    export request-kind;
+}
+
+world report {
+    include host;
+    export report-renderer;
+}

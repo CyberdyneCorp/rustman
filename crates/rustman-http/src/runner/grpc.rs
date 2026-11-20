@@ -160,10 +160,12 @@ impl Runner<'_> {
         let mut redactor = self.request_redactor(Some(&checked.resolved.request), None);
         redactor.merge(&outcome.credentials);
         let assertions = expectations(checked.grpc, outcome.stopped);
+        let plugins = self.plugin_calls(&checked.resolved.request, &redactor);
         let ctx = Context {
             resolver: checked.resolver,
             request: Some(checked.request),
             redactor: &redactor,
+            plugins: plugins.as_ref(),
         };
         record.assertions = assertions::evaluate(&assertions, &outcome.view, &ctx);
         let captures = checked.grpc.captures.as_deref().unwrap_or_default();

@@ -1,0 +1,5 @@
+# Cases for `rustman plugin test .`.
+[[case]]
+name = "the request is echoed"
+execute = { kind = "echo", request = "{\"message\":\"hi\"}" }
+expect = { summary = "echo", body = "{\"message\":\"hi\"}" }

@@ -23,6 +23,20 @@ use crate::format::{Located, from_yaml};
 /// The only request-file version this build reads and writes.
 pub const REQUEST_VERSION: u64 = 1;
 
+/// The built-in request kinds. Plugins can never register these names
+/// (plugins spec, "Request kind extension point").
+pub const BUILTIN_KINDS: [&str; 7] = ["http", "graphql", "jsonrpc", "grpc", "mcp", "ws", "sse"];
+
+/// The keys every request file may have, whatever its kind.
+pub const COMMON_FIELDS: [&str; 6] = [
+    "version",
+    "kind",
+    "name",
+    "description",
+    "tags",
+    "variables",
+];
+
 /// Turns the text of a request file into a [`Request`].
 pub type KindLoader = fn(file: &Path, text: &str) -> Result<Request, LoadError>;
 
@@ -141,6 +155,35 @@ impl Request {
     }
 }
 
+impl OpaqueRequest {
+    /// The request file as JSON (YAML anchors and tags resolved).
+    pub fn to_json(&self, file: &Path) -> Result<serde_json::Value, LoadError> {
+        from_yaml(file, &self.source)
+    }
+
+    /// The fields of its kind: the request file without the common fields.
+    pub fn kind_fields(&self, file: &Path) -> Result<serde_json::Value, LoadError> {
+        let mut value = self.to_json(file)?;
+        if let Some(map) = value.as_object_mut() {
+            map.retain(|key, _| !COMMON_FIELDS.contains(&key.as_str()));
+        }
+        Ok(value)
+    }
+
+    /// Where `kind:` is written, for errors about it.
+    pub fn kind_position(&self) -> Position {
+        let line = self
+            .source
+            .lines()
+            .position(|l| l.trim_start().starts_with("kind:"))
+            .unwrap_or(0);
+        Position {
+            line: line + 1,
+            column: 1,
+        }
+    }
+}
+
 /// A request of a kind whose fields this build does not model. Only the common
 /// fields are read; saving writes the original text back unchanged.
 #[derive(Clone, Debug, PartialEq)]
@@ -168,7 +211,7 @@ impl Default for KindRegistry {
     fn default() -> Self {
         Self {
             kinds: vec![
-                ("http", load_http),
+                (BUILTIN_KINDS[0], load_http),
                 ("graphql", load_graphql),
                 ("jsonrpc", load_jsonrpc),
                 ("grpc", load_grpc),

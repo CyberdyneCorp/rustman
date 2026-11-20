@@ -145,6 +145,7 @@ pub fn request_file(
         headers: (!headers.is_empty()).then_some(headers),
         body,
         auth: None,
+        transform: None,
         settings: None,
         variables: None,
         assertions: None,

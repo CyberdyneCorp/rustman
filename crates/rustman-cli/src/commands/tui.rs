@@ -28,6 +28,17 @@ pub struct TuiArgs {
     vim: bool,
 }
 
+/// The workspace plugin trust prompt, in a build with plugins.
+fn plugin_gate() -> rustman_tui::plugin_trust::Gate {
+    #[cfg(feature = "plugins")]
+    let gate = rustman_tui::plugin_trust::Gate(Some(std::sync::Arc::new(
+        rustman_plugin::trust::TrustGate::default(),
+    )));
+    #[cfg(not(feature = "plugins"))]
+    let gate = rustman_tui::plugin_trust::Gate::default();
+    gate
+}
+
 fn parse_theme(name: &str) -> Result<ThemeName, String> {
     name.parse()
 }
@@ -51,7 +62,7 @@ pub fn run(args: &TuiArgs) -> u8 {
         ascii: args.ascii,
         vim: args.vim,
     };
-    match rustman_tui::run(&start, overrides) {
+    match rustman_tui::run_with(&start, overrides, plugin_gate()) {
         Ok(()) => exit::SUCCESS,
         Err(err @ (TuiError::Io(_) | TuiError::Failed(_))) => fail(&err, 1),
         Err(TuiError::Signal { code, .. }) => code,

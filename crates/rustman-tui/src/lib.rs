@@ -61,6 +61,10 @@ pub mod monitors;
 mod monitors_tests;
 pub mod palette;
 pub mod pane;
+pub mod plugin_pane;
+pub mod plugin_trust;
+#[cfg(test)]
+mod plugin_trust_tests;
 pub mod realtime;
 pub mod realtime_pane;
 #[cfg(test)]
@@ -313,6 +317,16 @@ fn flush_spans() {
 /// Open the TUI on the workspace found from `start` (spec: Launching the
 /// TUI) and run it until the user quits.
 pub fn run(start: &Path, overrides: Overrides) -> Result<(), TuiError> {
+    run_with(start, overrides, plugin_trust::Gate::default())
+}
+
+/// [`run`], with the plugin trust store that asks before a workspace's
+/// plugins may load (add-plugin-system).
+pub fn run_with(
+    start: &Path,
+    overrides: Overrides,
+    plugin_gate: plugin_trust::Gate,
+) -> Result<(), TuiError> {
     if !start.is_dir() {
         return Err(TuiError::NotADirectory(start.to_path_buf()));
     }
@@ -322,6 +336,7 @@ pub fn run(start: &Path, overrides: Overrides) -> Result<(), TuiError> {
     // Spilled viz bodies go when this returns or a panic unwinds out of it.
     let _viz_spills = viz::CleanupGuard::new();
     let (mut state, effects) = initial_state(start, overrides);
+    state.plugin_gate = plugin_gate;
     state.snapshot_mode = review::mode_from_env(std::env::var("CI").ok().as_deref());
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()

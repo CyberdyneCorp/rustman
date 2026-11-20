@@ -591,6 +591,7 @@ impl<'a> Executor<'a> {
             headers: rows(&step.headers),
             body: step.body.clone().map(|v| Body::Json(JsonContent::Value(v))),
             auth,
+            transform: None,
             settings: None,
             variables: None,
             assertions: None,

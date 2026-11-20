@@ -19,6 +19,9 @@ pub mod mcp;
 pub mod mcp_client;
 pub mod mock;
 pub mod monitor;
+#[cfg(feature = "plugins")]
+pub mod plugin;
+pub mod plugins;
 pub mod realtime;
 pub mod report;
 pub mod rpc;
@@ -60,8 +63,10 @@ pub struct EnvSelection {
 
 impl EnvSelection {
     /// The workspace, found from the current directory unless `--workspace`.
+    /// With plugins declared, request files of other kinds load as opaque:
+    /// commands that run them check them against the plugin kinds.
     pub fn workspace(&self) -> Result<Workspace, ConfigError> {
-        let ws = Workspace::discover(&current_dir()?, self.workspace.as_deref())?;
+        let ws = plugins::discover(&current_dir()?, self.workspace.as_deref())?;
         print_warnings(&ws.warnings);
         Ok(ws)
     }

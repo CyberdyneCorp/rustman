@@ -88,6 +88,12 @@ pub struct State {
     pub mock: crate::mock_server::MockPane,
     /// The MCP inspector pane and its session.
     pub mcp: McpPane,
+    /// Checks and records the workspace plugin trust; empty without plugin
+    /// support.
+    pub plugin_gate: crate::plugin_trust::Gate,
+    /// The request kinds of the workspace's trusted plugins, with the panes
+    /// they declare.
+    pub plugin_kinds: Vec<rustman_core::plugins::PluginKind>,
 }
 
 /// Modals drawn over the shell.
@@ -117,6 +123,8 @@ pub enum Overlay {
     SnapshotQueue(Box<review::Queue>),
     /// The Monitors view.
     Monitors(Box<crate::monitors::MonitorsView>),
+    /// The workspace plugin trust prompt (add-plugin-system).
+    PluginTrust(Box<rustman_core::plugins::PluginTrustPrompt>),
 }
 
 /// What fills the terminal.
@@ -470,6 +478,8 @@ impl State {
             snapshot_mode: SnapshotMode::Record,
             mock: crate::mock_server::MockPane::default(),
             mcp: McpPane::default(),
+            plugin_gate: crate::plugin_trust::Gate::default(),
+            plugin_kinds: Vec::new(),
         }
     }
 
@@ -666,6 +676,7 @@ fn open_workspace(state: &mut State, ws: Box<Workspace>) {
         state.notify(Severity::Warn, warning.clone());
     }
     state.screen = Screen::Shell(Session::Workspace(ws));
+    crate::plugin_trust::check(state);
 }
 
 fn on_key(state: &mut State, key: KeyEvent) -> Vec<Effect> {

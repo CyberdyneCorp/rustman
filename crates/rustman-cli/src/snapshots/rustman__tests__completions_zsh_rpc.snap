@@ -209,6 +209,7 @@ never\:"Never color"))' \
 '--no-history[Do not record the replayed exchange]' \
 '--body-only[Print only the response body, redacted (as received with --show-secrets)]' \
 '--show-secrets[Print secret values and credential headers as they are, on this terminal only (history and reports stay redacted)]' \
+'--trust-plugins[Load the workspace plugins even when this machine has not trusted them yet, and record the approval (for CI)]' \
 '*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
 '*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
 '-h[Print help]' \

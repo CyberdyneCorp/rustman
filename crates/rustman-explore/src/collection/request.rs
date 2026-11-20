@@ -74,6 +74,7 @@ pub fn request_for(
         headers,
         body,
         auth: context.auth.cloned(),
+        transform: None,
         settings: None,
         variables: None,
         assertions: None,

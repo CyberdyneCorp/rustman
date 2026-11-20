@@ -57,6 +57,7 @@ pub async fn run(root: &Path, folder: &str, env: &str) -> Vec<Ran> {
             resolver: &resolver,
             request: Some(&request),
             redactor: &redactor,
+            plugins: None,
         };
         let results = assertions::evaluate(list, &view, &ctx);
         drop(resolver);

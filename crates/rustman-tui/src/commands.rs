@@ -34,6 +34,7 @@ pub fn shell_key(state: &mut State, chord: Chord) -> Vec<Effect> {
         Some(Overlay::Import(_)) => import_dialog::key(state, chord),
         Some(Overlay::SnapshotQueue(_)) => review::queue_key(state, chord),
         Some(Overlay::Monitors(_)) => crate::monitors::key(state, chord),
+        Some(Overlay::PluginTrust(_)) => crate::plugin_trust::key(state, chord),
         _ => match crate::webhook::key(state, chord)
             .or_else(|| crate::mock_server::key(state, chord))
             .or_else(|| crate::mcp::key(state, chord))

@@ -90,8 +90,25 @@ The first time a workspace's plugin set is loaded (or after any plugin's sha256 
 - **WHEN** the workspace loads
 - **THEN** the trust prompt SHALL be shown again
 
+### Requirement: Trusted load verification
+A load SHALL compute the plugin-set hash again from the files it reads, and SHALL refuse a set whose hash is not the approved one, so files changed between the trust check and the load never run unapproved.
+
+#### Scenario: Manifest edited after the trust check
+- **GIVEN** a trusted plugin set whose manifest file is edited after the trust check passed
+- **WHEN** the set loads
+- **THEN** loading SHALL fail with `the workspace plugins changed while they were loading; review them again`
+
+### Requirement: Plugins in TUI sends
+Once a workspace's plugin set is trusted, a request sent from the TUI SHALL use its extension points like a headless command does. While the set is untrusted, a request that needs a plugin SHALL fail with a message naming the unloaded plugin.
+
+#### Scenario: Generator in a TUI send
+- **GIVEN** a request using `{{$faker.email}}` and the `faker` plugin
+- **WHEN** it is sent from the TUI after the set was trusted
+- **THEN** the sent URL SHALL hold the generated value
+- **AND** without trust the send SHALL fail with `plugin faker is not loaded`
+
 ### Requirement: Headless plugin trust
-Headless commands (`rustman run`, `send`, `explore` and others) SHALL refuse to load untrusted plugins. They SHALL fail with `workspace plugins are not trusted (run interactively or pass --trust-plugins)` and exit code 2, unless `--trust-plugins` is passed or the current plugin-set hash is already trusted.
+Headless commands (`rustman run`, `send`, `bench`, `history replay`, `explore` and others) SHALL refuse to load untrusted plugins. They SHALL fail with `workspace plugins are not trusted (run interactively or pass --trust-plugins)` and exit code 2, unless `--trust-plugins` is passed or the current plugin-set hash is already trusted.
 
 #### Scenario: CI run
 - **GIVEN** a fresh CI checkout of a workspace with plugins
@@ -110,6 +127,11 @@ A plugin SHALL start with no access to the filesystem, network, environment vari
 - **WHEN** it tries to open a file
 - **THEN** the call SHALL fail with `capability_denied: fs`
 - **AND** no host file SHALL be read
+
+#### Scenario: Granted folder symlinked out of the workspace
+- **GIVEN** `grants = ["fs:read:data"]` and `data` a symbolic link to a folder outside the workspace
+- **WHEN** the plugin reads `data/<file>`
+- **THEN** the call SHALL fail with `capability_denied: fs`
 
 #### Scenario: Grant beyond the manifest
 - **GIVEN** `grants = ["env:HOME"]` and a manifest that doesn't request `env`
@@ -148,6 +170,15 @@ A plugin with `net:<host>` SHALL send requests only through a host-provided HTTP
 - **WHEN** the same plugin fetches `https://evil.example.net/`
 - **THEN** the call SHALL fail with `capability_denied: net evil.example.net`
 
+### Requirement: Resolved address check
+A granted host name SHALL NOT reach a loopback, private, link-local or unspecified address it resolves to, checked on the addresses connected to, unless the grant names that address or `localhost` literally.
+
+#### Scenario: Granted name resolving to a private address
+- **GIVEN** `grants = ["net:api.example.com"]` and `api.example.com` resolving to `169.254.169.254`
+- **WHEN** the plugin fetches `https://api.example.com/`
+- **THEN** the connection SHALL be refused with `policy_denied: api.example.com resolves to the private address 169.254.169.254 (grant the address itself to reach it)`
+- **AND** a grant naming the address itself (`net:169.254.169.254`) or `localhost` SHALL still reach it
+
 ### Requirement: Secrets inside plugins
 A plugin SHALL receive a secret value in clear only when it holds `secrets:read:<name>` for that secret. Otherwise, values passed to the plugin SHALL carry the placeholder `«redacted:<name>»`. Anything a plugin returns, logs or reports SHALL pass through the redaction invariant of `environments`.
 
@@ -155,7 +186,7 @@ A plugin SHALL receive a secret value in clear only when it holds `secrets:read:
 - **GIVEN** an auth plugin with `grants = ["secrets:read:aws_secret_key", "clock"]`
 - **WHEN** it signs a request
 - **THEN** it SHALL receive the real `aws_secret_key` value
-- **AND** history SHALL show the resulting `Authorization` header as `«redacted:Authorization»`
+- **AND** history SHALL NOT contain the real value: like built-in auth, the headers an auth plugin sets are not recorded, and wherever the value shows up (for example echoed in a response) it SHALL appear as `«redacted:aws_secret_key»`
 
 #### Scenario: Plugin without a grant
 - **GIVEN** a transformer plugin without secret grants, and a body containing `{{api_token}}`
@@ -167,13 +198,13 @@ A plugin SHALL receive a secret value in clear only when it holds `secrets:read:
 - **THEN** the log line SHALL show `«redacted:api_token»`
 
 ### Requirement: Resource limits
-Each plugin call SHALL have a CPU budget (default 100 ms, enforced by epoch interruption) and a memory limit (default 64 MiB). Either can be raised per plugin with `limits = { cpu_ms, memory_mib }`, up to 10 s and 1024 MiB. Exceeding a limit SHALL abort the call with `plugin <name>: cpu limit exceeded` or `memory limit exceeded`, and SHALL NOT crash Rustman.
+Each plugin call SHALL have an execution time budget, `cpu_ms` (default 100 ms of wall time spent running the plugin, excluding host calls, enforced by epoch interruption) and a memory limit (default 64 MiB). Either can be raised per plugin with `limits = { cpu_ms, memory_mib }`, up to 10 s and 1024 MiB. Exceeding a limit SHALL abort the call with `plugin <name>: execution time limit exceeded` or `memory limit exceeded`, and SHALL NOT crash Rustman.
 
 #### Scenario: Infinite loop
 - **GIVEN** an assertion plugin that loops forever
 - **WHEN** a request using it runs
 - **THEN** the call SHALL be aborted after about 100 ms
-- **AND** the assertion SHALL report `error: plugin my-check: cpu limit exceeded`
+- **AND** the assertion SHALL report `error: plugin my-check: execution time limit exceeded`
 - **AND** the run SHALL continue with the next request
 
 #### Scenario: Limit above maximum
@@ -260,12 +291,17 @@ A `report` plugin SHALL register an output format usable as `--reporter <plugin>
 - **THEN** `r.xlsx` SHALL contain the bytes the plugin returned
 
 ### Requirement: Agents cannot manage plugins
-The agent interface SHALL NOT expose tools to add, remove, trust or grant plugins. MCP server sessions SHALL load only plugins whose plugin-set hash is already trusted. Plugin capabilities SHALL appear to agents only through the tools they back (for example a request kind used by `send_request`).
+The agent interface SHALL NOT expose tools to add, remove, trust or grant plugins. MCP server sessions SHALL load only plugins whose plugin-set hash is already trusted, and their plugins SHALL send only safe-method (read-only) requests. Plugin capabilities SHALL appear to agents only through the tools they back (for example a request kind used by `send_request`).
 
 #### Scenario: Untrusted plugins in agent mode
 - **GIVEN** a workspace whose plugin set isn't trusted
 - **WHEN** `rustman mcp serve` starts
 - **THEN** the server SHALL start without plugins and log `plugins not loaded: workspace not trusted`
+
+#### Scenario: Plugins in agent sessions only read
+- **GIVEN** a trusted plugin with a `net:` grant, loaded by `rustman mcp serve`
+- **WHEN** it sends a `POST` to its granted host during an agent's request
+- **THEN** the host SHALL refuse it with `policy-denied`, since an agent's mutations need the human's confirmation, which a plugin call cannot ask for
 
 ### Requirement: Plugin SDK and template
 A `rustman-plugin-sdk` crate SHALL provide Rust bindings for the WIT world of each extension point. `rustman plugin new <name> --kind <extension point>` SHALL scaffold a buildable project with a manifest, a sample implementation, tests and a `cargo build --target wasm32-wasip2` recipe.

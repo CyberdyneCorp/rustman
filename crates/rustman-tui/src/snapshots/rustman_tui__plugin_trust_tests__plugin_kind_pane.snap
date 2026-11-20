@@ -1,0 +1,34 @@
+---
+source: crates/rustman-tui/src/plugin_trust_tests.rs
+expression: text
+---
+┌ order ───────────────────────────────────────────────────────────────────────────────────────────┐
+│ Kind "soap" from plugin soapy                                                                    │
+│ Fields                                                                                           │
+│ Endpoint  text                                                                                   │
+│   {{base_url}}/soap                                                                              │
+│ SOAP action  one of: GetOrder, ListOrders                                                        │
+│   GetOrder                                                                                       │
+│ Envelope  code (xml)                                                                             │
+│   <Envelope>                                                                                     │
+│     <Body/>                                                                                      │
+│   </Envelope>                                                                                    │
+│ Response views  Raw, JSON tree                                                                   │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌ Response ────────────────────────────────────────────────────────────────────────────────────────┐
+│ No response yet · press Ctrl+Enter to send                                                       │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ w │ no environment │ TLS verified │ 0 in flight                                        Ctrl+Q quit

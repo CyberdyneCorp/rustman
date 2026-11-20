@@ -84,6 +84,12 @@ fn escape_auth(auth: Auth) -> Auth {
             }
             Auth::AwsSigV4(sigv4)
         }
+        Auth::Plugin(mut plugin) => {
+            for (_, value) in &mut plugin.params {
+                *value = escape(value);
+            }
+            Auth::Plugin(plugin)
+        }
         Auth::Jwt(mut jwt) => {
             jwt.secret = jwt.secret.as_deref().map(escape);
             jwt.private_key = jwt.private_key.as_deref().map(escape);
@@ -191,6 +197,7 @@ mod tests {
             headers: Some(headers),
             body: None,
             auth: Some(auth),
+            transform: None,
             settings: None,
             variables: None,
             assertions: None,

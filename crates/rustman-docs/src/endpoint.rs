@@ -277,6 +277,7 @@ fn auth_scheme(auth: &Auth) -> Option<&'static str> {
         Auth::Digest { .. } => "digest",
         Auth::AwsSigV4(_) => "aws_sigv4",
         Auth::Jwt(_) => "jwt",
+        Auth::Plugin(_) => "plugin",
     })
 }
 

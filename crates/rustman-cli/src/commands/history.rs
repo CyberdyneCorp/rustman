@@ -81,6 +81,8 @@ struct ReplayArgs {
     no_history: bool,
     #[command(flatten)]
     output: OutputFlags,
+    #[command(flatten)]
+    plugins: super::plugins::PluginFlags,
 }
 
 pub fn run(args: &HistoryArgs) -> Result<u8, CliError> {
@@ -101,7 +103,7 @@ pub(super) struct History {
 
 impl History {
     pub(super) fn open(workspace: Option<&Path>) -> Result<Self, CliError> {
-        let ws = match Workspace::discover(&current_dir()?, workspace) {
+        let ws = match super::plugins::discover(&current_dir()?, workspace) {
             Ok(ws) => ws,
             Err(ConfigError::NoWorkspace) if workspace.is_none() => {
                 let store = HistoryStore::global(&HistorySettings::default())?;
@@ -182,10 +184,17 @@ impl History {
         // a provider secret that cannot be fetched.
         let resolve = replay.resolve_for_send(environment, env_name, &secrets, Some(&providers));
         let resolved = runtime.block_on(resolve)?;
+        // A request signed by a plugin is signed again: its workspace's
+        // plugins load under the same trust rule as `run` and `send`.
+        let plugins = match &self.ws {
+            Some(ws) => super::plugins::headless(&ws.root, environment, &secrets, &args.plugins)?,
+            None => None,
+        };
         let record = settings.history.enabled && !args.no_history;
         let options = RunOptions {
             login: login_mode(),
             history: record.then_some(self.store),
+            plugins,
             ..RunOptions::default()
         };
         let cancel = options.cancel.clone();
@@ -217,10 +226,16 @@ fn write_stdout(text: &str) {
     let _ = out.write_all(text.as_bytes()).and_then(|()| out.flush());
 }
 
+/// The response status, or for an exchange without an HTTP status (a
+/// plugin request kind) the recorded outcome; `error` when it errored.
 fn status_text(entry: &Entry) -> String {
-    entry
-        .status
-        .map_or_else(|| "error".to_owned(), |s| s.to_string())
+    if let Some(status) = entry.status {
+        return status.to_string();
+    }
+    match entry.record.get("status").and_then(Value::as_str) {
+        Some(outcome @ ("passed" | "failed" | "skipped")) => outcome.to_owned(),
+        _ => "error".to_owned(),
+    }
 }
 
 fn millis_text(entry: &Entry) -> String {
@@ -338,5 +353,47 @@ fn display(value: &Value) -> String {
         Value::String(text) => text.clone(),
         Value::Null => String::new(),
         other => other.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(status: Option<u16>, record: Value) -> Entry {
+        serde_json::from_value(json!({
+            "schema": rustman_core::history::ENTRY_SCHEMA,
+            "id": "01JDQ3XG000000000000000000",
+            "timestamp": "2026-11-17T09:30:00.123Z",
+            "request": "order.rman.yaml",
+            "environment": null,
+            "sent": {"method": "SOAP", "url": "http://x/soap", "headers": [], "body": null},
+            "status": status,
+            "total_ms": 4.0,
+            "error": record.get("error").cloned().unwrap_or(Value::Null),
+            "spill": null,
+            "record": record,
+            "replay": null,
+        }))
+        .unwrap()
+    }
+
+    /// A plugin-kind exchange has no HTTP status: its line shows the
+    /// recorded outcome, not `error`.
+    #[test]
+    fn exchanges_without_a_status_show_their_outcome() {
+        let passed = entry(None, json!({"status": "passed"}));
+        assert_eq!(status_text(&passed), "passed");
+        assert!(line(&passed).contains("  passed  "), "{}", line(&passed));
+        assert_eq!(
+            status_text(&entry(None, json!({"status": "failed"}))),
+            "failed"
+        );
+        let errored = entry(None, json!({"status": "errored", "error": "refused"}));
+        assert_eq!(status_text(&errored), "error");
+        assert_eq!(
+            status_text(&entry(Some(201), json!({"status": "passed"}))),
+            "201"
+        );
     }
 }

@@ -36,6 +36,8 @@ rustman-bench = { path = "crates/rustman-bench", version = "0.1.0" }
 rustman-docs = { path = "crates/rustman-docs", version = "0.1.0" }
 rustman-monitor = { path = "crates/rustman-monitor", version = "0.1.0" }
 rustman-secrets = { path = "crates/rustman-secrets", version = "0.1.0" }
+rustman-plugin = { path = "crates/rustman-plugin", version = "0.1.0" }
+rustman-plugin-sdk = { path = "crates/rustman-plugin-sdk", version = "1.0.0" }
 
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
@@ -304,6 +306,24 @@ aes-gcm = { version = "0.11.1", default-features = false, features = ["aes", "al
 # escaped before output; `comrak` (larger, with a syntax highlighter) is
 # rejected.
 pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
+# Plugins (add-plugin-system design D1, D4): WASM components on wasmtime
+# with Cranelift only. No WASI, cache, parallel compilation, profiling,
+# GC or async features. Extism, Lua/Rhai and native dylibs are rejected.
+wasmtime = { version = "50.0.3", default-features = false, features = ["runtime", "cranelift", "component-model", "std"] }
+# Test plugins are written as WAT core modules and wrapped into components
+# in-process (rustman-plugin's `test-fixtures` feature); the WIT
+# compatibility check reads the package with wit-parser. Same 0.261 family
+# as wasmtime 50.
+wat = { version = "~1.261", default-features = false, features = ["component-model"] }
+wit-component = { version = "0.261", default-features = false }
+wit-parser = { version = "0.261", default-features = false, features = ["std"] }
+# Guest bindings of the plugin SDK (add-plugin-system task 6.2), only with
+# its world features: no std, no async, no bitflags. dlmalloc is the
+# allocator of no_std plugin components.
+wit-bindgen = { version = "0.57.1", default-features = false, features = ["macros", "realloc"] }
+dlmalloc = { version = "0.2", default-features = false, features = ["global"] }
+# Plugin manifest versions (already in the tree via wasmtime).
+semver = { version = "1.0.27", default-features = false, features = ["std"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

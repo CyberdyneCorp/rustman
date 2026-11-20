@@ -59,6 +59,9 @@ pub enum Assertion {
     Messages(Checked<MessagesAssertion>),
     /// `close_code: 1000`: the close code of a WebSocket session.
     CloseCode(u16),
+    /// `plugin: {fn: <plugin>/<fn>, ...args}`: an assertion function of a
+    /// plugin (add-plugin-system).
+    Plugin(PluginAssertion),
 }
 
 /// The key naming an assertion's type.
@@ -87,6 +90,7 @@ enum AssertionKey {
     ToolExists,
     Messages,
     CloseCode,
+    Plugin,
 }
 
 impl<'de> Deserialize<'de> for Assertion {
@@ -146,6 +150,7 @@ impl<'de> Visitor<'de> for AssertionVisitor {
             AssertionKey::ToolExists => Assertion::ToolExists(map.next_value()?),
             AssertionKey::Messages => Assertion::Messages(map.next_value()?),
             AssertionKey::CloseCode => Assertion::CloseCode(map.next_value()?),
+            AssertionKey::Plugin => Assertion::Plugin(map.next_value()?),
         };
         if let Some(extra) = map.next_key::<String>()? {
             return Err(de::Error::custom(format!(
@@ -182,7 +187,33 @@ impl AssertionKey {
             Self::ToolExists => "tool_exists",
             Self::Messages => "messages",
             Self::CloseCode => "close_code",
+            Self::Plugin => "plugin",
         }
+    }
+}
+
+/// `plugin: {fn: <plugin>/<fn>, ...args}`: the function to call and the
+/// other fields as its arguments (a JSON object).
+#[derive(Clone, Debug, PartialEq)]
+pub struct PluginAssertion {
+    pub function: String,
+    pub args: serde_json::Map<String, serde_json::Value>,
+}
+
+impl<'de> Deserialize<'de> for PluginAssertion {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let mut args = serde_json::Map::<String, serde_json::Value>::deserialize(deserializer)?;
+        let function = match args.remove("fn") {
+            Some(serde_json::Value::String(function)) => function,
+            Some(_) => return Err(de::Error::custom("plugin assertion: 'fn' must be a string")),
+            None => return Err(de::Error::custom("plugin assertion requires 'fn'")),
+        };
+        if crate::plugins::split_qualified(&function).is_none() {
+            return Err(de::Error::custom(format!(
+                "plugin assertion: invalid fn '{function}' (expected <plugin>/<function>)"
+            )));
+        }
+        Ok(Self { function, args })
     }
 }
 

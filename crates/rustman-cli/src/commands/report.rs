@@ -11,6 +11,7 @@ use rustman_report::exploration::Severity;
 use rustman_report::{RenderFormat, RenderOptions, Report, ReportTarget, diff};
 
 use super::current_dir;
+use super::plugins::{PluginFlags, PluginReport};
 use crate::exit::{self, CliError};
 
 #[derive(Debug, Args)]
@@ -37,8 +38,14 @@ struct RenderArgs {
     #[arg(value_name = "REPORT")]
     report: PathBuf,
     /// Output format: json, junit, markdown, html or sarif
+    // Report plugins exist only in a build with plugin support.
     #[arg(long, value_name = "FORMAT", value_parser = parse_format)]
-    format: RenderFormat,
+    #[cfg_attr(
+        feature = "plugins",
+        arg(help = "Output format: json, junit, markdown, html or sarif, \
+                    or a plugin's <plugin>/<format> (written with -o)")
+    )]
+    format: RenderChoice,
     /// Write to this file instead of stdout
     #[arg(short = 'o', long = "output", value_name = "FILE")]
     output: Option<PathBuf>,
@@ -46,6 +53,15 @@ struct RenderArgs {
     /// (default: the exploration's --fail-on)
     #[arg(long, value_name = "SEVERITY")]
     fail_on: Option<Severity>,
+    #[command(flatten)]
+    plugins: PluginFlags,
+}
+
+/// A built-in rendering, or a report plugin's `<plugin>/<format>`.
+#[derive(Clone, Debug)]
+enum RenderChoice {
+    Builtin(RenderFormat),
+    Plugin(String),
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -70,8 +86,11 @@ struct DiffArgs {
     format: DiffFormat,
 }
 
-fn parse_format(value: &str) -> Result<RenderFormat, String> {
-    value.parse()
+fn parse_format(value: &str) -> Result<RenderChoice, String> {
+    if rustman_core::plugins::split_qualified(value).is_some() {
+        return Ok(RenderChoice::Plugin(value.to_owned()));
+    }
+    value.parse().map(RenderChoice::Builtin)
 }
 
 pub fn run(args: &ReportArgs) -> Result<u8, CliError> {
@@ -86,16 +105,43 @@ pub fn run(args: &ReportArgs) -> Result<u8, CliError> {
 }
 
 fn render(args: &RenderArgs) -> Result<(), CliError> {
+    let format = match &args.format {
+        RenderChoice::Builtin(format) => *format,
+        RenderChoice::Plugin(format) => return render_with_plugin(args, format),
+    };
     let report = read(&args.report)?;
     let options = RenderOptions {
         fail_on: args.fail_on,
         ..render_options(&report)?
     };
     let target = ReportTarget {
-        format: args.format,
+        format,
         path: args.output.clone(),
     };
     write_target(&target, &report, &options)
+}
+
+/// Render with a report plugin of the current workspace, which must be
+/// trusted (or `--trust-plugins`); the file gets the plugin's bytes.
+fn render_with_plugin(args: &RenderArgs, format: &str) -> Result<(), CliError> {
+    let Some(path) = args.output.clone() else {
+        let message = format!("--format {format} writes a file: pass -o <FILE>");
+        return Err(ConfigError::Usage(message).into());
+    };
+    read(&args.report)?;
+    let text = std::fs::read_to_string(&args.report).map_err(|source| ConfigError::Io {
+        path: args.report.clone(),
+        source,
+    })?;
+    let ws = super::plugins::discover(&current_dir()?, None)?;
+    let store = super::exec::secret_store(&ws.root)?;
+    let plugins = super::plugins::headless(&ws.root, None, &store, &args.plugins)?;
+    let target = PluginReport {
+        format: format.to_owned(),
+        path,
+    };
+    super::plugins::write_plugin_reports(plugins.as_ref(), &[target], &text)?;
+    Ok(())
 }
 
 fn diff_command(args: &DiffArgs) -> Result<u8, CliError> {

@@ -1,0 +1,5 @@
+# Cases for `rustman plugin test .`.
+[[case]]
+name = "the report is wrapped"
+render = { format = "text", report = "{\"schema\":\"rustman.report/v1\"}" }
+expect = { output = "rustman report\n\n{\"schema\":\"rustman.report/v1\"}\n" }

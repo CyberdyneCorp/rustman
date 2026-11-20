@@ -100,6 +100,9 @@ pub struct AgentContext {
     /// Where `{{secret:...}}` references of sent requests are fetched;
     /// values are resolved inside the engine and never returned.
     secret_providers: Option<Arc<SecretProviders>>,
+    /// The workspace plugins, loaded only when their set is already
+    /// trusted on this machine; agents can never trust or grant them.
+    plugins: Option<Arc<dyn rustman_core::plugins::Extensions>>,
 }
 
 impl std::fmt::Debug for AgentContext {
@@ -141,6 +144,7 @@ impl AgentContext {
             jobs: Jobs::in_pool(pool),
             audit,
             secret_providers: None,
+            plugins: None,
         }
     }
 
@@ -158,6 +162,21 @@ impl AgentContext {
             Some(providers) => runner.with_secret_providers(providers.clone()),
             None => runner,
         }
+    }
+
+    /// Serve the tools with the workspace's trusted plugins.
+    #[must_use]
+    pub fn with_plugins(
+        mut self,
+        plugins: Option<Arc<dyn rustman_core::plugins::Extensions>>,
+    ) -> Self {
+        self.plugins = plugins;
+        self
+    }
+
+    /// The trusted plugins the session's requests may use.
+    pub fn plugins(&self) -> Option<Arc<dyn rustman_core::plugins::Extensions>> {
+        self.plugins.clone()
     }
 
     pub fn session_id(&self) -> &str {

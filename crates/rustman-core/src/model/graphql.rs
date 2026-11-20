@@ -236,6 +236,7 @@ pub fn graphql_as_http(
         headers: Some(with_accept(request.headers.clone().unwrap_or_default())),
         body: Some(Body::Json(JsonContent::Value(Value::Object(payload)))),
         auth: request.auth.clone(),
+        transform: None,
         settings: None,
         // `variables` holds the GraphQL variables, sent in the payload; it
         // is not a layer of Rustman variables.

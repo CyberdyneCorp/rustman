@@ -83,6 +83,7 @@ fn sample_request() -> Request {
         headers: None,
         body: None,
         auth: None,
+        transform: None,
         settings: None,
         variables: None,
         assertions: Some(vec![Assertion::Status(StatusExpectation::Code(200))]),

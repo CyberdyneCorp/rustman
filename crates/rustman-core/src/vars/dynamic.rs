@@ -42,6 +42,13 @@ pub enum Dynamic {
     RandomString(usize),
     /// An OS environment variable; unresolved when unset.
     Env(String),
+    /// `{{$<plugin>.<name> args...}}`: a value generator of a plugin
+    /// (add-plugin-system), evaluated by the resolver's plugins.
+    Plugin {
+        plugin: String,
+        name: String,
+        args: Vec<String>,
+    },
 }
 
 /// Reads an OS environment variable.
@@ -58,6 +65,9 @@ impl Dynamic {
         let mut words = text.split_whitespace();
         let head = words.next().unwrap_or_default();
         let args: Vec<&str> = words.collect();
+        if let Some(generator) = plugin_generator(head, &args) {
+            return Ok(generator);
+        }
         let Some((_, usage)) = USAGE.iter().find(|(name, _)| *name == head) else {
             return Err(format!("unknown dynamic variable '{head}'"));
         };
@@ -88,7 +98,8 @@ impl Dynamic {
         }
     }
 
-    /// Produce a value. Only `$env` can fail, when the variable is unset.
+    /// Produce a value. Only `$env` can fail, when the variable is unset;
+    /// a plugin generator has no value here (the resolver asks its plugins).
     pub fn evaluate(&self, os_env: OsEnv) -> Option<String> {
         match self {
             Self::Uuid => Some(uuid::Uuid::new_v4().to_string()),
@@ -98,8 +109,24 @@ impl Dynamic {
             Self::RandomInt { min, max } => Some(rand::random_range(*min..=*max).to_string()),
             Self::RandomString(len) => Some(Alphanumeric.sample_string(&mut rand::rng(), *len)),
             Self::Env(name) => os_env(name),
+            Self::Plugin { .. } => None,
         }
     }
+}
+
+/// `$<plugin>.<name>`: a plugin's generator, when both parts are names.
+fn plugin_generator(head: &str, args: &[&str]) -> Option<Dynamic> {
+    let (plugin, name) = head.strip_prefix('$')?.split_once('.')?;
+    let word = |s: &str| {
+        !s.is_empty()
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    };
+    (word(plugin) && word(name)).then(|| Dynamic::Plugin {
+        plugin: plugin.to_owned(),
+        name: name.to_owned(),
+        args: args.iter().map(|a| (*a).to_owned()).collect(),
+    })
 }
 
 fn random_int(min: &str, max: &str) -> Option<Dynamic> {
@@ -140,6 +167,10 @@ impl fmt::Display for Dynamic {
             Self::RandomInt { min, max } => write!(f, "$randomInt {min} {max}"),
             Self::RandomString(len) => write!(f, "$randomString {len}"),
             Self::Env(name) => write!(f, "$env {name}"),
+            Self::Plugin { plugin, name, args } => {
+                write!(f, "${plugin}.{name}")?;
+                args.iter().try_for_each(|arg| write!(f, " {arg}"))
+            }
         }
     }
 }
@@ -168,6 +199,23 @@ mod tests {
             assert_eq!(parsed.get_version_num(), 4, "{id}");
             assert_eq!(id.len(), 36);
         }
+    }
+
+    #[test]
+    fn plugin_generators_parse_and_print_back() {
+        let parsed = Dynamic::parse("$faker.email en  US").unwrap();
+        assert_eq!(
+            parsed,
+            Dynamic::Plugin {
+                plugin: "faker".into(),
+                name: "email".into(),
+                args: vec!["en".into(), "US".into()],
+            }
+        );
+        assert_eq!(parsed.to_string(), "$faker.email en US");
+        assert_eq!(parsed.evaluate(no_env), None);
+        assert!(Dynamic::parse("$faker.").is_err());
+        assert!(Dynamic::parse("$.email").is_err());
     }
 
     #[test]

@@ -373,3 +373,32 @@ async fn error_messages_are_redacted() {
     assert!(!message.contains("s3cr3t"), "{message}");
     assert!(message.contains("«redacted:token»"), "{message}");
 }
+
+/// An engine with an address guard checks the addresses a name resolves
+/// to when it connects: `localhost` resolving to loopback is refused
+/// before any byte is sent, while an engine without a guard reaches it.
+#[tokio::test]
+async fn an_address_guard_refuses_resolved_addresses() {
+    let server = TestServer::http().await;
+    let url = server.url("/status/204").replace("127.0.0.1", "localhost");
+    let guard: rustman_http::AddressGuard = std::sync::Arc::new(|host, ip| {
+        if ip.is_loopback() {
+            Err(format!("{host} resolves to {ip}"))
+        } else {
+            Ok(())
+        }
+    });
+    let guarded = HttpEngine::with_address_guard(guard);
+    let error = guarded
+        .send(&get(&url), &SendOptions::default())
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(&error, RequestError::Blocked(m) if m.starts_with("localhost resolves to")),
+        "{error}"
+    );
+    let open = HttpEngine::new()
+        .send(&get(&url), &SendOptions::default())
+        .await;
+    assert!(open.is_ok(), "{open:?}");
+}

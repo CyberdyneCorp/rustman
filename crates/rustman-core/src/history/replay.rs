@@ -125,6 +125,11 @@ pub enum ReplayAuth {
         location: ApiKeyLocation,
         name: Option<String>,
     },
+    /// Signed by a plugin when replayed; the params as templates.
+    Plugin {
+        scheme: String,
+        params: Vec<(String, String)>,
+    },
 }
 
 /// The request settings that change how it is sent.
@@ -390,6 +395,14 @@ impl Builder<'_> {
             },
             Auth::AwsSigV4(sigv4) => self.aws_sigv4(sigv4),
             Auth::Jwt(jwt) => self.jwt(jwt),
+            Auth::Plugin(plugin) => ReplayAuth::Plugin {
+                scheme: plugin.scheme.clone(),
+                params: plugin
+                    .params
+                    .iter()
+                    .map(|(name, value)| (name.clone(), self.t.text(value)))
+                    .collect(),
+            },
         }
     }
 
@@ -576,6 +589,13 @@ impl ReplayAuth {
             },
             Self::AwsSigV4 { .. } => Auth::AwsSigV4(Box::new(self.aws_sigv4(i))),
             Self::Jwt { .. } => Auth::Jwt(Box::new(self.jwt(i))),
+            Self::Plugin { scheme, params } => Auth::Plugin(crate::model::PluginAuth {
+                scheme: scheme.clone(),
+                params: params
+                    .iter()
+                    .map(|(name, value)| (name.clone(), text(i, value)))
+                    .collect(),
+            }),
         }
     }
 

@@ -215,6 +215,12 @@
         },
         "trace": {
           "$ref": "#/$defs/trace"
+        },
+        "transform": {
+          "$ref": "#/$defs/transform"
+        },
+        "plugin_kind": {
+          "$ref": "#/$defs/plugin_kind"
         }
       }
     },
@@ -1066,6 +1072,76 @@
         },
         "desc": {
           "type": "string"
+        }
+      }
+    },
+    "transform": {
+      "type": "object",
+      "description": "The plugin transformers a request went through (transform:), and the response body as received; the exchange holds the transformed response. Absent without transform:. Added in v0.7.",
+      "properties": {
+        "request": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "response": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "original_body": {
+          "type": "string"
+        },
+        "original_body_bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "plugin_kind": {
+      "type": "object",
+      "description": "The exchange of a request of a plugin kind, as the plugin reported it. Absent from every other request. Added in v0.7.",
+      "required": [
+        "kind",
+        "summary",
+        "status",
+        "headers",
+        "body",
+        "body_bytes"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "request_body": {
+          "type": "string"
+        },
+        "status": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "headers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/header"
+          }
+        },
+        "body": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "body_bytes": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },

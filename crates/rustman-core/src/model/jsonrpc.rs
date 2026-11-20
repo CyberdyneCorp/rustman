@@ -387,6 +387,7 @@ pub fn jsonrpc_as_http(file: &Path, request: &JsonrpcRequest) -> Result<HttpRequ
         headers: request.headers.clone(),
         body: Some(Body::Json(JsonContent::Value(body))),
         auth: request.auth.clone(),
+        transform: None,
         settings: request.http_settings(),
         variables: request.variables.clone(),
         assertions: None,

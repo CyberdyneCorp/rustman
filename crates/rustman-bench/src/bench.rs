@@ -75,6 +75,9 @@ pub struct BenchInput<'a> {
     /// Resolve `{{secret:...}}` references (shared by every VU, so a
     /// value is fetched once per run).
     pub secret_providers: Option<Arc<SecretProviders>>,
+    /// The workspace's trusted plugins (auth schemes, generators,
+    /// transformers, assertions); `None` when it declares none.
+    pub plugins: Option<std::sync::Arc<dyn rustman_core::plugins::Extensions>>,
 }
 
 /// What a bench produced.
@@ -339,6 +342,7 @@ impl<'a> Bench<'a> {
                     cancel: hard.clone(),
                     snapshots: SnapshotMode::Ci,
                     gate: Some(gate),
+                    plugins: input.plugins.clone(),
                     ..RunOptions::default()
                 };
                 let mut runner = Runner::new(ctx, options)

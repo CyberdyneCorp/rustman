@@ -82,7 +82,7 @@ impl Runner<'_> {
         };
         self.remember(&resolved.secrets);
         remember_for_logs(&self.request_redactor(Some(&resolved), None));
-        let mut sent = match self.exchange(target, &mut resolved).await {
+        let mut sent = match self.exchange(target, &mut resolved, &[]).await {
             Some(Ok(exchange)) => replayed(record, &resolved, exchange).with_resolved(resolved),
             Some(Err(e)) => Sent::errored(record, e.to_string()).with_resolved(resolved),
             None => Sent::skipped(record, SkipReason::Interrupted),
@@ -110,6 +110,7 @@ fn replayable(record: &RequestRecord) -> bool {
         && graphql.is_none_or(|graphql| graphql.transport == "http")
         && jsonrpc.is_none_or(|jsonrpc| jsonrpc.transport == "http")
         && record.realtime.is_none()
+        && record.plugin_kind.is_none()
 }
 
 fn replayed(mut record: RequestRecord, resolved: &ResolvedRequest, exchange: Exchange) -> Sent {

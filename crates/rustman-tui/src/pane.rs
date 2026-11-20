@@ -113,9 +113,11 @@ pub trait RequestPane: Sync {
     fn open(&self, request: &Request) -> Option<Box<dyn PaneEditor>>;
 }
 
-/// The panes known to this build, keyed by kind.
+/// The panes known to this build, keyed by kind, and the declarative
+/// panes of the workspace's plugin kinds.
 pub struct Registry {
     panes: Vec<&'static dyn RequestPane>,
+    plugin_kinds: Vec<rustman_core::plugins::PluginKind>,
 }
 
 impl Registry {
@@ -131,20 +133,41 @@ impl Registry {
                 &RealtimePane::WS,
                 &RealtimePane::SSE,
             ],
+            plugin_kinds: Vec::new(),
         }
+    }
+
+    /// Also open requests of these plugin kinds with their declared panes.
+    #[must_use]
+    pub fn with_plugin_kinds(mut self, kinds: &[rustman_core::plugins::PluginKind]) -> Self {
+        self.plugin_kinds = kinds.to_vec();
+        self
+    }
+
+    /// The registry of `state`: the built-in panes and its plugin kinds.
+    pub fn of(state: &crate::app::State) -> Self {
+        Self::builtin().with_plugin_kinds(&state.plugin_kinds)
     }
 
     pub fn kinds(&self) -> Vec<&'static str> {
         self.panes.iter().map(|p| p.kind()).collect()
     }
 
-    /// The editor for `request`: its kind's pane, else a read-only view.
+    /// The editor for `request`: its kind's pane, a plugin kind's declared
+    /// pane, else a read-only view.
     pub fn open(&self, request: &Request) -> Box<dyn PaneEditor> {
-        self.panes
+        if let Some(editor) = self
+            .panes
             .iter()
             .find(|p| p.kind() == request.kind())
             .and_then(|p| p.open(request))
-            .unwrap_or_else(|| Box::new(ReadOnly::new(request)))
+        {
+            return editor;
+        }
+        match self.plugin_kinds.iter().find(|k| k.name == request.kind()) {
+            Some(kind) => Box::new(crate::plugin_pane::PluginKindEditor::new(request, kind)),
+            None => Box::new(ReadOnly::new(request)),
+        }
     }
 }
 

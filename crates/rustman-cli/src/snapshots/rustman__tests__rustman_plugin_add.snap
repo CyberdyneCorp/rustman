@@ -1,0 +1,29 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Fetch a plugin from a workspace path or an https URL, print its manifest, pin its sha256 and declare it with no grants
+
+Usage: rustman plugin add [OPTIONS] <SOURCE>
+
+Arguments:
+  <SOURCE>
+          A plugin folder or .wasm file inside the workspace, or an https URL
+
+Options:
+      --name <NAME>
+          The workspace's name for the plugin (default: the manifest's name)
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

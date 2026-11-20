@@ -163,6 +163,7 @@ fn assess(request: Option<&HttpRequest>, body: &[u8]) -> Vec<AssertionResult> {
         resolver: &Resolver::new(),
         request: None,
         redactor: &Redactor::new(),
+        plugins: None,
     };
     assertions::evaluate(list, &response, &ctx)
 }

@@ -19,6 +19,7 @@ use rustman_http::runner::{RunContext, Runner, Sent};
 use super::exec::{
     SendFlags, cancel_on_ctrl_c, history_store, print_snapshot_notes, runtime, secret_store,
 };
+use super::plugins::PluginFlags;
 use super::{EnvSelection, current_dir, print_warnings};
 use crate::exit::{CliError, run_code};
 
@@ -54,6 +55,8 @@ pub struct SendArgs {
     selection: EnvSelection,
     #[command(flatten)]
     flags: SendFlags,
+    #[command(flatten)]
+    plugins: PluginFlags,
 }
 
 /// Where the response goes, shared by `send` and `history replay`.
@@ -163,7 +166,16 @@ fn send(
         None => None,
     };
     let store = secret_store(target.root)?;
+    let plugins = match ws {
+        Some(ws) => {
+            let plugins = super::plugins::headless(&ws.root, env, &store, &args.plugins)?;
+            super::plugins::check_kinds(ws, plugins.as_ref())?;
+            plugins
+        }
+        None => None,
+    };
     let mut options = args.flags.options()?;
+    options.plugins = plugins;
     options.history = history_store(args.flags.no_history, ws, settings);
     options.ad_hoc = args.ad_hoc_url().is_some();
     let cancel = options.cancel.clone();
@@ -202,6 +214,10 @@ pub fn finish(args: &OutputFlags, sent: &Sent) -> Result<u8, CliError> {
     }
     if let Some(exchange) = &sent.exchange {
         print_response(args, record, exchange, &sent.redactor)?;
+    }
+    // A plugin kind's response body, already redacted.
+    if let Some(body) = record.plugin_kind.as_ref().and_then(|k| k.body.as_deref()) {
+        println!("{body}");
     }
     for line in record.trace.iter().flat_map(super::trace::lines) {
         eprintln!("{line}");

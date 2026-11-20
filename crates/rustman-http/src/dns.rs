@@ -1,21 +1,48 @@
 //! Name resolution: `hickory-resolver` with the system configuration, falling
 //! back to the system resolver (`tokio::net::lookup_host`) when it fails.
 
-use std::net::SocketAddr;
-use std::sync::OnceLock;
+use std::net::{IpAddr, SocketAddr};
+use std::sync::{Arc, OnceLock};
 
 use hickory_resolver::TokioResolver;
 
 use crate::error::RequestError;
+
+/// Decides, at connect time, whether a request to `host` may connect to
+/// the address it resolved to: `Err(reason)` refuses it (`blocked:
+/// <reason>`). It sees every address of the server (never a proxy's), so a
+/// name cannot be re-pointed between a check and the connection.
+pub type AddressGuard = Arc<dyn Fn(&str, IpAddr) -> Result<(), String> + Send + Sync>;
 
 #[derive(Default)]
 pub(crate) struct Dns {
     /// Built on first use, inside the runtime; `None` if the system
     /// configuration cannot be read.
     hickory: OnceLock<Option<TokioResolver>>,
+    guard: Option<AddressGuard>,
 }
 
 impl Dns {
+    /// A resolver whose server addresses `guard` must allow.
+    pub fn guarded(guard: AddressGuard) -> Self {
+        Self {
+            hickory: OnceLock::new(),
+            guard: Some(guard),
+        }
+    }
+
+    /// Refuse the server addresses `addrs` of `host` that the guard does
+    /// not allow.
+    pub fn check(&self, host: &str, addrs: &[SocketAddr]) -> Result<(), RequestError> {
+        let Some(guard) = &self.guard else {
+            return Ok(());
+        };
+        addrs
+            .iter()
+            .try_for_each(|addr| guard(host, addr.ip()))
+            .map_err(RequestError::Blocked)
+    }
+
     /// Every address for `host`, in resolver order.
     pub async fn lookup(&self, host: &str, port: u16) -> Result<Vec<SocketAddr>, RequestError> {
         if let Some(addrs) = self.hickory_lookup(host, port).await {
@@ -44,6 +71,28 @@ fn build_resolver() -> Option<TokioResolver> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_guard_sees_every_address() {
+        let guard: AddressGuard = Arc::new(|host, ip| {
+            if ip.is_loopback() {
+                Err(format!("{host} resolves to {ip}"))
+            } else {
+                Ok(())
+            }
+        });
+        let dns = Dns::guarded(guard);
+        let public = SocketAddr::from(([93, 184, 216, 34], 80));
+        let local = SocketAddr::from(([127, 0, 0, 1], 80));
+        assert!(dns.check("a.test", &[public]).is_ok());
+        assert_eq!(
+            dns.check("a.test", &[public, local])
+                .unwrap_err()
+                .to_string(),
+            "blocked: a.test resolves to 127.0.0.1"
+        );
+        assert!(Dns::default().check("a.test", &[local]).is_ok());
+    }
 
     #[tokio::test]
     async fn resolves_localhost() {

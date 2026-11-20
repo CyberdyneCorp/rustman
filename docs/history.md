@@ -52,7 +52,7 @@ History is written through the same redaction as every other output (see [Enviro
 
 ## Listing and searching
 
-`rustman history list` prints one line per exchange, newest first: id, time, method, URL, status and total time.
+`rustman history list` prints one line per exchange, newest first: id, time, method, URL, status and total time. The status is the HTTP status; an exchange without one (a [plugin request kind](plugins.md)) shows its recorded outcome, `passed` or `failed`, and one that got no response shows `error`.
 
 | Flag | Keeps |
 |------|-------|
@@ -67,7 +67,7 @@ History is written through the same redaction as every other output (see [Enviro
 
 ## Replay
 
-`rustman history replay <id>` sends the stored request again and records it as a new exchange. It takes `--body-only`, `-o FILE`, `--show-secrets` and `--no-history` like `rustman send`, and prints the response the same way. The stored request has `{{name}}` placeholders where secrets were, and replay reads them from the secret store at that moment: a rotated secret is sent with its new value, and a deleted one fails with `unresolved variable(s): <name>` before anything is sent. A value from a [secret provider](secrets.md) (a `{{secret:...}}` reference, or an environment variable backed by one) is fetched again from its provider, as `rustman send` would. There are no assertions on a replay; a response is a pass (exit code 0).
+`rustman history replay <id>` sends the stored request again and records it as a new exchange. It takes `--body-only`, `-o FILE`, `--show-secrets` and `--no-history` like `rustman send`, and prints the response the same way. The stored request has `{{name}}` placeholders where secrets were, and replay reads them from the secret store at that moment: a rotated secret is sent with its new value, and a deleted one fails with `unresolved variable(s): <name>` before anything is sent. A value from a [secret provider](secrets.md) (a `{{secret:...}}` reference, or an environment variable backed by one) is fetched again from its provider, as `rustman send` would. There are no assertions on a replay; a response is a pass (exit code 0). A request signed by a [plugin auth scheme](plugins.md#trust) is signed again, so replay loads the workspace plugins under the same trust rule as `rustman send` (`--trust-plugins` in CI).
 
 Some exchanges cannot be replayed, because what they sent is deliberately not kept:
 

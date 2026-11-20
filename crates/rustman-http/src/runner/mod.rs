@@ -25,6 +25,7 @@ mod grpc;
 mod history;
 mod jsonrpc;
 mod mcp;
+mod plugins;
 mod realtime;
 mod record;
 mod seed;
@@ -153,6 +154,9 @@ pub struct RunOptions<'a> {
     /// view (`rustman run --viz`) can follow the run. Called from the run's
     /// tasks: it must not block.
     pub observer: Option<&'a RunObserver<'a>>,
+    /// The workspace's trusted plugins: plugin auth schemes, assertion
+    /// functions and value generators. Without them those are errors.
+    pub plugins: Option<std::sync::Arc<dyn rustman_core::plugins::Extensions>>,
 }
 
 /// See [`RunOptions::observer`].
@@ -195,6 +199,7 @@ impl Default for RunOptions<'_> {
             snapshots: SnapshotMode::Record,
             trace: false,
             observer: None,
+            plugins: None,
         }
     }
 }
@@ -328,6 +333,12 @@ impl<'a> Runner<'a> {
         };
         runner.remember(&trace_secrets.unwrap_or_default());
         runner.remember(&link_secrets.unwrap_or_default());
+        // A plugin may return any secret of its session (one it is granted
+        // in a header, a generated value or a body), so every sink redacts
+        // all of them, whether or not a request references them.
+        if let Some(plugins) = &runner.options.plugins {
+            runner.remember_all(&plugins.redactor());
+        }
         // Every secret column value is redacted from the first request on.
         if let Some(data) = &runner.options.data {
             runner.remember(&data.rows.secrets(&data.secret));

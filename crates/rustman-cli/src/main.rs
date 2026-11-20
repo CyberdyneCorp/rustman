@@ -100,6 +100,10 @@ enum Command {
     /// Scheduled monitors: run collections on a schedule, store the
     /// results locally and alert
     Monitor(commands::monitor::MonitorArgs),
+    /// Add, list, remove and verify the workspace's WebAssembly plugins;
+    /// scaffold and test new ones
+    #[cfg(feature = "plugins")]
+    Plugin(commands::plugin::PluginArgs),
 }
 
 fn main() -> ExitCode {
@@ -165,6 +169,8 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
         Command::Viz(args) => commands::viz::run(&args),
         Command::Docs(args) => commands::docs::run(&args),
         Command::Monitor(args) => commands::monitor::run(&args),
+        #[cfg(feature = "plugins")]
+        Command::Plugin(args) => commands::plugin::run(&args),
     }
 }
 

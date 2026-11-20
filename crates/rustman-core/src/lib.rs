@@ -19,6 +19,8 @@ pub mod history;
 pub mod init;
 pub mod model;
 pub mod paths;
+pub mod plugin_import;
+pub mod plugins;
 pub mod redact;
 pub mod run;
 pub mod safety;

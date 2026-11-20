@@ -198,7 +198,7 @@ fn recorder(args: &ServeArgs, root: Option<&Path>, dir: &Path) -> Result<Recorde
         }
         other => other,
     })?;
-    let ws = Workspace::load(root)?;
+    let ws = Workspace::load_with(root, &super::plugins::kind_registry(root))?;
     let env_var = std::env::var(ENV_VAR).ok();
     let environment = ws
         .active_environment(args.env.as_deref(), env_var.as_deref())?
@@ -274,7 +274,7 @@ fn history(enabled: bool, root: Option<&Path>) -> Result<Option<HistoryStore>, C
     }
     Ok(match root {
         Some(root) => {
-            let ws = Workspace::load(root)?;
+            let ws = Workspace::load_with(root, &super::plugins::kind_registry(root))?;
             history_store(false, Some(&ws), &ws.settings)
         }
         None => history_store(false, None, &Settings::ad_hoc()),

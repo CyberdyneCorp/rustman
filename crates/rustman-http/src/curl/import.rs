@@ -259,6 +259,7 @@ impl Parsed {
             headers: (!self.headers.is_empty()).then(|| std::mem::take(&mut self.headers)),
             body,
             auth: self.user.as_deref().map(basic_auth),
+            transform: None,
             settings: self.settings(),
             variables: None,
             assertions: None,

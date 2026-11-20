@@ -1,0 +1,30 @@
+[package]
+name = "@@NAME@@"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The plugin builds on its own, even when it sits inside another cargo
+# workspace.
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Until rustman-plugin-sdk is published on crates.io, it comes from the
+# Rustman repository (or a local copy: `rustman plugin new --sdk <path>`).
+# `version` keeps it on the plugin API major this project was made for.
+# The first build pins the exact SDK commit in Cargo.lock: commit that file
+# (and build with `--locked`) for reproducible builds.
+# Once it is published, use `version = "1.0"` instead.
+rustman-plugin-sdk = { @@SDK@@, features = ["@@POINT@@", "runtime"] }
+@@DEPENDENCIES@@
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+opt-level = "s"
+lto = true
+codegen-units = 1

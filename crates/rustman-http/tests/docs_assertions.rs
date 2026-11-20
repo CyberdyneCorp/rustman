@@ -155,6 +155,7 @@ fn the_schema_failure_example_is_exact() {
         resolver: &resolver,
         request: None,
         redactor: &redactor,
+        plugins: None,
     };
     let results = assertions::evaluate(&list, &response, &ctx);
     assert_eq!(results[0].message, block.lines[0]);

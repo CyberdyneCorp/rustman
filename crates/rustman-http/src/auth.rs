@@ -61,6 +61,8 @@ pub(crate) fn apply(
             place_jwt(request, jwt, token.expose())
         }
         Some(Auth::Digest { .. } | Auth::AwsSigV4(_)) => Ok(()),
+        // Signed by its plugin when the request was prepared.
+        Some(Auth::Plugin(_)) => Ok(()),
     }
 }
 

@@ -153,10 +153,12 @@ impl Runner<'_> {
             Err(message) => record = record.errored(message),
             Ok(result) => {
                 let view = view(result.to_string().into_bytes(), elapsed);
+                let plugins = self.bare_plugin_calls();
                 let ctx = Context {
                     resolver: checked.resolver,
                     request: Some(checked.request),
                     redactor: &redactor,
+                    plugins: plugins.as_ref(),
                 };
                 record.assertions =
                     assertions::evaluate_mcp(checked.assertions, &view, &ctx, &facts);

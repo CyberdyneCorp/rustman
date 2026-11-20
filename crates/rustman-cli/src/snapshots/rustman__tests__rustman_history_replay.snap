@@ -23,6 +23,9 @@ Options:
       --show-secrets
           Print secret values and credential headers as they are, on this terminal only (history and reports stay redacted)
 
+      --trust-plugins
+          Load the workspace plugins even when this machine has not trusted them yet, and record the approval (for CI)
+
       --workspace <DIR>
           Workspace directory (default: search from the current directory upwards; outside any workspace, the ad-hoc history)
 

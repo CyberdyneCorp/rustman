@@ -180,10 +180,12 @@ impl Runner<'_> {
         for (index, (fields, call)) in checked.calls.iter().zip(&outcome.calls).enumerate() {
             let view = call_view(outcome, call);
             let assertions = unlocated(Some(fields.assertions));
+            let plugins = self.bare_plugin_calls();
             let ctx = Context {
                 resolver: checked.resolver,
                 request: Some(checked.request),
                 redactor,
+                plugins: plugins.as_ref(),
             };
             let mut results = assertions::evaluate(&assertions, &view, &ctx);
             if batch {
