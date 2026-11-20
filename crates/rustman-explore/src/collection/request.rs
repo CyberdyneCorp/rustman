@@ -67,6 +67,7 @@ pub fn request_for(
             .unwrap_or_else(|| format!("{} {}", op.method, op.path)),
         description: description(op),
         tags: Some(tags),
+        docs: None,
         method: Method::parse(&op.method).ok(),
         url: url(op, warnings),
         query: rows(op.parameters_in(ParameterLocation::Query), op, warnings),

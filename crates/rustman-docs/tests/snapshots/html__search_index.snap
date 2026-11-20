@@ -1,0 +1,63 @@
+---
+source: crates/rustman-docs/tests/html.rs
+expression: "read(&ws.path().join(\"site\"), \"search-index.json\")"
+---
+{
+  "version": 1,
+  "entries": [
+    {
+      "t": "Login",
+      "m": "POST",
+      "p": "{{base_url}}/login",
+      "k": "http",
+      "d": "",
+      "w": [],
+      "u": "endpoints/auth-login.html"
+    },
+    {
+      "t": "List sessions",
+      "m": "GET",
+      "p": "{{base_url}}/sessions",
+      "k": "http",
+      "d": "",
+      "w": [],
+      "u": "endpoints/auth-list.html"
+    },
+    {
+      "t": "Create user",
+      "m": "POST",
+      "p": "{{base_url}}/users",
+      "k": "http",
+      "d": "Creates a user.",
+      "w": [
+        "Content-Type",
+        "Authorization",
+        "name",
+        "role"
+      ],
+      "u": "endpoints/users-create.html"
+    },
+    {
+      "t": "Delete user",
+      "m": "DELETE",
+      "p": "{{base_url}}/users/{{user_id}}",
+      "k": "http",
+      "d": "",
+      "w": [
+        "X-Api-Key"
+      ],
+      "u": "endpoints/users-delete.html"
+    },
+    {
+      "t": "Get user",
+      "m": "GET",
+      "p": "{{base_url}}/users/{{user_id}}",
+      "k": "http",
+      "d": "",
+      "w": [
+        "expand"
+      ],
+      "u": "endpoints/users-get.html"
+    }
+  ]
+}

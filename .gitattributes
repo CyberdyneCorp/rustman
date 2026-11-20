@@ -18,3 +18,6 @@ crates/rustman-viz-protocol/schema/*.json text eol=lf
 crates/rustman-graphql/tests/fixtures/** text eol=lf
 fixtures/contract/** text eol=lf
 crates/rustman-contract/tests/catalog/*.txt text eol=lf
+crates/rustman-docs/src/templates/** text eol=lf
+crates/rustman-docs/src/assets/** text eol=lf
+crates/rustman-docs/tests/snapshots/** text eol=lf

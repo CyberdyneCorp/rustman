@@ -3,7 +3,8 @@
 //! show how a request is built rather than one concrete instance of it.
 //!
 //! Secrets are never read: a secret variable becomes `«redacted:<name>»`.
-//! Dynamic values (`{{$uuid}}`, `{{$env NAME}}`) are still evaluated.
+//! Dynamic values (`{{$uuid}}`, `{{$env NAME}}`) are still evaluated,
+//! unless the resolver keeps them ([`Resolver::keep_dynamics`]).
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -29,7 +30,7 @@ pub fn resolve_placeholders(
     resolver: &Resolver<'_>,
 ) -> Result<(ResolvedRequest, Vec<PlaceholderVar>), ResolveError> {
     let used = Rc::new(RefCell::new(Vec::new()));
-    let keep = Resolver::new().with(KeepVariables {
+    let keep = resolver.empty_like().with(KeepVariables {
         inner: resolver,
         used: Rc::clone(&used),
     });

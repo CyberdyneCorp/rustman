@@ -5,6 +5,7 @@ pub mod auth;
 pub mod body;
 pub mod capture;
 pub mod common;
+pub mod docs;
 pub mod graphql;
 pub mod grpc;
 pub mod http;
@@ -25,6 +26,7 @@ pub use auth::{ApiKeyLocation, Auth, OAuth2, OAuth2Grant};
 pub use body::{Body, JsonContent, Part, PartSource};
 pub use capture::{Capture, CaptureSource};
 pub use common::{Checked, NameValue, Validate, VarValue, Variables};
+pub use docs::DocsMeta;
 pub use graphql::{
     DEFAULT_DURATION, DEFAULT_MAX_EVENTS, DOCUMENT_SOURCE_ERROR, DocumentSource, GRAPHQL_ACCEPT,
     GraphqlMethod, GraphqlRequest, GraphqlTransport, WsProtocol, graphql_as_http,

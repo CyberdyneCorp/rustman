@@ -1,0 +1,76 @@
+---
+source: crates/rustman-docs/tests/samples.rs
+expression: "samples_of(ws.path(), slug)"
+---
+## Code samples
+
+### curl
+
+```sh
+curl -X PUT '{{base_url}}/raw' -H 'Content-Type: application/octet-stream' --data-binary '@bodies/data/report.csv' -L
+```
+
+### httpie
+
+```sh
+http --follow -- PUT '{{base_url}}/raw' \
+  'Content-Type:application/octet-stream' \
+  < bodies/data/report.csv
+```
+
+### fetch
+
+```js
+import { openAsBlob } from "node:fs";
+
+const BASE_URL = "{{base_url}}";
+
+const response = await fetch(BASE_URL + "/raw", {
+  method: "PUT",
+  headers: {
+    "Content-Type": "application/octet-stream",
+  },
+  body: await openAsBlob("bodies/data/report.csv"),
+});
+console.log(response.status);
+console.log(await response.text());
+```
+
+### python
+
+```python
+import requests
+
+BASE_URL = "{{base_url}}"
+
+response = requests.put(
+    BASE_URL + "/raw",
+    data=open("bodies/data/report.csv", "rb"),
+    headers={
+        "Content-Type": "application/octet-stream",
+    },
+)
+print(response.status_code)
+print(response.text)
+```
+
+### rust
+
+```rust
+// Cargo.toml: reqwest = { version = "0.12", features = ["blocking"] }
+
+const BASE_URL: &str = "{{base_url}}";
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = reqwest::blocking::Client::builder()
+        .build()?;
+    let response = client
+        .request(reqwest::Method::PUT, [BASE_URL, "/raw"].concat())
+        .header("Content-Type", "application/octet-stream")
+        .body(std::fs::File::open("bodies/data/report.csv")?)
+        .send()?;
+    println!("{}", response.status());
+    println!("{}", response.text()?);
+    Ok(())
+}
+```

@@ -1,0 +1,32 @@
+{% extends "layout.html" %}
+{% block title %}{{ reference.name }} - {{ site.title }}{% endblock %}
+{% block content %}
+<article id="{{ reference.slug }}">
+<h1>{{ reference.name }}{% if reference.deprecated %} <span class="badge">deprecated</span>{% endif %}</h1>
+<p class="muted">{{ reference.label }} &middot; {{ set.title }} <code>{{ set.endpoint }}</code></p>
+{% if reference.deprecated %}
+<p>Deprecated: {{ reference.deprecated }}</p>
+{% endif %}
+{% if reference.description %}
+{{ reference.description|safe -}}
+{% endif %}
+{% for table in reference.tables %}
+<h2>{{ table.title }}</h2>
+<table>
+<thead><tr>{% for c in table.columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+<tbody>
+{% for row in table.rows %}
+<tr>{% for cell in row %}<td>{% if loop.first %}<code>{{ cell }}</code>{% else %}{{ cell }}{% endif %}</td>{% endfor %}</tr>
+{% endfor %}
+</tbody>
+</table>
+{% endfor %}
+{% if reference.schemas %}
+<h2>Schemas</h2>
+{% for schema in reference.schemas %}
+<h3>{{ schema.label }}</h3>
+<pre><code>{{ schema.json }}</code></pre>
+{% endfor %}
+{% endif %}
+</article>
+{% endblock %}

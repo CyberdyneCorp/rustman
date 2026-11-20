@@ -167,6 +167,9 @@ pub enum SnippetError {
     /// POST.
     #[error("{0}")]
     Invalid(String),
+    /// A custom template that cannot be parsed or rendered.
+    #[error("snippet: template: {0}")]
+    Template(String),
 }
 
 /// The HTTP request a snippet of `target` is made from: `None` for a
@@ -221,8 +224,35 @@ pub struct Snippet {
     pub warnings: Vec<String>,
 }
 
+/// The version of the context a custom template receives, as the global
+/// `docs_context_version`. Raised whenever the view a template sees
+/// changes, so `[docs].template_dirs` templates written for another
+/// version fall back to the built-in template instead of breaking.
+pub const TEMPLATE_CONTEXT_VERSION: u32 = 1;
+
 /// `request` as a `lang` snippet.
 pub fn snippet(request: &ResolvedRequest, lang: Lang, options: &SnippetOptions<'_>) -> Snippet {
+    make(request, lang, options, None).expect("built-in templates render")
+}
+
+/// `request` as a `lang` snippet rendered by `template`, a custom template
+/// (`[docs].template_dirs`), instead of the built-in one. It sees the same
+/// redacted view and filters as the built-in templates.
+pub fn custom_snippet(
+    request: &ResolvedRequest,
+    lang: Lang,
+    options: &SnippetOptions<'_>,
+    template: &str,
+) -> Result<Snippet, SnippetError> {
+    make(request, lang, options, Some(template))
+}
+
+fn make(
+    request: &ResolvedRequest,
+    lang: Lang,
+    options: &SnippetOptions<'_>,
+    custom: Option<&str>,
+) -> Result<Snippet, SnippetError> {
     let show_secrets = options.show_secrets && options.placeholders.is_none();
     let mut warnings = Vec::new();
     if let Some(kind) = request.auth.as_ref().and_then(signature_kind)
@@ -232,40 +262,54 @@ pub fn snippet(request: &ResolvedRequest, lang: Lang, options: &SnippetOptions<'
             "snippet: {kind} auth cannot be precomputed for {lang}"
         ));
     }
-    let code = if lang == Lang::Curl {
-        curl(request, options, show_secrets, &mut warnings)
-    } else {
-        let context = Context {
-            lang,
-            syntax: lang.syntax(),
-            shown: Shown::new(request, show_secrets),
-            placeholders: options.placeholders,
-            root: options.root,
-        };
-        let mut view = context.view(request);
-        warnings.extend(limitations(&view, lang));
-        if lang == Lang::Httpie {
-            if !httpie::sends_method(&view.method) {
-                warnings.push(format!(
-                    "snippet: httpie cannot send method {}",
-                    view.method
-                ));
-                let code = httpie_refusal(&view.method, view.auth_comment.as_deref());
-                return Snippet { code, warnings };
-            }
-            let (items, left_out) = httpie::items(&view);
-            view.items = items;
-            warnings.extend(left_out);
-        }
-        let code = render(lang, &view, options.placeholders.is_some());
-        if lang.syntax() == Syntax::Shell && code.contains('\0') {
-            warnings.push(NUL_WARNING.replace("{tool}", lang.id()));
-            nul_refusal()
-        } else {
-            code
-        }
+    let code = match custom {
+        None if lang == Lang::Curl => curl(request, options, show_secrets, &mut warnings),
+        _ => templated(request, lang, options, custom, &mut warnings)?,
     };
-    Snippet { code, warnings }
+    Ok(Snippet { code, warnings })
+}
+
+/// The snippet of a language rendered from a template: the built-in one,
+/// or `custom`.
+fn templated(
+    request: &ResolvedRequest,
+    lang: Lang,
+    options: &SnippetOptions<'_>,
+    custom: Option<&str>,
+    warnings: &mut Vec<String>,
+) -> Result<String, SnippetError> {
+    let context = Context {
+        lang,
+        syntax: lang.syntax(),
+        shown: Shown::new(
+            request,
+            options.show_secrets && options.placeholders.is_none(),
+        ),
+        placeholders: options.placeholders,
+        root: options.root,
+    };
+    let mut view = context.view(request);
+    warnings.extend(limitations(&view, lang));
+    if lang == Lang::Httpie {
+        if !httpie::sends_method(&view.method) {
+            warnings.push(format!(
+                "snippet: httpie cannot send method {}",
+                view.method
+            ));
+            return Ok(httpie_refusal(&view.method, view.auth_comment.as_deref()));
+        }
+        let (items, left_out) = httpie::items(&view);
+        view.items = items;
+        warnings.extend(left_out);
+    }
+    let source = custom.unwrap_or(lang.template());
+    let code = render(lang, &view, options.placeholders.is_some(), source)
+        .map_err(|e| SnippetError::Template(e.to_string()))?;
+    if lang.syntax() == Syntax::Shell && code.contains('\0') {
+        warnings.push(NUL_WARNING.replace("{tool}", lang.id()));
+        return Ok(nul_refusal());
+    }
+    Ok(code)
 }
 
 /// The httpie snippet of a request whose method httpie cannot send: a
@@ -345,8 +389,13 @@ fn limitations(view: &View, lang: Lang) -> Vec<String> {
     warnings
 }
 
-/// Render `lang`'s template over `view`.
-fn render(lang: Lang, view: &View, placeholders: bool) -> String {
+/// Render `source`, a template for `lang`, over `view`.
+fn render(
+    lang: Lang,
+    view: &View,
+    placeholders: bool,
+    source: &str,
+) -> Result<String, minijinja::Error> {
     let syntax = lang.syntax();
     let mut env = Environment::new();
     env.set_syntax(
@@ -368,13 +417,10 @@ fn render(lang: Lang, view: &View, placeholders: bool) -> String {
         syntax.header_value(&text, placeholders)
     });
     env.add_global("comment", lang.comment());
-    let template = env
-        .template_from_str(lang.template())
-        .expect("built-in templates parse");
-    let code = template
-        .render(Value::from(Serde(view)))
-        .expect("built-in templates render");
-    code.trim_end().to_owned()
+    env.add_global("docs_context_version", TEMPLATE_CONTEXT_VERSION);
+    let template = env.template_from_str(source)?;
+    let code = template.render(Value::from(Serde(view)))?;
+    Ok(code.trim_end().to_owned())
 }
 
 #[cfg(test)]
@@ -460,6 +506,38 @@ mod tests {
             code(Lang::Wget).contains("  -- -K/etc/passwd"),
             "{}",
             code(Lang::Wget)
+        );
+    }
+
+    #[test]
+    fn a_custom_template_sees_the_same_view_and_filters() {
+        use rustman_core::vars::{Resolved, ResolvedBody};
+        let request = ResolvedRequest {
+            method: "POST".into(),
+            url: Resolved::literal("http://localhost/x?q=1"),
+            query: Vec::new(),
+            headers: Vec::new(),
+            body: ResolvedBody::Text(Resolved::literal("hi")),
+            auth: None,
+            settings: Default::default(),
+            tls: Default::default(),
+            secrets: Vec::new(),
+        };
+        let template = "{{ comment }} v{{ docs_context_version }}\n{{ method_lower }}({{ url|q }}, {{ body.text|q }})\n";
+        let out = custom_snippet(&request, Lang::Go, &SnippetOptions::default(), template).unwrap();
+        assert_eq!(out.code, "// v1\npost(\"http://localhost/x?q=1\", \"hi\")");
+        let curl = custom_snippet(
+            &request,
+            Lang::Curl,
+            &SnippetOptions::default(),
+            "{{ url|q }}",
+        )
+        .unwrap();
+        assert_eq!(curl.code, "'http://localhost/x?q=1'");
+        let broken = custom_snippet(&request, Lang::Go, &SnippetOptions::default(), "{{ nope }}");
+        assert!(
+            matches!(&broken, Err(SnippetError::Template(m)) if m.contains("undefined")),
+            "{broken:?}"
         );
     }
 

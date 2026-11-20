@@ -53,6 +53,8 @@ pub struct WsRequest {
     pub name: String,
     pub description: Option<String>,
     pub tags: Option<Vec<String>>,
+    /// How the request appears in `rustman docs` output.
+    pub docs: Option<super::docs::DocsMeta>,
     /// A `ws://` or `wss://` URL; `{{variables}}` are interpolated.
     pub url: Located<String>,
     pub headers: Option<Vec<NameValue>>,

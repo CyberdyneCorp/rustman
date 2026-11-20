@@ -184,6 +184,7 @@ mod tests {
             name: "t".into(),
             description: None,
             tags: None,
+            docs: None,
             method: Method::parse("GET").ok(),
             url: "http://h/x".into(),
             query: None,

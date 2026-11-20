@@ -1,0 +1,10 @@
+---
+source: crates/rustman-docs/tests/markdown.rs
+expression: "read(&out, \"README.md\")"
+---
+# Shop
+
+## Sections
+
+- [auth](sections/auth.md)
+- [Users](sections/users.md)

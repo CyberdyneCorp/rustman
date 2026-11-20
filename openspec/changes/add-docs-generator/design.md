@@ -73,6 +73,6 @@ Additive: new subcommands and optional config keys only.
 ## Open Questions
 
 - Whether to offer an OpenAPI export (`rustman docs openapi`) generated from the workspace in a later change. It reuses the page model and doesn't affect these specs.
-- `[docs].template_dirs` overrides need a hook in the shared snippet engine. Should overrides also apply to `rustman export snippet` (keeps the byte-for-byte parity of runner-parity task 4.5), or to docs only?
+- Resolved: `[docs].template_dirs` sample overrides go through `rustman_http::snippet::custom_snippet` and apply to docs only; `rustman export snippet` keeps the built-in templates, so the byte-for-byte parity of runner-parity task 4.5 holds for built-in templates. A custom template declares `{# docs_context_version = N #}` on its first line.
 - CommonMark rendering of descriptions needs a new dependency (`pulldown-cmark` is the usual pure-Rust choice). Confirm it, or render descriptions as escaped preformatted text in v1?
-- Reading the GraphQL schema cache and OpenRPC catalogs: depend on `rustman-graphql`/`rustman-jsonrpc` for their readers, or read the cache files directly to keep `rustman-docs` light?
+- Resolved: `rustman-docs` depends on `rustman-graphql` (`active_schema`, so `schema_file` and `[[graphql.endpoints]]` schemas count too) and `rustman-jsonrpc` (`catalog_for`) instead of reading the cache files directly, so the docs see exactly the schema and catalog the clients use. Endpoints are resolved without the secret store or the process environment, only as lookup keys.

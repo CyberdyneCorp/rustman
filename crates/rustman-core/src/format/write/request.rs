@@ -6,9 +6,9 @@ use crate::environment::Environment;
 use crate::model::signed_auth::DEFAULT_JWT_TTL_SECS;
 use crate::model::{
     ApiKeyLocation, Assertion, Auth, AwsCredentials, AwsSigV4, Body, Capture, CountExpectation,
-    CountOp, GraphqlMethod, GraphqlRequest, GraphqlTransport, HeaderAssertion, HttpRequest,
-    JsonAssertion, JsonContent, Jwt, McpRequest, NameValue, OAuth2, Part, PartSource, Request,
-    RequestSettings, RpcErrorExpectation, SnapshotAssertion, StatusExpectation, VarValue,
+    CountOp, DocsMeta, GraphqlMethod, GraphqlRequest, GraphqlTransport, HeaderAssertion,
+    HttpRequest, JsonAssertion, JsonContent, Jwt, McpRequest, NameValue, OAuth2, Part, PartSource,
+    Request, RequestSettings, RpcErrorExpectation, SnapshotAssertion, StatusExpectation, VarValue,
     Variables, WsProtocol,
 };
 
@@ -108,6 +108,7 @@ pub fn graphql_to_yaml(r: &GraphqlRequest) -> String {
         .str("name", &r.name)
         .opt_str("description", r.description.as_deref())
         .opt("tags", r.tags.as_deref().map(strings))
+        .opt("docs", r.docs.as_ref().map(docs_node))
         .str("endpoint", &r.endpoint)
         .opt_str("document", r.document.as_deref())
         .opt_str("document_file", r.document_file.as_deref())
@@ -151,6 +152,7 @@ pub fn mcp_to_yaml(r: &McpRequest) -> String {
         .str("name", &r.name)
         .opt_str("description", r.description.as_deref())
         .opt("tags", r.tags.as_deref().map(strings))
+        .opt("docs", r.docs.as_ref().map(docs_node))
         .str("server", &r.server)
         .str("operation", r.operation.as_str())
         .opt("params", r.params.as_ref().map(json_map))
@@ -220,6 +222,7 @@ fn http_node(r: &HttpRequest) -> Node {
         .str("name", &r.name)
         .opt_str("description", r.description.as_deref())
         .opt("tags", r.tags.as_deref().map(strings))
+        .opt("docs", r.docs.as_ref().map(docs_node))
         .opt_str("method", r.method.as_ref().map(|m| m.as_str()))
         .str("url", &r.url)
         .opt("query", r.query.as_deref().map(name_values))
@@ -240,6 +243,15 @@ fn http_node(r: &HttpRequest) -> Node {
                 .as_deref()
                 .map(|c| Node::Seq(c.iter().map(|c| capture(c)).collect())),
         )
+        .build()
+}
+
+/// The `docs:` mapping, keys in schema order.
+pub(super) fn docs_node(d: &DocsMeta) -> Node {
+    MapBuilder::new()
+        .opt_plain("example", d.example)
+        .opt_plain("hidden", d.hidden)
+        .opt_str("description", d.description.as_deref())
         .build()
 }
 

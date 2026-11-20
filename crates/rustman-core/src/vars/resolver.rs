@@ -95,6 +95,9 @@ pub type UsedSecret = Secret<String>;
 pub struct Resolver<'a> {
     sources: Vec<Box<dyn VarSource + 'a>>,
     os_env: OsEnv,
+    /// Write dynamic values (`{{$uuid}}`) back as their placeholder
+    /// instead of evaluating them.
+    keep_dynamics: bool,
 }
 
 impl Default for Resolver<'_> {
@@ -109,6 +112,7 @@ impl<'a> Resolver<'a> {
         Self {
             sources: Vec::new(),
             os_env: process_env,
+            keep_dynamics: false,
         }
     }
 
@@ -140,6 +144,25 @@ impl<'a> Resolver<'a> {
     pub fn with_os_env(mut self, os_env: OsEnv) -> Self {
         self.os_env = os_env;
         self
+    }
+
+    /// Keep dynamic values (`{{$uuid}}`, `{{$env NAME}}`) as written
+    /// instead of evaluating them, so the result is the same on every run
+    /// and reads nothing from the process environment (generated docs).
+    #[must_use]
+    pub fn keep_dynamics(mut self) -> Self {
+        self.keep_dynamics = true;
+        self
+    }
+
+    /// A new, empty chain with this one's `{{$env}}` reader and dynamic
+    /// handling.
+    pub(crate) fn empty_like(&self) -> Resolver<'a> {
+        Resolver {
+            sources: Vec::new(),
+            os_env: self.os_env,
+            keep_dynamics: self.keep_dynamics,
+        }
     }
 
     /// Add a source after every source of the same or a higher-precedence layer.
@@ -215,6 +238,9 @@ impl Interpolator<'_, '_> {
             match segment {
                 Segment::Literal(text) => out.text.push_str(text),
                 Segment::Var(name) => self.variable(name, &mut out),
+                Segment::Dynamic(dynamic) if self.resolver.keep_dynamics => {
+                    out.text.push_str(&format!("{{{{{dynamic}}}}}"));
+                }
                 Segment::Dynamic(dynamic) => match dynamic.evaluate(self.resolver.os_env) {
                     Some(value) => out.text.push_str(&value),
                     None => self.miss(dynamic.to_string(), None),
@@ -408,6 +434,21 @@ mod tests {
         );
         let resolver = Resolver::new().with_os_env(|n| (n == "API_KEY").then(|| "k".into()));
         assert_eq!(text(&resolver, "key={{$env API_KEY}}"), "key=k");
+    }
+
+    #[test]
+    fn kept_dynamics_are_written_back_and_never_evaluated() {
+        let resolver = Resolver::new()
+            .with_os_env(|_| Some("from-the-machine".into()))
+            .keep_dynamics();
+        let input = "{{$uuid}}/{{$env API_KEY}}/{{$randomInt 1 5}}";
+        assert_eq!(text(&resolver, input), input);
+        let copy = resolver
+            .empty_like()
+            .with(at(Layer::Settings, &[("a", "1")]));
+        assert_eq!(text(&copy, "{{a}}{{$env X}}"), "1{{$env X}}");
+        let plain = Resolver::new().with_os_env(|_| Some("v".into()));
+        assert_eq!(text(&plain.empty_like(), "{{$env X}}"), "v");
     }
 
     #[test]

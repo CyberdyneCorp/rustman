@@ -42,14 +42,24 @@ pub struct ParamSpec {
     pub schema: Value,
 }
 
+/// An error a method documents.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ErrorSpec {
+    pub code: i64,
+    pub message: String,
+}
+
 /// One method of a catalog.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MethodSpec {
     pub name: String,
     pub summary: Option<String>,
+    pub description: Option<String>,
+    pub deprecated: bool,
     pub params: Vec<ParamSpec>,
     /// The JSON Schema of its result, when the document gives one.
     pub result: Option<Value>,
+    pub errors: Vec<ErrorSpec>,
 }
 
 /// The methods of an OpenRPC document.
@@ -81,15 +91,18 @@ impl Catalog {
                 .ok_or_else(|| invalid("a method has no name"))?;
             let spec = MethodSpec {
                 name: name.to_owned(),
-                summary: method
-                    .get("summary")
-                    .and_then(Value::as_str)
-                    .map(str::to_owned),
+                summary: text(method, "summary"),
+                description: text(method, "description"),
+                deprecated: method
+                    .get("deprecated")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
                 params: catalog.params(method),
                 result: method
                     .get("result")
                     .map(|r| catalog.resolve(r))
                     .and_then(|r| r.get("schema").cloned()),
+                errors: catalog.errors(method),
             };
             catalog.methods.push(spec);
         }
@@ -114,6 +127,22 @@ impl Catalog {
                     .get("schema")
                     .cloned()
                     .unwrap_or(Value::Object(Map::new())),
+            })
+            .collect()
+    }
+
+    fn errors(&self, method: &Value) -> Vec<ErrorSpec> {
+        let Some(errors) = method.get("errors").and_then(Value::as_array) else {
+            return Vec::new();
+        };
+        errors
+            .iter()
+            .map(|e| self.resolve(e))
+            .filter_map(|e| {
+                Some(ErrorSpec {
+                    code: e.get("code")?.as_i64()?,
+                    message: text(e, "message").unwrap_or_default(),
+                })
             })
             .collect()
     }
@@ -235,6 +264,11 @@ fn json_type(value: &Value) -> &'static str {
         Value::Array(_) => "array",
         Value::Object(_) => "object",
     }
+}
+
+/// The string field `key` of `value`.
+fn text(value: &Value, key: &str) -> Option<String> {
+    value.get(key).and_then(Value::as_str).map(str::to_owned)
 }
 
 /// `endpoint` reduced to scheme, host, port and path.
@@ -415,6 +449,42 @@ mod tests {
             }
         }))
         .unwrap()
+    }
+
+    #[test]
+    fn descriptions_deprecation_and_errors_are_read() {
+        let catalog = Catalog::parse(&json!({
+            "methods": [{
+                "name": "eth_call",
+                "description": "Runs a call.",
+                "deprecated": true,
+                "params": [],
+                "errors": [
+                    {"code": -32000, "message": "execution reverted"},
+                    {"$ref": "#/components/errors/Limit"},
+                    {"message": "no code: skipped"}
+                ]
+            }],
+            "components": {"errors": {"Limit": {"code": 429, "message": "rate limited"}}}
+        }))
+        .unwrap();
+        let method = catalog.method("eth_call").unwrap();
+        assert_eq!(method.description.as_deref(), Some("Runs a call."));
+        assert!(method.deprecated);
+        assert_eq!(
+            method.errors,
+            [
+                ErrorSpec {
+                    code: -32000,
+                    message: "execution reverted".into()
+                },
+                ErrorSpec {
+                    code: 429,
+                    message: "rate limited".into()
+                },
+            ]
+        );
+        assert!(eth().method("eth_chainId").unwrap().errors.is_empty());
     }
 
     #[test]

@@ -1,0 +1,81 @@
+---
+source: crates/rustman-docs/tests/samples.rs
+expression: "samples_of(ws.path(), slug)"
+---
+## Code samples
+
+### curl
+
+```sh
+curl '{{base_url}}/upload' --form-string title=Report -F 'file=@bodies/data/report.csv;type=text/csv' -L
+```
+
+### httpie
+
+```sh
+http --ignore-stdin --follow --multipart -- POST '{{base_url}}/upload' \
+  title=Report \
+  'file@bodies/data/report.csv;type=text/csv'
+```
+
+### fetch
+
+```js
+import { openAsBlob } from "node:fs";
+
+const BASE_URL = "{{base_url}}";
+
+const form = new FormData();
+form.append("title", "Report");
+form.append("file", await openAsBlob("bodies/data/report.csv", { type: "text/csv" }), "report.csv");
+
+const response = await fetch(BASE_URL + "/upload", {
+  method: "POST",
+  body: form,
+});
+console.log(response.status);
+console.log(await response.text());
+```
+
+### python
+
+```python
+import requests
+
+BASE_URL = "{{base_url}}"
+
+response = requests.post(
+    BASE_URL + "/upload",
+    files=[
+        ("title", (None, "Report")),
+        ("file", ("report.csv", open("bodies/data/report.csv", "rb"), "text/csv")),
+    ],
+)
+print(response.status_code)
+print(response.text)
+```
+
+### rust
+
+```rust
+// Cargo.toml: reqwest = { version = "0.12", features = ["blocking", "multipart"] }
+use reqwest::blocking::multipart::{Form, Part};
+
+const BASE_URL: &str = "{{base_url}}";
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = reqwest::blocking::Client::builder()
+        .build()?;
+    let form = Form::new()
+        .text("title", "Report")
+        .part("file", Part::file("bodies/data/report.csv")?.mime_str("text/csv")?)
+        ;
+    let response = client
+        .request(reqwest::Method::POST, [BASE_URL, "/upload"].concat())
+        .multipart(form)
+        .send()?;
+    println!("{}", response.status());
+    println!("{}", response.text()?);
+    Ok(())
+}
+```

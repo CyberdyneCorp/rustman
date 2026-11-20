@@ -1,0 +1,45 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Generate a static, offline documentation site from the workspace
+
+Usage: rustman docs build [OPTIONS]
+
+Options:
+      --out <DIR>
+          Output folder; only files a previous build wrote are replaced
+          
+          [default: site]
+
+      --format <FORMAT>
+          Output format
+          
+          [default: html]
+          [possible values: html, markdown, both]
+
+      --env <NAME>
+          Environment whose [docs].publish_variables values are shown (default: none)
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --examples <EXAMPLES>
+          Where opted-in examples come from
+          
+          [default: history]
+          [possible values: history, snapshot]
+
+      --force
+          Write into a non-empty folder that rustman docs did not generate
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

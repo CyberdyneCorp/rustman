@@ -93,6 +93,19 @@ const KNOWN_KEYS: &[(&str, &[&str])] = &[
             "export",
         ],
     ),
+    // Read by rustman-docs (add-docs-generator).
+    (
+        "docs",
+        &[
+            "title",
+            "logo",
+            "examples",
+            "example_redact_paths",
+            "publish_variables",
+            "samples",
+            "template_dirs",
+        ],
+    ),
     (
         "agent",
         &[
@@ -133,7 +146,32 @@ pub struct Settings {
     #[serde(default)]
     pub stress: StressSettings,
     #[serde(default)]
+    pub docs: DocsSettings,
+    #[serde(default)]
     pub variables: Variables,
+}
+
+/// `[docs]`: settings of `rustman docs` (api-docs-generation).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct DocsSettings {
+    /// The site title; the workspace name when absent.
+    pub title: Option<String>,
+    /// An image file, relative to the workspace root, shown in the header.
+    pub logo: Option<String>,
+    /// Requests (ids such as `users/list`, or names) whose latest recorded
+    /// exchange is published as an example.
+    pub examples: Vec<String>,
+    /// JSONPaths masked in published example bodies (`$.users[*].email`).
+    pub example_redact_paths: Vec<String>,
+    /// Variables whose values may appear in the site; never secrets.
+    pub publish_variables: Vec<String>,
+    /// Code sample languages, in order (default: curl, httpie, fetch,
+    /// python, rust).
+    pub samples: Vec<String>,
+    /// Folders, relative to the workspace root, whose templates override
+    /// or add code-sample templates by language id.
+    pub template_dirs: Vec<String>,
 }
 
 /// `[jsonrpc]`: settings of the JSON-RPC client. Not `JsonrpcSettings`:
@@ -572,6 +610,23 @@ base_url = "http://localhost"
         let text = "[workspace]\nname = \"a\"\nversion = 1\n[mock]\nport = 4011\nseed = 7\nmax_body_bytes = 10\ndir = \"stubs\"\ndelay_ms = 5\njitter_ms = 1\nmax_items = 9\nmax_store_bytes = 99\n[mock.security]\nbearer = \"{{t}}\"\n";
         let (_, warnings) = parse(text).unwrap();
         assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    #[test]
+    fn docs_keys_are_known_and_read() {
+        let text = "[workspace]\nname = \"a\"\nversion = 1\n[docs]\ntitle = \"Shop API\"\nlogo = \"logo.png\"\nexamples = [\"users/list\"]\nexample_redact_paths = [\"$.email\"]\npublish_variables = [\"base_url\"]\nsamples = [\"curl\", \"go\"]\ntemplate_dirs = [\"templates\"]\n";
+        let (settings, warnings) = parse(text).unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let docs = &settings.docs;
+        assert_eq!(docs.title.as_deref(), Some("Shop API"));
+        assert_eq!(docs.logo.as_deref(), Some("logo.png"));
+        assert_eq!(docs.examples, ["users/list"]);
+        assert_eq!(docs.example_redact_paths, ["$.email"]);
+        assert_eq!(docs.publish_variables, ["base_url"]);
+        assert_eq!(docs.samples, ["curl", "go"]);
+        assert_eq!(docs.template_dirs, ["templates"]);
+        let (settings, _) = parse("[workspace]\nname = \"a\"\nversion = 1\n").unwrap();
+        assert_eq!(settings.docs, DocsSettings::default());
     }
 
     #[test]

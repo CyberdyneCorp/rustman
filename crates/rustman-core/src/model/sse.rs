@@ -45,6 +45,8 @@ pub struct SseRequest {
     pub name: String,
     pub description: Option<String>,
     pub tags: Option<Vec<String>>,
+    /// How the request appears in `rustman docs` output.
+    pub docs: Option<super::docs::DocsMeta>,
     /// Defaults to `GET` when absent.
     pub method: Option<Method>,
     /// An `http://` or `https://` URL; `{{variables}}` are interpolated.

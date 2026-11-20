@@ -1,0 +1,18 @@
+---
+source: crates/rustman-docs/tests/reference.rs
+expression: "read(&site, \"reference/graphql-schema-query.md\")"
+---
+# Query
+
+[Index](../README.md) / GraphQL schema `{{base_url}}/graphql`
+
+*object*
+
+## Fields
+
+| Field | Type | Arguments | Deprecated | Description |
+| --- | --- | --- | --- | --- |
+| user | User | id: ID! |  | Find a user by id. |
+| users | \[User!\]! | role: Role, first: Int = 10 |  |  |
+| search | \[SearchResult!\]! | text: String! |  |  |
+| node | Node | id: ID! |  |  |

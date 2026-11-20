@@ -580,6 +580,7 @@ impl<'a> Executor<'a> {
             name: name.to_owned(),
             description: None,
             tags: None,
+            docs: None,
             method: Method::parse(&step.method).ok(),
             url: format!(
                 "{}{}",

@@ -1,0 +1,98 @@
+/* rustman docs: light and dark themes (WCAG AA tokens, checked by tests). */
+:root {
+  --bg: #ffffff;
+  --fg: #1b1f24;
+  --muted: #57606a;
+  --link: #0a58ca;
+  --border: #d0d7de;
+  --panel: #f6f8fa;
+  --badge-bg: #fff1c2;
+  --badge-fg: #6b4400;
+  --method-bg: #e7f0ff;
+  --method-fg: #0b3d91;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1117;
+    --fg: #e6edf3;
+    --muted: #9da7b3;
+    --link: #6cb6ff;
+    --border: #30363d;
+    --panel: #161b22;
+    --badge-bg: #3d2e00;
+    --badge-fg: #ffd866;
+    --method-bg: #10284a;
+    --method-fg: #a5d0ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1117;
+  --fg: #e6edf3;
+  --muted: #9da7b3;
+  --link: #6cb6ff;
+  --border: #30363d;
+  --panel: #161b22;
+  --badge-bg: #3d2e00;
+  --badge-fg: #ffd866;
+  --method-bg: #10284a;
+  --method-fg: #a5d0ff;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+a { color: var(--link); }
+code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9em; }
+pre { background: var(--panel); border: 1px solid var(--border); padding: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+header.top { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+header.top .title { font-weight: 600; font-size: 1.1em; color: var(--fg); text-decoration: none; }
+header.top img { height: 32px; }
+header.top .spacer { flex: 1; }
+button.theme { background: var(--panel); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.layout { display: flex; align-items: flex-start; }
+nav.side { width: 300px; flex: none; padding: 16px; border-right: 1px solid var(--border); }
+nav.side ul { list-style: none; margin: 0; padding-left: 12px; }
+nav.side > ul { padding-left: 0; }
+nav.side li { margin: 2px 0; }
+nav.side .section { font-weight: 600; margin-top: 8px; }
+main { flex: 1; min-width: 0; padding: 16px 24px; max-width: 980px; }
+table { border-collapse: collapse; width: 100%; margin: 8px 0 16px; }
+th, td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; vertical-align: top; }
+th { background: var(--panel); }
+td { word-break: break-word; }
+.method { background: var(--method-bg); color: var(--method-fg); border-radius: 4px; padding: 1px 6px; font-weight: 600; }
+.badge { background: var(--badge-bg); color: var(--badge-fg); border-radius: 4px; padding: 1px 6px; font-size: 0.8em; }
+.muted { color: var(--muted); }
+#search { margin-bottom: 12px; }
+#search input { width: 100%; padding: 6px 8px; background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; }
+#search-results { list-style: none; padding: 0; margin: 6px 0 0; }
+#search-results li { padding: 2px 0; }
+@media (max-width: 760px) {
+  .layout { display: block; }
+  nav.side { width: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+  main { padding: 16px; }
+}
+/* Code-sample tabs: radio buttons and labels, no JavaScript. */
+.samples > input { position: absolute; opacity: 0; pointer-events: none; }
+.samples > label { display: inline-block; padding: 4px 10px; border: 1px solid var(--border); border-bottom: none; cursor: pointer; }
+.samples > input:checked + label { background: var(--panel); font-weight: 600; }
+.samples > input:focus-visible + label { outline: 2px solid currentColor; }
+.samples > pre.sample { display: none; margin-top: 0; }
+.samples > input:nth-of-type(1):checked ~ pre.sample:nth-of-type(1) { display: block; }
+.samples > input:nth-of-type(2):checked ~ pre.sample:nth-of-type(2) { display: block; }
+.samples > input:nth-of-type(3):checked ~ pre.sample:nth-of-type(3) { display: block; }
+.samples > input:nth-of-type(4):checked ~ pre.sample:nth-of-type(4) { display: block; }
+.samples > input:nth-of-type(5):checked ~ pre.sample:nth-of-type(5) { display: block; }
+.samples > input:nth-of-type(6):checked ~ pre.sample:nth-of-type(6) { display: block; }
+.samples > input:nth-of-type(7):checked ~ pre.sample:nth-of-type(7) { display: block; }
+.samples > input:nth-of-type(8):checked ~ pre.sample:nth-of-type(8) { display: block; }
+.samples > input:nth-of-type(9):checked ~ pre.sample:nth-of-type(9) { display: block; }
+.samples > input:nth-of-type(10):checked ~ pre.sample:nth-of-type(10) { display: block; }
+.samples > input:nth-of-type(11):checked ~ pre.sample:nth-of-type(11) { display: block; }
+.samples > input:nth-of-type(12):checked ~ pre.sample:nth-of-type(12) { display: block; }

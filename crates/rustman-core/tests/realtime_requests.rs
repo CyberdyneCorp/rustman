@@ -160,6 +160,7 @@ fn a_request_built_in_code_is_written_field_by_field() {
         name: "Echo".into(),
         description: None,
         tags: None,
+        docs: None,
         url: Located::new("ws://localhost:9000/".into()),
         headers: None,
         auth: None,

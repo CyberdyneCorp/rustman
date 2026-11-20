@@ -1,0 +1,101 @@
+{% extends "layout.html" %}
+{% block title %}{{ endpoint.name }} - {{ site.title }}{% endblock %}
+{% block content %}
+{% macro table(rows, first) %}
+{% set described = rows|selectattr("description")|list|length > 0 %}
+<table>
+<thead><tr><th>{{ first }}</th><th>Value</th>{% if described %}<th>Description</th>{% endif %}</tr></thead>
+<tbody>
+{% for row in rows %}
+<tr><td><code>{{ row.name }}</code></td><td><code>{{ row.value }}</code></td>{% if described %}<td>{{ row.description or "" }}</td>{% endif %}</tr>
+{% endfor %}
+</tbody>
+</table>
+{% endmacro %}
+<article id="{{ endpoint.slug }}">
+<h1>{{ endpoint.name }}{% if endpoint.deprecated %} <span class="badge">deprecated</span>{% endif %}</h1>
+{% if endpoint.url %}
+<p class="request-line"><span class="method">{{ endpoint.method }}</span> <code>{{ endpoint.url }}</code></p>
+{% else %}
+<p class="muted">kind: <code>{{ endpoint.kind }}</code></p>
+{% endif %}
+{% if endpoint.summary %}
+<p><strong>{{ endpoint.summary }}</strong></p>
+{% endif %}
+{% if endpoint.description %}
+{{ endpoint.description|safe -}}
+{% endif %}
+{% if endpoint.auth %}
+<p>Auth: <code>{{ endpoint.auth }}</code></p>
+{% endif %}
+{% if endpoint.query %}
+<h2>Query parameters</h2>
+{{ table(endpoint.query, "Name") -}}
+{% endif %}
+{% if endpoint.headers %}
+<h2>Headers</h2>
+{{ table(endpoint.headers, "Header") -}}
+{% endif %}
+{% if endpoint.body_type %}
+<h2>Body</h2>
+<p>Body type: <code>{{ endpoint.body_type }}</code></p>
+{% if endpoint.body_fields %}
+{{ table(endpoint.body_fields, "Field") -}}
+{% endif %}
+{% if endpoint.body_text %}
+<pre><code>{{ endpoint.body_text }}</code></pre>
+{% endif %}
+{% endif %}
+{% if endpoint.fields %}
+<h2>Fields</h2>
+{{ table(endpoint.fields, "Field") -}}
+{% endif %}
+{% if endpoint.expected %}
+<h2>Expected behavior</h2>
+<ul>
+{% for line in endpoint.expected %}
+<li>{{ line }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+{% if endpoint.produces %}
+<h2>Produces</h2>
+<ul>
+{% for line in endpoint.produces %}
+<li>{{ line }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+{% if endpoint.schemas %}
+<h2>Schemas</h2>
+{% for schema in endpoint.schemas %}
+<h3>{{ schema.label }}</h3>
+<pre><code>{{ schema.json }}</code></pre>
+{% endfor %}
+{% endif %}
+{% if endpoint.example %}
+<h2>Example response</h2>
+<p>{% if endpoint.example.status %}Status <code>{{ endpoint.example.status }}</code>{% endif %}{% if endpoint.example.recorded %} <span class="muted">recorded {{ endpoint.example.recorded }}</span>{% else %} <span class="muted">from the stored snapshot</span>{% endif %}</p>
+{% if endpoint.example.headers %}
+{{ table(endpoint.example.headers, "Header") -}}
+{% endif %}
+{% if endpoint.example.body %}
+<pre><code>{{ endpoint.example.body }}</code></pre>
+{% endif %}
+{% if endpoint.example.truncated %}
+<p class="muted">Body truncated at 64 KB.</p>
+{% endif %}
+{% endif %}
+{% if endpoint.samples %}
+<h2>Code samples</h2>
+<div class="samples">
+{% for s in endpoint.samples %}
+<input type="radio" name="sample" id="sample-{{ loop.index }}"{% if loop.first %} checked{% endif %}><label for="sample-{{ loop.index }}">{{ s.id }}</label>
+{% endfor %}
+{% for s in endpoint.samples %}
+<pre class="sample" data-lang="{{ s.id }}"><code>{{ s.code }}</code></pre>
+{% endfor %}
+</div>
+{% endif %}
+</article>
+{% endblock %}

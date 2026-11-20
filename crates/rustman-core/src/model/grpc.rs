@@ -86,6 +86,8 @@ pub struct GrpcRequest {
     pub name: String,
     pub description: Option<String>,
     pub tags: Option<Vec<String>>,
+    /// How the request appears in `rustman docs` output.
+    pub docs: Option<super::docs::DocsMeta>,
     /// `host:port`, `grpc://host:port` or `grpcs://host:port`;
     /// `{{variables}}` are interpolated.
     pub target: String,

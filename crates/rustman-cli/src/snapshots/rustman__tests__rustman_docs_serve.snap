@@ -1,0 +1,36 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Preview the documentation on 127.0.0.1 with live reload
+
+Usage: rustman docs serve [OPTIONS]
+
+Options:
+      --port <PORT>
+          Port on 127.0.0.1
+          
+          [default: 4000]
+
+      --env <NAME>
+          Environment whose [docs].publish_variables values are shown (default: none)
+
+      --examples <EXAMPLES>
+          Where opted-in examples come from
+          
+          [default: history]
+          [possible values: history, snapshot]
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help
