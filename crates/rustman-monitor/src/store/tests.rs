@@ -64,6 +64,20 @@ fn results_go_to_their_utc_day_file_and_read_back_in_order() {
     );
 }
 
+/// Regression: the day file was opened append-only, and Windows refused to
+/// lock that handle ("Access is denied"), so no run could be stored there.
+#[test]
+fn appending_to_an_existing_day_file_takes_its_lock() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = Store::new(tmp.path());
+    let first = result(at("2026-03-01T10:00:00Z"), Outcome::Pass, 10.0);
+    let second = result(at("2026-03-01T10:05:00Z"), Outcome::Fail, 20.0);
+    store.append("api", &first).unwrap();
+    store.append("api", &second).unwrap();
+    let all = store.raw_since("api", at("2026-03-01T00:00:00Z")).unwrap();
+    assert_eq!(all, [first, second]);
+}
+
 #[test]
 fn a_failed_result_keeps_its_assertion_message() {
     let tmp = tempfile::tempdir().unwrap();
