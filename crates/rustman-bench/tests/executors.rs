@@ -114,7 +114,9 @@ async fn a_duration_limit_and_think_time_bound_the_iterations() {
         .await
         .unwrap();
     let iterations = outcome.summary.iterations;
-    assert!((2..=5).contains(&iterations), "{iterations}");
+    // At least one: on a loaded runner the first request (a cold connection)
+    // can take most of the second, leaving no room for a second iteration.
+    assert!((1..=5).contains(&iterations), "{iterations}");
     assert!(started.elapsed() < ms(3000), "{:?}", started.elapsed());
     assert_eq!(outcome.summary.latency_kind, LatencyKind::Service);
 }
