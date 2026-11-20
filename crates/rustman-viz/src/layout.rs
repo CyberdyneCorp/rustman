@@ -127,7 +127,7 @@ mod tests {
     /// stress view landed in the protocol after the companion.
     #[test]
     fn views_without_a_dashboard_have_no_layout() {
-        for view in [View::Bench, View::Stress, View::Unknown] {
+        for view in [View::Bench, View::Stress, View::MonitorTrend, View::Unknown] {
             assert_eq!(ViewKind::from_view(view), None, "{view:?}");
         }
     }
