@@ -24,7 +24,7 @@ use crate::ca::{CaError, LocalCa};
 use crate::config::{BindError, ProxyConfig, bind_reason};
 use crate::filter::CaptureFilter;
 use crate::forward::{Leg, Origin, Upstream, forward, plain};
-use crate::guard::{INTERNAL_REFUSED, is_own_address, is_refused_host, is_refused_ip};
+use crate::guard::{INTERNAL_REFUSED, is_own_address, is_refused_host, network_client_guard};
 use crate::idle::{Activity, Tracked};
 use crate::intercept::{Interception, Tunnel, intercept};
 use crate::recorder::Recorder;
@@ -132,7 +132,7 @@ impl Proxy {
         };
         let upstream = Arc::new(Upstream {
             direct: RawConnector::new(&options)?,
-            guarded: RawConnector::denying(&options, is_refused_ip)?,
+            guarded: RawConnector::guarded(&options, network_client_guard())?,
             recorder: Recorder { store, filter },
             max_body: config.max_body,
             budget: Budget::new(config.max_buffer_bytes),
