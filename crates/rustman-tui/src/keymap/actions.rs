@@ -100,7 +100,7 @@ const fn def(action: ActionId, id: &'static str, title: &'static str) -> ActionD
 }
 
 /// Every action, in the order the palette and the docs list them.
-pub const REGISTRY: [ActionDef; 75] = [
+pub const REGISTRY: [ActionDef; 76] = [
     def(ActionId::RequestSend, "request.send", "Send request"),
     def(ActionId::RequestCancel, "request.cancel", "Cancel request"),
     def(ActionId::RequestSave, "request.save", "Save request"),
