@@ -179,6 +179,7 @@ impl Reader<'_> {
             | Request::Ws(_)
             | Request::Sse(_)
             | Request::Messaging(_)
+            | Request::Evm(_)
             | Request::Opaque(_) => {
                 let kind = entry.request.kind();
                 let message = format!("request kind '{kind}' not exported");

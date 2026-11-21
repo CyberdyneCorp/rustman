@@ -103,6 +103,19 @@ impl Session {
         ad_hoc: bool,
         targets: &[RequestRef<'_>],
     ) -> Result<Vec<Sent>, CliError> {
+        self.send_with(common, mode, ad_hoc, targets, common.flags.no_history)
+    }
+
+    /// [`Session::send`], keeping history only when `no_history` is false
+    /// (a lookup made for display, such as the chain id, keeps none).
+    fn send_with(
+        &self,
+        common: &Common,
+        mode: Mode,
+        ad_hoc: bool,
+        targets: &[RequestRef<'_>],
+        no_history: bool,
+    ) -> Result<Vec<Sent>, CliError> {
         let env = match &self.ws {
             Some(ws) => common.selection.environment(ws)?,
             None => None,
@@ -115,7 +128,7 @@ impl Session {
             ..JsonrpcRunner::default()
         };
         let mut options = common.flags.options()?;
-        options.history = history_store(common.flags.no_history, self.ws.as_ref(), &self.settings);
+        options.history = history_store(no_history, self.ws.as_ref(), &self.settings);
         options.ad_hoc = ad_hoc;
         options.jsonrpc = Some(&jsonrpc);
         let cancel = options.cancel.clone();

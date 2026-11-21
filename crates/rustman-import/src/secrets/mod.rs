@@ -900,6 +900,7 @@ mod tests {
             secrets: vec!["token".into(), "api_key".into()],
             production: false,
             trace: Default::default(),
+            chain_id: None,
         }];
         let lookup = |_: &str, name: &str| {
             (name == "token").then(|| Secret::new("token", "same".to_owned()))

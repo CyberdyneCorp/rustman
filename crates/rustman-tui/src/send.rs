@@ -192,6 +192,14 @@ pub fn finished(state: &mut State, tab: TabId, seq: u64, mut received: Received)
         state.notify(Severity::Warn, warning);
     }
     let warnings = received.record.warnings.clone();
+    if let Some(evm) = received.record.evm.clone() {
+        if let Some(status) = evm["status"].as_str() {
+            state.status.chain = Some(status.to_owned());
+        }
+        if let Some(editor) = state.tabs.get_mut(tab).and_then(|t| t.editor.evm_mut()) {
+            editor.set_result(&evm);
+        }
+    }
     let shown = state
         .tabs
         .get_mut(tab)
@@ -440,10 +448,12 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         feed: Some(msg_feed),
         ..MessagingRunner::default()
     };
+    let evm = rustman_evm::exec::EvmRunner::new(Arc::new(rustman_http::HttpEngine::new()));
     let options = RunOptions {
         cancel: job.cancel.clone(),
         history: place.history(),
         ad_hoc,
+        evm: Some(&evm),
         graphql: Some(&graphql),
         jsonrpc: Some(&jsonrpc),
         mcp: Some(&mcp),

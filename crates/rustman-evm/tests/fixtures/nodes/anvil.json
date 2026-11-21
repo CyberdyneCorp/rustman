@@ -1,0 +1,5 @@
+[
+  {"method": "eth_chainId", "params": [], "result": "0x7a69"},
+  {"method": "web3_clientVersion", "params": [], "result": "anvil/v0.2.0"},
+  {"method": "net_version", "params": [], "result": "31337"}
+]

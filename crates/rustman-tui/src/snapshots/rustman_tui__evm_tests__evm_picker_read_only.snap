@@ -1,0 +1,11 @@
+---
+source: crates/rustman-tui/src/evm_tests.rs
+expression: "draw(editor.as_ref(), Focus::EditorBody)"
+---
+ view and pure functions · a: toggle · Enter: choose
+   allowance(address,address)  view
+ ● balanceOf(address)  view
+   decimals()  view
+   name()  view
+   symbol()  view
+   totalSupply()  view

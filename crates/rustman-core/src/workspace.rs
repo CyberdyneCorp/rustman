@@ -2,6 +2,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, RwLock};
 
 use crate::collection::{
     COLLECTION_FILE, Collection, CollectionMeta, Entry, RequestEntry, apply_order, is_tool_dir,
@@ -15,6 +16,33 @@ use crate::model::{
 };
 use crate::paths::{PathEscape, contain};
 use crate::settings::{HTTP_PATH_KEYS, HttpDefaults, SETTINGS_FILE, Settings};
+
+/// A check every loaded workspace must pass, registered by a capability
+/// whose rules need more than the file itself (the EVM toolkit reads the
+/// ABI of `evm-call` files). Its errors make the load fail.
+pub type WorkspaceCheck = fn(&Workspace) -> Vec<LoadError>;
+
+static WORKSPACE_CHECKS: LazyLock<RwLock<Vec<WorkspaceCheck>>> =
+    LazyLock::new(|| RwLock::new(Vec::new()));
+
+/// Run `check` on every workspace loaded from now on, for the life of the
+/// process. Registering the same check twice runs it once.
+pub fn register_workspace_check(check: WorkspaceCheck) {
+    if let Ok(mut checks) = WORKSPACE_CHECKS.write()
+        && !checks.iter().any(|c| std::ptr::fn_addr_eq(*c, check))
+    {
+        checks.push(check);
+    }
+}
+
+/// The errors of the registered checks for `workspace`.
+fn registered_check_errors(workspace: &Workspace) -> Vec<LoadError> {
+    let checks = WORKSPACE_CHECKS
+        .read()
+        .map(|c| c.clone())
+        .unwrap_or_default();
+    checks.iter().flat_map(|check| check(workspace)).collect()
+}
 
 /// A loaded workspace.
 #[derive(Clone, Debug)]
@@ -65,13 +93,18 @@ impl Workspace {
         if !loader.errors.is_empty() {
             return Err(ConfigError::Invalid(loader.errors));
         }
-        Ok(Self {
+        let workspace = Self {
             root: root.to_path_buf(),
             settings,
             tree,
             environments: envs.environments,
             warnings: loader.warnings,
-        })
+        };
+        let errors = registered_check_errors(&workspace);
+        if !errors.is_empty() {
+            return Err(ConfigError::Invalid(errors));
+        }
+        Ok(workspace)
     }
 
     /// The active environment: `flag` (`--env`), else `env_var`
@@ -208,7 +241,7 @@ impl<'a> RequestRef<'a> {
             Request::Sse(sse) => sse.headers.as_deref(),
             // Brokers do not speak HTTP: no headers are inherited.
             Request::Messaging(_) => return Vec::new(),
-            Request::Mcp(_) | Request::Opaque(_) => None,
+            Request::Mcp(_) | Request::Evm(_) | Request::Opaque(_) => None,
         };
         let mut merged: Vec<NameValue> = Vec::new();
         for level in inherited.chain(own) {
@@ -230,7 +263,7 @@ impl<'a> RequestRef<'a> {
             Request::Sse(sse) => sse.auth.as_ref(),
             // Broker credentials are the request's own; no HTTP auth is inherited.
             Request::Messaging(_) => return None,
-            Request::Grpc(_) | Request::Mcp(_) | Request::Opaque(_) => None,
+            Request::Grpc(_) | Request::Mcp(_) | Request::Evm(_) | Request::Opaque(_) => None,
         };
         own.or_else(|| {
             self.ancestors
@@ -424,7 +457,7 @@ fn request_path_errors(
         Request::Ws(ws) => ws.file_paths(),
         Request::Sse(sse) => sse.file_paths(),
         Request::Messaging(messaging) => messaging.file_paths(),
-        Request::Mcp(_) | Request::Opaque(_) => return Vec::new(),
+        Request::Mcp(_) | Request::Evm(_) | Request::Opaque(_) => return Vec::new(),
     };
     paths
         .into_iter()

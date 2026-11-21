@@ -282,7 +282,8 @@ jobs:
 
   # add-jsonrpc-client task 8.1: `rustman run` over the JSON-RPC fixture
   # collection against a local Anvil node (blocks every second, so the
-  # newHeads subscription gets its events). Nothing leaves loopback.
+  # newHeads subscription gets its events), then the rustman-evm Anvil
+  # tests. Nothing leaves loopback.
   jsonrpc-anvil:
     runs-on: ubuntu-latest
     steps:
@@ -303,6 +304,21 @@ jobs:
           done
           RUSTMAN_ANVIL_URL=http://127.0.0.1:8545 \
             cargo test -p rustman-cli --test rpc_run --locked -- --nocapture
+      # add-evm-toolkit section 3: calls, traces, streams and forks
+      # against Anvils the tests start themselves (forge compiles and
+      # deploys the fixture token offline, so solc is installed first);
+      # required here, skipped in the hermetic test jobs.
+      - name: Install solc 0.8.26 for the fixture token
+        run: |
+          project="$(mktemp -d)"
+          mkdir "$project/src"
+          cp crates/rustman-evm/tests/fixtures/contracts/TestToken.sol "$project/src/"
+          printf '[profile.default]\nsolc = "0.8.26"\n' > "$project/foundry.toml"
+          forge build --root "$project"
+      - name: Run the EVM toolkit tests against Anvil
+        env:
+          RUSTMAN_REQUIRE_ANVIL: "1"
+        run: cargo test -p rustman-evm --test anvil --locked -- --nocapture
 
   # add-messaging-client tasks 2.1-2.3, 5.1 and 6.1: Kafka produce and
   # consume, a `start: before_next` consume in a run and the CLI, against

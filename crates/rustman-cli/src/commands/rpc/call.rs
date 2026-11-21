@@ -1,14 +1,20 @@
 //! `rustman rpc call <endpoint|request-file> [method] [params-json]`: send
 //! one call (or a request file) and print its result or error object.
-//! Exit codes: 0 for a result, 1 for a JSON-RPC error or a failed
-//! assertion, 2 when the catalog refuses the call, 3 when nothing usable
-//! came back, 130 on Ctrl+C.
+//! `--param name=value` builds the params of a built-in `eth_*`, `net_*` or
+//! `web3_*` method from its typed catalog (`rustman_evm::catalog`); a
+//! native amount (`eth_getBalance`) is shown as `1 ETH`, its other forms on
+//! stderr. Exit codes: 0 for a result, 1 for a JSON-RPC error or a failed
+//! assertion, 2 when the catalog refuses the call or a typed param, 3 when
+//! nothing usable came back, 4 when a method guard refuses it, 130 on
+//! Ctrl+C.
 
 use std::time::Duration;
 
 use clap::Args;
 use rustman_core::ConfigError;
-use rustman_core::run::RequestStatus;
+use rustman_core::run::{RequestRecord, RequestStatus};
+use rustman_evm::Denomination;
+use rustman_evm::catalog::{build_params, check_params, native_forms, native_of};
 use serde_json::{Map, Value, json};
 
 use super::print::{Format, print_call};
@@ -28,6 +34,10 @@ pub struct CallArgs {
     /// The params, as a JSON array or object
     #[arg(value_name = "PARAMS_JSON")]
     params: Option<String>,
+    /// A typed param of a built-in eth_*, net_* or web3_* method
+    /// (repeatable): --param address=0xd8dA... --param block=latest
+    #[arg(long = "param", value_name = "NAME=VALUE", conflicts_with = "params")]
+    typed_params: Vec<String>,
     /// Add a header (repeatable): --header "Authorization: Basic {{auth}}"
     #[arg(long = "header", short = 'H', value_name = "NAME: VALUE")]
     headers: Vec<String>,
@@ -73,8 +83,9 @@ pub fn run(args: &CallArgs) -> Result<u8, CliError> {
         max_events: args.max_events,
         duration: args.duration,
     };
+    let native = native(&session, &args.common);
     let sent = if ad_hoc {
-        let entry = ad_hoc_entry(&args.target, fields(args)?)?;
+        let entry = ad_hoc_entry(&args.target, fields(args, &native)?)?;
         let target = session.ad_hoc(&entry);
         session.send(&args.common, mode, true, &[target])?
     } else {
@@ -89,7 +100,18 @@ pub fn run(args: &CallArgs) -> Result<u8, CliError> {
     if let Some(code) = early_exit(record) {
         return Ok(code);
     }
-    print_call(record, format(args))?;
+    let shown = native_result(record, format(args)).map(|(method, result)| {
+        let native = match pinned_chain(&session, &args.common) {
+            Some(_) => native.clone(),
+            None if ad_hoc => detected_native(&session, args).unwrap_or(native.clone()),
+            None => native.clone(),
+        };
+        native_forms(method, result, &native)
+    });
+    match shown.flatten() {
+        Some(forms) => print_native(&forms),
+        None => print_call(record, format(args))?,
+    }
     for failed in record.assertions.iter().filter(|a| !a.passed()) {
         eprintln!("fail: {failed}");
     }
@@ -105,6 +127,7 @@ pub fn run(args: &CallArgs) -> Result<u8, CliError> {
 impl CallArgs {
     fn has_call_flags(&self) -> bool {
         self.params.is_some()
+            || !self.typed_params.is_empty()
             || !self.headers.is_empty()
             || self.id.is_some()
             || self.notify
@@ -122,8 +145,75 @@ fn format(args: &CallArgs) -> Format {
     }
 }
 
+/// The `chain_id` the selected environment pins.
+fn pinned_chain(session: &Session, common: &Common) -> Option<u64> {
+    session
+        .ws
+        .as_ref()
+        .and_then(|ws| common.selection.environment(ws).ok().flatten())
+        .and_then(|env| env.chain_id)
+}
+
+/// The native currency of the selected environment's chain (ether when it
+/// pins none).
+fn native(session: &Session, common: &Common) -> Denomination {
+    native_of(&session.settings.evm, pinned_chain(session, common))
+}
+
+/// The native currency of the chain the endpoint reports (`eth_chainId`,
+/// sent with the same headers and kept out of history), for an
+/// environment that pins no chain; `None` when the node does not say.
+fn detected_native(session: &Session, args: &CallArgs) -> Option<Denomination> {
+    let mut fields = Map::new();
+    fields.insert("method".into(), json!("eth_chainId"));
+    if !args.headers.is_empty() {
+        fields.insert("headers".into(), headers(&args.headers).ok()?);
+    }
+    let entry = ad_hoc_entry(&args.target, fields).ok()?;
+    let target = session.ad_hoc(&entry);
+    let sent = session
+        .send_with(&args.common, Mode::default(), true, &[target], true)
+        .ok()?;
+    let calls = &sent.first()?.record.jsonrpc.as_ref()?.calls;
+    let result = calls.first()?.response.as_ref()?.get("result")?.as_str()?;
+    let id = u64::from_str_radix(result.trim_start_matches("0x"), 16).ok()?;
+    Some(native_of(&session.settings.evm, Some(id)))
+}
+
+/// The method and result of a single call whose result may be a native
+/// amount (`eth_getBalance`), in the default format.
+fn native_result(record: &RequestRecord, format: Format) -> Option<(&str, &Value)> {
+    let [call] = record.jsonrpc.as_ref()?.calls.as_slice() else {
+        return None;
+    };
+    let result = call.response.as_ref()?.get("result")?;
+    let native = rustman_evm::catalog::find(&call.method).is_some_and(|m| m.native_result);
+    (format == Format::Pretty && native).then_some((call.method.as_str(), result))
+}
+
+/// `1 ETH` on stdout, the other forms of the toggle on stderr.
+fn print_native(forms: &[String]) {
+    if let Some((shown, others)) = forms.split_first() {
+        println!("{shown}");
+        eprintln!("= {}", others.join(" = "));
+    }
+}
+
+/// `--param name=value` pairs.
+fn typed_pairs(texts: &[String]) -> Result<Vec<(String, String)>, ConfigError> {
+    texts
+        .iter()
+        .map(|text| match text.split_once('=') {
+            Some((name, value)) => Ok((name.trim().to_owned(), value.to_owned())),
+            None => Err(ConfigError::Usage(format!(
+                "--param takes NAME=VALUE, got '{text}'"
+            ))),
+        })
+        .collect()
+}
+
 /// The fields of the ad-hoc request `args` describe.
-fn fields(args: &CallArgs) -> Result<Map<String, Value>, ConfigError> {
+fn fields(args: &CallArgs, native: &Denomination) -> Result<Map<String, Value>, ConfigError> {
     let method = args
         .method
         .as_deref()
@@ -131,7 +221,15 @@ fn fields(args: &CallArgs) -> Result<Map<String, Value>, ConfigError> {
     let mut fields = Map::new();
     fields.insert("method".into(), json!(method));
     if let Some(text) = &args.params {
-        fields.insert("params".into(), params(text)?);
+        let value = params(text)?;
+        // The same check as --param, so a bad param exits 2 either way.
+        check_params(method, Some(&value)).map_err(ConfigError::Usage)?;
+        fields.insert("params".into(), value);
+    }
+    if !args.typed_params.is_empty() {
+        let pairs = typed_pairs(&args.typed_params)?;
+        let typed = build_params(method, &pairs, native).map_err(ConfigError::Usage)?;
+        fields.insert("params".into(), typed);
     }
     if let Some(id) = &args.id {
         let id = id.parse::<i64>().map_or_else(|_| json!(id), |n| json!(n));

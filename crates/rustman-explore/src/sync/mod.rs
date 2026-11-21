@@ -430,6 +430,7 @@ fn merge_environment(
         secrets,
         production: local.production,
         trace: Default::default(),
+        chain_id: None,
     };
     (merged != *local).then_some(merged)
 }

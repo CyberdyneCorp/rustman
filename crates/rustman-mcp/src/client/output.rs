@@ -3,35 +3,13 @@
 //! item. Values arrive redacted from the session. [`printable`] makes text
 //! a server controls safe to write to a terminal.
 
-use std::borrow::Cow;
-
 use rmcp::model::{Prompt, Resource, Tool};
 
 use super::prompts::PromptResult;
 use super::resources::ResourceContent;
 use super::tools::ToolResult;
 
-/// `text` with every control character other than newline and tab written
-/// escaped (`\u{1b}`), so text a server controls cannot send escape
-/// sequences to the terminal.
-pub fn printable(text: &str) -> Cow<'_, str> {
-    if !text.chars().any(is_unsafe) {
-        return Cow::Borrowed(text);
-    }
-    let mut out = String::with_capacity(text.len());
-    for c in text.chars() {
-        if is_unsafe(c) {
-            out.extend(c.escape_unicode());
-        } else {
-            out.push(c);
-        }
-    }
-    Cow::Owned(out)
-}
-
-fn is_unsafe(c: char) -> bool {
-    c.is_control() && c != '\n' && c != '\t'
-}
+pub use rustman_core::text::printable;
 
 /// `search  Search files [read-only]` and the description below it.
 pub fn tools(tools: &[Tool]) -> String {

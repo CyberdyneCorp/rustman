@@ -1,0 +1,5 @@
+---
+source: crates/rustman-tui/src/status.rs
+expression: text(&info)
+---
+ demo │ env: base │ TLS verified │ 0 in flight │ Base (8453) · geth 1.14.11             Ctrl+Q quit

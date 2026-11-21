@@ -67,6 +67,9 @@ enum Command {
     Grpc(commands::grpc::GrpcArgs),
     /// Send JSON-RPC calls and batches, and fetch OpenRPC catalogs
     Rpc(commands::rpc::RpcArgs),
+    /// EVM chains: read-only contract calls, decoding, logs, transactions,
+    /// blocks, ENS and local Anvil forks
+    Evm(commands::evm::EvmArgs),
     /// List, inspect, replay and clear past exchanges (redacted)
     History(commands::history::HistoryArgs),
     /// Serve the workspace to AI agents over MCP (Model Context Protocol)
@@ -118,6 +121,10 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     terminal::init_color(cli.color);
     terminal::init_logs(cli.verbose, cli.color);
+    // Signing and sending go through the signing gate only: every face
+    // (rpc, run, TUI, MCP) refuses the send methods; evm files are checked
+    // against their ABI when the workspace loads.
+    rustman_evm::install();
     let Some(command) = cli.command else {
         if commands::tui::is_interactive() {
             return ExitCode::from(commands::tui::run(&commands::tui::TuiArgs::default()));
@@ -159,6 +166,7 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
         Command::Graphql(args) => commands::graphql::run(&args),
         Command::Grpc(args) => commands::grpc::run(&args),
         Command::Rpc(args) => commands::rpc::run(&args),
+        Command::Evm(args) => commands::evm::run(&args),
         Command::History(args) => commands::history::run(&args),
         Command::Mcp(args) => commands::mcp::run(&args),
         Command::McpClient(args) => commands::mcp_client::run(&args),

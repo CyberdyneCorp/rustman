@@ -94,6 +94,21 @@ const KNOWN_KEYS: &[(&str, &[&str])] = &[
     ("graphql", &["endpoints"]),
     // Read by rustman-jsonrpc (add-jsonrpc-client).
     ("jsonrpc", &["catalogs", "agent_read_only_methods"]),
+    // Read by rustman-evm (add-evm-toolkit), which checks the values.
+    (
+        "evm",
+        &[
+            "chains",
+            "explorers",
+            "allow_explorer_fetch",
+            "ens_rpc",
+            "allow_raw_send_local",
+            "allow_signing",
+            "signers",
+            "protected_chains",
+            "headless_signing_chains",
+        ],
+    ),
     // Trace propagation (add-trace-propagation).
     (
         "trace",
@@ -168,6 +183,10 @@ pub struct Settings {
     pub monitors: MonitorSettings,
     #[serde(default)]
     pub variables: Variables,
+    /// `[evm]` (add-evm-toolkit), kept as written: `rustman-evm` reads and
+    /// checks it, so this crate needs no EVM types.
+    #[serde(default)]
+    pub evm: toml::Table,
     /// `[secret_providers.<name>]` (add-secret-providers), checked when
     /// loaded: no credentials, no commands, no binary paths.
     #[serde(default)]
@@ -533,6 +552,18 @@ mod tests {
         assert!(
             parse("[workspace]\nname = \"a\"\nversion = 1\n[explore]\nproducer = {}\n").is_err()
         );
+    }
+
+    #[test]
+    fn the_evm_table_is_kept_for_rustman_evm() {
+        let text = "[workspace]\nname = \"a\"\nversion = 1\n\n[evm]\nallow_explorer_fetch = true\nens_rpc = \"{{mainnet_rpc}}\"\n\n[evm.chains.999]\nname = \"My L2\"\nsymbol = \"MYL\"\n";
+        let (settings, warnings) = parse(text).unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(settings.evm["allow_explorer_fetch"].as_bool(), Some(true));
+        assert!(settings.evm["chains"]["999"].is_table());
+        let (_, warnings) =
+            parse("[workspace]\nname = \"a\"\nversion = 1\n[evm]\nchain = 1\n").unwrap();
+        assert_eq!(warnings, ["rustman.toml: unknown key 'evm.chain' ignored"]);
     }
 
     #[test]

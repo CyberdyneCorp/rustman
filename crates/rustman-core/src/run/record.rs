@@ -44,6 +44,9 @@ pub enum SkipReason {
     Interrupted,
     /// A request kind this run cannot execute (e.g. `mcp`).
     UnsupportedKind,
+    /// An `evm-tx` request in a run without `--sign`: it never counts as a
+    /// failure.
+    SigningNotRequested,
 }
 
 impl fmt::Display for SkipReason {
@@ -52,6 +55,7 @@ impl fmt::Display for SkipReason {
             Self::Bail => "bail",
             Self::Interrupted => "interrupted",
             Self::UnsupportedKind => "unsupported kind",
+            Self::SigningNotRequested => "signing not requested",
         })
     }
 }
@@ -271,6 +275,11 @@ pub struct RequestRecord {
     /// produce or consume; absent for every other kind.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub messaging: Option<MessagingRecord>,
+    /// The decoded result of an `evm-call` (add-evm-toolkit): chain,
+    /// client, function, outputs or revert, gas estimate and trace;
+    /// absent for every other kind. Redacted like every other field.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub evm: Option<serde_json::Value>,
     /// The trace context the request carried, when trace propagation was
     /// on or the request set its own; absent otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -312,6 +321,7 @@ impl RequestRecord {
             transform: None,
             plugin_kind: None,
             messaging: None,
+            evm: None,
         }
     }
 
@@ -470,6 +480,14 @@ mod tests {
         assert_eq!(
             serde_json::to_value(SkipReason::UnsupportedKind).unwrap(),
             serde_json::json!("unsupported_kind")
+        );
+        assert_eq!(
+            SkipReason::SigningNotRequested.to_string(),
+            "signing not requested"
+        );
+        assert_eq!(
+            serde_json::to_value(SkipReason::SigningNotRequested).unwrap(),
+            serde_json::json!("signing_not_requested")
         );
     }
 }

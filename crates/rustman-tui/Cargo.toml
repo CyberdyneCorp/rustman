@@ -25,6 +25,7 @@ rustman-webhook.workspace = true
 rustman-mock.workspace = true
 rustman-monitor.workspace = true
 rustman-proxy.workspace = true
+rustman-evm.workspace = true
 ratatui.workspace = true
 crossterm.workspace = true
 thiserror.workspace = true

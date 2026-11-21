@@ -323,6 +323,9 @@ fn capture(c: &CaptureSpec) -> Option<Checked<Capture>> {
         name,
         pattern: None,
         group: None,
+        output: None,
+        event: None,
+        field: None,
         required: None,
         persist: c.persist.then_some(true),
     })

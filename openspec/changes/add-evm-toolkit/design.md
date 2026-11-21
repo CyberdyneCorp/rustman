@@ -45,7 +45,7 @@ A `Quantity` display model holds a `U256` and a unit context (native decimals, t
 Try `debug_traceCall` with `{"tracer":"callTracer"}` first, then `trace_call` with `["trace"]`, then degrade. Both normalize into one `CallFrame` tree. Support is cached per endpoint.
 
 ### D8. Anvil as an external process
-`rustman evm fork` shells out to `anvil` (found on `PATH`) rather than embedding a node: embedding would pull a whole EVM implementation into the default binary. The child is tied to the command's lifetime (kill on drop, process group on Unix, job object on Windows).
+`rustman evm fork` shells out to `anvil` (found on `PATH`) rather than embedding a node: embedding would pull a whole EVM implementation into the default binary. The child is tied to the command's lifetime as far as the command can see it end: it is killed on drop, after Ctrl+C, SIGTERM or SIGHUP, and on the forced exit of a second interrupt. On Unix it runs in a process group of its own, so a terminal's Ctrl+C reaches only Rustman, which removes the environment before stopping the node. A command killed outright (SIGKILL) cannot stop it: `PR_SET_PDEATHSIG` would need `unsafe` code (`pre_exec`), which the workspace forbids, and Windows has no job-object helper in the codebase. The temporary environment records Anvil's pid, and the next fork removes files whose Anvil is gone (Unix).
 
 ### D9. Fees and nonces
 EIP-1559 suggestion from `eth_feeHistory(10, "latest", [50])`: `max_priority_fee` = median of the 50th percentile rewards; `max_fee` = 2 × latest base fee + priority. Legacy uses `eth_gasPrice`. Gas limit = estimate × 1.2. Nonces come from `pending` count, with an in-run counter per signer so a collection of `evm-tx` files does not race.

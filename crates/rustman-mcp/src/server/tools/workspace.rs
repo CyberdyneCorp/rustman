@@ -130,6 +130,7 @@ fn summary(request: &RequestRef<'_>) -> RequestSummary {
             let brokers = brokers.map(|b| b.join(","));
             (None, brokers.or_else(|| m.broker.as_ref().map(shown)))
         }
+        Request::Evm(evm) => (None, Some(evm.common().rpc.get().clone())),
         Request::Mcp(_) | Request::Opaque(_) => (None, None),
     };
     RequestSummary {

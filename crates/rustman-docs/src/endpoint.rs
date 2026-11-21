@@ -245,6 +245,9 @@ fn produces(capture: &Capture, r: &DocsRedactor) -> Rendered {
             capture.name.clone()
         }
         CaptureSource::Status => None,
+        CaptureSource::EvmOutput => capture.output.as_ref().map(ToString::to_string),
+        CaptureSource::EvmEvent => capture.event.clone(),
+        CaptureSource::EvmReceipt => capture.field.clone(),
     };
     let source = capture.from.as_str();
     let text = match detail {

@@ -21,6 +21,10 @@ pub mod dialogs;
 pub mod effects;
 #[cfg(test)]
 mod env_tests;
+pub mod evm_pane;
+#[cfg(test)]
+mod evm_tests;
+mod evm_view;
 pub mod external;
 pub mod files;
 pub mod focus;

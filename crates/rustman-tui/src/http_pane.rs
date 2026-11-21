@@ -173,6 +173,7 @@ impl RequestPane for HttpPane {
             | Request::Ws(_)
             | Request::Sse(_)
             | Request::Messaging(_)
+            | Request::Evm(_)
             | Request::Opaque(_) => None,
         }
     }

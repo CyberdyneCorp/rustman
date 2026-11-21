@@ -18,6 +18,7 @@
 //! request is handed to the [`SendGate`] instead of the engine, which
 //! decides whether it may be sent and sends it under a safety policy.
 
+mod evm;
 mod execute;
 mod export;
 mod graphql;
@@ -63,6 +64,7 @@ use crate::error::RequestError;
 use crate::exchange::Exchange;
 use crate::timing::millis;
 
+pub use evm::{EvmCall, EvmExecutor, EvmFuture, EvmOutcome, evm_error_record};
 pub use graphql::{GraphqlCall, GraphqlExecutor, GraphqlFuture, GraphqlOutcome};
 pub use grpc::{
     GRPC_CONFIG_ERROR, GRPC_REQUEST_ERROR, GrpcCall, GrpcExecutor, GrpcFailure, GrpcFuture,
@@ -136,6 +138,9 @@ pub struct RunOptions<'a> {
     /// Sends `kind: grpc` requests; without one they are skipped as an
     /// unsupported kind.
     pub grpc: Option<&'a dyn GrpcExecutor>,
+    /// Runs `kind: evm-call` requests; without one they are skipped as an
+    /// unsupported kind.
+    pub evm: Option<&'a dyn EvmExecutor>,
     /// How `snapshot` assertions treat their files: record, update
     /// (`--update-snapshots`) or CI (`--ci`, `CI=true`).
     pub snapshots: SnapshotMode,
@@ -210,6 +215,7 @@ impl Default for RunOptions<'_> {
             jsonrpc: None,
             mcp: None,
             grpc: None,
+            evm: None,
             realtime: None,
             messaging: None,
             gate: None,

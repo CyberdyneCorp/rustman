@@ -209,17 +209,7 @@ fn max_captures_waits_for_the_mocked_reply_and_prints_its_match() {
 #[test]
 fn max_body_and_the_port_from_rustman_toml() {
     let dir = tempfile::tempdir().unwrap();
-    let free = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let port = free.local_addr().unwrap().port();
-    drop(free);
-    common::write(
-        dir.path(),
-        "rustman.toml",
-        &format!("[workspace]\nname = \"w\"\nversion = 1\n\n[webhook]\nport = {port}\n"),
-    );
-    let mut child = spawn_listen(dir.path(), &["--max-body", "4"]);
-    let out = lines(&mut child);
-    assert_eq!(next(&out), format!("Listening on http://127.0.0.1:{port}"));
+    let (mut child, out, port) = listen_on_a_configured_port(dir.path(), &["--max-body", "4"]);
     let addr = format!("127.0.0.1:{port}");
     let response = exchange(
         &addr,
@@ -233,6 +223,39 @@ fn max_body_and_the_port_from_rustman_toml() {
     );
     child.kill().unwrap();
     let _ = child.wait();
+}
+
+/// `webhook listen` on a port written to `rustman.toml`. The port is
+/// reserved and released first, so another process can take it before the
+/// listener binds: a start that fails is retried on a fresh port
+/// (regression: the test failed under full-workspace load).
+fn listen_on_a_configured_port(
+    dir: &std::path::Path,
+    args: &[&str],
+) -> (Child, mpsc::Receiver<String>, u16) {
+    for _ in 0..5 {
+        let free = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = free.local_addr().unwrap().port();
+        drop(free);
+        common::write(
+            dir,
+            "rustman.toml",
+            &format!("[workspace]\nname = \"w\"\nversion = 1\n\n[webhook]\nport = {port}\n"),
+        );
+        let mut child = spawn_listen(dir, args);
+        let out = lines(&mut child);
+        match out.recv_timeout(Duration::from_secs(20)) {
+            Ok(banner) => {
+                assert_eq!(banner, format!("Listening on http://127.0.0.1:{port}"));
+                return (child, out, port);
+            }
+            Err(_) => {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+    }
+    panic!("webhook listen did not start on any of 5 ports");
 }
 
 fn next(lines: &mpsc::Receiver<String>) -> String {

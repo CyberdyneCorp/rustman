@@ -293,6 +293,7 @@ async fn call_every_tool(
     call_realtime_listen(client, out).await;
     called.push("realtime_listen".to_owned());
     called.extend(call_grpc_tools(client, out).await);
+    called.extend(call_evm_tools(client, out).await);
     let simple = [
         ("list_requests", json!({})),
         ("list_requests", json!({"text": CANARY})),
@@ -375,6 +376,46 @@ async fn read_every_resource(client: &Client, extra: &[String], out: &mut Output
         out.add(uri, &read.map_err(|e| e.to_string()));
     }
     uris.len()
+}
+
+/// The EVM tools with the secret in the endpoint, pasted into arguments
+/// and as a request path.
+async fn call_evm_tools(client: &Client, out: &mut Outputs) -> Vec<String> {
+    let secret_rpc = "{{base_url}}/mirror?k={{api_token}}";
+    let pasted = format!("https://blocked.example/{CANARY}");
+    let calls = [
+        ("evm_call", json!({"path": CANARY})),
+        (
+            "evm_call",
+            json!({"rpc": secret_rpc, "to": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", "abi": "erc20", "function": "name"}),
+        ),
+        (
+            "evm_call",
+            json!({"rpc": pasted, "to": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", "abi": "erc20", "function": "name", "args": []}),
+        ),
+        ("evm_decode", json!({"abi": CANARY, "data": "0x"})),
+        (
+            "evm_decode",
+            json!({"abi": "erc20", "data": format!("0x{CANARY}")}),
+        ),
+        ("evm_tx", json!({"rpc": secret_rpc, "hash": CANARY})),
+        ("evm_block", json!({"rpc": pasted, "block": "latest"})),
+        ("evm_block", json!({"rpc": secret_rpc, "block": CANARY})),
+        (
+            "evm_logs_query",
+            json!({"rpc": secret_rpc, "from_block": "0", "to_block": "1", "event": CANARY}),
+        ),
+        (
+            "evm_ens",
+            json!({"rpc": secret_rpc, "target": format!("{CANARY}.eth")}),
+        ),
+    ];
+    let mut called = Vec::new();
+    for (tool, args) in calls {
+        out.add(tool, &call(client, tool, args).await);
+        called.push(tool.to_owned());
+    }
+    called
 }
 
 /// `realtime_listen` with the secret in the URL, a pasted literal, frames

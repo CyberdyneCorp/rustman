@@ -185,6 +185,7 @@ mod tests {
             secrets: vec!["api_token".into(), "other".into(), "broken".into()],
             production: false,
             trace: Default::default(),
+            chain_id: None,
         }
     }
 

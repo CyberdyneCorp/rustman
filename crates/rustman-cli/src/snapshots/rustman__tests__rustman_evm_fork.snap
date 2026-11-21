@@ -1,0 +1,51 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Fork a chain with a local Anvil node and a temporary fork-<chain> environment, until Ctrl+C
+
+Usage: rustman evm fork [OPTIONS]
+
+Options:
+      --chain <CHAIN>
+          The chain to fork: an environment name, a chain name or a chain id (else --env or --rpc names the endpoint)
+
+      --block <N>
+          Fork at this block number (default: the latest)
+
+      --port <PORT>
+          The local port (default 8545)
+          
+          [default: 8545]
+
+      --env <NAME>
+          Environment (default: RUSTMAN_ENV, then default_environment)
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --rpc <URL>
+          The node: a URL or a {{variable}} (default: the environment's {{rpc}})
+
+      --var <K=V>
+          Set a variable, above every other source (repeatable): --var k=v
+
+      --timeout <DURATION>
+          Total timeout per node call: 500ms, 5s, 2m, or milliseconds
+
+  -k, --insecure
+          Do not verify TLS certificates
+
+      --json
+          Print one JSON object instead of text
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

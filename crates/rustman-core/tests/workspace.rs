@@ -231,7 +231,7 @@ fn invalid_files_are_all_reported() {
     assert_eq!(errs.len(), 2, "{errs:?}");
     assert_eq!(
         errs[0],
-        "a.rman.yaml:2: unknown request kind 'soap' (expected one of: http, graphql, jsonrpc, grpc, mcp, ws, sse, kafka, mqtt, amqp)"
+        "a.rman.yaml:2: unknown request kind 'soap' (expected one of: http, graphql, jsonrpc, grpc, mcp, ws, sse, kafka, mqtt, amqp, evm-call, evm-tx)"
     );
     assert!(errs[1].starts_with(&format!(
         "{}:1: unknown field `nme`",
@@ -420,4 +420,28 @@ fn requests_are_found_by_file_id_or_unique_name() {
     );
     let err = ws.find_request("nope", f.root()).unwrap_err();
     assert!(matches!(err, ConfigError::RequestNotFound(_)));
+}
+
+#[test]
+fn a_registered_workspace_check_fails_the_load() {
+    fn refuse_marker(ws: &Workspace) -> Vec<rustman_core::LoadError> {
+        ws.find_by_name("check-hook-marker")
+            .iter()
+            .map(|r| rustman_core::LoadError::new(&r.entry.path, None, "refused by the hook"))
+            .collect()
+    }
+    rustman_core::workspace::register_workspace_check(refuse_marker);
+    rustman_core::workspace::register_workspace_check(refuse_marker);
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("rustman.toml"),
+        "[workspace]\nname = \"t\"\nversion = 1\n",
+    )
+    .unwrap();
+    let request = "version: 1\nkind: http\nname: check-hook-marker\nurl: http://x\n";
+    std::fs::write(dir.path().join("a.rman.yaml"), request).unwrap();
+    let err = Workspace::load(dir.path()).unwrap_err();
+    assert_eq!(err.to_string(), "a.rman.yaml: refused by the hook");
+    std::fs::remove_file(dir.path().join("a.rman.yaml")).unwrap();
+    assert!(Workspace::load(dir.path()).is_ok());
 }

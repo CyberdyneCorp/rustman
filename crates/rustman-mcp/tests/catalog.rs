@@ -207,7 +207,7 @@ fn snapshot_files(root: &Path) -> BTreeMap<String, String> {
     files
 }
 
-const TOOLS: [&str; 19] = [
+const TOOLS: [&str; 25] = [
     "list_requests",
     "get_request",
     "list_environments",
@@ -230,6 +230,13 @@ const TOOLS: [&str; 19] = [
     "grpc_list",
     "grpc_describe",
     "grpc_call",
+    // evm-toolkit: read-only, registered with the protocol tools.
+    "evm_call",
+    "evm_decode",
+    "evm_tx",
+    "evm_block",
+    "evm_logs_query",
+    "evm_ens",
 ];
 
 #[tokio::test(flavor = "multi_thread")]
@@ -893,6 +900,22 @@ async fn every_tool_error_uses_a_catalogued_code() {
         (
             "grpc_call",
             json!({"target": "grpc://blocked.example:1", "method": "a.B/C"}),
+        ),
+        ("evm_call", json!({"path": "missing"})),
+        ("evm_call", json!({"to": "0x1"})),
+        ("evm_decode", json!({"abi": "erc20", "data": "0xzz"})),
+        (
+            "evm_tx",
+            json!({"hash": "0x1", "rpc": "http://blocked.example:1"}),
+        ),
+        ("evm_block", json!({"block": "newest"})),
+        (
+            "evm_logs_query",
+            json!({"from_block": "0", "to_block": "50000"}),
+        ),
+        (
+            "evm_ens",
+            json!({"target": "vitalik.eth", "rpc": "http://blocked.example:1"}),
         ),
     ];
     let mut tools_seen: Vec<&str> = Vec::new();

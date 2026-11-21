@@ -1,0 +1,6 @@
+---
+source: crates/rustman-tui/src/evm_tests.rs
+expression: "draw(editor.as_ref(), Focus::EditorBody)"
+---
+ Block:  latest  finalized  safe  pending  earliest
+ ←/→: change · a number or hash can be typed in the file

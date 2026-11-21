@@ -75,6 +75,10 @@ pub fn badge(request: &Request) -> Badge {
         Request::Ws(_) => ("WS".to_owned(), Token::Info),
         Request::Sse(_) => ("SSE".to_owned(), Token::Info),
         Request::Messaging(m) => (m.kind.to_ascii_uppercase(), Token::Info),
+        Request::Evm(evm) => match **evm {
+            rustman_core::model::EvmRequest::Call(_) => ("EVM".to_owned(), Token::Info),
+            rustman_core::model::EvmRequest::Tx(_) => ("ETX".to_owned(), Token::Warn),
+        },
         Request::Opaque(opaque) => {
             let text = match opaque.kind.as_str() {
                 "graphql" => "GQL".to_owned(),
@@ -260,6 +264,22 @@ mod tests {
                 ("GET", Token::Ok)
             ]
         );
+    }
+
+    #[test]
+    fn evm_requests_have_their_own_badges() {
+        let load = |kind: &str| {
+            let text = format!(
+                "version: 1\nkind: {kind}\nname: N\nrpc: http://x/\nto: '0x1'\nabi: erc20\nfunction: name\n"
+            );
+            rustman_core::model::KindRegistry::default()
+                .load(std::path::Path::new("e.rman.yaml"), &text)
+                .unwrap()
+        };
+        let call = badge(&load("evm-call"));
+        assert_eq!((call.text.as_str(), call.token), ("EVM", Token::Info));
+        let tx = badge(&load("evm-tx"));
+        assert_eq!((tx.text.as_str(), tx.token), ("ETX", Token::Warn));
     }
 
     #[test]

@@ -1,0 +1,39 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+EVM chains: read-only contract calls, decoding, logs, transactions, blocks, ENS and local Anvil forks
+
+Usage: rustman evm [OPTIONS] <COMMAND>
+
+Commands:
+  call    Run a read-only contract call (an evm-call request file, or --to, --abi and --function) and print the decoded result or revert
+  decode  Decode call data, revert data or a log with an ABI, offline
+  logs    Stream new heads or logs, or query logs over a block range
+  tx      Show a transaction and its receipt, with input and logs decoded
+  block   Show a block by number, tag or hash
+  ens     Resolve an ENS name to an address, or an address to its verified primary name
+  fork    Fork a chain with a local Anvil node and a temporary fork-<chain> environment, until Ctrl+C
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help
+
+Examples:
+  rustman evm call requests/token/balance.rman.yaml --env mainnet
+  rustman evm call --to 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --abi erc20 --function balanceOf vitalik.eth --rpc {{rpc}}
+  rustman evm decode --abi erc20 0xa9059cbb000...
+  rustman evm logs --address 0xA0b8... --event "Transfer(address,address,uint256)" --max-events 5
+  rustman evm tx 0x5c50... --env mainnet --json
+  rustman evm block latest
+  rustman evm ens vitalik.eth
+  rustman evm fork --chain mainnet --block 20000000

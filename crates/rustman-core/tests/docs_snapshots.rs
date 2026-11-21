@@ -88,6 +88,7 @@ fn snapshot_spec<'r>(request: &'r Request, name: &str) -> &'r SnapshotAssertion 
         | Request::Ws(_)
         | Request::Sse(_)
         | Request::Messaging(_)
+        | Request::Evm(_)
         | Request::Opaque(_) => None,
     };
     assertions

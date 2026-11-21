@@ -16,6 +16,7 @@ use ratatui::widgets::{Paragraph, Wrap};
 use rustman_core::model::Request;
 
 use crate::config::UiOptions;
+use crate::evm_pane::{EvmEditor, EvmPane};
 use crate::focus::Focus;
 use crate::graphql_pane::{GraphqlEditor, GraphqlPane};
 use crate::grpc_pane::{GrpcEditor, GrpcPane};
@@ -112,6 +113,13 @@ pub trait PaneEditor: fmt::Debug + Send {
     fn messaging_mut(&mut self) -> Option<&mut MessagingEditor> {
         None
     }
+    /// The EVM editor, for its decoded results and event timeline.
+    fn evm(&self) -> Option<&EvmEditor> {
+        None
+    }
+    fn evm_mut(&mut self) -> Option<&mut EvmEditor> {
+        None
+    }
 }
 
 /// A pane registered for one request kind.
@@ -130,8 +138,8 @@ pub struct Registry {
 
 impl Registry {
     /// The panes shipped here: `http`, `graphql`, `jsonrpc`, `grpc`, the
-    /// realtime pane for `ws` and `sse`, and the messaging pane for
-    /// `kafka`, `mqtt` and `amqp`.
+    /// realtime pane for `ws` and `sse`, the messaging pane for `kafka`,
+    /// `mqtt` and `amqp`, and the EVM pane for `evm-call` and `evm-tx`.
     pub fn builtin() -> Self {
         Self {
             panes: vec![
@@ -144,6 +152,8 @@ impl Registry {
                 &MessagingPane::KAFKA,
                 &MessagingPane::MQTT,
                 &MessagingPane::AMQP,
+                &EvmPane::CALL,
+                &EvmPane::TX,
             ],
             plugin_kinds: Vec::new(),
         }
@@ -287,7 +297,8 @@ mod tests {
         assert_eq!(
             registry.kinds(),
             [
-                "http", "graphql", "jsonrpc", "grpc", "ws", "sse", "kafka", "mqtt", "amqp"
+                "http", "graphql", "jsonrpc", "grpc", "ws", "sse", "kafka", "mqtt", "amqp",
+                "evm-call", "evm-tx"
             ]
         );
         let http = load("version: 1\nkind: http\nname: A\nurl: http://x/\n");

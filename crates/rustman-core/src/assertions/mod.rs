@@ -46,6 +46,10 @@ pub(crate) use shown::quoted;
 /// with [`crate::snapshot::check`] instead of [`evaluate`].
 pub const SNAPSHOT_NEEDS_RUNNER: &str = "snapshot assertions are checked by the runner";
 
+/// `evm` assertions need the decoded call, so `rustman-evm` checks them
+/// instead of [`evaluate`].
+pub const EVM_NEEDS_DECODER: &str = "evm assertions are checked by the EVM toolkit";
+
 /// How one assertion ended.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -207,6 +211,7 @@ fn evaluate_one(
         Assertion::GrpcStatus(expected) => grpc::evaluate(*expected, view),
         Assertion::Metadata(metadata) => header::metadata(metadata, view, interp),
         Assertion::Plugin(plugin) => plugin::evaluate(plugin, response, ctx.plugins),
+        Assertion::Evm(_) => Check::new("evm", "evm").error(EVM_NEEDS_DECODER),
         Assertion::Snapshot(snapshot) => {
             Check::new("snapshot", format!("snapshot {}", snapshot.name()))
                 .error(SNAPSHOT_NEEDS_RUNNER)
