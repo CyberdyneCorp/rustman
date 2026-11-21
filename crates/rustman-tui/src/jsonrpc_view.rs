@@ -48,7 +48,8 @@ fn call(frame: &mut Frame, rect: Rect, editor: &JsonrpcEditor, focused: bool, ct
         Paragraph::new(method_line(editor, on_method, ctx)),
         row(rect, 1, 1),
     );
-    frame.render_widget(Paragraph::new(muted("Params (JSON)", ctx)), row(rect, 2, 1));
+    let label = editor.params_label();
+    frame.render_widget(Paragraph::new(muted(&label, ctx)), row(rect, 2, 1));
     let body_height = rect.height.saturating_sub(4);
     let on_params = focused && editor.field == CallField::Params;
     let lines = if editor.params.is_empty() && !on_params {

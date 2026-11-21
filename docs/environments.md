@@ -30,6 +30,8 @@ secrets:
 production: true
 ```
 
+An environment may also set `chain_id: <integer>` to pin the EVM chain its endpoints must report; see [EVM toolkit](evm.md#chain-pinning).
+
 `production: true` marks an environment as production for the [safety policy](safety.md#production-guard): automated senders such as OpenAPI exploration refuse to target it unless the host is confirmed, and never send destructive requests to it. Environments named `prod` or `production` are treated as production even without the key. It defaults to `false`.
 
 ```yaml

@@ -34,6 +34,9 @@ pub struct Environment {
     pub production: bool,
     /// `trace:`: trace propagation, over `rustman.toml [trace]`.
     pub trace: TraceConfig,
+    /// `chain_id:`: the EVM chain this environment's endpoints must report
+    /// (add-evm-toolkit "Chain pinning per environment").
+    pub chain_id: Option<u64>,
 }
 
 impl Environment {
@@ -54,6 +57,8 @@ struct EnvironmentFile {
     production: bool,
     #[serde(default)]
     trace: Option<Located<TraceConfig>>,
+    #[serde(default)]
+    chain_id: Option<u64>,
 }
 
 /// Whether `name` is a valid environment name: `[A-Za-z0-9_-]+`.
@@ -169,6 +174,7 @@ pub fn parse(file: &Path, name: &str, text: &str) -> Result<Environment, LoadErr
             .collect(),
         production: parsed.production,
         trace: parsed.trace.map(Located::into_inner).unwrap_or_default(),
+        chain_id: parsed.chain_id,
     })
 }
 
@@ -271,6 +277,15 @@ mod tests {
     fn empty_file_is_an_empty_environment() {
         let e = env("").unwrap();
         assert!(e.variables.is_empty() && e.secrets.is_empty());
+        assert_eq!(e.chain_id, None);
+    }
+
+    #[test]
+    fn chain_id_pins_the_environment() {
+        let e = env("chain_id: 11155111\nvariables: {rpc: http://x}\n").unwrap();
+        assert_eq!(e.chain_id, Some(11_155_111));
+        assert!(env("chain_id: sepolia\n").is_err());
+        assert!(env("chain_id: -1\n").is_err());
     }
 
     #[test]

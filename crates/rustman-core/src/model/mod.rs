@@ -6,6 +6,8 @@ pub mod body;
 pub mod capture;
 pub mod common;
 pub mod docs;
+pub mod evm;
+pub mod evm_check;
 pub mod graphql;
 pub mod grpc;
 pub mod http;
@@ -25,9 +27,14 @@ pub use assertion::{
 };
 pub use auth::{ApiKeyLocation, Auth, OAuth2, OAuth2Grant, PluginAuth};
 pub use body::{Body, JsonContent, Part, PartSource};
-pub use capture::{Capture, CaptureSource};
+pub use capture::{Capture, CaptureSource, EVM_RECEIPT_FIELDS};
 pub use common::{Checked, NameValue, Validate, VarValue, Variables};
 pub use docs::DocsMeta;
+pub use evm::{
+    AbiSpec, DEPLOYMENT_OUT_OF_SCOPE, EVM_CALL_KIND, EVM_TX_KIND, EvmCallRequest, EvmCommon,
+    EvmRequest, EvmTxRequest, SIGNING_UNAVAILABLE, Scalar, StateOverride, TxType,
+};
+pub use evm_check::{EVM_OUTPUT_OPS, EvmAssertion, OutputRef};
 pub use graphql::{
     DEFAULT_DURATION, DEFAULT_MAX_EVENTS, DOCUMENT_SOURCE_ERROR, DocumentSource, GRAPHQL_ACCEPT,
     GraphqlMethod, GraphqlRequest, GraphqlTransport, WsProtocol, graphql_as_http,

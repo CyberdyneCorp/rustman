@@ -17,6 +17,9 @@ Arguments:
           The params, as a JSON array or object
 
 Options:
+      --param <NAME=VALUE>
+          A typed param of a built-in eth_*, net_* or web3_* method (repeatable): --param address=0xd8dA... --param block=latest
+
   -H, --header <NAME: VALUE>
           Add a header (repeatable): --header "Authorization: Basic {{auth}}"
 

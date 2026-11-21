@@ -1,0 +1,6 @@
+---
+source: crates/rustman-tui/src/evm_tests.rs
+expression: "draw(editor.as_ref(), Focus::EditorBody)"
+---
+ CALL 0xA0b8…eB48 balanceOf(account=0xd8dA…6045) gas=29000/24000
+   STATICCALL 0x43…01 implementation()

@@ -138,11 +138,25 @@ fn registry_accepts_new_kinds() {
         registry.names(),
         [
             "http", "graphql", "jsonrpc", "grpc", "mcp", "ws", "sse", "kafka", "mqtt", "amqp",
-            "soap"
+            "evm-call", "evm-tx", "soap"
         ]
     );
     let text = "version: 1\nkind: soap\nname: Say hello\n";
     assert_eq!(registry.load(Path::new("g"), text).unwrap().kind(), "soap");
+}
+
+#[test]
+fn evm_kinds_are_registered_and_evm_tx_never_runs() {
+    let call = "version: 1\nkind: evm-call\nname: Supply\nrpc: http://127.0.0.1:8545\nto: \"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48\"\nabi: erc20\nfunction: totalSupply\n";
+    let request = KindRegistry::default().load(Path::new("c"), call).unwrap();
+    assert_eq!((request.kind(), request.name()), ("evm-call", "Supply"));
+    assert_eq!(rustman_core::format::write::request_to_yaml(&request), call);
+    let tx = call.replace("evm-call", "evm-tx");
+    let request = KindRegistry::default().load(Path::new("t"), &tx).unwrap();
+    assert_eq!(
+        request.unsupported_reason().as_deref(),
+        Some(rustman_core::model::SIGNING_UNAVAILABLE)
+    );
 }
 
 #[test]
@@ -189,7 +203,7 @@ fn unknown_kind_names_file_line_and_registered_kinds() {
         &err,
         2,
         7,
-        "unknown-kind.rman.yaml:2: unknown request kind 'soap' (expected one of: http, graphql, jsonrpc, grpc, mcp, ws, sse, kafka, mqtt, amqp)",
+        "unknown-kind.rman.yaml:2: unknown request kind 'soap' (expected one of: http, graphql, jsonrpc, grpc, mcp, ws, sse, kafka, mqtt, amqp, evm-call, evm-tx)",
     );
 }
 
@@ -211,7 +225,7 @@ fn missing_kind_is_rejected() {
         &err,
         1,
         1,
-        "missing-kind.rman.yaml:1: missing request kind (expected one of: http, graphql, jsonrpc, grpc, mcp, ws, sse, kafka, mqtt, amqp)",
+        "missing-kind.rman.yaml:1: missing request kind (expected one of: http, graphql, jsonrpc, grpc, mcp, ws, sse, kafka, mqtt, amqp, evm-call, evm-tx)",
     );
 }
 

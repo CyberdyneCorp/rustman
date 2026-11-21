@@ -1,0 +1,8 @@
+---
+source: crates/rustman-tui/src/evm_tests.rs
+expression: "draw(editor.as_ref(), Focus::EditorBody)"
+---
+ Ethereum Mainnet (1) · geth 1.14.11
+ balance = 1.5 ETH
+ gas estimate: 29000
+ u: toggle units

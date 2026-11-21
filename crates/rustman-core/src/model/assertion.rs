@@ -62,6 +62,9 @@ pub enum Assertion {
     /// `plugin: {fn: <plugin>/<fn>, ...args}`: an assertion function of a
     /// plugin (add-plugin-system).
     Plugin(PluginAssertion),
+    /// `evm: {...}`: a check of a decoded EVM call (add-evm-toolkit),
+    /// evaluated by `rustman-evm`.
+    Evm(Box<Checked<super::evm_check::EvmAssertion>>),
 }
 
 /// The key naming an assertion's type.
@@ -91,6 +94,7 @@ enum AssertionKey {
     Messages,
     CloseCode,
     Plugin,
+    Evm,
 }
 
 impl<'de> Deserialize<'de> for Assertion {
@@ -151,6 +155,7 @@ impl<'de> Visitor<'de> for AssertionVisitor {
             AssertionKey::Messages => Assertion::Messages(map.next_value()?),
             AssertionKey::CloseCode => Assertion::CloseCode(map.next_value()?),
             AssertionKey::Plugin => Assertion::Plugin(map.next_value()?),
+            AssertionKey::Evm => Assertion::Evm(map.next_value()?),
         };
         if let Some(extra) = map.next_key::<String>()? {
             return Err(de::Error::custom(format!(
@@ -188,6 +193,7 @@ impl AssertionKey {
             Self::Messages => "messages",
             Self::CloseCode => "close_code",
             Self::Plugin => "plugin",
+            Self::Evm => "evm",
         }
     }
 }

@@ -192,6 +192,7 @@ pub fn http_entry(target: &RequestRef<'_>) -> Result<Option<RequestEntry>, Snipp
         | Request::Ws(_)
         | Request::Sse(_)
         | Request::Messaging(_)
+        | Request::Evm(_)
         | Request::Opaque(_)) => {
             return Err(SnippetError::UnsupportedKind(other.kind().to_owned()));
         }

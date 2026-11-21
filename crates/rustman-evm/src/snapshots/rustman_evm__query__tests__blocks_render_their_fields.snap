@@ -1,0 +1,12 @@
+---
+source: crates/rustman-evm/src/query.rs
+expression: view.render()
+---
+number: 16
+hash: 0xaa
+parent: 0xbb
+timestamp: 5
+miner: 0x0000000000000000000000000000000000000000
+gas used: 21000 / 30000000
+base fee: 1 gwei
+transactions: 2

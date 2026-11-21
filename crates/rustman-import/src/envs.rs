@@ -215,6 +215,7 @@ mod tests {
             secrets: vec!["api_key".into()],
             production: true,
             trace: Default::default(),
+            chain_id: None,
         }]
     }
 

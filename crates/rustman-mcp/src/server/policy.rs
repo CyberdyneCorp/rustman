@@ -204,6 +204,7 @@ mod tests {
             secrets: Vec::new(),
             production,
             trace: Default::default(),
+            chain_id: None,
         }
     }
 

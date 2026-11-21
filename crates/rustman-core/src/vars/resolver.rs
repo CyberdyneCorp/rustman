@@ -541,6 +541,7 @@ mod tests {
             secrets: Vec::new(),
             production: false,
             trace: Default::default(),
+            chain_id: None,
         };
         let resolver = Resolver::new()
             .with(EnvironmentSource::new(&env, &NoSecrets))
@@ -562,6 +563,7 @@ mod tests {
             secrets: Vec::new(),
             production: false,
             trace: Default::default(),
+            chain_id: None,
         };
         let resolver = Resolver::new()
             .with(EnvironmentSource::new(&env, &NoSecrets))
@@ -681,6 +683,7 @@ mod tests {
             secrets: vec!["api_token".into()],
             production: false,
             trace: Default::default(),
+            chain_id: None,
         };
         let resolver = Resolver::new().with(EnvironmentSource::new(&env, &Store));
         let mut i = resolver.interpolator();
@@ -706,6 +709,7 @@ mod tests {
             secrets: vec!["api_token".into()],
             production: false,
             trace: Default::default(),
+            chain_id: None,
         };
         let resolver = Resolver::new()
             .with(EnvironmentSource::new(&env, &NoSecrets))

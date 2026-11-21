@@ -28,6 +28,7 @@ pub fn request_to_yaml(request: &Request) -> String {
         Request::Sse(sse) if sse.source.is_empty() => super::realtime::sse_to_yaml(sse),
         Request::Sse(sse) => sse.source.clone(),
         Request::Messaging(messaging) => messaging.source.clone(),
+        Request::Evm(evm) => evm.common().source.to_owned(),
         Request::Opaque(opaque) => opaque.source.clone(),
     }
 }
@@ -538,8 +539,31 @@ pub(super) fn assertion(a: &Assertion) -> Node {
             map.extend(p.args.clone());
             ("plugin", json(&serde_json::Value::Object(map)))
         }
+        Assertion::Evm(e) => ("evm", evm_assertion(e)),
     };
     Node::Map(vec![(key.to_owned(), node)])
+}
+
+fn evm_assertion(e: &crate::model::EvmAssertion) -> Node {
+    let output = e.output.as_ref().map(|o| match o {
+        crate::model::OutputRef::Index(i) => Node::plain(i),
+        crate::model::OutputRef::Name(n) => Node::str(n),
+    });
+    let op = e.output_op().map(|(name, value)| (name, json(value)));
+    let mut map = MapBuilder::new().opt("output", output);
+    if let Some((name, node)) = op {
+        map = map.node(name, node);
+    }
+    let fields = e.where_fields.as_ref().map(|fields| {
+        let object = fields.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        json(&serde_json::Value::Object(object))
+    });
+    map.opt_str("emits", e.emits.as_deref())
+        .opt("where", fields)
+        .opt_plain("reverts", e.reverts)
+        .opt_str("reverts_with", e.reverts_with.as_deref())
+        .opt_str("gas_lt", e.gas_lt.as_ref().map(|g| g.as_str()))
+        .build()
 }
 
 fn rpc_error_node(expected: &RpcErrorExpectation) -> Node {
@@ -692,6 +716,7 @@ mod tests {
             secrets: vec!["api_key".into()],
             production: false,
             trace: Default::default(),
+            chain_id: None,
         };
         let text = environment_to_yaml(&env);
         assert_eq!(

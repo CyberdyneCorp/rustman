@@ -1,0 +1,14 @@
+---
+source: crates/rustman-tui/src/evm_tests.rs
+expression: "draw(editor.as_ref(), Focus::EditorBody)"
+---
+ all functions (non-view ones run as read-only eth_call simulations) · a: toggle · Enter:
+   allowance(address,address)  view
+   approve(address,uint256)  nonpayable
+ ● balanceOf(address)  view
+   decimals()  view
+   name()  view
+   symbol()  view
+   totalSupply()  view
+   transfer(address,uint256)  nonpayable
+   transferFrom(address,address,uint256)  nonpayable

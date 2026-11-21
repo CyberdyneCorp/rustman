@@ -56,6 +56,7 @@ pub fn add_request_literals(redactor: &mut Redactor, request: &Request) {
             add_body(redactor, r.body.as_ref());
         }
         Request::Messaging(r) => add_messaging(redactor, r),
+        Request::Evm(r) => add_url(redactor, r.common().rpc),
         Request::Opaque(_) => {}
     }
 }

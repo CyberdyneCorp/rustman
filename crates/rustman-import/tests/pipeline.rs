@@ -365,6 +365,7 @@ fn a_different_existing_secret_is_never_replaced() {
         secrets: vec!["token".into()],
         production: false,
         trace: Default::default(),
+        chain_id: None,
     }];
     let lookup = |_: &str, n: &str| Some(Secret::new(n, "other".to_owned()));
     let dir = tempfile::tempdir().unwrap();

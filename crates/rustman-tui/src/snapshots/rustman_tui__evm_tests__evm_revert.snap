@@ -1,0 +1,6 @@
+---
+source: crates/rustman-tui/src/evm_tests.rs
+expression: "draw(editor.as_ref(), Focus::EditorBody)"
+---
+ Ethereum Mainnet (1) · geth 1.14.11
+ reverted: Panic(0x12) division or modulo by zero

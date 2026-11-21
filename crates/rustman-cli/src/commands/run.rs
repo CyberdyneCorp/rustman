@@ -182,6 +182,9 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
     options.realtime = Some(&realtime);
     let messaging = MessagingRunner::default();
     options.messaging = Some(&messaging);
+    let evm =
+        rustman_evm::exec::EvmRunner::new(std::sync::Arc::new(rustman_http::HttpEngine::new()));
+    options.evm = Some(&evm);
     if viz.is_some() {
         options.observer = Some(&observe);
     }
@@ -226,14 +229,16 @@ fn viz_title(paths: &[PathBuf]) -> String {
 }
 
 /// The run's exit code; a run whose errors include a call a method guard
-/// refused (like `rustman rpc`), or a messaging operation the safety
-/// policy refused, exits 4.
+/// refused (like `rustman rpc`), a messaging operation the safety policy
+/// refused, or an evm-call refused for safety (a chain mismatch, like
+/// `rustman evm call`), exits 4.
 fn exit_code(record: &RunRecord) -> u8 {
     let code = run_code(&record.summary);
     let guarded = record.requests.iter().any(|r| {
         let rpc = r.jsonrpc.as_ref();
         rpc.is_some_and(|j| j.refusal == Some(RpcRefusal::Guard))
             || r.messaging.as_ref().is_some_and(|m| m.blocked)
+            || r.evm.as_ref().is_some_and(rustman_evm::exec::is_refusal)
     });
     if code == REQUEST && guarded {
         SAFETY

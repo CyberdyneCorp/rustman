@@ -1,0 +1,45 @@
+[package]
+name = "rustman-evm"
+description = "EVM toolkit for Rustman: chain identity, units, ABI loading, encoding and decoding over the JSON-RPC client"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+rustman-core.workspace = true
+rustman-http.workspace = true
+rustman-jsonrpc.workspace = true
+alloy-dyn-abi.workspace = true
+alloy-json-abi.workspace = true
+alloy-primitives.workspace = true
+ring.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt", "sync", "time"] }
+tokio-util.workspace = true
+toml.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+# Whether a stale fork environment's Anvil still runs (safe `kill(pid, 0)`).
+rustix.workspace = true
+
+[features]
+# `Recorded`, an RPC replaying recorded node answers (src/recorded.rs).
+# Never enabled in a shipped build: only this crate's own tests turn it
+# on, through the dev-dependency on itself below.
+test-fixtures = []
+
+[dev-dependencies]
+rustman-evm = { path = ".", features = ["test-fixtures"] }
+insta = { workspace = true, features = ["json"] }
+proptest.workspace = true
+rustman-test-support.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

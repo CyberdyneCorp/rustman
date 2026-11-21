@@ -155,6 +155,9 @@ impl Runner<'_> {
             Request::Messaging(_) => {
                 return Box::pin(self.execute_messaging(request, record, iteration)).await;
             }
+            Request::Evm(evm) => {
+                return Box::pin(self.execute_evm(request, evm, record, iteration)).await;
+            }
             Request::Opaque(opaque) => {
                 return Box::pin(self.execute_plugin_kind(request, opaque, record, iteration))
                     .await;

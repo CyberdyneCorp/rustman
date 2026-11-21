@@ -89,6 +89,8 @@ All the requests of a session share one rate limit and one concurrency limit, fr
 
 `send_request` and `run_collection` also run saved `kind: kafka`, `kind: mqtt` and `kind: amqp` request files. A produce is a mutation (refused with `blocked: produce requires allow_mutations` unless `[agent] allow_mutations`, then confirmed by the human), a consume from a named AMQP queue without `requeue` or through a persistent MQTT session (`clean_session: false`) is destructive, and every broker (and a Kafka `schema_registry.url`) must pass the allowlist as its `http(s)` origin (`mqtt://` and `amqp://` URLs of the active environment count; Kafka `host:port` brokers need `[agent] allowed_hosts`). Agent consumes stop after at most 100 messages or 60 s. See [Messaging](messaging.md#safety).
 
+The EVM tools (`evm_call`, `evm_decode`, `evm_tx`, `evm_block`, `evm_logs_query`, `evm_ens`) are read-only: they reach nodes through the same sender as `rpc_call` (allowlist and rate limit), pass the JSON-RPC method guards, never take or send a signed transaction, and `evm_logs_query` spans at most 10,000 blocks. See [EVM toolkit](evm.md#agent-tools).
+
 `realtime_listen` opens a WebSocket or SSE session and returns the messages it received, after at most 100 messages or 60 s. Its URL must pass the allowlist (a `ws://` URL is checked as its `http://` origin, `wss://` as `https://`), and sending frames is a mutation: refused with `blocked: sending frames requires allow_mutations` unless `[agent] allow_mutations`, and confirmed by the human otherwise. See [WebSocket and SSE](realtime.md#agent-tool).
 
 `send_request` and `run_collection` compare [snapshots](snapshots.md) in CI mode: an agent never writes or updates a snapshot file, and a missing snapshot fails the assertion.
@@ -134,6 +136,12 @@ The reference below is generated from the tool schemas that `tools/list` returns
 | `grpc_list` | `target`, `path`, `refresh`, `vars` | yes | List the services and methods (with call types) of a gRPC target or saved grpc request, by reflection or its schema, through the safety policy's allowlist. |
 | `grpc_describe` | **`symbol`**, `target`, `path`, `refresh`, `vars` | yes | Describe a gRPC service, method (with a request message template) or message of a target or saved grpc request. |
 | `grpc_call` | `path`, `target`, `method`, `message`, `metadata`, `deadline_ms`, `vars` | no | Call a unary or server-streaming gRPC method (target, method, message, metadata) or a saved grpc request through the safety policy. Returns the redacted status, metadata and messages; streams stop at 100 messages or 30 s. |
+| `evm_call` | `path`, `rpc`, `to`, `abi`, `function`, `args`, `block`, `from`, `estimate`, `vars` | yes | Run a read-only eth_call (a saved evm-call request, or rpc, to, abi, function, args, block) through the safety policy and return the decoded outputs or revert, with the node's chain and client. Never signs or sends a transaction. |
+| `evm_decode` | **`abi`**, **`data`**, `topics` | yes | Decode call data, revert data or (with topics) a log with an ABI (erc20, erc721, erc1155 or a workspace ABI file), offline. |
+| `evm_tx` | **`hash`**, `rpc`, `vars` | yes | Read a transaction and its receipt by hash, with input data and logs decoded (token amounts in token units). |
+| `evm_block` | `block`, `rpc`, `vars` | yes | Read a block by number, tag or hash: number, hash, timestamp, gas and transaction count. |
+| `evm_logs_query` | **`from_block`**, `to_block`, `addresses`, `event`, `topics`, `rpc`, `vars` | yes | Query logs by address, event signature and topics over a block range of at most 10000 blocks, decoded. |
+| `evm_ens` | **`target`**, `rpc`, `vars` | yes | Resolve an ENS name to an address, or an address to its primary name verified by a forward lookup (needs a mainnet endpoint or [evm] ens_rpc). |
 
 <!-- tool-reference:end -->
 

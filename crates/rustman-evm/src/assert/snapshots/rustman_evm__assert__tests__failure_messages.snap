@@ -1,0 +1,38 @@
+---
+source: crates/rustman-evm/src/assert/tests.rs
+expression: "lines.join(\"\\n\")"
+---
+{output: balance, gte: "1 ether"}
+  Fail: evm output 'balance': expected >= 1 ETH, got 0.5 ETH
+{output: balance, equals: 7}
+  Fail: evm output 'balance': expected 7, got 500000000000000000
+{output: owner, equals: "0x0000000000000000000000000000000000000001"}
+  Fail: evm output 'owner': expected 0x0000000000000000000000000000000000000001, got 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045
+{output: name, contains: Coin}
+  Fail: evm output 'name': expected to contain Coin, got "Test Token"
+{output: delta, gt: 0}
+  Fail: evm output 'delta': expected > 0, got -5
+{output: ids, contains: 8}
+  Fail: evm output 'ids': expected to contain 8, got [1, 7]
+{output: missing, equals: 1}
+  Error: evm output 'missing': no such output (outputs: balance, owner, name, paused, delta, 5, ids)
+{output: name, lt: 1}
+  Error: evm output 'name': 'lt' needs an integer output, got "Test Token"
+{emits: "Transfer(address,address,uint256)", where: {value: 11}}
+  Fail: evm emits: expected Transfer(address,address,uint256) where value=11, got Transfer(from=0x0000000000000000000000000000000000000000, to=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045, value=10)
+{emits: "Approval(address,address,uint256)"}
+  Fail: evm emits: expected Approval(address,address,uint256), got Transfer(from=0x0000000000000000000000000000000000000000, to=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045, value=10)
+{reverts: true}
+  Fail: evm reverts: expected a revert, got no revert
+{reverts_with: InsufficientBalance}
+  Fail: evm reverts_with: expected a revert with InsufficientBalance, got no revert
+{gas_lt: 21000}
+  Fail: evm gas_lt: expected < 21000, got 21000
+{reverts: false}
+  Fail: evm reverts: expected no revert, got reverted: Panic(0x12) division or modulo by zero
+{reverts_with: InsufficientBalance}
+  Fail: evm reverts_with: expected InsufficientBalance, got reverted: Panic(0x12) division or modulo by zero
+{output: balance, gte: 1}
+  Error: evm output 'balance': the call reverted: Panic(0x12) division or modulo by zero
+{gas_lt: 1}
+  Error: evm gas_lt: no gas figure (the estimate failed or the call reverted)

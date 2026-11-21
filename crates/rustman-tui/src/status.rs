@@ -49,6 +49,8 @@ pub struct StatusInfo {
     /// The collector client spans are exported to (`[trace.export]`), as
     /// `host:port`.
     pub otlp: Option<String>,
+    /// The EVM node last called: `Base (8453) · geth 1.14.11`.
+    pub chain: Option<String>,
 }
 
 /// The MCP approvals waiting for the user, shown on every screen until
@@ -113,7 +115,7 @@ fn left_spans(workspace: &str, info: &StatusInfo, ui: &UiOptions) -> Vec<Span<'s
         let text = format!(" {} in flight ", info.in_flight);
         Span::styled(text, theme.fg(Token::Accent).add_modifier(Modifier::BOLD))
     };
-    vec![
+    let mut spans = vec![
         Span::styled(
             format!(" {workspace} "),
             theme.fg(Token::Text).add_modifier(Modifier::BOLD),
@@ -122,9 +124,14 @@ fn left_spans(workspace: &str, info: &StatusInfo, ui: &UiOptions) -> Vec<Span<'s
         environment,
         separator.clone(),
         tls,
-        separator,
+        separator.clone(),
         in_flight,
-    ]
+    ];
+    if let Some(chain) = &info.chain {
+        spans.push(separator);
+        spans.push(Span::styled(format!(" {chain} "), theme.fg(Token::Info)));
+    }
+    spans
 }
 
 /// The recording proxy and the `CA TRUSTED` badge (traffic-recorder
@@ -225,6 +232,16 @@ mod tests {
     }
 
     #[test]
+    fn status_evm_chain_and_client() {
+        let info = StatusInfo {
+            environment: Some("base".into()),
+            chain: Some("Base (8453) · geth 1.14.11".into()),
+            ..StatusInfo::default()
+        };
+        insta::assert_snapshot!(text(&info));
+    }
+
+    #[test]
     fn status_otlp_export() {
         let info = StatusInfo {
             environment: Some("dev".into()),
@@ -310,6 +327,7 @@ mod tests {
             recorder: None,
             ca_trusted: false,
             otlp: None,
+            chain: None,
         };
         insta::assert_snapshot!(text(&info));
     }

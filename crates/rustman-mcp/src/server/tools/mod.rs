@@ -4,6 +4,7 @@
 //! guardrails (audit, redaction, limits) wrap every call in
 //! [`AgentContext::audited`](super::AgentContext::audited).
 
+pub mod evm;
 mod execute;
 mod explore;
 #[cfg(feature = "grpc")]
@@ -212,7 +213,45 @@ fn protocol_tools() -> Vec<Tool> {
         ),
     ];
     tools.extend(grpc_tools());
+    tools.extend(evm_tools());
     tools
+}
+
+/// The read-only EVM tools (`evm-toolkit`). None signs or sends a
+/// transaction.
+fn evm_tools() -> Vec<Tool> {
+    vec![
+        tool::<evm::EvmCallArgs, evm::EvmCallResult>(
+            evm::CALL_TOOL,
+            "Run a read-only eth_call (a saved evm-call request, or rpc, to, abi, function, args, block) through the safety policy and return the decoded outputs or revert, with the node's chain and client. Never signs or sends a transaction.",
+            Effect::ReadOnly,
+        ),
+        tool::<evm::EvmDecodeArgs, evm::EvmResult>(
+            evm::DECODE_TOOL,
+            "Decode call data, revert data or (with topics) a log with an ABI (erc20, erc721, erc1155 or a workspace ABI file), offline.",
+            Effect::ReadOnly,
+        ),
+        tool::<evm::EvmTxArgs, evm::EvmResult>(
+            evm::TX_TOOL,
+            "Read a transaction and its receipt by hash, with input data and logs decoded (token amounts in token units).",
+            Effect::ReadOnly,
+        ),
+        tool::<evm::EvmBlockArgs, evm::EvmResult>(
+            evm::BLOCK_TOOL,
+            "Read a block by number, tag or hash: number, hash, timestamp, gas and transaction count.",
+            Effect::ReadOnly,
+        ),
+        tool::<evm::EvmLogsQueryArgs, evm::EvmResult>(
+            evm::LOGS_TOOL,
+            "Query logs by address, event signature and topics over a block range of at most 10000 blocks, decoded.",
+            Effect::ReadOnly,
+        ),
+        tool::<evm::EvmEnsArgs, evm::EvmResult>(
+            evm::ENS_TOOL,
+            "Resolve an ENS name to an address, or an address to its primary name verified by a forward lookup (needs a mainnet endpoint or [evm] ens_rpc).",
+            Effect::ReadOnly,
+        ),
+    ]
 }
 
 /// The gRPC tools, in a build with the `grpc` feature.
@@ -311,6 +350,9 @@ pub async fn call(name: &str, call: &Call) -> Result<ToolOutput, ToolError> {
         "search_history" => history::search_history(call),
         rpc::NAME => rpc::rpc_call(call).await,
         realtime::NAME => realtime::realtime_listen(call).await,
+        _ if evm::TOOLS.contains(&name) => evm::dispatch(name, call)
+            .await
+            .unwrap_or_else(|| Err(ToolError::internal("unregistered evm tool"))),
         _ => call_grpc(name, call).await.unwrap_or_else(|| {
             Err(ToolError::new(
                 ErrorCode::NotFound,

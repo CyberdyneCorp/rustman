@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use clap::Args;
 use rustman_core::collection::RequestEntry;
-use rustman_core::model::{REQUEST_FILE_SUFFIX, Request};
+use rustman_core::model::{EvmRequest, REQUEST_FILE_SUFFIX, Request, SIGNING_UNAVAILABLE};
 use rustman_core::run::{RequestRecord, RequestStatus, SkipReason, Summary};
 use rustman_core::settings::Settings;
 use rustman_core::workspace::RequestRef;
@@ -161,6 +161,9 @@ fn send(
     settings: &Settings,
     target: &RequestRef<'_>,
 ) -> Result<u8, CliError> {
+    if let Some(code) = refuse_evm(target)? {
+        return Ok(code);
+    }
     let env = match ws {
         Some(ws) => args.selection.environment(ws)?,
         None => None,
@@ -200,6 +203,25 @@ fn send(
     print_warnings(&sent.record.warnings);
     print_snapshot_notes(&sent.record);
     finish(&args.output, &sent)
+}
+
+/// An `evm-tx` request is never sent: signing is not available yet, a
+/// refusal (exit code 4, as the signing gate refuses). An `evm-call`
+/// request is sent by `rustman evm call` and `rustman run` (exit code 2).
+fn refuse_evm(target: &RequestRef<'_>) -> Result<Option<u8>, ConfigError> {
+    let Request::Evm(evm) = target.request() else {
+        return Ok(None);
+    };
+    match **evm {
+        EvmRequest::Tx(_) => {
+            eprintln!("{}", crate::exit::render(&SIGNING_UNAVAILABLE));
+            Ok(Some(crate::exit::SAFETY))
+        }
+        EvmRequest::Call(_) => Err(ConfigError::Usage(format!(
+            "request '{}' is an evm-call request; send it with `rustman evm call` or `rustman run`",
+            target.entry.id()
+        ))),
+    }
 }
 
 /// Print the response (or why there is none) and pick the exit code.

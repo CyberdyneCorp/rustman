@@ -142,6 +142,7 @@
           "bail",
           "interrupted",
           "unsupported_kind",
+          "signing_not_requested",
           null
         ]
       },
@@ -169,6 +170,10 @@
       },
       "realtime": {
         "$ref": "#/$defs/realtime"
+      },
+      "evm": {
+        "description": "The decoded result of an evm-call: chain, client, function, outputs or revert, gas estimate.",
+        "type": "object"
       },
       "assertions": {
         "type": "array",

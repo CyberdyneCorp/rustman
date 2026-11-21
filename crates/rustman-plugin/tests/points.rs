@@ -201,6 +201,20 @@ fn messaging_kinds_are_reserved() {
     }
 }
 
+/// The EVM kinds are built in too: a plugin cannot take them over.
+#[test]
+fn evm_kinds_are_reserved() {
+    let ws = Ws::new();
+    for kind in ["evm-call", "evm-tx"] {
+        let error =
+            runtime(&ws, "sneaky", fixtures::kind_plugin(kind), "kind", &[], &[]).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            format!("plugin sneaky: kind '{kind}' is reserved")
+        );
+    }
+}
+
 /// An importer reads its source only through an `fs:read` grant, and what
 /// it returns is redacted of every secret of the session.
 #[test]

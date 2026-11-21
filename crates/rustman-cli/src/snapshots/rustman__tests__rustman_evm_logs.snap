@@ -1,0 +1,67 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Stream new heads or logs, or query logs over a block range
+
+Usage: rustman evm logs [OPTIONS]
+
+Options:
+      --address <ADDRESS>
+          Logs from this contract (repeatable; any contract when absent)
+
+      --event <SIGNATURE>
+          Topic 0 as an event signature: "Transfer(address,address,uint256)"
+
+      --topic <TOPIC>
+          A further topic, in order (32-byte hex, a signature, or * for any)
+
+      --heads
+          Stream new block headers instead of logs
+
+      --from-block <BLOCK>
+          Query logs from this block instead of streaming (with --to-block, default latest)
+
+      --to-block <BLOCK>
+          The last block of a query
+
+      --max-events <N>
+          Stop streaming after N events (reorged logs not counted)
+
+      --duration <DURATION>
+          Stop streaming after this long: 30s, 5m
+
+      --poll-interval <DURATION>
+          How often to poll over HTTP (default 2s)
+
+      --env <NAME>
+          Environment (default: RUSTMAN_ENV, then default_environment)
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --rpc <URL>
+          The node: a URL or a {{variable}} (default: the environment's {{rpc}})
+
+      --var <K=V>
+          Set a variable, above every other source (repeatable): --var k=v
+
+      --timeout <DURATION>
+          Total timeout per node call: 500ms, 5s, 2m, or milliseconds
+
+  -k, --insecure
+          Do not verify TLS certificates
+
+      --json
+          Print one JSON object instead of text
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help
