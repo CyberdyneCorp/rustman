@@ -25,6 +25,7 @@ use crate::config::{BindError, ProxyConfig, bind_reason};
 use crate::filter::CaptureFilter;
 use crate::forward::{Leg, Origin, Upstream, forward, plain};
 use crate::guard::{INTERNAL_REFUSED, is_own_address, is_refused_host, is_refused_ip};
+use crate::idle::{Activity, Tracked};
 use crate::intercept::{Interception, Tunnel, intercept};
 use crate::recorder::Recorder;
 use crate::scope::Scope;
@@ -226,19 +227,30 @@ pub fn banner(addr: SocketAddr) -> [String; 3] {
     ]
 }
 
+/// Serve one client connection. A request head that takes longer than the
+/// client timeout closes it, and so does a connection on which no byte
+/// moved for the idle timeout (a stalled body or keep-alive), so a client
+/// cannot hold a connection slot forever. A `CONNECT` tunnel, once
+/// upgraded, leaves this connection and has its own idle timeout.
 async fn serve_client(stream: TcpStream, shared: Arc<Shared>, client: Arc<Client>) {
     let timeout = shared.client_timeout;
+    let idle_timeout = shared.idle_timeout;
     let service = service_fn(move |request| {
         let shared = Arc::clone(&shared);
         let client = Arc::clone(&client);
         async move { Ok::<_, Infallible>(handle(request, shared, client).await) }
     });
-    let _ = hyper::server::conn::http1::Builder::new()
+    let activity = Activity::new();
+    let io = TokioIo::new(Tracked::new(stream, &activity));
+    let connection = hyper::server::conn::http1::Builder::new()
         .timer(TokioTimer::new())
         .header_read_timeout(timeout)
-        .serve_connection(TokioIo::new(stream), service)
-        .with_upgrades()
-        .await;
+        .serve_connection(io, service)
+        .with_upgrades();
+    tokio::select! {
+        _ = connection => {}
+        () = activity.idle(idle_timeout) => {}
+    }
 }
 
 async fn handle(

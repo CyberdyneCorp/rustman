@@ -276,7 +276,7 @@ fn ca_export_without_a_ca_exits_2() {
     );
 }
 
-/// `rustman` in `ws` with the stand-in keychain of debug builds in
+/// `rustman` in `ws` with the stand-in keychain of test builds in
 /// `keychain` (never the OS keychain) and the user config in `config`.
 fn rustman_with_test_keychain(ws: &Path, config: &Path, keychain: &Path) -> std::process::Command {
     let mut cmd = std::process::Command::new(assert_cmd::cargo::cargo_bin("rustman"));
@@ -351,7 +351,7 @@ fn ca_remove_deletes_the_key_and_the_certificate_after_confirmation() {
 
 /// Task 8.1, on every CI platform: curl through `rustman record
 /// --intercept localhost --save --har out.har` to a local TLS API. The CA
-/// key goes to the stand-in keychain of debug builds (never the OS
+/// key goes to the stand-in keychain of test builds (never the OS
 /// keychain nor a trust store: curl gets the CA with `--cacert`), and the
 /// recording stops by itself after one capture, as a test cannot send
 /// Ctrl+C to a child on Windows.

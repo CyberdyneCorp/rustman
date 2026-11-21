@@ -5281,6 +5281,7 @@ dependencies = [
  "roxmltree",
  "rpassword",
  "rustman-bench",
+ "rustman-cli",
  "rustman-contract",
  "rustman-core",
  "rustman-docs",

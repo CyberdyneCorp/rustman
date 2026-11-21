@@ -70,8 +70,18 @@ secrets-aws = ["rustman-secrets/secrets-aws"]
 secrets-gcp = ["rustman-secrets/secrets-gcp"]
 secrets-azure = ["rustman-secrets/secrets-azure"]
 cloud-secrets = ["secrets-aws", "secrets-gcp", "secrets-azure"]
+# Test hooks of `rustman record` (a stand-in keychain directory and a stop
+# after N captures, see src/commands/record/test_hooks.rs). Never enabled
+# in a build that is shipped or installed: only this crate's own tests turn
+# it on, through the dev-dependency on itself below.
+record-test-hooks = []
 
 [dev-dependencies]
+# The integration tests run `rustman record --intercept` and the `ca`
+# commands with the test hooks on every platform; a dev-dependency only
+# applies to test builds, never to `cargo build`, `cargo install` or
+# `cargo run`.
+rustman-cli = { path = ".", default-features = false, features = ["record-test-hooks"] }
 assert_cmd.workspace = true
 # Test plugins built in-process (add-plugin-system).
 rustman-plugin = { workspace = true, features = ["test-fixtures"] }

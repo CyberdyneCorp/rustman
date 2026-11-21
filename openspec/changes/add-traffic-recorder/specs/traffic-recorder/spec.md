@@ -46,7 +46,7 @@ Requests from clients that are not on loopback SHALL reach only globally routabl
 - **THEN** the request SHALL be forwarded to `https://api.example.com/v1/users` and the exchange SHALL be captured
 
 ### Requirement: Interception scope
-TLS SHALL be decrypted only for hosts matching the include list (`--intercept <glob>`, repeatable, or `[record].intercept`). Every other `CONNECT` SHALL be relayed as an opaque tunnel and recorded only as a host, port and byte-count entry. With no include list and no CA, all HTTPS SHALL pass through untouched.
+TLS SHALL be decrypted only for hosts matching the include list (`--intercept <glob>`, repeatable, or `[record].intercept`). Every other `CONNECT` SHALL be relayed as an opaque tunnel and recorded only as a host, port and byte-count entry. With no include list and no CA, all HTTPS SHALL pass through untouched. A `CONNECT` host that is neither a valid DNS name nor an IP address SHALL get `400` before any certificate is minted.
 
 #### Scenario: Host not included
 - **GIVEN** `--intercept "*.example.com"`
@@ -58,6 +58,11 @@ TLS SHALL be decrypted only for hosts matching the include list (`--intercept <g
 - **GIVEN** `--intercept "*.example.com"` and an installed local CA
 - **WHEN** a client calls `https://api.example.com/v1/me` through the proxy
 - **THEN** the full request and response SHALL be captured
+
+#### Scenario: Wildcard CONNECT host
+- **GIVEN** `--intercept "*.example.com"` and a local CA
+- **WHEN** a client sends `CONNECT *.example.com:443`
+- **THEN** the proxy SHALL answer `400` and SHALL NOT mint a certificate
 
 ### Requirement: Local CA generation and storage
 The local CA SHALL be created only by `rustman record ca init`, or on first `--intercept` after an explicit prompt. It SHALL be per workspace, valid for 1 year, constrained to TLS server authentication, with its private key in the OS keychain and its certificate under the user config directory, never inside the workspace.
@@ -133,7 +138,7 @@ The copies of bodies still in flight SHALL share a budget of `max_buffer_bytes`:
 - **AND** its capture SHALL be marked `truncated`
 
 ### Requirement: Connection timeouts
-An upstream SHALL get `response_timeout_ms` (default 60 s), counted once the request body is sent, to send a response head; past it the client SHALL get `504` and the exchange SHALL be recorded with the error. An opaque tunnel or an intercepted connection without traffic either way for `idle_timeout_ms` (default 5 minutes) SHALL be closed; a closed tunnel SHALL be recorded with an idle-timeout error. Both SHALL be configurable in `[record]`.
+An upstream SHALL get `response_timeout_ms` (default 60 s), counted once the request body is sent, to send a response head; past it the client SHALL get `504` and the exchange SHALL be recorded with the error. Any client connection (plain, tunnel or intercepted) idle either way for `idle_timeout_ms` (default 5 minutes) SHALL be closed; a closed tunnel SHALL be recorded with an idle-timeout error. Both SHALL be configurable in `[record]`.
 
 #### Scenario: Silent upstream
 - **WHEN** an upstream accepts a request and sends no response head for 60 seconds
@@ -143,6 +148,10 @@ An upstream SHALL get `response_timeout_ms` (default 60 s), counted once the req
 #### Scenario: Idle tunnel
 - **WHEN** an opaque tunnel carries no byte for 5 minutes
 - **THEN** it SHALL be closed and its entry SHALL carry `idle timeout: no traffic for 300 s`
+
+#### Scenario: Stalled request body
+- **WHEN** a client sends a plain proxy request with `Content-Length: 100000` (or a chunked body), sends part of the body and then nothing for 5 minutes
+- **THEN** the proxy SHALL close the connection and free its connection slot
 
 ### Requirement: Live capture list
 The TUI SHALL provide a recorder pane listing captures as they arrive (time, method, host, path, status, duration, size), with filtering, multi-select and a detail view. `rustman record --json` SHALL print one redacted JSON object per capture to stdout.
@@ -195,11 +204,16 @@ Before anything is written, values of `Authorization`, `Proxy-Authorization`, `C
 - **AND** the string `eyJ` SHALL NOT appear in any file under the workspace
 
 ### Requirement: Redaction in display and export
-Captures SHALL be redacted in the TUI, JSON-lines output and logs using the `environments` redaction rules. They SHALL be kept unredacted only in memory, for the purpose of saving secrets with `--store-secrets` or replaying.
+Captures SHALL be redacted in the TUI, JSON-lines output, HAR export and logs using the `environments` redaction rules. Every value that saving would replace by a placeholder (secret-named headers and fields, values starting with an auth scheme, known token formats under any name) SHALL be redacted there too. They SHALL be kept unredacted only in memory, for the purpose of saving secrets with `--store-secrets` or replaying.
 
 #### Scenario: Cookie hidden in the pane
 - **WHEN** a captured request carries `Cookie: sid=abc`
 - **THEN** the recorder pane SHALL show `Cookie: «redacted:Cookie»`
+
+#### Scenario: Secrets found by their shape
+- **WHEN** a captured request carries `X-Forward: ghp_…`, the JSON body `{"data":"ghp_…","x":"AKIAIOSFODNN7EXAMPLE","authorization":"Bearer X"}` and a `ghp_…` query value
+- **THEN** none of these raw values SHALL appear in the HAR export, the `--json` line or the recorder pane
+- **AND** saving SHALL NOT warn that any of them was kept
 
 ### Requirement: HAR export
 `rustman record --har <file>` SHALL write all captures as HAR 1.2 when the session ends, and a TUI action SHALL export the selected captures at any time. Secrets SHALL be redacted unless `--show-secrets` is given. Tunnel-only and truncated entries SHALL be marked in the HAR `comment` field. The file SHALL be readable by the current user only (mode `0600` on Unix).

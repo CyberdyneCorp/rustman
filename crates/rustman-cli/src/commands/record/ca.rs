@@ -120,8 +120,8 @@ pub fn new_store(root: &Path) -> Result<CaStore, CliError> {
 /// The OS keychain, unless `RUSTMAN_SECRET_STORE=file` keeps Rustman away
 /// from it; the CA key never falls back to a file.
 fn record_keychain() -> Result<Option<Box<dyn Keychain>>, CliError> {
-    if let Some(stand_in) = super::test_hooks::DirKeychain::from_env() {
-        return Ok(Some(Box::new(stand_in)));
+    if let Some(stand_in) = super::test_hooks::keychain() {
+        return Ok(Some(stand_in));
     }
     let backend = SecretBackend::from_env_value(std::env::var(BACKEND_VAR).ok().as_deref())
         .map_err(ConfigError::from)?;

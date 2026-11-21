@@ -412,3 +412,55 @@ fn saving_part_of_an_earlier_recording_keeps_its_order_and_base_urls() {
     let delete = read(ws.path(), "recorded/localhost-18081/delete-big.rman.yaml");
     assert!(delete.contains("{{base_url_2}}/big"), "{delete}");
 }
+
+/// Secrets the save path finds by their value or shape rather than their
+/// name: a token in a neutral-named header, well-known tokens in a JSON
+/// body and the query, an auth scheme value in a body field.
+fn shaped_secrets() -> (Capture, [&'static str; 5]) {
+    let header_token = "ghp_q8ZK3vLw0pTn6RxYb2HsJm9CdFgA5eUi7oQ1";
+    let body_token = "ghp_Zx9Yw8Vu7Ts6Rq5Po4Nm3Lk2Ji1Hg0FeDcBa";
+    let query_token = "ghp_Aa1Bb2Cc3Dd4Ee5Ff6Gg7Hh8Ii9Jj0KkLlMm";
+    let aws_key = "AKIAIOSFODNN7EXAMPLE";
+    let body = format!(r#"{{"data":"{body_token}","x":"{aws_key}","authorization":"Bearer X"}}"#);
+    let capture = exchange(
+        "POST",
+        &format!("https://api.example.com/sync?state={query_token}"),
+        &[
+            ("Content-Type", "application/json"),
+            ("X-Forward", header_token),
+        ],
+        &body,
+    );
+    let raw = [header_token, body_token, query_token, aws_key, "Bearer X"];
+    (capture, raw)
+}
+
+#[test]
+fn shown_captures_redact_every_secret_the_save_path_parameterizes() {
+    let ws = workspace();
+    let (capture, raw) = shaped_secrets();
+    let captures = [capture];
+    let saved = save(&captures, &options(ws.path(), "recorded"), None).unwrap();
+    for (path, bytes) in tree(ws.path()) {
+        let text = String::from_utf8_lossy(&bytes);
+        for secret in raw {
+            assert!(!text.contains(secret), "saved: {secret} in {path}: {text}");
+        }
+    }
+    let har = crate::har::har(&captures, false).to_string();
+    let json = crate::jsonl::capture_json(&captures[0]).to_string();
+    let line = captures[0]
+        .redactor()
+        .text(&captures[0].to_string())
+        .into_owned();
+    for (shown, text) in [("HAR", &har), ("--json", &json), ("live line", &line)] {
+        for secret in raw {
+            assert!(!text.contains(secret), "{shown}: {secret} in {text}");
+        }
+    }
+    assert!(
+        saved.warnings.iter().all(|w| !w.contains("high entropy")),
+        "a parameterized value is reported as kept: {:?}",
+        saved.warnings
+    );
+}

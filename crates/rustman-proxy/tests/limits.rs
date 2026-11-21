@@ -1,7 +1,8 @@
 //! Resource limits of the proxy (traffic-recorder spec: Capture limits,
 //! Connection timeouts): the copies of bodies in flight share the
 //! `max_buffer_bytes` budget, a slow upstream response head gets `504`, and
-//! idle tunnels and intercepted connections are closed.
+//! idle tunnels, intercepted connections and plain connections with a
+//! stalled request body are closed.
 
 mod common;
 
@@ -150,4 +151,62 @@ async fn an_idle_intercepted_http2_connection_is_closed() {
         .unwrap()
         .ok();
     drop(sender);
+}
+
+/// An upstream that reads whatever it gets and never answers.
+async fn silent_upstream() -> std::net::SocketAddr {
+    let silent = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = silent.local_addr().unwrap();
+    tokio::spawn(async move {
+        while let Ok((mut tcp, _)) = silent.accept().await {
+            tokio::spawn(async move {
+                let mut buf = vec![0u8; 1024];
+                while tcp.read(&mut buf).await.is_ok_and(|n| n > 0) {}
+            });
+        }
+    });
+    addr
+}
+
+/// Send `head` and the start of its body through a proxy that serves one
+/// connection at once, stall, and expect the proxy to close the connection
+/// and serve the next client.
+async fn assert_stalled_body_is_closed(head_and_partial_body: &str) {
+    let upstream = silent_upstream().await;
+    let server = TestServer::http().await;
+    let config = ProxyConfig {
+        idle_timeout: SHORT,
+        max_connections: 1,
+        ..ProxyConfig::default()
+    };
+    let proxy = start(config, None).await;
+    let mut tcp = TcpStream::connect(proxy.addr).await.unwrap();
+    let request = head_and_partial_body.replace("{upstream}", &upstream.to_string());
+    tcp.write_all(request.as_bytes()).await.unwrap();
+    let mut rest = Vec::new();
+    let closed = tokio::time::timeout(PATIENCE, tcp.read_to_end(&mut rest)).await;
+    assert!(closed.is_ok(), "the stalled connection stays open");
+    let next = TcpStream::connect(proxy.addr).await.unwrap();
+    let response = tokio::time::timeout(PATIENCE, send_http1(next, get(&server.url("/echo"))))
+        .await
+        .expect("the stalled connection still holds the only connection slot");
+    assert_eq!(response.status(), 200);
+}
+
+#[tokio::test]
+async fn a_plain_connection_with_a_stalled_content_length_body_is_closed() {
+    assert_stalled_body_is_closed(
+        "POST http://{upstream}/upload HTTP/1.1\r\nHost: {upstream}\r\n\
+         Content-Length: 100000\r\n\r\npartial",
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn a_plain_connection_with_a_stalled_chunked_body_is_closed() {
+    assert_stalled_body_is_closed(
+        "POST http://{upstream}/upload HTTP/1.1\r\nHost: {upstream}\r\n\
+         Transfer-Encoding: chunked\r\n\r\n7\r\npartial\r\n",
+    )
+    .await;
 }

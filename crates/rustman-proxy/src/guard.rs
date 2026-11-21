@@ -39,16 +39,20 @@ pub(crate) fn is_refused_ip(ip: IpAddr) -> bool {
     !is_public_ip(ip)
 }
 
-/// Whether `host:port` is the listen address `addr` of the proxy itself.
+/// Whether `host:port` is the listen address `addr` of the proxy itself:
+/// that address, or a loopback name or address (all of `127.0.0.0/8`,
+/// `::1`, `::ffff:127.x.y.z`, `localhost` and `*.localhost`) when the
+/// proxy listens on loopback or on every interface.
 pub(crate) fn is_own_address(host: &str, port: u16, addr: SocketAddr) -> bool {
     if port != addr.port() {
         return false;
     }
     let host = bare(host);
-    if host == "localhost" {
+    if host == "localhost" || host.ends_with(".localhost") {
         return addr.ip().is_loopback() || addr.ip().is_unspecified();
     }
     host.parse::<IpAddr>().is_ok_and(|ip| {
+        let ip = ip.to_canonical();
         ip == addr.ip()
             || (ip.is_loopback() && addr.ip().is_loopback())
             || (addr.ip().is_unspecified() && (ip.is_loopback() || ip.is_unspecified()))
@@ -109,6 +113,9 @@ mod tests {
         assert!(is_own_address("localhost", 27464, loopback));
         assert!(is_own_address("127.0.0.2", 27464, loopback));
         assert!(is_own_address("[::1]", 27464, loopback));
+        assert!(is_own_address("127.255.0.9", 27464, loopback));
+        assert!(is_own_address("[::ffff:127.0.0.1]", 27464, loopback));
+        assert!(is_own_address("api.localhost", 27464, loopback));
         assert!(!is_own_address("127.0.0.1", 27465, loopback));
         assert!(!is_own_address("api.example.com", 27464, loopback));
         let any: SocketAddr = "0.0.0.0:9000".parse().unwrap();

@@ -10,7 +10,8 @@
 use std::collections::HashMap;
 
 use rustman_import::ir::{ImportedRequest, Pair};
-use rustman_import::secrets::{is_secret_header_name, is_secret_name};
+
+use crate::named::{is_secret_field, is_secret_header};
 
 /// Values longer than this are checked for high entropy.
 pub const ENTROPY_MIN_LEN: usize = 32;
@@ -78,18 +79,20 @@ impl HeaderSecrets {
 }
 
 /// Warnings for header and query values of `request` that look random but
-/// whose names do not mark them as secrets. Values are never shown.
+/// that the secret extraction keeps: neither their names nor their values
+/// (a well-known token, an auth scheme) mark them as secrets. Values are
+/// never shown.
 pub fn entropy_warnings(request: &ImportedRequest, shown: &str) -> Vec<String> {
     let headers = request
         .headers
         .iter()
-        .filter(|h| !is_secret_header_name(&h.name) && !is_descriptive_header(&h.name))
+        .filter(|h| !is_secret_header(&h.name, &h.value) && !is_descriptive_header(&h.name))
         .filter(|h| looks_random(&h.value))
         .map(|h| ("header", h));
     let query = request
         .query
         .iter()
-        .filter(|p| !is_secret_name(&p.name))
+        .filter(|p| !is_secret_field(&p.name, &p.value))
         .filter(|p| looks_random(&p.value))
         .map(|p| ("query parameter", p));
     headers
