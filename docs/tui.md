@@ -476,7 +476,7 @@ cargo run -p rustman-tui --example screenshot -- [--ansi] [--size WxH] [--theme 
 
 It opens PATH as `rustman tui` would, runs the start-up work synchronously, and prints a 120x36 frame (or `--size`) as plain text, or with ANSI colours with `--ansi` (view it with `cat` or `less -R`). It ignores `tui.toml` and renders in 24-bit colour unless `--no-color` is given, so the output depends only on the flags and the workspace.
 
-The README images in `docs/images/tui-*.svg` are real frames rendered off-screen by the `screenshot` example. [`crates/rustman-tui/examples/screenshots/`](../crates/rustman-tui/examples/screenshots/) holds the sample workspace (HTTP, GraphQL, JSON-RPC and gRPC requests, a `.proto` file, an OpenRPC catalog and MCP server definitions) and the sample responses, and its `render.sh` renders every frame and converts it to SVG with `ansi2svg.py` next to it:
+The README images in `docs/images/tui-*.svg` are real frames rendered off-screen by the `screenshot` example. [`crates/rustman-tui/examples/screenshots/`](../crates/rustman-tui/examples/screenshots/) holds the sample workspace (HTTP, GraphQL, JSON-RPC, gRPC and Kafka requests, a `.proto` file, an OpenRPC catalog, MCP server definitions and two monitors) and the sample responses, and its `render.sh` renders every frame and converts it to SVG with `ansi2svg.py` next to it. The Monitors view reads its results relative to the current time, so `monitor-store.py` writes 24 hours of sample results into the copied workspace's store just before that frame (a fixed seed keeps their shape; only the timestamps change between renders):
 
 ```bash
 crates/rustman-tui/examples/screenshots/render.sh
@@ -496,6 +496,8 @@ crates/rustman-tui/examples/screenshots/render.sh
 | `tui-grpc` | the gRPC method browser and a server-streaming call's messages |
 | `tui-grpc-timeline` | a gRPC request message and the call's timeline |
 | `tui-mcp` | the MCP inspector asking for workspace trust before running a stdio server |
+| `tui-messaging` | the messaging editor's Compose tab for a Kafka produce request |
+| `tui-monitors` | the Monitors view: two monitors' last outcome, uptime and latency sparkline, a firing rule and the recent runs |
 
 The animated GIF at the top of the README (`docs/images/demo.gif`) is a real session recorded with [VHS](https://github.com/charmbracelet/vhs): [`examples/demo/`](../examples/demo/) holds the todo backend it talks to, its workspace, the `demo.tape` script and a `render.sh` that builds Rustman, starts the backend and records the tape.
 
@@ -506,7 +508,7 @@ cargo run -p rustman-tui --example screenshot -- --ansi --size 136x30 \
     [--open pets/get-pet.rman.yaml --response pet.json] [--keys "Ctrl+P s w e n v"] <workspace> > frame.ans
 ```
 
-`--open` opens a request file (relative to the workspace root) in a tab, and its background loads (a GraphQL or gRPC schema, an OpenRPC catalog) run before the frame is captured. `--response` shows a JSON file as its exchange, so a frame with a response needs no network and is the same on every run: for an HTTP request it is the body of a `200 OK` with fixed timings and history, and the request's assertions are evaluated against it, so the Assertions tab and the summary line's tally are real results; for a GraphQL request the body is read as a GraphQL result (`Data`, `Errors` and `Extensions` tabs); for a gRPC request the file is the call's record, the `grpc` member of a `rustman.report/v1` request. `--keys` presses space-separated chords before the frame is captured (for example `Ctrl+P` for the palette, `F1` for help, `Alt+I` for the MCP inspector, `Tab 2 Tab` to show and focus the Headers tab, or `Tab Tab Tab ] ]` to focus the response and show its third tab; the URL has the focus first, so a printable key such as `?` is typed into it). Frames that need a running listener or session (webhook captures, the mock server's request log, a connected MCP server) can't be rendered this way.
+`--open` opens a request file (relative to the workspace root) in a tab, and its background loads (a GraphQL or gRPC schema, an OpenRPC catalog) run before the frame is captured. `--response` shows a JSON file as its exchange, so a frame with a response needs no network and is the same on every run: for an HTTP request it is the body of a `200 OK` with fixed timings and history, and the request's assertions are evaluated against it, so the Assertions tab and the summary line's tally are real results; for a GraphQL request the body is read as a GraphQL result (`Data`, `Errors` and `Extensions` tabs); for a gRPC request the file is the call's record, the `grpc` member of a `rustman.report/v1` request. `--keys` presses space-separated chords before the frame is captured (for example `Ctrl+P` for the palette, `F1` for help, `Alt+I` for the MCP inspector, `Tab 2 Tab` to show and focus the Headers tab, or `Tab Tab Tab ] ]` to focus the response and show its third tab; the URL has the focus first, so a printable key such as `?` is typed into it). Frames that need a running listener or session (webhook captures, the mock server's request log, a connected MCP server, the traffic recorder's captures, a live messaging consume) can't be rendered this way.
 
 ## Platform checks
 
