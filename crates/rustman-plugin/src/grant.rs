@@ -207,7 +207,19 @@ fn env_name(name: &str) -> Result<String, GrantError> {
     }
 }
 
+/// A secret's name, or a provider reference `<provider>/<path>[#field]`
+/// (secret-providers spec, "Plugins and provider secrets"): a value a
+/// `{{secret:...}}` reference resolved is granted by the reference text.
 fn secret_name(name: &str) -> Result<String, GrantError> {
+    if name.contains('/') {
+        // `?` may be part of a reference path (`?version=2`); `*` is not.
+        if name.contains('*') {
+            return Err(GrantError::Wildcard);
+        }
+        return rustman_core::secrets::provider::SecretRef::parse(name)
+            .map(|_| name.to_owned())
+            .map_err(|_| GrantError::Invalid("not a secret name or reference"));
+    }
     if has_wildcard(name) {
         return Err(GrantError::Wildcard);
     }
@@ -401,6 +413,22 @@ mod tests {
         assert!(grants(&["net:a.example:0"], &CLASSES).is_err());
         assert!(grants(&["env:"], &CLASSES).is_err());
         assert!(grants(&["secrets:read:a b"], &CLASSES).is_err());
+        assert!(grants(&["secrets:read:vault/"], &CLASSES).is_err());
+        assert!(grants(&["secrets:read:vault/kv/*"], &CLASSES).is_err());
+    }
+
+    #[test]
+    fn provider_references_are_secret_names() {
+        for reference in [
+            "vault/kv/app#key",
+            "op/Eng/API Keys/token",
+            "aws/db?version=2",
+        ] {
+            assert_eq!(
+                Grant::parse(&format!("secrets:read:{reference}")),
+                Ok(Grant::SecretsRead(reference.to_owned()))
+            );
+        }
     }
 
     #[test]

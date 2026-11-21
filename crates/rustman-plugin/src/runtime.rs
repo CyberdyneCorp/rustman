@@ -34,6 +34,9 @@ pub struct PluginRuntime {
     kinds: Vec<RegisteredKind>,
     /// The workspace root, which importers read their sources from.
     root: PathBuf,
+    /// The session every plugin serves, shared: it learns the secrets
+    /// sends resolve.
+    context: Option<Arc<HostContext>>,
 }
 
 impl PluginRuntime {
@@ -55,6 +58,7 @@ impl PluginRuntime {
             redactor,
             kinds,
             root,
+            context: Some(context),
         })
     }
 
@@ -182,6 +186,12 @@ impl Extensions for PluginRuntime {
 
     fn redactor(&self) -> rustman_core::Redactor {
         self.redactor.clone()
+    }
+
+    fn learn_secrets(&self, secrets: &[rustman_core::Secret<String>]) {
+        if let Some(context) = &self.context {
+            context.learn(secrets);
+        }
     }
 
     fn transform_request(

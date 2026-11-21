@@ -248,6 +248,12 @@ A plugin SHALL receive a secret value in clear only when it holds `secrets:read:
 - **GIVEN** a plugin granted `secrets:read:api_token` that writes the value into its log output
 - **THEN** the log line SHALL show `«redacted:api_token»`
 
+#### Scenario: Secret resolved at send time
+- **GIVEN** an auth plugin without grants, and a param `{{secret:vault/kv/app#key}}` resolved by a secret provider when the request is sent
+- **WHEN** the plugin signs the request
+- **THEN** it SHALL receive `«redacted:vault/kv/app#key»`
+- **AND** with `secrets:read:vault/kv/app#key` it SHALL receive the value
+
 ### Requirement: Resource limits
 Each plugin call SHALL have an execution time budget, `cpu_ms` (default 100 ms of wall time spent running the plugin, excluding host calls, enforced by epoch interruption) and a memory limit (default 64 MiB). Either can be raised per plugin with `limits = { cpu_ms, memory_mib }`, up to 10 s and 1024 MiB. Exceeding a limit SHALL abort the call with `plugin <name>: execution time limit exceeded` or `memory limit exceeded`, and SHALL NOT crash Rustman.
 

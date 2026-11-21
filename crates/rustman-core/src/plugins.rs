@@ -269,6 +269,14 @@ pub trait Extensions: Send + Sync {
     fn redactor(&self) -> Redactor {
         Redactor::new()
     }
+    /// Secret values a send resolved after the plugins were loaded
+    /// (provider values, captured and data-row secrets), by the name they
+    /// are redacted as: from now on they are secrets of the plugin
+    /// session, so a plugin sees one in clear only with
+    /// `secrets:read:<name>` and everything it returns is redacted of it.
+    fn learn_secrets(&self, secrets: &[crate::Secret<String>]) {
+        let _ = secrets;
+    }
 }
 
 /// Check the requests of `workspace` loaded as opaque (its kind is not

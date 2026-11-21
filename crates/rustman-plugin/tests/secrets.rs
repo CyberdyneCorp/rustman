@@ -168,3 +168,41 @@ fn sent_with_header(name: &str, value: &str) -> SentRequest {
     };
     SentRequest::new(&request, &Redactor::for_request(&request))
 }
+
+/// add-secret-providers task 5.3: a provider value a send resolved after
+/// the plugins loaded is a secret of the session, granted by its
+/// reference text.
+#[test]
+fn learned_provider_values_need_their_reference_grant() {
+    const PROVIDER_VALUE: &str = "vault-value-81c3";
+    let manifest = fixtures::manifest("acme", &["transformer"], &["secrets:read"]);
+    let reference = "vault/kv/app#key";
+    let learned = [Secret::new(reference, PROVIDER_VALUE.to_owned())];
+
+    let ungranted = verified("acme", fixtures::echo_transformer(), &manifest, &[]);
+    let plugin = plugin(&ungranted, context());
+    assert_eq!(plugin.input_redactor().text(PROVIDER_VALUE), PROVIDER_VALUE);
+    let runtime_context = context();
+    runtime_context.learn(&learned);
+    let plugin = common::plugin(&ungranted, runtime_context);
+    assert_eq!(
+        plugin.input_redactor().text(PROVIDER_VALUE),
+        "«redacted:vault/kv/app#key»"
+    );
+    assert_eq!(
+        plugin.output_redactor().text(PROVIDER_VALUE),
+        "«redacted:vault/kv/app#key»"
+    );
+
+    let grant = format!("secrets:read:{reference}");
+    let granted = verified("acme", fixtures::echo_transformer(), &manifest, &[&grant]);
+    let granted_context = context();
+    granted_context.learn(&learned);
+    let plugin = common::plugin(&granted, granted_context);
+    assert_eq!(plugin.input_redactor().text(PROVIDER_VALUE), PROVIDER_VALUE);
+    // Everything it returns is still redacted of the value.
+    assert_eq!(
+        plugin.output_redactor().text(PROVIDER_VALUE),
+        "«redacted:vault/kv/app#key»"
+    );
+}

@@ -786,3 +786,67 @@ fn replay_signs_with_the_trusted_plugins() {
         .any(|h| h[0] == "x-signature");
     assert!(signed, "{echo}");
 }
+
+/// A provider value no other test uses.
+const PROVIDER_CANARY: &str = "provider-canary-4d2e9b";
+
+/// What the `param_echo` auth plugin passed on (its `p` query parameter)
+/// when it signed a request whose `app_key` param is
+/// `{{secret:vault/APP_JSON#key}}`, resolved by an `env` provider, under
+/// `grants`. The response is written as received (`-o`), so the
+/// placeholder or the value is exactly what the plugin saw.
+fn param_seen_by_plugin(grants: &[&str]) -> String {
+    let server = Server::http();
+    let dir = workspace(&server);
+    write(
+        dir.path(),
+        "rustman.toml",
+        "[workspace]\nname = \"t\"\nversion = 1\n\n[secret_providers.vault]\ntype = \"env\"\n",
+    );
+    add_plugin(
+        dir.path(),
+        "echo",
+        &fixtures::param_echo(),
+        &["auth"],
+        &["secrets:read"],
+        grants,
+    );
+    let auth = "auth: {type: plugin, scheme: echo/v1, app_key: '{{secret:vault/APP_JSON#key}}'}\n";
+    write(
+        dir.path(),
+        "signed.rman.yaml",
+        &request("signed", "{{base_url}}/echo", auth),
+    );
+    let config = tempfile::tempdir().unwrap();
+    let output = rustman(dir.path())
+        .env("XDG_CONFIG_HOME", config.path())
+        .env("APPDATA", config.path())
+        .env("APP_JSON", format!(r#"{{"key":"{PROVIDER_CANARY}"}}"#))
+        .args(["send", "signed", "--env", "dev", "--trust-plugins"])
+        .args(["-o", "out.json"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(0), "{output:?}");
+    let body = std::fs::read_to_string(dir.path().join("out.json")).unwrap();
+    let echo: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let path = echo["path"].as_str().unwrap().to_owned();
+    let query = path.split_once("?p=").map(|(_, q)| q.to_owned());
+    query.unwrap_or_else(|| panic!("no p parameter: {path}"))
+}
+
+/// add-secret-providers task 5.3, "Auth plugin without grant": a value a
+/// `{{secret:...}}` reference resolved reaches a plugin as its
+/// placeholder unless the plugin holds `secrets:read:<reference>`.
+#[test]
+fn auth_plugin_without_grant_sees_the_provider_placeholder() {
+    let seen = param_seen_by_plugin(&[]);
+    assert!(!seen.contains(PROVIDER_CANARY), "{seen}");
+    // `«redacted:vault/APP_JSON#key»`, form-encoded.
+    assert_eq!(seen, "%C2%ABredacted%3Avault%2FAPP_JSON%23key%C2%BB");
+}
+
+#[test]
+fn auth_plugin_with_the_reference_grant_sees_the_provider_value() {
+    let seen = param_seen_by_plugin(&["secrets:read:vault/APP_JSON#key"]);
+    assert_eq!(seen, PROVIDER_CANARY);
+}
