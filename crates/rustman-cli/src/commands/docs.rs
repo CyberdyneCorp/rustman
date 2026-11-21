@@ -108,9 +108,9 @@ fn run_serve(args: &DocsArgs, serve: &ServeArgs) -> Result<u8, CliError> {
         let preview = Preview::bind(serve.port, Arc::new(source), Box::new(report)).await?;
         preview.rebuild().await;
         let _watcher = preview.watch(&root)?;
-        println!("docs: serving on http://{}", preview.local_addr());
         let stop = CancellationToken::new();
         cancel_on_ctrl_c(&stop);
+        println!("docs: serving on http://{}", preview.local_addr());
         preview.serve(stop).await;
         Ok::<_, CliError>(SUCCESS)
     })

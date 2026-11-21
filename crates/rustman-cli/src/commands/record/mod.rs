@@ -257,13 +257,14 @@ async fn serve(
         .await
         .map_err(proxy_error)?;
     let addr = proxy.local_addr();
+    // Listen for Ctrl+C before the banner: whoever reads it may interrupt.
+    let cancel = CancellationToken::new();
+    cancel_on_ctrl_c(&cancel);
     print_banner(addr, config.upstream.as_deref(), json);
     if !addr.ip().is_loopback() {
         eprintln!("{}", remote_warning(addr));
     }
     let _ = std::io::stdout().flush();
-    let cancel = CancellationToken::new();
-    cancel_on_ctrl_c(&cancel);
     let mut writer = Writer::spawn(std::io::stdout(), WRITE_QUEUE);
     tokio::spawn(proxy.run(cancel.clone()));
     let stop_after = test_hooks::stop_after();

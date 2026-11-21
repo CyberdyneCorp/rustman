@@ -14,7 +14,7 @@ use rustman_mcp::server::{Sessions, serve_stdio, token};
 use tokio_util::sync::CancellationToken;
 
 use super::EnvSelection;
-use super::exec::secret_store;
+use super::exec::{cancel_on_ctrl_c, secret_store};
 use crate::exit::CliError;
 
 #[derive(Debug, Args)]
@@ -103,14 +103,12 @@ async fn serve_http(
             "warning: serving MCP on non-loopback address {local}; anyone who can reach it and holds the token can drive this workspace"
         );
     }
+    // Listen for Ctrl+C before the ready line: whoever reads it may
+    // interrupt.
+    let cancel = CancellationToken::new();
+    cancel_on_ctrl_c(&cancel);
     eprintln!("rustman mcp: listening on http://{local}{MCP_PATH}");
     let origins = sessions.workspace().settings.agent.allowed_origins.clone();
-    let cancel = CancellationToken::new();
-    let stop = cancel.clone();
-    tokio::spawn(async move {
-        let _ = tokio::signal::ctrl_c().await;
-        stop.cancel();
-    });
     let guard = HttpGuard::new(token, origins);
     let any_host = http::accepts_any_host(local, args.allow_remote);
     let router = http::router(sessions, guard, any_host, cancel.clone());

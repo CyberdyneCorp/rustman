@@ -231,6 +231,9 @@ async fn serve(args: &ServeArgs, setup: Setup) -> Result<u8, CliError> {
         base_url: format!("http://{addr}"),
     };
     sink.spawn(server.subscribe());
+    // Listen for Ctrl+C before the banner: whoever reads it may interrupt.
+    let cancel = CancellationToken::new();
+    cancel_on_ctrl_c(&cancel);
     print_banner(&server.banner(), args.jsonl);
     if !addr.ip().is_loopback() {
         eprintln!("warning: {}", remote_warning(addr));
@@ -243,8 +246,6 @@ async fn serve(args: &ServeArgs, setup: Setup) -> Result<u8, CliError> {
     let _watcher = watch(server.reloader(reload))
         .inspect_err(|e| eprintln!("warning: changes will not be reloaded: {e}"))
         .ok();
-    let cancel = CancellationToken::new();
-    cancel_on_ctrl_c(&cancel);
     Ok(stop_on(&cancel, server.spawn()).await)
 }
 

@@ -136,12 +136,13 @@ pub struct Companion {
 /// the handshake is killed.
 pub fn connect(discovery: &Discovery) -> Result<Companion, VizError> {
     let program = discovery.find()?;
-    let mut child = Command::new(&program)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| VizError::Failed(format!("cannot start {}: {e}", program.display())))?;
+    let mut child = rustman_viz_client::spawn(
+        Command::new(&program)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null()),
+    )
+    .map_err(|e| VizError::Failed(format!("cannot start {}: {e}", program.display())))?;
     match greet(&mut child) {
         Ok((stdin, replies, ack)) => Ok(Companion {
             child,
