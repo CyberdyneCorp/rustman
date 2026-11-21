@@ -1,0 +1,5 @@
+---
+source: crates/rustman-proxy/src/jsonl.rs
+expression: line
+---
+{"type":"exchange","method":"GET","url":"http://api.test/v1/me?echo=«redacted:Authorization»","version":"HTTP/1.1","status":200,"duration_ms":12,"intercepted":false,"request_headers":[{"name":"authorization","value":"«redacted:Authorization»"},{"name":"cookie","value":"«redacted:Cookie»"},{"name":"accept","value":"application/json"}],"response_headers":[{"name":"content-type","value":"application/json"},{"name":"set-cookie","value":"«redacted:Set-Cookie»"}],"request_size":0,"response_size":2,"truncated":false,"error":null,"id":7,"ts_ms":1700000000123}

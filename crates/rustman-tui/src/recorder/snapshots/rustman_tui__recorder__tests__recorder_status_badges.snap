@@ -1,0 +1,5 @@
+---
+source: crates/rustman-tui/src/recorder/tests.rs
+expression: status
+---
+ Scratch session │ no environment │ TLS verified │ 0 in flight          record 127.0.0.1:8888   CA TRUSTED  Ctrl+Q quit

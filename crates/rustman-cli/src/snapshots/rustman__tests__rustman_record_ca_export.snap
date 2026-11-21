@@ -1,0 +1,25 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Print the CA certificate (PEM, never the key) and its fingerprint
+
+Usage: rustman record ca export [OPTIONS]
+
+Options:
+      --out <FILE>
+          Write the PEM certificate to FILE instead of stdout
+
+      --workspace <DIR>
+          Workspace whose CA to use (default: search from the current directory upwards)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

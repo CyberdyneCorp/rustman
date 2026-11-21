@@ -1,0 +1,81 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Record HTTP(S) traffic through a local proxy; manage its local CA
+
+Usage: rustman record [OPTIONS]
+       rustman record <COMMAND>
+
+Commands:
+  ca    Manage this workspace's local CA, used to decrypt intercepted hosts
+  help  Print this message or the help of the given subcommand(s)
+
+Options:
+      --host <HOST>
+          Address to bind: an IP address or localhost (default: [record] host in rustman.toml, else 127.0.0.1)
+
+      --port <PORT>
+          Port to bind; 0 picks a free port (default: [record] port in rustman.toml, else 8888)
+
+      --allow-remote
+          Allow binding an address reachable from the network (anyone who can reach it can use the proxy and see intercepted traffic)
+
+      --intercept <GLOB>
+          Decrypt HTTPS to hosts matching GLOB with the local CA (repeatable; default: [record] intercept); other hosts stay opaque tunnels
+
+      --workspace <DIR>
+          Workspace whose settings and CA to use (default: search from the current directory upwards; recording without interception works without one)
+
+      --include-host <GLOB>
+          Record only hosts matching GLOB (repeatable)
+
+      --exclude-host <GLOB>
+          Do not record hosts matching GLOB (repeatable)
+
+      --method <METHOD>
+          Record only this method (repeatable)
+
+      --content-type <PREFIX>
+          Record only exchanges whose request or response content type starts with PREFIX (repeatable)
+
+      --keep-static
+          Also record static assets (images, fonts, CSS, JavaScript, media, source maps), dropped by default
+
+      --json
+          Print one redacted JSON object per capture instead of a summary line
+
+      --upstream <URL>
+          Reverse-proxy mode: forward every request received to this origin (https://api.example.com), for clients that cannot use a proxy
+
+      --insecure
+          Do not verify the --upstream server's TLS certificate
+
+      --save
+          When recording stops (Ctrl+C), save the captures as request files
+
+      --into <DIR>
+          Folder for the saved request files (default: recorded/<host>/)
+
+      --env <NAME>
+          Environment that receives base_url, path defaults and secret names (default: recorded)
+
+      --store-secrets
+          Store the raw secret values in the secret store (keychain); without it they are kept nowhere and must be set with 'rustman secret set'
+
+      --har <FILE>
+          When recording stops (Ctrl+C), write every capture to FILE as HAR 1.2, secrets redacted
+
+      --show-secrets
+          Keep secret values in the --har file instead of redacting them
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

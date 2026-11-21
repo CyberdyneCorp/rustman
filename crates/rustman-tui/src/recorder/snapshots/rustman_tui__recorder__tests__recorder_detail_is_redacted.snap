@@ -1,0 +1,36 @@
+---
+source: crates/rustman-tui/src/recorder/tests.rs
+expression: text
+---
+┌ Traffic recorder ────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ ✔ Recording on http://127.0.0.1:8888  intercept *.example.com · 3 captures, 0 marked                                 │
+│ ┌ Captures ──────────────────────────────────────────────┐┌ Capture #1 ────────────────────────────────────────────┐ │
+│ │  10:15:30 TLS REJECTED pinned.example.com              ││GET https://api.example.com/v1/me                       │ │
+│ │  10:15:30 TUNNEL www.google.com:443 517 B up, 4 KiB dow││HTTP/1.1 -> 200 in 12 ms, decrypted                     │ │
+│ │  10:15:30 GET api.example.com /v1/me 200 12 ms 33 B    ││                                                        │ │
+│ │                                                        ││Request                                                 │ │
+│ │                                                        ││authorization: «redacted:Authorization»                 │ │
+│ │                                                        ││cookie: «redacted:Cookie»                               │ │
+│ │                                                        ││accept: application/json                                │ │
+│ │                                                        ││                                                        │ │
+│ │                                                        ││Response                                                │ │
+│ │                                                        ││content-type: application/json                          │ │
+│ │                                                        ││body: 33 B                                              │ │
+│ │                                                        ││{"echo":"«redacted:Authorization»","n":1}               │ │
+│ │                                                        ││                                                        │ │
+│ │                                                        ││                                                        │ │
+│ │                                                        ││                                                        │ │
+│ │                                                        ││                                                        │ │
+│ │                                                        ││                                                        │ │
+│ │                                                        ││                                                        │ │
+│ │                                                        ││                                                        │ │
+│ │                                                        ││                                                        │ │
+│ │                                                        ││                                                        │ │
+│ │                                                        ││                                                        │ │
+│ │                                                        ││                                                        │ │
+│ │                                                        ││                                                        │ │
+│ └────────────────────────────────────────────────────────┘└────────────────────────────────────────────────────────┘ │
+│                                                                                                                      │
+│ s stop · ↑↓ select · Space mark · a mark all · / filter · w save · e export HAR · Esc close                          │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ Scratch session │ no environment │ TLS verified │ 0 in flight                       record 127.0.0.1:8888  Ctrl+Q quit

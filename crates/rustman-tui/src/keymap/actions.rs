@@ -74,6 +74,7 @@ pub enum ActionId {
     WebhookOpen,
     MockOpen,
     McpOpen,
+    RecorderOpen,
     GraphqlRefreshSchema,
     GraphqlSubscriptionStart,
     GraphqlSubscriptionStop,
@@ -100,7 +101,7 @@ const fn def(action: ActionId, id: &'static str, title: &'static str) -> ActionD
 }
 
 /// Every action, in the order the palette and the docs list them.
-pub const REGISTRY: [ActionDef; 76] = [
+pub const REGISTRY: [ActionDef; 77] = [
     def(ActionId::RequestSend, "request.send", "Send request"),
     def(ActionId::RequestCancel, "request.cancel", "Cancel request"),
     def(ActionId::RequestSave, "request.save", "Save request"),
@@ -220,6 +221,7 @@ pub const REGISTRY: [ActionDef; 76] = [
     def(ActionId::WebhookOpen, "webhook.open", "Webhook inspector"),
     def(ActionId::MockOpen, "mock.open", "Mock server"),
     def(ActionId::McpOpen, "mcp.open", "MCP inspector"),
+    def(ActionId::RecorderOpen, "recorder.open", "Traffic recorder"),
     def(
         ActionId::GraphqlRefreshSchema,
         "graphql.refresh_schema",

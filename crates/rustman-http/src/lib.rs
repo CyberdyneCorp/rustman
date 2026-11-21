@@ -1,6 +1,7 @@
 //! HTTP execution for Rustman: transport, TLS, auth helpers, timings and curl
 //! interop. Builds on the request model from `rustman-core`.
 
+pub mod address;
 mod auth;
 mod body;
 mod client_auth;
@@ -60,7 +61,7 @@ pub use oauth2::{
 };
 pub use plugin_auth::PluginHooks;
 pub use proxy::{NoProxy, ProxyKind, ProxySettings, ProxyUrl};
-pub use raw_stream::{ALPN_HTTP1, RawStream, open_raw_stream};
+pub use raw_stream::{ALPN_HTTP1, RawConnector, RawStream, open_raw_stream};
 pub use redirect::RedirectHop;
 pub use sigv4::{Keys as AwsKeys, env_keys as aws_env_keys, profile_keys as aws_profile_keys};
 pub use snippet::{Lang, Snippet, SnippetError, SnippetOptions, snippet};

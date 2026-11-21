@@ -38,6 +38,7 @@ rustman-monitor = { path = "crates/rustman-monitor", version = "0.1.0" }
 rustman-secrets = { path = "crates/rustman-secrets", version = "0.1.0" }
 rustman-plugin = { path = "crates/rustman-plugin", version = "0.1.0" }
 rustman-plugin-sdk = { path = "crates/rustman-plugin-sdk", version = "1.0.0" }
+rustman-proxy = { path = "crates/rustman-proxy", version = "0.1.0" }
 
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
@@ -106,6 +107,10 @@ async-compression = { version = "0.4.50", default-features = false }
 http-body = "1"
 # Test certificates for the in-process test server.
 rcgen = { version = "0.14.10", default-features = false, features = ["crypto", "ring", "pem"] }
+# Reading the traffic recorder's local CA back (subject, expiry, basic
+# constraints) and rebuilding its issuer (add-traffic-recorder design D2);
+# already in the tree via p12-keystore.
+x509-parser = { version = "0.18.1", default-features = false }
 
 # Cookie jars per environment (design D2): RFC 6265 storage, saved as JSON.
 cookie_store = { version = "0.22.1", default-features = false, features = ["serde_json"] }

@@ -9,6 +9,7 @@
 //! opens the stream: it neither writes nor parses HTTP.
 
 use std::io;
+use std::net::IpAddr;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -38,22 +39,60 @@ impl std::fmt::Debug for RawStream {
 /// Open a raw stream to the origin of `uri` (`http` or `https`), within
 /// `options.connect_timeout`.
 pub async fn open_raw_stream(uri: &Uri, options: &SendOptions) -> Result<RawStream, RequestError> {
-    let proxy_tls = TlsSettings {
-        client_auth: None,
-        ..options.tls.clone()
-    };
-    let config = ConnectorConfig {
-        tls: Arc::new(options.tls.client_config(ALPN_HTTP1)?),
-        proxy_tls: Arc::new(proxy_tls.client_config(ALPN_HTTP1)?),
-        proxies: options.proxy.clone(),
-        // A proxy that forwards requests would rewrite or refuse what the
-        // caller writes: always tunnel.
-        tunnel_plain: true,
-        timeout: options.connect_timeout,
-    };
-    let mut connector = Connector::new(Arc::new(Dns::default()), config);
-    let conn = tower_service::Service::call(&mut connector, uri.clone()).await?;
-    Ok(RawStream(conn.into_io()))
+    RawConnector::new(options)?.open(uri).await
+}
+
+/// Opens raw streams with settings built once: callers that open many
+/// streams (a recording proxy) skip rebuilding the TLS configuration, and
+/// so re-reading `ca_bundle`, for every connection.
+#[derive(Clone)]
+pub struct RawConnector(Connector);
+
+impl std::fmt::Debug for RawConnector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("RawConnector")
+    }
+}
+
+impl RawConnector {
+    /// A connector for `options`.
+    pub fn new(options: &SendOptions) -> Result<Self, RequestError> {
+        Self::build(options, None)
+    }
+
+    /// A connector that refuses any target resolving to an address `deny`
+    /// matches (after DNS, so names and odd IP spellings are covered too).
+    pub fn denying(options: &SendOptions, deny: fn(IpAddr) -> bool) -> Result<Self, RequestError> {
+        Self::build(options, Some(deny))
+    }
+
+    fn build(
+        options: &SendOptions,
+        deny: Option<fn(IpAddr) -> bool>,
+    ) -> Result<Self, RequestError> {
+        let proxy_tls = TlsSettings {
+            client_auth: None,
+            ..options.tls.clone()
+        };
+        let config = ConnectorConfig {
+            tls: Arc::new(options.tls.client_config(ALPN_HTTP1)?),
+            proxy_tls: Arc::new(proxy_tls.client_config(ALPN_HTTP1)?),
+            proxies: options.proxy.clone(),
+            // A proxy that forwards requests would rewrite or refuse what the
+            // caller writes: always tunnel.
+            tunnel_plain: true,
+            timeout: options.connect_timeout,
+            deny,
+        };
+        Ok(Self(Connector::new(Arc::new(Dns::default()), config)))
+    }
+
+    /// Open a raw stream to the origin of `uri` (`http` or `https`).
+    pub async fn open(&self, uri: &Uri) -> Result<RawStream, RequestError> {
+        let mut connector = self.0.clone();
+        let conn = tower_service::Service::call(&mut connector, uri.clone()).await?;
+        Ok(RawStream(conn.into_io()))
+    }
 }
 
 impl AsyncRead for RawStream {
@@ -131,5 +170,26 @@ mod tests {
                 .is_err()
         );
         drop(reserved);
+    }
+
+    #[tokio::test]
+    async fn a_denying_connector_refuses_matching_addresses_without_connecting() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let options = SendOptions::default();
+        let guarded = RawConnector::denying(&options, |ip| ip.is_loopback()).unwrap();
+        for uri in [
+            format!("http://{addr}/"),
+            format!("http://localhost:{}/", addr.port()),
+        ] {
+            let err = guarded.open(&uri.parse().unwrap()).await.unwrap_err();
+            assert!(err.to_string().contains("refused"), "{uri}: {err}");
+        }
+        let accepted =
+            tokio::time::timeout(std::time::Duration::from_millis(200), listener.accept()).await;
+        assert!(accepted.is_err(), "the denied target was connected to");
+        let open = RawConnector::new(&options).unwrap();
+        let uri: Uri = format!("http://{addr}/").parse().unwrap();
+        assert!(open.open(&uri).await.is_ok());
     }
 }

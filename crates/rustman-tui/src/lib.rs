@@ -70,6 +70,7 @@ pub mod realtime_pane;
 #[cfg(test)]
 mod realtime_tests;
 mod realtime_view;
+pub mod recorder;
 pub mod response;
 pub mod reveal;
 pub mod review;

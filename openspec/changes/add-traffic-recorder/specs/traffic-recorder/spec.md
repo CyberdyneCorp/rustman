@@ -24,6 +24,19 @@ The proxy SHALL bind only to loopback unless `--allow-remote` is given. With `--
 - **WHEN** the user runs `rustman record --host 0.0.0.0`
 - **THEN** the command SHALL exit with code 2 and the message `binding a non-loopback address requires --allow-remote`
 
+### Requirement: Network clients reach only public addresses
+Requests from clients that are not on loopback SHALL reach only globally routable addresses; every other address SHALL be refused by default, decided on the resolved addresses that are then connected to. Clients on loopback MAY reach local and private targets.
+
+#### Scenario: Ranges refused
+- **WHEN** a client on another machine targets a loopback, unspecified, private (RFC 1918), CGNAT (`100.64.0.0/10`), link-local, unique local (`fc00::/7`), `192.0.0.0/24`, benchmarking, documentation, multicast, reserved (`240.0.0.0/4`) or broadcast address, or an IPv6 address wrapping one (IPv4-mapped, IPv4-compatible, NAT64 `64:ff9b::/96`, 6to4 `2002::/16`)
+- **THEN** the request or tunnel SHALL be refused without connecting
+
+#### Scenario: Network client asks for a private address
+- **GIVEN** `rustman record --host 0.0.0.0 --allow-remote`
+- **WHEN** a client on another machine sends `GET http://10.0.0.5/admin` or `CONNECT 100.100.100.200:80` through the proxy
+- **THEN** the proxy SHALL answer `403` without connecting to the target
+- **AND** a name resolving to a non-public address SHALL be refused after DNS, without connecting
+
 ### Requirement: Reverse-proxy mode
 `rustman record --upstream <url>` SHALL accept plain requests on the listen address and forward them to the upstream origin, rewriting `Host` to the upstream. It SHALL record exchanges exactly like forward mode. HTTPS upstreams SHALL be verified with the standard TLS rules from `http-requests`.
 
@@ -51,7 +64,7 @@ The local CA SHALL be created only by `rustman record ca init`, or on first `--i
 
 #### Scenario: CA files stay out of the workspace
 - **WHEN** the user runs `rustman record ca init`
-- **THEN** no file SHALL be written under the workspace root
+- **THEN** no CA file (private key or certificate) SHALL be written under the workspace root; the only workspace file it may create is the git-ignored per-clone id `.rustman/workspace-id` (design D3), when the workspace has none yet
 - **AND** the CA private key SHALL be retrievable only from the OS keychain
 
 #### Scenario: Keychain unavailable
@@ -78,6 +91,14 @@ Rustman SHALL NOT add the CA to any trust store on its own. `rustman record ca i
 - **WHEN** the user runs `rustman record ca rotate --yes`
 - **THEN** the old CA SHALL be uninstalled and a new fingerprint SHALL be printed
 
+### Requirement: CA removal
+`rustman record ca remove` SHALL print the CA's fingerprint, its keychain entry, its certificate path and the uninstall commands, require typing `yes` (or `--yes`), then remove the CA from every trust store Rustman installed it in and delete its private key from the keychain and its certificate. Declining SHALL change nothing and exit with code 1; a failed uninstall SHALL keep the CA.
+
+#### Scenario: Remove after use
+- **GIVEN** a workspace CA installed in the user's trust store
+- **WHEN** the user runs `rustman record ca remove --yes`
+- **THEN** the CA SHALL be uninstalled, its keychain entry and certificate SHALL be deleted, and `rustman record ca export` SHALL then exit with code 2
+
 ### Requirement: Certificate pinning failures
 When a client aborts the TLS handshake against an intercepted host (for example, because it pins certificates or doesn't trust the CA), the capture list SHALL show a `TLS REJECTED` entry for that host, with the hint `client rejected the Rustman CA (not installed or pinned); exclude the host or install the CA`.
 
@@ -102,6 +123,27 @@ Each captured body SHALL be stored up to `max_body` (default 10 MiB). Larger bod
 - **THEN** the client SHALL receive all 25 MiB
 - **AND** the capture SHALL hold the first 10 MiB and be marked `truncated`
 
+### Requirement: In-flight capture budget
+The copies of bodies still in flight SHALL share a budget of `max_buffer_bytes`: past it, a body SHALL still be proxied in full and its capture SHALL be marked `truncated`. An intercepted HTTP/2 connection SHALL allow at most 100 concurrent streams.
+
+#### Scenario: In-flight budget used up
+- **GIVEN** the bodies in flight already hold `max_buffer_bytes`
+- **WHEN** another response streams through the proxy
+- **THEN** the client SHALL receive the whole body
+- **AND** its capture SHALL be marked `truncated`
+
+### Requirement: Connection timeouts
+An upstream SHALL get `response_timeout_ms` (default 60 s), counted once the request body is sent, to send a response head; past it the client SHALL get `504` and the exchange SHALL be recorded with the error. An opaque tunnel or an intercepted connection without traffic either way for `idle_timeout_ms` (default 5 minutes) SHALL be closed; a closed tunnel SHALL be recorded with an idle-timeout error. Both SHALL be configurable in `[record]`.
+
+#### Scenario: Silent upstream
+- **WHEN** an upstream accepts a request and sends no response head for 60 seconds
+- **THEN** the client SHALL get `504 Gateway Timeout`
+- **AND** the capture SHALL show the error `no response within 60 s`
+
+#### Scenario: Idle tunnel
+- **WHEN** an opaque tunnel carries no byte for 5 minutes
+- **THEN** it SHALL be closed and its entry SHALL carry `idle timeout: no traffic for 300 s`
+
 ### Requirement: Live capture list
 The TUI SHALL provide a recorder pane listing captures as they arrive (time, method, host, path, status, duration, size), with filtering, multi-select and a detail view. `rustman record --json` SHALL print one redacted JSON object per capture to stdout.
 
@@ -109,13 +151,24 @@ The TUI SHALL provide a recorder pane listing captures as they arrive (time, met
 - **WHEN** the user runs `rustman record --json` and one request passes through
 - **THEN** stdout SHALL contain one JSON line with `method`, `url`, `status`, `duration_ms` and redacted headers
 
+#### Scenario: Output slower than the traffic
+- **WHEN** stdout cannot keep up and lines are dropped from the output queue
+- **THEN** stderr SHALL show `warning: <n> captures not shown (output too slow)`
+- **AND** the lines still queued when recording stops SHALL be printed before the save and HAR output
+
 ### Requirement: Save captures as request files
 Saving captures (selected ones via the TUI action, or all of them on exit with `rustman record --save`) SHALL write `*.rman.yaml` files into a target collection (`--into <dir>`, default `recorded/<host>/`). Captures with the same method and templated path SHALL be deduplicated into one file. File names SHALL derive from the method and path.
+
+A save with no request among the captures SHALL write nothing (no environment either) and SHALL say that nothing was saved.
 
 #### Scenario: Dedupe by templated path
 - **GIVEN** captures `GET /users/17` and `GET /users/42`
 - **WHEN** the user saves both
 - **THEN** one file `get-users-id.rman.yaml` SHALL be written with url `{{base_url}}/users/{{user_id}}`
+
+#### Scenario: Nothing recorded
+- **WHEN** a `rustman record --save` session that recorded no request is stopped with Ctrl+C
+- **THEN** no file SHALL be written and stderr SHALL show `No requests recorded; nothing saved`
 
 ### Requirement: Path and id parameterization
 When saving, path segments that look like identifiers (integers, UUIDs, 24-hex ObjectIds, ULIDs) SHALL become variables named after the previous segment in singular form (`/users/42` → `{{user_id}}`, fallback `{{id_N}}`). The first observed value SHALL be stored as a default in the generated environment.
@@ -133,7 +186,7 @@ Saving SHALL create or update an environment (`--env <name>`, default `recorded`
 - **THEN** `environments/staging.yaml` SHALL contain `base_url: https://api.example.com`
 
 ### Requirement: Secrets become placeholders
-Before anything is written, values of `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key`-style headers, and query or body fields named like `token`, `password`, `secret`, `api_key` SHALL be replaced by `{{secret:<name>}}` references. Raw values SHALL be stored only through the `environments` secret store, and only with `--store-secrets`.
+Before anything is written, values of `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key`-style headers, and query or body fields named like `token`, `password`, `secret`, `api_key` SHALL be replaced by `{{<name>}}` placeholders declared under `secrets:` in the target environment. Raw values SHALL be stored only through the `environments` secret store, and only with `--store-secrets`.
 
 #### Scenario: Bearer token captured
 - **GIVEN** a capture with `Authorization: Bearer eyJ…`
@@ -149,7 +202,7 @@ Captures SHALL be redacted in the TUI, JSON-lines output and logs using the `env
 - **THEN** the recorder pane SHALL show `Cookie: «redacted:Cookie»`
 
 ### Requirement: HAR export
-`rustman record --har <file>` SHALL write all captures as HAR 1.2 when the session ends, and a TUI action SHALL export the selected captures at any time. Secrets SHALL be redacted unless `--show-secrets` is given. Tunnel-only and truncated entries SHALL be marked in the HAR `comment` field.
+`rustman record --har <file>` SHALL write all captures as HAR 1.2 when the session ends, and a TUI action SHALL export the selected captures at any time. Secrets SHALL be redacted unless `--show-secrets` is given. Tunnel-only and truncated entries SHALL be marked in the HAR `comment` field. The file SHALL be readable by the current user only (mode `0600` on Unix).
 
 #### Scenario: HAR validity
 - **WHEN** a `rustman record --har session.har` session with 3 captures is stopped with Ctrl+C

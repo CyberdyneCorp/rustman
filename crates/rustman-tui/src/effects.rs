@@ -110,6 +110,7 @@ fn execute_other(effect: Effect) -> Action {
         Effect::Webhook(job) => crate::webhook::execute(*job),
         Effect::Mock(job) => crate::mock_server::execute(*job),
         Effect::Mcp(job) => crate::mcp::execute(*job),
+        Effect::Recorder(job) => crate::recorder::execute(*job),
         Effect::GraphqlSchema(job) => graphql_schema::execute(&job),
         Effect::GrpcSchema(job) => crate::grpc::execute(&job),
         Effect::Snippet(job) => crate::copy_as::execute(&job),
@@ -153,7 +154,8 @@ pub fn spawn_runner_with(
         while let Some(effect) = rx.recv().await {
             let effect = crate::webhook::intercept(effect, &actions)
                 .and_then(|effect| crate::mock_server::intercept(effect, &actions))
-                .and_then(|effect| crate::mcp::intercept(effect, &actions));
+                .and_then(|effect| crate::mcp::intercept(effect, &actions))
+                .and_then(|effect| crate::recorder::intercept(effect, &actions));
             let Some(effect) = effect else {
                 continue;
             };

@@ -94,6 +94,8 @@ pub struct State {
     /// The request kinds of the workspace's trusted plugins, with the panes
     /// they declare.
     pub plugin_kinds: Vec<rustman_core::plugins::PluginKind>,
+    /// The traffic recorder pane and its proxy.
+    pub recorder: crate::recorder::RecorderPane,
 }
 
 /// Modals drawn over the shell.
@@ -308,6 +310,8 @@ pub enum Action {
     Mock(Box<crate::mock_server::Msg>),
     /// An MCP session event or an MCP inspector job finished.
     Mcp(Box<mcp::Msg>),
+    /// A recording proxy event or a recorder job finished.
+    Recorder(Box<crate::recorder::Msg>),
     /// A GraphQL tab's schema was loaded (or refreshed).
     GraphqlSchema {
         tab: TabId,
@@ -423,6 +427,8 @@ pub enum Effect {
     Mock(Box<crate::mock_server::Job>),
     /// MCP inspector work: servers, trust, the session, saving a call.
     Mcp(Box<mcp::Job>),
+    /// Recorder pane work: settings, the proxy, save and HAR export.
+    Recorder(Box<crate::recorder::Job>),
     /// Load (or refresh) a GraphQL tab's schema.
     GraphqlSchema(Box<SchemaJob>),
     /// Load (or refresh) a gRPC tab's schema.
@@ -480,6 +486,7 @@ impl State {
             mcp: McpPane::default(),
             plugin_gate: crate::plugin_trust::Gate::default(),
             plugin_kinds: Vec::new(),
+            recorder: crate::recorder::RecorderPane::default(),
         }
     }
 
@@ -621,6 +628,7 @@ fn on_workbench(state: &mut State, action: Action) -> Vec<Effect> {
         Action::Webhook(msg) => webhook::on_msg(state, *msg),
         Action::Mock(msg) => crate::mock_server::on_msg(state, *msg),
         Action::Mcp(msg) => mcp::on_msg(state, *msg),
+        Action::Recorder(msg) => crate::recorder::on_msg(state, *msg),
         Action::GraphqlSchema {
             tab,
             refresh,
