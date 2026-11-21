@@ -292,14 +292,16 @@ async fn throttling_breaks_only_when_it_counts_as_failure() {
 }
 
 /// The spec's scenario, scaled down: 30% of requests are throttled above
-/// 15 req/s. That is "rate limited at 20", not a break, and the climb goes
-/// on to the cap.
+/// 5 req/s. That is "rate limited at 10", not a break, and the climb goes
+/// on to the cap. The first step offers twice the limiter's threshold, so a
+/// slow runner that falls short of the offered rate still trips it (at 15
+/// and 20 req/s a loaded macOS runner never did).
 #[tokio::test]
 async fn a_rate_limiter_is_reported_as_rate_limited() {
     let _serial = common::serial().await;
     let server = StressServer::start().await;
     let ws = workspace(&server.origin(), "max_rps = 40\n");
-    get(ws.path(), "api/t.rman.yaml", "/throttle?above=15&share=30");
+    get(ws.path(), "api/t.rman.yaml", "/throttle?above=5&share=30");
     let outcome = stress(
         ws.path(),
         &server.origin(),
@@ -308,11 +310,11 @@ async fn a_rate_limiter_is_reported_as_rate_limited() {
     .await
     .unwrap();
     let bp = outcome.breakpoint.unwrap();
-    assert_eq!(bp.rate_limited_at, Some(20.0));
+    assert_eq!(bp.rate_limited_at, Some(10.0));
     assert_eq!(bp.breaking_rps, None);
     assert_eq!(bp.max_sustainable_rps, Some(40.0));
     assert_eq!(bp.stop, StopReason::CapReached);
-    assert_eq!(bp.steps[1].verdict, StepVerdict::RateLimited);
+    assert_eq!(bp.steps[0].verdict, StepVerdict::RateLimited);
 }
 
 /// Task 2.5: `search` slows down above 10 req/s, `list` and `detail` never.
