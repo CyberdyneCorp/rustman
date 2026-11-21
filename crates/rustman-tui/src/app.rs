@@ -127,6 +127,8 @@ pub enum Overlay {
     Monitors(Box<crate::monitors::MonitorsView>),
     /// The workspace plugin trust prompt (add-plugin-system).
     PluginTrust(Box<rustman_core::plugins::PluginTrustPrompt>),
+    /// A GraphQL result's addresses and hashes, into the EVM toolkit.
+    ChainLinks(Box<crate::chain_links::ChainLinks>),
 }
 
 /// What fills the terminal.
@@ -318,6 +320,8 @@ pub enum Action {
         refresh: bool,
         result: Result<Box<SchemaLoaded>, String>,
     },
+    /// An EVM lookup from a GraphQL result link finished (redacted).
+    EvmLookup(Result<Vec<String>, String>),
     /// A gRPC tab's schema was loaded (or refreshed).
     GrpcSchema {
         tab: TabId,
@@ -431,6 +435,8 @@ pub enum Effect {
     Recorder(Box<crate::recorder::Job>),
     /// Load (or refresh) a GraphQL tab's schema.
     GraphqlSchema(Box<SchemaJob>),
+    /// Decode a transaction or read a balance from a GraphQL result link.
+    EvmLookup(Box<crate::chain_links::LookupJob>),
     /// Load (or refresh) a gRPC tab's schema.
     GrpcSchema(Box<crate::grpc::SchemaJob>),
     /// Make a "Copy as…" snippet.
@@ -635,6 +641,10 @@ fn on_workbench(state: &mut State, action: Action) -> Vec<Effect> {
             result,
         } => {
             graphql::on_loaded(state, tab, refresh, result);
+            Vec::new()
+        }
+        Action::EvmLookup(result) => {
+            crate::chain_links::on_lookup(state, result);
             Vec::new()
         }
         Action::GrpcSchema {

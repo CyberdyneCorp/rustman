@@ -23,7 +23,7 @@ pub mod ws;
 pub use assertion::{
     Assertion, BodyAssertion, CountExpectation, CountOp, GrpcStatusExpectation, HeaderAssertion,
     JsonAssertion, LatencyAssertion, MessagesAssertion, MetadataAssertion, PluginAssertion,
-    RpcErrorExpectation, SchemaAssertion, StatusExpectation,
+    RpcErrorExpectation, SchemaAssertion, StatusExpectation, SubgraphAssertion,
 };
 pub use auth::{ApiKeyLocation, Auth, OAuth2, OAuth2Grant, PluginAuth};
 pub use body::{Body, JsonContent, Part, PartSource};
@@ -37,7 +37,7 @@ pub use evm::{
 pub use evm_check::{EVM_OUTPUT_OPS, EvmAssertion, OutputRef};
 pub use graphql::{
     DEFAULT_DURATION, DEFAULT_MAX_EVENTS, DOCUMENT_SOURCE_ERROR, DocumentSource, GRAPHQL_ACCEPT,
-    GraphqlMethod, GraphqlRequest, GraphqlTransport, WsProtocol, graphql_as_http,
+    GraphqlMethod, GraphqlPreset, GraphqlRequest, GraphqlTransport, WsProtocol, graphql_as_http,
 };
 pub use grpc::{
     BOTH_MESSAGES_ERROR, DEFAULT_STREAM_DURATION_MS, DEFAULT_STREAM_MESSAGES, GRPC_CODE_NAMES,

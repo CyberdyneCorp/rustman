@@ -131,6 +131,7 @@ fn the_assertion_and_capture_examples_load() {
     use rustman_core::model::{Assertion, CaptureSource};
     let examples: Vec<String> = blocks(&page(), "yaml")
         .into_iter()
+        .filter(|b| b.contains("kind: evm-"))
         .filter(|b| b.contains("assertions:") || b.contains("captures:"))
         .collect();
     assert_eq!(examples.len(), 2);
@@ -194,6 +195,63 @@ fn the_quoted_failure_messages_are_produced() {
     ] {
         assert!(
             text.contains(&message),
+            "docs/evm.md does not quote: {message}"
+        );
+    }
+}
+
+/// The blockchain GraphQL examples (task 7.5): every graphql request file
+/// loads and its document validates against the geth or subgraph fixture
+/// schema of its preset, the query blocks validate against the subgraph
+/// fixture, and the quoted messages are the code's.
+#[test]
+fn the_graphql_preset_examples_parse_against_the_fixture_schemas() {
+    use rustman_core::model::GraphqlPreset;
+    use rustman_graphql::GraphqlSchema;
+    let schema = |name: &str| {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join(format!("tests/fixtures/graphql/{name}.introspection.json"));
+        GraphqlSchema::from_file(&path, name).unwrap()
+    };
+    let (geth, subgraph) = (schema("geth"), schema("subgraph"));
+    let valid = |document: &str, schema: &GraphqlSchema| {
+        let validation =
+            rustman_graphql::validate(document, Some(schema), None, &serde_json::Map::new());
+        let errors: Vec<String> = validation.errors().map(ToString::to_string).collect();
+        assert!(errors.is_empty(), "{errors:?}\n{document}");
+    };
+    let text = page();
+    let requests: Vec<String> = blocks(&text, "yaml")
+        .into_iter()
+        .filter(|b| b.contains("kind: graphql"))
+        .collect();
+    assert_eq!(requests.len(), 2);
+    for yaml in &requests {
+        let file = Path::new("requests/example.rman.yaml");
+        let Request::Graphql(graphql) = KindRegistry::default().load(file, yaml).unwrap() else {
+            panic!("a graphql request");
+        };
+        let document = graphql.document.as_deref().unwrap();
+        match graphql.preset {
+            Some(GraphqlPreset::Geth) => valid(document, &geth),
+            _ => valid(document, &subgraph),
+        }
+    }
+    let queries = blocks(&text, "graphql");
+    assert_eq!(queries.len(), 1);
+    valid(&queries[0], &subgraph);
+    for message in [
+        rustman_graphql::preset::NOT_GETH,
+        rustman_graphql::preset::NOT_SUBGRAPH,
+        rustman_graphql::META_QUERY,
+        rustman_core::assertions::SUBGRAPH_NO_RPC,
+        rustman_core::run::LAG_NO_RPC,
+        "subgraph lag 120 blocks exceeds 50",
+        "stopped at --max-pages 20",
+        "1000 (18 decimals)",
+    ] {
+        assert!(
+            text.contains(message),
             "docs/evm.md does not quote: {message}"
         );
     }

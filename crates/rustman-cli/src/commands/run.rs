@@ -162,6 +162,10 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
     let graphql = GraphqlRunner {
         max_events: args.max_events,
         duration: args.duration,
+        // `subgraph` assertions read the head from the environment's rpc.
+        chain_head: Some(std::sync::Arc::new(rustman_evm::gql::RpcHead::new(
+            std::sync::Arc::new(rustman_http::HttpEngine::new()),
+        ))),
         ..GraphqlRunner::default()
     };
     options.graphql = Some(&graphql);

@@ -16,11 +16,15 @@ use std::path::Path;
 use std::pin::Pin;
 use std::time::Duration;
 
+use rustman_core::collection::RequestEntry;
 use rustman_core::model::{GraphqlRequest, GraphqlTransport};
+use rustman_core::model::{OpaqueRequest, Request};
 use rustman_core::redact::remember_for_logs;
 use rustman_core::run::{GraphqlRecord, RequestRecord, SkipReason};
 use rustman_core::settings::Settings;
-use rustman_core::vars::{ResolvedGraphql, ResolvedRequest, Resolver, resolve_graphql};
+use rustman_core::vars::{
+    ResolvedGraphql, ResolvedRequest, Resolver, resolve_evm_endpoint, resolve_graphql,
+};
 use rustman_core::workspace::RequestRef;
 use tokio_util::sync::CancellationToken;
 
@@ -48,7 +52,15 @@ pub struct GraphqlCall<'a> {
     pub settings: &'a Settings,
     /// Cancelled on Ctrl+C: a subscription stops collecting.
     pub cancel: &'a CancellationToken,
+    /// The environment's EVM node (`{{rpc}}`) with its send options, for
+    /// a subgraph's freshness: `None` when the environment has none, an
+    /// error (redacted) when it did not resolve. Only resolved when the
+    /// executor [wants it](GraphqlExecutor::wants_chain_rpc).
+    pub chain_rpc: Option<Result<(ResolvedRequest, SendOptions), String>>,
 }
+
+/// The variable naming the environment's EVM node.
+pub const CHAIN_RPC_VARIABLE: &str = "rpc";
 
 /// What sending a graphql request produced.
 pub struct GraphqlOutcome {
@@ -70,6 +82,13 @@ pub type GraphqlFuture<'a> = Pin<Box<dyn Future<Output = Result<GraphqlOutcome, 
 /// Sends graphql requests for a run.
 pub trait GraphqlExecutor: Sync {
     fn execute<'a>(&'a self, call: GraphqlCall<'a>) -> GraphqlFuture<'a>;
+
+    /// Whether sending `graphql` may read the chain head, so the runner
+    /// resolves the environment's `{{rpc}}` for it.
+    fn wants_chain_rpc(&self, graphql: &GraphqlRequest) -> bool {
+        let _ = graphql;
+        false
+    }
 }
 
 impl Runner<'_> {
@@ -97,6 +116,12 @@ impl Runner<'_> {
             Ok(options) => options,
             Err(e) => return Sent::errored(record, e.to_string()).with_resolved(resolved.http),
         };
+        let chain_rpc = match executor.wants_chain_rpc(graphql)
+            && resolver.lookup(CHAIN_RPC_VARIABLE).is_some()
+        {
+            true => Some(self.resolve_chain_rpc(request).await),
+            false => None,
+        };
         let call = GraphqlCall {
             request,
             graphql,
@@ -106,6 +131,7 @@ impl Runner<'_> {
             root: self.ctx.root,
             settings: self.ctx.settings,
             cancel: &self.options.cancel,
+            chain_rpc,
         };
         let grace = match graphql.effective_transport() {
             GraphqlTransport::Http => Duration::ZERO,
@@ -137,6 +163,10 @@ impl Runner<'_> {
             resolved: &sent,
             kind: "graphql",
             events,
+            subgraph: graphql_record
+                .preset
+                .as_ref()
+                .and_then(|p| p.freshness.clone()),
         };
         let redactor = self.request_redactor(Some(&sent), Some(&exchange));
         let mut done = self.evaluate(&checked, exchange, record);
@@ -144,6 +174,46 @@ impl Runner<'_> {
         done.record.warnings.splice(0..0, warnings);
         done.record.graphql = Some(graphql_record.redacted(&redactor));
         done.with_resolved(sent)
+    }
+}
+
+impl Runner<'_> {
+    /// The environment's EVM node `{{rpc}}`, resolved with the variables
+    /// of `request` but none of its headers or auth: a subgraph's API key
+    /// never goes to the node.
+    async fn resolve_chain_rpc(
+        &self,
+        request: &RequestRef<'_>,
+    ) -> Result<(ResolvedRequest, SendOptions), String> {
+        let entry = RequestEntry {
+            path: request.entry.path.clone(),
+            request: Request::Opaque(OpaqueRequest {
+                kind: "evm-rpc".to_owned(),
+                name: CHAIN_RPC_VARIABLE.to_owned(),
+                description: None,
+                tags: None,
+                docs: None,
+                variables: None,
+                source: String::new(),
+            }),
+        };
+        let bare = RequestRef {
+            root: request.root,
+            http: request.http,
+            entry: &entry,
+            ancestors: Vec::new(),
+        };
+        let captured = self.lock_captures().clone();
+        let mut resolver = self.resolver(request, &captured, 1);
+        let resolve = |r: &Resolver<'_>| resolve_evm_endpoint(&bare, r, "{{rpc}}");
+        let resolved = self
+            .with_secrets(&mut resolver, resolve)
+            .await
+            .map_err(|e| e.to_string())?;
+        self.remember(&resolved.secrets);
+        remember_for_logs(&self.request_redactor(Some(&resolved), None));
+        let options = self.send_options(&resolved).map_err(|e| e.to_string())?;
+        Ok((resolved, options))
     }
 }
 

@@ -9,6 +9,9 @@ pub mod app;
 pub mod bench_live;
 pub mod bench_view;
 pub mod bench_viz;
+pub mod chain_links;
+#[cfg(test)]
+mod chain_links_tests;
 pub mod clipboard;
 mod commands;
 pub mod companion;

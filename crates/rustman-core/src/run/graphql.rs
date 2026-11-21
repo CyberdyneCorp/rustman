@@ -5,6 +5,8 @@
 //! Records are redacted with [`GraphqlRecord::redacted`] before they reach
 //! any sink, like every other text of a [`super::RequestRecord`].
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -37,6 +39,72 @@ pub struct GraphqlRecord {
     pub apq: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subscription: Option<SubscriptionRecord>,
+    /// The blockchain preset in use (add-evm-toolkit "blockchain-graphql").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preset: Option<PresetRecord>,
+}
+
+/// The blockchain preset of an operation and what it learned.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct PresetRecord {
+    /// `geth` or `subgraph`.
+    pub name: String,
+    /// Whether the request file named it (`preset:`) or the schema did.
+    pub explicit: bool,
+    /// `schema does not look like geth EIP-1767`, for an explicit preset
+    /// on a schema without its markers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
+    /// The blockchain scalar of each result leaf, by response path
+    /// (`transfers[].value` → `BigInt`): what display formatting reads.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub scalars: BTreeMap<String, String>,
+    /// How far a subgraph trails the chain head.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub freshness: Option<SubgraphFacts>,
+}
+
+/// How fresh a subgraph is: its `_meta` and the chain head from the
+/// environment's EVM RPC.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SubgraphFacts {
+    /// `_meta.block.number`: the last block the subgraph indexed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub indexed_block: Option<u64>,
+    #[serde(default)]
+    pub has_indexing_errors: bool,
+    /// The chain head (`eth_blockNumber`); `None` without an RPC or when
+    /// it could not be read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub head: Option<u64>,
+    /// Whether the environment has an EVM RPC (`{{rpc}}`).
+    pub rpc: bool,
+    /// Why `_meta` or the head could not be read (redacted).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub problem: Option<String>,
+}
+
+/// The lag text without an RPC.
+pub const LAG_NO_RPC: &str = "unknown (no rpc)";
+
+impl SubgraphFacts {
+    /// Blocks between the head and the indexed block (0 when ahead).
+    pub fn lag(&self) -> Option<u64> {
+        Some(self.head?.saturating_sub(self.indexed_block?))
+    }
+
+    /// `lag 12 blocks`, `unknown (no rpc)` or `unknown (<why>)`.
+    pub fn lag_text(&self) -> String {
+        if !self.rpc {
+            return LAG_NO_RPC.to_owned();
+        }
+        match (self.lag(), &self.problem) {
+            (Some(1), _) => "lag 1 block".to_owned(),
+            (Some(lag), _) => format!("lag {lag} blocks"),
+            (None, Some(problem)) => format!("unknown ({problem})"),
+            (None, None) => "unknown".to_owned(),
+        }
+    }
 }
 
 /// The events a subscription received.
@@ -94,6 +162,14 @@ impl GraphqlRecord {
             }
             subscription.failure = subscription.failure.as_deref().map(text);
         }
+        if let Some(preset) = &mut self.preset {
+            preset.warning = preset.warning.as_deref().map(text);
+            let scalars = std::mem::take(&mut preset.scalars);
+            preset.scalars = scalars.into_iter().map(|(k, v)| (text(&k), v)).collect();
+            if let Some(facts) = &mut preset.freshness {
+                facts.problem = facts.problem.as_deref().map(text);
+            }
+        }
         self
     }
 }
@@ -147,6 +223,15 @@ mod tests {
             variables: json!({"auth": {"token": "s3cr3t"}, "list": ["a s3cr3t"], "n": 1}),
             result: Some("ok".into()),
             apq: None,
+            preset: Some(PresetRecord {
+                name: "subgraph".into(),
+                freshness: Some(SubgraphFacts {
+                    rpc: true,
+                    problem: Some("rpc s3cr3t down".into()),
+                    ..SubgraphFacts::default()
+                }),
+                ..PresetRecord::default()
+            }),
             subscription: Some(SubscriptionRecord {
                 failure: Some("closed (4403 s3cr3t)".into()),
                 ..SubscriptionRecord::new(
@@ -162,5 +247,24 @@ mod tests {
         assert!(!shown.contains("s3cr3t"), "{shown}");
         assert!(shown.contains(r#""token":"«redacted:token»""#), "{shown}");
         assert!(shown.contains(r#""n":1"#), "{shown}");
+    }
+
+    #[test]
+    fn lag_texts() {
+        let mut facts = SubgraphFacts {
+            indexed_block: Some(100),
+            head: Some(220),
+            rpc: true,
+            ..SubgraphFacts::default()
+        };
+        assert_eq!(facts.lag(), Some(120));
+        assert_eq!(facts.lag_text(), "lag 120 blocks");
+        facts.head = Some(90);
+        assert_eq!(facts.lag_text(), "lag 0 blocks");
+        facts.head = None;
+        facts.problem = Some("eth_blockNumber: timeout".into());
+        assert_eq!(facts.lag_text(), "unknown (eth_blockNumber: timeout)");
+        facts.rpc = false;
+        assert_eq!(facts.lag_text(), LAG_NO_RPC);
     }
 }

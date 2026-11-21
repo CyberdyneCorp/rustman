@@ -1,0 +1,38 @@
+---
+source: crates/rustman-tui/src/chain_links_tests.rs
+expression: stable(&units)
+---
+┌ transfers ─────────────────────────────────────────────────────────────────────────────────────────────────┐┌ › Response ────────────────────────────────────────────────────────────────────────┌ ℹ info ───────────────┐
+│ POST {{subgraph}} ││ ✔ 200 OK · #.# ms · 464 B │ GraphQL values: units │
+│ Query  Variables  Schema                                                                                   ││  Data  Errors  Extensions  Events  Body  Headers  Timing  Assertions               └───────────────────────┘
+│ Schema: schema_file schema.graphql · 8 types · preset subgraph                                             ││ query T · ok · preset subgraph · lag 12 blocks · units                                                     │
+│ query T($last: ID) { transfers(first: 2, where: {id_gt: $last}) { id from value transactionHash token { dec││ {                                                                                                          │
+│                                                                                                            ││   "transfers": [                                                                                           │
+│                                                                                                            ││     {                                                                                                      │
+│                                                                                                            ││       "id": "a",                                                                                           │
+│                                                                                                            ││       "from": "0x7e4c83cb3b38C128E42286dB909E410B1bC60038",                                                │
+│                                                                                                            ││       "value": "250000000",                                                                                │
+│                                                                                                            ││       "transactionHash": "0xdeed52ec1e92d0ca8834284f39ed5e37ff6106b6bb09a9dc37fb6d1c01b0a8f6",             │
+│                                                                                                            ││       "token": {                                                                                           │
+│                                                                                                            ││         "decimals": 6,                                                                                     │
+│                                                                                                            ││         "totalSupply": "1000 (6 decimals)"                                                                 │
+│                                                                                                            ││       }                                                                                                    │
+│                                                                                                            ││     },                                                                                                     │
+│                                                                                                            ││     {                                                                                                      │
+│                                                                                                            ││       "id": "b",                                                                                           │
+│                                                                                                            ││       "from": "0x7e4c83cb3b38C128E42286dB909E410B1bC60038",                                                │
+│                                                                                                            ││       "value": "250000000",                                                                                │
+│                                                                                                            ││       "transactionHash": "0xdeed52ec1e92d0ca8834284f39ed5e37ff6106b6bb09a9dc37fb6d1c01b0a8f6",             │
+│                                                                                                            ││       "token": {                                                                                           │
+│                                                                                                            ││         "decimals": 6,                                                                                     │
+│                                                                                                            ││         "totalSupply": "1000 (6 decimals)"                                                                 │
+│                                                                                                            ││       }                                                                                                    │
+│                                                                                                            ││     }                                                                                                      │
+│                                                                                                            ││   ]                                                                                                        │
+│                                                                                                            ││ }                                                                                                          │
+│                                                                                                            ││                                                                                                            │
+│                                                                                                            ││                                                                                                            │
+│                                                                                                            ││                                                                                                            │
+│ ✔ Valid                                                                                                    ││                                                                                                            │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ demo │ env: local │ TLS verified │ 0 in flight                                                                                                                                                                 Ctrl+Q quit

@@ -65,7 +65,9 @@ use crate::exchange::Exchange;
 use crate::timing::millis;
 
 pub use evm::{EvmCall, EvmExecutor, EvmFuture, EvmOutcome, evm_error_record};
-pub use graphql::{GraphqlCall, GraphqlExecutor, GraphqlFuture, GraphqlOutcome};
+pub use graphql::{
+    CHAIN_RPC_VARIABLE, GraphqlCall, GraphqlExecutor, GraphqlFuture, GraphqlOutcome,
+};
 pub use grpc::{
     GRPC_CONFIG_ERROR, GRPC_REQUEST_ERROR, GrpcCall, GrpcExecutor, GrpcFailure, GrpcFuture,
     GrpcOutcome,

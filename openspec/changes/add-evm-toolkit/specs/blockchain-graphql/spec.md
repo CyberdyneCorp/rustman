@@ -13,7 +13,7 @@ A `kind: graphql` request file MAY set `preset: geth` (EIP-1767 endpoint, usuall
 - **THEN** the geth preset SHALL apply and a warning `schema does not look like geth EIP-1767` SHALL be shown
 
 ### Requirement: Blockchain scalar display
-With a preset active, `BigInt`, `BigDecimal` and `Long` values SHALL display as exact decimals; `Bytes` and `Bytes32` as `0x` hex; and fields typed or named as addresses as EIP-55 checksummed addresses. Values SHALL be shown unchanged in raw mode, and assertions SHALL compare the raw JSON values.
+With a preset active, `BigInt`, `BigDecimal` and `Long` values SHALL display as exact decimals; `Bytes` and `Bytes32` as `0x` hex; and fields typed as addresses, and any other 20-byte `0x` value, as EIP-55 checksummed addresses. Values SHALL be shown unchanged in raw mode, and assertions SHALL compare the raw JSON values.
 
 #### Scenario: BigInt formatting
 - **GIVEN** a subgraph field `totalSupply: "1000000000000000000000"` of type `BigInt`
@@ -34,6 +34,21 @@ For subgraph queries, the system SHALL offer `--paginate` (CLI) and a TUI action
 #### Scenario: Page cap
 - **GIVEN** more than 20 full pages exist
 - **THEN** pagination SHALL stop at 20 pages with the warning `stopped at --max-pages 20`
+
+### Requirement: Pagination bounds
+Pagination SHALL hold bounded memory: `--max-pages` SHALL accept at most 1000, and paging SHALL stop once the page bodies read reach 64 MiB in all. When a later page fails, the pages read before it SHALL be kept, with an error naming the failed page and how many pages were kept, and the run SHALL exit non-zero.
+
+#### Scenario: Page limit
+- **WHEN** the user runs `rustman graphql query transfers --paginate --max-pages 1001`
+- **THEN** it SHALL be a usage error with exit code 2
+
+#### Scenario: Byte limit
+- **GIVEN** full pages whose bodies reach 64 MiB in all before `--max-pages`
+- **THEN** pagination SHALL stop with the warning `stopped after N pages: they reached the 64 MiB pagination limit`
+
+#### Scenario: Failing page
+- **GIVEN** the third page of a paginated query fails with HTTP 502
+- **THEN** the result SHALL hold the items of the first two pages and the error `--paginate: page 3 failed (HTTP 502, not a GraphQL result); keeping the 2 pages read before it`, and the exit code SHALL be non-zero
 
 ### Requirement: Subgraph freshness check
 For the `subgraph` preset, the system SHALL query `_meta { block { number } hasIndexingErrors }` and compare with the chain head from the environment's EVM RPC (if configured). The TUI SHALL show `lag N blocks`. An assertion `subgraph: {max_lag_blocks: N}` SHALL fail when the lag exceeds N or `hasIndexingErrors` is true.

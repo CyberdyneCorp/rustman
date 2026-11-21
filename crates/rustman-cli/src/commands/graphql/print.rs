@@ -1,12 +1,14 @@
 //! How `rustman graphql query` prints a result: `data`, `errors` and
 //! `extensions` apart for an operation, the events for a subscription, or
-//! the raw body when the response is not a GraphQL result. Everything
-//! printed is redacted.
+//! the raw body when the response is not a GraphQL result. With a
+//! blockchain preset, `data` shows its scalars formatted (display only;
+//! `--raw` shows them as received). Everything printed is redacted.
 
 use std::io::{self, Write};
 
-use rustman_core::run::{GraphqlRecord, RequestRecord, SubscriptionRecord};
+use rustman_core::run::{GraphqlRecord, PresetRecord, RequestRecord, SubscriptionRecord};
 use rustman_core::{ConfigError, Redactor};
+use rustman_evm::gql::{Display, format_data};
 use rustman_graphql::{GraphqlResponse, ResponseError};
 use rustman_http::Exchange;
 use serde_json::{Value, json};
@@ -18,17 +20,30 @@ pub struct Shown<'a> {
     /// The response body, redacted.
     body: Vec<u8>,
     response: Option<GraphqlResponse>,
+    redactor: &'a Redactor,
+    display: Display,
 }
 
 impl<'a> Shown<'a> {
-    pub fn new(record: &'a RequestRecord, exchange: &Exchange, redactor: &Redactor) -> Self {
+    pub fn new(
+        record: &'a RequestRecord,
+        exchange: &Exchange,
+        redactor: &'a Redactor,
+        display: Display,
+    ) -> Self {
         let body = redactor.bytes(&exchange.body).into_owned();
         Self {
             record,
             status: exchange.status,
             response: GraphqlResponse::parse(&body),
             body,
+            redactor,
+            display,
         }
+    }
+
+    fn preset(&self) -> Option<&PresetRecord> {
+        self.graphql().and_then(|g| g.preset.as_ref())
     }
 
     /// A GraphQL result without errors.
@@ -71,6 +86,9 @@ impl<'a> Shown<'a> {
             value["events"] = json!(subscription.events);
             return value;
         }
+        if let Some(preset) = self.preset() {
+            value["preset"] = preset_json(preset);
+        }
         match &self.response {
             Some(response) => {
                 value["apq"] = json!(graphql.and_then(|g| g.apq.clone()));
@@ -95,12 +113,27 @@ impl<'a> Shown<'a> {
         status.extend(graphql.and_then(|g| g.result.clone()));
         status.push(format!("{:.0} ms", self.record.duration_ms));
         status.extend(graphql.and_then(|g| g.apq.clone()));
+        if let Some(preset) = self.preset() {
+            status.push(format!("preset {}", preset.name));
+            status.extend(preset.freshness.as_ref().map(|f| f.lag_text()));
+        }
         writeln!(out, "{}", status.join(" · "))?;
         let Some(response) = &self.response else {
             out.write_all(&self.body)?;
             return writeln!(out);
         };
-        result(out, response)
+        let data = response.data.as_ref().map(|data| self.shown_data(data));
+        result(out, data.as_deref(), response)
+    }
+
+    /// `data` as shown: formatted per the preset, redacted again (a
+    /// formatted value can spell a secret the raw one did not).
+    fn shown_data(&self, data: &Value) -> String {
+        let formatted = match self.preset() {
+            Some(preset) => format_data(data, &preset.scalars, self.display),
+            None => data.clone(),
+        };
+        self.redactor.text(&pretty(&formatted)).into_owned()
     }
 
     fn events(
@@ -135,10 +168,25 @@ impl<'a> Shown<'a> {
     }
 }
 
-/// `data`, `errors` and `extensions`, each under its own heading.
-fn result(out: &mut dyn Write, response: &GraphqlResponse) -> io::Result<()> {
-    if let Some(data) = &response.data {
-        writeln!(out, "data:\n{}", pretty(data))?;
+/// The preset of `--json` output: its name, warning and freshness.
+fn preset_json(preset: &PresetRecord) -> Value {
+    let mut value = json!({
+        "name": preset.name,
+        "explicit": preset.explicit,
+        "warning": preset.warning,
+    });
+    if let Some(facts) = &preset.freshness {
+        value["freshness"] = json!(facts);
+        value["freshness"]["lag"] = json!(facts.lag());
+    }
+    value
+}
+
+/// `data` (already shown as text), `errors` and `extensions`, each under
+/// its own heading.
+fn result(out: &mut dyn Write, data: Option<&str>, response: &GraphqlResponse) -> io::Result<()> {
+    if let Some(data) = data {
+        writeln!(out, "data:\n{data}")?;
     }
     if !response.errors.is_empty() {
         writeln!(out, "errors:")?;

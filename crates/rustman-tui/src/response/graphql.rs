@@ -1,10 +1,16 @@
 //! The GraphQL result in the response viewer (spec: TUI GraphQL pane): the
 //! `Data`, `Errors`, `Extensions` and `Events` tabs, prepared off the render
-//! loop from the redacted body and the redacted GraphQL record.
+//! loop from the redacted body and the redacted GraphQL record. With a
+//! blockchain preset (add-evm-toolkit "blockchain-graphql"), `Data` shows
+//! the scalars formatted, in token units or raw (`graphql.display`), the
+//! summary names the preset and a subgraph's lag, and the addresses and
+//! transaction hashes of the result are links into the EVM toolkit.
 
 use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
+use rustman_core::Redactor;
 use rustman_core::run::GraphqlRecord;
+use rustman_evm::gql::{Display, Link, find_links, format_data};
 use rustman_graphql::{GraphqlResponse, ResponseError};
 use serde_json::Value;
 
@@ -46,6 +52,17 @@ pub struct GraphqlView {
     /// The subscription protocol: `graphql-transport-ws`, `legacy
     /// subscriptions-transport-ws` or `sse`.
     pub protocol: Option<String>,
+    /// The blockchain preset: `preset subgraph`.
+    pub preset: Option<String>,
+    /// A subgraph's lag: `lag 12 blocks`, `unknown (no rpc)`.
+    pub lag: Option<String>,
+    /// How `data` is shown, with a preset.
+    pub display: Display,
+    /// `data` in the units and raw forms (`data` holds the formatted one).
+    pub units: Vec<String>,
+    pub raw: Vec<String>,
+    /// The addresses and transaction hashes of `data`.
+    pub links: Vec<Link>,
 }
 
 impl GraphqlView {
@@ -67,6 +84,7 @@ impl GraphqlView {
             view.data = pretty(parsed.data.as_ref());
             view.errors = parsed.errors.iter().map(error_row).collect();
             view.extensions = pretty(parsed.extensions.map(Value::Object).as_ref());
+            view.preset_forms(record, parsed.data.as_ref());
         }
         if let Some(sub) = &record.subscription {
             view.events = sub
@@ -79,11 +97,73 @@ impl GraphqlView {
         view
     }
 
+    /// With a preset: the summary's preset and lag, the display forms of
+    /// `data` and its links.
+    fn preset_forms(&mut self, record: &GraphqlRecord, data: Option<&Value>) {
+        let Some(preset) = &record.preset else {
+            return;
+        };
+        self.preset = Some(format!("preset {}", preset.name));
+        self.lag = preset.freshness.as_ref().map(|f| f.lag_text());
+        let Some(data) = data else {
+            return;
+        };
+        let form = |display| pretty(Some(&format_data(data, &preset.scalars, display)));
+        self.raw = std::mem::replace(&mut self.data, form(Display::Formatted));
+        self.units = form(Display::Units);
+        self.links = find_links(data);
+    }
+
+    /// This view with every display form redacted again (a formatted
+    /// value, like a checksummed address, can spell a secret the raw one
+    /// did not), and links that would show a secret left out.
+    #[must_use]
+    pub fn redacted(mut self, redactor: &Redactor) -> Self {
+        let redact = |lines: &mut Vec<String>| {
+            for line in lines.iter_mut() {
+                *line = redactor.text(line).into_owned();
+            }
+        };
+        redact(&mut self.data);
+        redact(&mut self.units);
+        self.links.retain(|l| redactor.text(&l.value) == l.value);
+        self
+    }
+
+    /// The `data` lines as currently shown.
+    pub fn shown_data(&self) -> &[String] {
+        match self.display {
+            Display::Units if self.preset.is_some() => &self.units,
+            Display::Raw if self.preset.is_some() => &self.raw,
+            _ => &self.data,
+        }
+    }
+
+    /// `graphql.display`: formatted → units → raw. False without a preset.
+    pub fn cycle_display(&mut self) -> bool {
+        if self.preset.is_none() {
+            return false;
+        }
+        self.display = self.display.next();
+        true
+    }
+
     /// `subscription OnMessage · ok · legacy subscriptions-transport-ws`:
     /// the operation, the result, the protocol and the APQ outcome, what of
-    /// them there is.
+    /// them there is; then the preset, the lag and the display form.
     pub fn summary(&self) -> String {
-        let parts = [&self.result, &self.protocol, &self.apq];
+        let display = self
+            .preset
+            .as_ref()
+            .map(|_| self.display.label().to_owned());
+        let parts = [
+            &self.result,
+            &self.protocol,
+            &self.apq,
+            &self.preset,
+            &self.lag,
+            &display,
+        ];
         std::iter::once(&self.operation)
             .chain(parts.into_iter().flatten())
             .filter(|p| !p.is_empty())
@@ -146,7 +226,7 @@ fn data_lines(view: &GraphqlView, ui: &UiOptions) -> Vec<Line<'static>> {
             ui,
         )];
     }
-    json_lines(&view.data, "No data.", ui)
+    json_lines(view.shown_data(), "No data.", ui)
 }
 
 fn json_lines(lines: &[String], empty: &str, ui: &UiOptions) -> Vec<Line<'static>> {
@@ -237,6 +317,7 @@ mod tests {
             result: Some("partial".into()),
             apq: None,
             subscription: None,
+            preset: None,
         }
     }
 
@@ -335,5 +416,77 @@ mod tests {
         query.apq = Some("APQ hit".into());
         let view = GraphqlView::new(&query, None);
         assert_eq!(view.summary(), "query Me · partial · APQ hit");
+    }
+
+    fn subgraph_record() -> GraphqlRecord {
+        let mut record = record();
+        record.result = Some("ok".into());
+        record.preset = Some(rustman_core::run::PresetRecord {
+            name: "subgraph".into(),
+            scalars: [("token.totalSupply".to_owned(), "BigInt".to_owned())].into(),
+            freshness: Some(rustman_core::run::SubgraphFacts {
+                indexed_block: Some(1000),
+                head: Some(1012),
+                rpc: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+        record
+    }
+
+    const OWNER: &str = "0xd8da6bf26964af9d7eed9e03e53415d37aa96045";
+
+    fn subgraph_body() -> String {
+        json!({"data": {"token": {
+            "owner": OWNER, "decimals": 18, "totalSupply": "1000000000000000000000",
+            "transactionHash": "0x5c504ed432cb51138bcf09aa5e8a410dd4a1e204ef84bfed1be16dfba1b22060"
+        }}})
+        .to_string()
+    }
+
+    #[test]
+    fn a_preset_formats_data_and_cycles_units_and_raw() {
+        let mut view = GraphqlView::new(&subgraph_record(), Some(subgraph_body().as_bytes()));
+        let ui = UiOptions::default();
+        let shown = text(&lines(&view, "Data", &ui));
+        assert!(
+            shown.starts_with(
+                "query Me · ok · preset subgraph · lag 12 blocks · formatted
+"
+            ),
+            "{shown}"
+        );
+        assert!(
+            shown.contains("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"),
+            "{shown}"
+        );
+        assert!(view.cycle_display());
+        let units = text(&lines(&view, "Data", &ui));
+        assert!(units.contains("\"1000 (18 decimals)\""), "{units}");
+        assert!(view.cycle_display());
+        let raw = text(&lines(&view, "Data", &ui));
+        assert!(raw.contains(OWNER) && raw.contains("· raw\n"), "{raw}");
+        assert_eq!(view.links.len(), 2);
+        assert!(!GraphqlView::new(&record(), None).cycle_display());
+    }
+
+    #[test]
+    fn formatted_values_and_links_that_spell_a_secret_stay_redacted() {
+        let secret = rustman_core::Secret::new(
+            "owner",
+            "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045".to_owned(),
+        );
+        let redactor = Redactor::new().with(&secret);
+        let view = GraphqlView::new(&subgraph_record(), Some(subgraph_body().as_bytes()))
+            .redacted(&redactor);
+        let shown = view.data.join("\n");
+        assert!(shown.contains("«redacted:owner»"), "{shown}");
+        assert!(!shown.contains("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"));
+        assert_eq!(
+            view.links.len(),
+            1,
+            "the address link would show the secret"
+        );
     }
 }

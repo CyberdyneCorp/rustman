@@ -1,0 +1,15 @@
+---
+source: crates/rustman-evm/tests/graphql.rs
+expression: shown
+---
+{
+  "block": {
+    "number": "20000000",
+    "gasUsed": "21000",
+    "hash": "0x88e96d4537bea4d9c05d12549907b32561d3bf31f45aae734cdc119f13406cb6",
+    "miner": {
+      "address": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+      "balance": "1000000000000000000"
+    }
+  }
+}

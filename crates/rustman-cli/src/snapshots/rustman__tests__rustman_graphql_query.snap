@@ -29,6 +29,20 @@ Options:
       --duration <DURATION>
           Subscriptions stop after this long (default: the request's duration, else 30s)
 
+      --paginate [<MODE>]
+          Follow subgraph pagination and concatenate the pages: id_gt (default, `where: {id_gt: $var}`) or skip (`skip: $var`)
+          
+          [possible values: id_gt, skip]
+
+      --max-pages <N>
+          Stop paginating after N pages (default 20, at most 1000)
+
+      --raw
+          Show blockchain scalars as received, not formatted by the preset
+
+      --units
+          Also show BigInt values next to a `decimals` field in token units
+
       --env <NAME>
           Environment (default: RUSTMAN_ENV, then default_environment)
 

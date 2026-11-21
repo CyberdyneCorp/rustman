@@ -434,6 +434,9 @@ The table below is generated from the action registry; a test fails if it drifts
 | Refresh GraphQL schema | `graphql.refresh_schema` | `Ctrl+G` |  |
 | Start GraphQL subscription | `graphql.subscription_start` | `Alt+S` |  |
 | Stop GraphQL subscription | `graphql.subscription_stop` | `Alt+X` |  |
+| Send following subgraph pagination | `graphql.paginate` | `Alt+G` |  |
+| Cycle blockchain scalar display | `graphql.display` | `u` (response) |  |
+| Open result value in EVM toolkit | `graphql.links` | `L` (response) |  |
 | Copy as… | `request.copy_as` | `Alt+C` |  |
 | Import… | `import.open` |  |  |
 | Review snapshots | `snapshot.review` | `Alt+A` |  |

@@ -6,10 +6,10 @@ use crate::environment::Environment;
 use crate::model::signed_auth::DEFAULT_JWT_TTL_SECS;
 use crate::model::{
     ApiKeyLocation, Assertion, Auth, AwsCredentials, AwsSigV4, Body, Capture, CountExpectation,
-    CountOp, DocsMeta, GraphqlMethod, GraphqlRequest, GraphqlTransport, HeaderAssertion,
-    HttpRequest, JsonAssertion, JsonContent, Jwt, McpRequest, NameValue, OAuth2, Part, PartSource,
-    Request, RequestSettings, RpcErrorExpectation, SnapshotAssertion, StatusExpectation, VarValue,
-    Variables, WsProtocol,
+    CountOp, DocsMeta, GraphqlMethod, GraphqlPreset, GraphqlRequest, GraphqlTransport,
+    HeaderAssertion, HttpRequest, JsonAssertion, JsonContent, Jwt, McpRequest, NameValue, OAuth2,
+    Part, PartSource, Request, RequestSettings, RpcErrorExpectation, SnapshotAssertion,
+    StatusExpectation, VarValue, Variables, WsProtocol,
 };
 
 /// The YAML text Rustman writes for a request file.
@@ -122,6 +122,7 @@ pub fn graphql_to_yaml(r: &GraphqlRequest) -> String {
         .opt_str("method", r.method.map(graphql_method_name))
         .opt_plain("apq", r.apq)
         .opt_str("schema_file", r.schema_file.as_deref())
+        .opt_str("preset", r.preset.map(GraphqlPreset::as_str))
         .opt_str("ws_protocol", r.ws_protocol.map(ws_protocol_name))
         .opt(
             "connection_params",
@@ -540,6 +541,12 @@ pub(super) fn assertion(a: &Assertion) -> Node {
             ("plugin", json(&serde_json::Value::Object(map)))
         }
         Assertion::Evm(e) => ("evm", evm_assertion(e)),
+        Assertion::Subgraph(s) => (
+            "subgraph",
+            MapBuilder::new()
+                .node("max_lag_blocks", Node::plain(s.max_lag_blocks))
+                .build(),
+        ),
     };
     Node::Map(vec![(key.to_owned(), node)])
 }

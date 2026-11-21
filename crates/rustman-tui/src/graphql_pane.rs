@@ -237,6 +237,14 @@ impl GraphqlEditor {
         Ok(graphql)
     }
 
+    /// The blockchain preset in force: the request's `preset:` (with a
+    /// warning when the loaded schema does not look like it) or the one the
+    /// schema shows.
+    pub fn preset(&self) -> Option<rustman_core::run::PresetRecord> {
+        let schema = self.loaded().map(|l| l.schema.as_ref());
+        rustman_graphql::preset::choose(self.base.preset, schema)
+    }
+
     /// The label left of the endpoint: how the operation travels.
     fn transport_label(&self) -> &'static str {
         match (

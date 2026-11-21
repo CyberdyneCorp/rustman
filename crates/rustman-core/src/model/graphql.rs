@@ -67,6 +67,10 @@ pub struct GraphqlRequest {
     /// An SDL (`.graphql`/`.graphqls`) or introspection JSON file, relative
     /// to the request file's folder; preferred over the schema cache.
     pub schema_file: Option<String>,
+    /// A blockchain endpoint preset (add-evm-toolkit "blockchain-graphql"):
+    /// `geth` (EIP-1767) or `subgraph`. Without it, the preset is detected
+    /// from the schema.
+    pub preset: Option<GraphqlPreset>,
     pub ws_protocol: Option<WsProtocol>,
     /// The `connection_init` payload of WebSocket subscriptions.
     pub connection_params: Option<Map<String, Value>>,
@@ -94,6 +98,26 @@ pub enum GraphqlTransport {
     Http,
     Ws,
     Sse,
+}
+
+/// A blockchain GraphQL endpoint preset: display and helper layers over
+/// the client, never a change to what is sent.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GraphqlPreset {
+    /// geth's EIP-1767 endpoint (`<rpc>/graphql`).
+    Geth,
+    /// The Graph and compatible indexers.
+    Subgraph,
+}
+
+impl GraphqlPreset {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Geth => "geth",
+            Self::Subgraph => "subgraph",
+        }
+    }
 }
 
 /// The HTTP method of a `transport: http` operation.

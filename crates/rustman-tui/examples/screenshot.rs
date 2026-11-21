@@ -266,6 +266,7 @@ fn graphql_exchange(path: &Path, request: &GraphqlRequest, body: &[u8]) -> Recei
         result: Some(outcome.into()),
         apq: None,
         subscription: None,
+        preset: None,
     };
     let mut received = exchange(path, None, body.to_vec());
     received.graphql = Some(Box::new(GraphqlView::new(&record, Some(body))));

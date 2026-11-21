@@ -162,3 +162,21 @@ pub fn stop_subscription(state: &mut State) -> bool {
 fn not_graphql(state: &mut State) {
     state.notify(Severity::Info, "Open a GraphQL request first");
 }
+
+/// `graphql.display`: show the current GraphQL result's blockchain
+/// scalars formatted, in token units or raw.
+pub fn cycle_display(state: &mut State) {
+    let view = state
+        .tabs
+        .active_mut()
+        .and_then(|t| t.exchange.as_mut())
+        .and_then(|r| r.graphql.as_mut());
+    let shown = match view {
+        Some(view) => match view.cycle_display() {
+            true => format!("GraphQL values: {}", view.display.label()),
+            false => "No blockchain preset: values are shown as received".to_owned(),
+        },
+        None => "No GraphQL result to format".to_owned(),
+    };
+    state.notify(Severity::Info, shown);
+}

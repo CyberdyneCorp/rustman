@@ -55,11 +55,12 @@
 
 ## 7. Blockchain GraphQL presets
 
-- [ ] 7.1 Implement preset detection (`geth`, `subgraph`) and explicit `preset:` handling with the mismatch warning; verify with introspection fixtures from geth and a subgraph.
-- [ ] 7.2 Implement scalar formatting (BigInt/BigDecimal/Long decimal, Bytes hex, EIP-55 addresses) at display time only; verify snapshot tests and that assertions compare raw values.
-- [ ] 7.3 Implement `--paginate` (`id_gt` default, `skip` option, `--max-pages` 20) for CLI and TUI; verify against a mock subgraph returning paged data.
-- [ ] 7.4 Implement subgraph freshness (`_meta`, lag display, `max_lag_blocks` assertion, no-RPC behavior) and decoder links in the TUI; verify with a mock subgraph + Anvil head and TUI snapshot tests.
-- [ ] 7.5 Document presets in `docs/evm.md`; verify example queries in docs parse against the fixture schemas.
+- [x] 7.1 Implement preset detection (`geth`, `subgraph`) and explicit `preset:` handling with the mismatch warning; verify with introspection fixtures from geth and a subgraph.
+- [x] 7.2 Implement scalar formatting (BigInt/BigDecimal/Long decimal, Bytes hex, EIP-55 addresses) at display time only; verify snapshot tests and that assertions compare raw values.
+- [x] 7.3 Implement `--paginate` (`id_gt` default, `skip` option, `--max-pages` 20) for CLI and TUI; verify against a mock subgraph returning paged data.
+- [x] 7.4 Implement subgraph freshness (`_meta`, lag display, `max_lag_blocks` assertion, no-RPC behavior) and decoder links in the TUI; verify with a mock subgraph + Anvil head and TUI snapshot tests.
+- [x] 7.5 Document presets in `docs/evm.md`; verify example queries in docs parse against the fixture schemas.
+  - Note: the Anvil-head freshness check of 7.4 (`the_lag_is_measured_against_an_anvil_head` in `crates/rustman-evm/tests/graphql.rs`) is opt-in like the other Anvil tests (`RUSTMAN_ANVIL=1`, required in the `jsonrpc-anvil` job); the mock-subgraph and stub-node checks run everywhere.
 
 ## Workflow follow-up
 

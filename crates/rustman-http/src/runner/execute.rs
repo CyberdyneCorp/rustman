@@ -195,6 +195,7 @@ impl Runner<'_> {
             resolved: &resolved,
             kind: "http",
             events: None,
+            subgraph: None,
         };
         let mut sent = self.evaluate(&checked, exchange, record);
         sent.record.transform = http.transform.is_some().then_some(transformed);
@@ -316,7 +317,8 @@ impl Runner<'_> {
             redactor: &redactor,
             plugins: plugins.as_ref(),
         };
-        record.assertions = assertions::evaluate(assertions, &view, &ctx);
+        let subgraph = checked.subgraph.as_ref();
+        record.assertions = assertions::evaluate_graphql(assertions, &view, &ctx, subgraph);
         let report = self.capture(captures, &view, &mut redactor);
         // After the captures, so a captured secret is redacted too.
         let snapshots = self.check_snapshots(checked, &view, &redactor, &mut record.assertions);
@@ -529,6 +531,8 @@ pub(super) struct Checked<'c, 'r> {
     pub kind: &'static str,
     /// The events of a subscription: what its snapshots compare.
     pub events: Option<Vec<serde_json::Value>>,
+    /// What a GraphQL subgraph preset learned (`subgraph` assertions).
+    pub subgraph: Option<rustman_core::run::SubgraphFacts>,
 }
 
 /// Redact the error message of `record`, which may quote what was sent.

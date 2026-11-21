@@ -1,10 +1,13 @@
 //! `rustman graphql query <request | --endpoint URL --query TEXT>`:
 //! validate, send and print one operation through the runner (so it is
-//! recorded in history and its assertions are checked). Exit codes: 0 for
+//! recorded in history and its assertions are checked). Blockchain presets
+//! add `--paginate`, the display forms (`--raw`, `--units`) and a
+//! subgraph's lag. Exit codes: 0 for
 //! no errors, 1 when `errors` is not empty (or an assertion failed), and
 //! the `cli-runner` codes when nothing came back.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use clap::Args;
@@ -14,7 +17,9 @@ use rustman_core::run::{RequestStatus, SkipReason};
 use rustman_core::settings::Settings;
 use rustman_core::workspace::RequestRef;
 use rustman_core::{ConfigError, Workspace};
-use rustman_graphql::GraphqlRunner;
+use rustman_evm::gql::{Display, RpcHead};
+use rustman_graphql::{DEFAULT_MAX_PAGES, GraphqlRunner, MAX_PAGES_LIMIT, PageMode, Paginate};
+use rustman_http::HttpEngine;
 use rustman_http::runner::{RunContext, Runner, Sent};
 
 use super::{is_url, print};
@@ -57,6 +62,30 @@ pub struct QueryArgs {
     /// duration, else 30s)
     #[arg(long, value_name = "DURATION", value_parser = parse_duration)]
     duration: Option<Duration>,
+    /// Follow subgraph pagination and concatenate the pages: id_gt
+    /// (default, `where: {id_gt: $var}`) or skip (`skip: $var`)
+    #[arg(
+        long,
+        value_name = "MODE",
+        num_args = 0..=1,
+        default_missing_value = "id_gt",
+        value_parser = ["id_gt", "skip"]
+    )]
+    paginate: Option<String>,
+    /// Stop paginating after N pages (default 20, at most 1000)
+    #[arg(
+        long,
+        value_name = "N",
+        requires = "paginate",
+        value_parser = clap::value_parser!(u32).range(1..=i64::from(MAX_PAGES_LIMIT))
+    )]
+    max_pages: Option<u32>,
+    /// Show blockchain scalars as received, not formatted by the preset
+    #[arg(long, conflicts_with = "units")]
+    raw: bool,
+    /// Also show BigInt values next to a `decimals` field in token units
+    #[arg(long)]
+    units: bool,
     #[command(flatten)]
     selection: EnvSelection,
     #[command(flatten)]
@@ -137,6 +166,9 @@ fn send(
         max_events: args.max_events,
         duration: args.duration,
         validate: !args.no_validate,
+        paginate: paginate(args),
+        chain_head: Some(Arc::new(RpcHead::new(Arc::new(HttpEngine::new())))),
+        freshness: true,
         ..GraphqlRunner::default()
     };
     let mut options = args.flags.options()?;
@@ -167,6 +199,24 @@ fn send(
     finish(args, &sent, cancel.is_cancelled())
 }
 
+/// `--paginate [MODE]` with `--max-pages`.
+fn paginate(args: &QueryArgs) -> Option<Paginate> {
+    let mode = PageMode::parse(args.paginate.as_deref()?)?;
+    Some(Paginate {
+        mode,
+        max_pages: args.max_pages.unwrap_or(DEFAULT_MAX_PAGES),
+    })
+}
+
+/// How `data` is shown: `--raw`, `--units`, else formatted.
+fn display(args: &QueryArgs) -> Display {
+    match (args.raw, args.units) {
+        (true, _) => Display::Raw,
+        (false, true) => Display::Units,
+        (false, false) => Display::Formatted,
+    }
+}
+
 /// Print the result (or why there is none) and pick the exit code. A
 /// subscription stopped by Ctrl+C prints its events and exits 130.
 fn finish(args: &QueryArgs, sent: &Sent, interrupted: bool) -> Result<u8, CliError> {
@@ -181,7 +231,7 @@ fn finish(args: &QueryArgs, sent: &Sent, interrupted: bool) -> Result<u8, CliErr
     let Some(exchange) = &sent.exchange else {
         return Ok(REQUEST);
     };
-    let shown = print::Shown::new(record, exchange, &sent.redactor);
+    let shown = print::Shown::new(record, exchange, &sent.redactor, display(args));
     shown.write(args.json)?;
     for failed in record.assertions.iter().filter(|a| !a.passed()) {
         eprintln!("fail: {failed}");

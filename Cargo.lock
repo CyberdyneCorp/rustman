@@ -7015,6 +7015,7 @@ dependencies = [
  "rustix",
  "rustman-core",
  "rustman-evm",
+ "rustman-graphql",
  "rustman-http",
  "rustman-jsonrpc",
  "rustman-report",
