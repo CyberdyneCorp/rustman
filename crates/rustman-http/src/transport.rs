@@ -108,7 +108,6 @@ impl Transport {
             proxies: key.proxy.clone(),
             tunnel_plain: key.http2_prior_knowledge,
             timeout: key.connect_timeout,
-            deny: None,
         };
         let connector = Connector::new(dns, config);
         let opening = connector.opening();

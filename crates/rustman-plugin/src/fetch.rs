@@ -76,7 +76,7 @@ pub async fn fetch(plugin: &str, url: &str, options: &FetchOptions) -> Result<Ve
 }
 
 /// The connect-time check of downloads: a host name may not resolve to an
-/// address that is not public ([`crate::sandbox::net::is_private_ip`]),
+/// address that is not public ([`rustman_http::address::is_public_ip`]),
 /// unless the URL names the address or `localhost` itself.
 pub fn check_download_address(host: &str, ip: IpAddr) -> Result<(), String> {
     crate::sandbox::net::check_address(host, ip).map_err(|_| {

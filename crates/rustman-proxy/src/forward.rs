@@ -398,7 +398,7 @@ mod tests {
         let options = rustman_http::SendOptions::default();
         let upstream = Upstream {
             direct: RawConnector::new(&options).unwrap(),
-            guarded: RawConnector::denying(&options, crate::guard::is_refused_ip).unwrap(),
+            guarded: RawConnector::guarded(&options, crate::guard::network_client_guard()).unwrap(),
             recorder: Recorder {
                 store: crate::store::CaptureStore::new(10, 1024),
                 filter: crate::filter::CaptureFilter::new(&crate::filter::FilterRules::default())

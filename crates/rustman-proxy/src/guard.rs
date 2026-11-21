@@ -4,8 +4,10 @@
 //! metadata service, and a reverse proxy forwarding to itself.
 
 use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
 
-use rustman_http::address::is_public_ip;
+use rustman_http::AddressGuard;
+use rustman_http::address::{is_localhost_name, is_public_ip};
 
 /// The answer a network client gets for a non-public target.
 pub(crate) const INTERNAL_REFUSED: &str = "rustman record: requests from the network to this \
@@ -25,10 +27,7 @@ fn bare(host: &str) -> String {
 /// with [`is_refused_ip`].
 pub(crate) fn is_refused_host(host: &str) -> bool {
     let host = bare(host);
-    if host == "localhost" || host.ends_with(".localhost") {
-        return true;
-    }
-    host.parse::<IpAddr>().is_ok_and(is_refused_ip)
+    is_localhost_name(&host) || host.parse::<IpAddr>().is_ok_and(is_refused_ip)
 }
 
 /// Whether a network client may not reach `ip`: every address that is
@@ -37,6 +36,20 @@ pub(crate) fn is_refused_host(host: &str) -> bool {
 /// wrapping such an IPv4 address); see [`is_public_ip`].
 pub(crate) fn is_refused_ip(ip: IpAddr) -> bool {
     !is_public_ip(ip)
+}
+
+/// The connect-time guard of network clients' connections: a target that
+/// resolves to an address [`is_refused_ip`] matches is refused.
+pub(crate) fn network_client_guard() -> AddressGuard {
+    Arc::new(|host, ip| {
+        if is_refused_ip(ip) {
+            Err(format!(
+                "{host} resolves to the non-public address {ip}, refused to network clients"
+            ))
+        } else {
+            Ok(())
+        }
+    })
 }
 
 /// Whether `host:port` is the listen address `addr` of the proxy itself:

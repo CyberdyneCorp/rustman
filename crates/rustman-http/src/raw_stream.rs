@@ -9,7 +9,6 @@
 //! opens the stream: it neither writes nor parses HTTP.
 
 use std::io;
-use std::net::IpAddr;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -18,7 +17,7 @@ use http::Uri;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 use crate::connect::{Connector, ConnectorConfig};
-use crate::dns::Dns;
+use crate::dns::{AddressGuard, Dns};
 use crate::engine::SendOptions;
 use crate::error::RequestError;
 use crate::tls::TlsSettings;
@@ -57,19 +56,17 @@ impl std::fmt::Debug for RawConnector {
 impl RawConnector {
     /// A connector for `options`.
     pub fn new(options: &SendOptions) -> Result<Self, RequestError> {
-        Self::build(options, None)
+        Self::build(options, Dns::default())
     }
 
-    /// A connector that refuses any target resolving to an address `deny`
-    /// matches (after DNS, so names and odd IP spellings are covered too).
-    pub fn denying(options: &SendOptions, deny: fn(IpAddr) -> bool) -> Result<Self, RequestError> {
-        Self::build(options, Some(deny))
+    /// A connector that opens direct connections only to the server
+    /// addresses `guard` allows, checked on the addresses DNS returned and
+    /// then connected to (so names and odd IP spellings are covered too).
+    pub fn guarded(options: &SendOptions, guard: AddressGuard) -> Result<Self, RequestError> {
+        Self::build(options, Dns::guarded(guard))
     }
 
-    fn build(
-        options: &SendOptions,
-        deny: Option<fn(IpAddr) -> bool>,
-    ) -> Result<Self, RequestError> {
+    fn build(options: &SendOptions, dns: Dns) -> Result<Self, RequestError> {
         let proxy_tls = TlsSettings {
             client_auth: None,
             ..options.tls.clone()
@@ -82,9 +79,8 @@ impl RawConnector {
             // caller writes: always tunnel.
             tunnel_plain: true,
             timeout: options.connect_timeout,
-            deny,
         };
-        Ok(Self(Connector::new(Arc::new(Dns::default()), config)))
+        Ok(Self(Connector::new(Arc::new(dns), config)))
     }
 
     /// Open a raw stream to the origin of `uri` (`http` or `https`).
@@ -173,17 +169,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_denying_connector_refuses_matching_addresses_without_connecting() {
+    async fn a_guarded_connector_refuses_matching_addresses_without_connecting() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         let options = SendOptions::default();
-        let guarded = RawConnector::denying(&options, |ip| ip.is_loopback()).unwrap();
+        let guard: AddressGuard = Arc::new(|host, ip| {
+            if ip.is_loopback() {
+                Err(format!("{host} resolves to {ip}, refused"))
+            } else {
+                Ok(())
+            }
+        });
+        let guarded = RawConnector::guarded(&options, guard).unwrap();
         for uri in [
             format!("http://{addr}/"),
             format!("http://localhost:{}/", addr.port()),
         ] {
             let err = guarded.open(&uri.parse().unwrap()).await.unwrap_err();
-            assert!(err.to_string().contains("refused"), "{uri}: {err}");
+            assert!(err.to_string().starts_with("blocked: "), "{uri}: {err}");
         }
         let accepted =
             tokio::time::timeout(std::time::Duration::from_millis(200), listener.accept()).await;
