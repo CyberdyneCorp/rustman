@@ -166,3 +166,24 @@ async fn a_request_head_trickled_after_the_handshake_is_cut_off() {
     );
     assert!(proxy.store.is_empty());
 }
+
+#[tokio::test]
+async fn a_wildcard_connect_host_is_refused_before_any_leaf_is_minted() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let ca = LocalCa::generate("Rustman Test CA").unwrap();
+    let config = ProxyConfig {
+        intercept: vec!["*.example.com".into()],
+        ..ProxyConfig::default()
+    };
+    let proxy = start(config, Some(&ca)).await;
+    let mut tcp = tokio::net::TcpStream::connect(proxy.addr).await.unwrap();
+    tcp.write_all(b"CONNECT *.example.com:443 HTTP/1.1\r\nHost: *.example.com:443\r\n\r\n")
+        .await
+        .unwrap();
+    let mut buf = vec![0u8; 512];
+    let read = tokio::time::timeout(std::time::Duration::from_secs(10), tcp.read(&mut buf));
+    let n = read.await.expect("no answer to CONNECT").unwrap();
+    let head = String::from_utf8_lossy(&buf[..n]);
+    assert!(head.starts_with("HTTP/1.1 400"), "{head}");
+}

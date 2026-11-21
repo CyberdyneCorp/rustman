@@ -58,3 +58,8 @@
 - [x] 9.5 A `--save` session without requests writes nothing. Verify: library and CLI tests.
 - [x] 9.6 Live output: dropped lines are counted and warned about, and queued lines are flushed on stop. Verify: unit tests with a blocked writer.
 - [x] 9.7 `rustman record ca remove`. Verify: a library test with a mock keychain and a fake runner, and a CLI test with the stand-in keychain.
+- [x] 9.8 Idle timeout on plain (non-intercepted) client connections, so a stalled `Content-Length` or chunked request body cannot hold a connection slot. Verify: `limits.rs` tests with a short idle timeout and one connection slot.
+- [x] 9.9 Display and export redaction (HAR, `--json`, TUI) use the save path's secret detection (secret names, auth scheme values, known token formats), and the high-entropy warning skips values that are parameterized. Verify: a save test that every raw value is absent from the saved files, the HAR, the JSON line and the live line, with no "was kept" warning.
+- [x] 9.10 The stand-in keychain and stop-after hooks are compiled in only by the `record-test-hooks` feature, enabled through `rustman-cli`'s dev-dependency on itself. Verify: `cargo test --workspace` runs the intercepting curl test; CI checks that default debug and release builds ignore `RUSTMAN_RECORD_TEST_KEYCHAIN`.
+- [x] 9.11 `CONNECT` hosts that are neither a DNS name nor an IP address are refused before a leaf is minted. Verify: unit tests on `Target::parse` and `Minter::mint`, and a proxy test answering `400` to `CONNECT *.example.com:443`.
+- [x] 9.12 Reverse-mode loop detection also treats `::ffff:127.x.y.z` and `*.localhost` as the proxy itself (`127.0.0.0/8` and the listen address already were). Verify: `guard` unit test.

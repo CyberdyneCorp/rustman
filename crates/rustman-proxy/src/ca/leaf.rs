@@ -53,8 +53,14 @@ impl Minter {
         })
     }
 
-    /// A new leaf certificate for `host` (a DNS name or an IP address).
+    /// A new leaf certificate for `host` (a DNS name or an IP address);
+    /// anything else, such as a wildcard (`*.example.com`), is refused.
     pub fn mint(&self, host: &str) -> Result<Leaf, CaError> {
+        if !is_certifiable_host(host) {
+            return Err(CaError::invalid(format!(
+                "{host:?} is neither a DNS name nor an IP address"
+            )));
+        }
         let key = KeyPair::generate_for(&PKCS_ECDSA_P256_SHA256).map_err(CaError::invalid)?;
         let mut params = CertificateParams::new(vec![host.to_owned()]).map_err(CaError::invalid)?;
         params.distinguished_name.push(DnType::CommonName, host);
@@ -94,6 +100,12 @@ impl Minter {
     fn lock(&self) -> std::sync::MutexGuard<'_, Lru> {
         self.cache.lock().unwrap_or_else(PoisonError::into_inner)
     }
+}
+
+/// Whether a leaf may be minted for `host`: a valid DNS name (no
+/// wildcard) or an IP address.
+pub fn is_certifiable_host(host: &str) -> bool {
+    rustls_pki_types::ServerName::try_from(host).is_ok()
 }
 
 fn server_config(leaf: Leaf) -> Result<ServerConfig, CaError> {
@@ -187,6 +199,20 @@ mod tests {
             names.value.general_names.as_slice(),
             [GeneralName::IPAddress([127, 0, 0, 1])]
         ));
+    }
+
+    #[test]
+    fn hosts_that_are_neither_dns_names_nor_ips_are_refused() {
+        let minter = Minter::new(&LocalCa::generate("a").unwrap()).unwrap();
+        for host in ["*.example.com", "*", "exa mple.com", "a..b", "-"] {
+            assert!(!is_certifiable_host(host), "{host}");
+            assert!(minter.mint(host).is_err(), "{host}");
+            assert!(minter.server_config(host).is_err(), "{host}");
+        }
+        assert_eq!(minter.cached(), 0);
+        for host in ["api.example.com", "localhost", "127.0.0.1", "::1"] {
+            assert!(is_certifiable_host(host), "{host}");
+        }
     }
 
     #[test]

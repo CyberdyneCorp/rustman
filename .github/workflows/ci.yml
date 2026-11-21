@@ -36,6 +36,10 @@ jobs:
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      # add-traffic-recorder task 9.10: --all-targets turns on the
+      # `record-test-hooks` feature (rustman-cli's dev-dependency on
+      # itself); lint the shipped build, without the hooks, too.
+      - run: cargo clippy -p rustman-cli --locked -- -D warnings
       # add-trace-propagation section 4: the OTLP exporter is behind the
       # `otlp` feature, and the default build has no OpenTelemetry crate.
       - run: cargo clippy --workspace --all-targets --locked --features rustman-cli/otlp -- -D warnings
@@ -240,6 +244,23 @@ jobs:
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
       - run: cargo build -p rustman-cli --locked
+      # add-traffic-recorder task 9.10: the record test hooks exist only in
+      # test builds, so a default build ignores the stand-in keychain.
+      - name: A default debug build has no record test hooks
+        shell: bash
+        run: |
+          # The step shell runs with -e; `ca init` is expected to fail.
+          set +e
+          tmp="$RUNNER_TEMP/hooks-debug"
+          mkdir -p "$tmp/ws" "$tmp/keychain" "$tmp/config"
+          printf '[workspace]\nname = "hooks"\nversion = 1\n' > "$tmp/ws/rustman.toml"
+          cd "$tmp/ws"
+          RUSTMAN_SECRET_STORE=file RUSTMAN_RECORD_TEST_KEYCHAIN="$tmp/keychain" \
+            XDG_CONFIG_HOME="$tmp/config" "$GITHUB_WORKSPACE/target/debug/rustman" record ca init
+          code=$?
+          if [ "$code" -ne 2 ] || [ -n "$(ls -A "$tmp/keychain")" ]; then
+            echo "the build honors RUSTMAN_RECORD_TEST_KEYCHAIN (exit $code)"; exit 1
+          fi
       - name: Conformance probes against the mock of fixtures/petstore.yaml
         shell: bash
         run: |
@@ -375,6 +396,23 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release -p rustman-cli --locked
       - run: cp target/release/rustman "$RUNNER_TEMP/rustman-default"
+      # add-traffic-recorder task 9.10: the record test hooks exist only in
+      # test builds, so a default build ignores the stand-in keychain.
+      - name: A default release build has no record test hooks
+        shell: bash
+        run: |
+          # The step shell runs with -e; `ca init` is expected to fail.
+          set +e
+          tmp="$RUNNER_TEMP/hooks-release"
+          mkdir -p "$tmp/ws" "$tmp/keychain" "$tmp/config"
+          printf '[workspace]\nname = "hooks"\nversion = 1\n' > "$tmp/ws/rustman.toml"
+          cd "$tmp/ws"
+          RUSTMAN_SECRET_STORE=file RUSTMAN_RECORD_TEST_KEYCHAIN="$tmp/keychain" \
+            XDG_CONFIG_HOME="$tmp/config" "$RUNNER_TEMP/rustman-default" record ca init
+          code=$?
+          if [ "$code" -ne 2 ] || [ -n "$(ls -A "$tmp/keychain")" ]; then
+            echo "the build honors RUSTMAN_RECORD_TEST_KEYCHAIN (exit $code)"; exit 1
+          fi
       - run: cargo build --release -p rustman-cli --locked --features cloud-secrets
       - name: Every provider type is in the release binary
         run: |

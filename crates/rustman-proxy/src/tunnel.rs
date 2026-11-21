@@ -11,6 +11,7 @@ use http::Uri;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 
+use crate::ca::leaf::is_certifiable_host;
 use crate::capture::{Recorded, Tunnel};
 use crate::guard::is_refused_ip;
 use crate::idle::{Activity, Tracked};
@@ -25,13 +26,18 @@ pub(crate) struct Target {
 }
 
 impl Target {
-    /// The target of an authority-form URI; the port is required.
+    /// The target of an authority-form URI; the port is required, and the
+    /// host must be a DNS name or an IP address (never a wildcard such as
+    /// `*.example.com`, which a minted leaf would then cover).
     pub fn parse(uri: &Uri) -> Option<Self> {
         let authority = uri.authority()?;
         let host = authority
             .host()
             .trim_start_matches('[')
             .trim_end_matches(']');
+        if !is_certifiable_host(host) {
+            return None;
+        }
         Some(Self {
             host: host.to_ascii_lowercase(),
             port: authority.port_u16()?,
@@ -143,6 +149,9 @@ mod tests {
         assert_eq!(v6.host, "::1");
         assert_eq!(v6.authority(), "[::1]:8443");
         assert!(parse("example.com").is_none());
+        for host in ["*.example.com:443", "*:443", "a..b:443"] {
+            assert!(parse(host).is_none(), "{host}");
+        }
     }
 
     #[tokio::test(start_paused = true)]
