@@ -251,7 +251,7 @@ mod tests {
         .unwrap_err();
         assert_eq!(
             error,
-            "plugin soapui: two.rman.yaml: unknown request kind 'soap' (expected one of: http, graphql, jsonrpc, grpc, mcp, ws, sse)"
+            "plugin soapui: two.rman.yaml: unknown request kind 'soap' (expected one of: http, graphql, jsonrpc, grpc, mcp, ws, sse, kafka, mqtt, amqp)"
         );
     }
 

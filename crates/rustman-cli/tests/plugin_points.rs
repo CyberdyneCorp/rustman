@@ -352,7 +352,7 @@ fn unknown_kinds_are_refused_with_plugins_declared() {
         .assert()
         .code(2)
         .stderr(predicate::str::contains(
-            "unknown request kind 'echo' (expected one of: http, graphql, jsonrpc, grpc, mcp, ws, sse, soap)",
+            "unknown request kind 'echo' (expected one of: http, graphql, jsonrpc, grpc, mcp, ws, sse, kafka, mqtt, amqp, soap)",
         ));
 }
 
