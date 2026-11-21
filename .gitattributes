@@ -21,3 +21,8 @@ crates/rustman-contract/tests/catalog/*.txt text eol=lf
 crates/rustman-docs/src/templates/** text eol=lf
 crates/rustman-docs/src/assets/** text eol=lf
 crates/rustman-docs/tests/snapshots/** text eol=lf
+# Plugin API and scaffolds embedded with include_str!: `plugin api` prints
+# the WIT and the frozen-surface check edits it by line.
+crates/rustman-plugin-sdk/wit/** text eol=lf
+crates/rustman-plugin/templates/** text eol=lf
+scripts/plugin-template-locks/** text eol=lf
