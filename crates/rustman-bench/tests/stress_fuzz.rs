@@ -136,6 +136,7 @@ fn rules(outcome: &StressOutcome) -> Vec<&'static str> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn valid_and_fuzzed_traffic_are_measured_apart() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let ws = workspace(&server.origin(), "", "/fuzz/strict");
     let outcome = fuzz(ws.path(), &server.origin(), Fuzz::new(&["json-syntax"])).await;
@@ -164,6 +165,7 @@ async fn valid_and_fuzzed_traffic_are_measured_apart() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn malformed_bodies_keep_the_request_auth_and_redact_it_in_evidence() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let ws = workspace(&server.origin(), "", "/fuzz/accept");
     let mut setup = Fuzz::new(&["duplicate-keys", "json-syntax"]);
@@ -211,6 +213,7 @@ async fn malformed_bodies_keep_the_request_auth_and_redact_it_in_evidence() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn oversized_bodies_accepted_are_reported() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let ws = workspace(
         &server.origin(),
@@ -239,6 +242,7 @@ async fn oversized_bodies_accepted_are_reported() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_parser_crash_names_the_family_and_the_smallest_failing_depth() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let ws = workspace(&server.origin(), "", "/fuzz/nest?fail_depth=5000");
     let mut setup = Fuzz::new(&["deep-nesting"]);
@@ -263,6 +267,7 @@ async fn a_parser_crash_names_the_family_and_the_smallest_failing_depth() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn fuzzing_that_slows_valid_traffic_is_reported() {
+    let _serial = common::serial().await;
     let poison = StressServer::start().await;
     let ws = workspace(
         &poison.origin(),
@@ -320,6 +325,7 @@ paths:
 
 #[tokio::test(flavor = "multi_thread")]
 async fn spec_variants_break_the_schema_and_are_reported_when_accepted() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let ws = workspace(&server.origin(), "", "/fuzz/accept");
     let path = ws.path().join("openapi.yaml");
@@ -368,6 +374,7 @@ async fn spec_variants_break_the_schema_and_are_reported_when_accepted() {
 /// traffic is never judged against fuzzing.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_plan_without_a_json_body_fuzzes_nothing_and_says_so() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let ws = workspace(&server.origin(), "", "/fuzz/accept");
     std::fs::remove_file(ws.path().join("api/order.rman.yaml")).unwrap();
