@@ -13,6 +13,8 @@ use std::str::FromStr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+pub use crate::evm_probe::*;
+
 /// The `kind` of an exploration report.
 pub const KIND_EXPLORATION: &str = "exploration";
 
@@ -143,6 +145,9 @@ pub enum Family {
     UndocumentedStatus,
     ErrorLeakage,
     SecurityHeaders,
+    /// The checks of `rustman evm probe` (`subject: evm-rpc`); never a
+    /// `--probes` family of `explore run`.
+    EvmRpc,
 }
 
 impl Family {
@@ -171,6 +176,7 @@ impl Family {
             Self::UndocumentedStatus => "undocumented-status",
             Self::ErrorLeakage => "error-leakage",
             Self::SecurityHeaders => "security-headers",
+            Self::EvmRpc => "evm-rpc",
         }
     }
 
@@ -286,6 +292,11 @@ pub struct StatusCell {
     /// As documented: `200`, `4XX` or `default`.
     pub status: String,
     pub state: Cell,
+    /// How the status was classified, where `state` is coarser: an
+    /// `evm-rpc` probe's `supported`, `unsupported`, `restricted`, `error`
+    /// or `skipped (budget)`. Added in 0.7; absent elsewhere.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub class: Option<String>,
 }
 
 /// One operation's row.
@@ -505,6 +516,13 @@ pub struct ExplorationReport {
     /// companion). Added in 0.1; absent in older reports.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dependencies: Vec<Dependency>,
+    /// What was explored: absent for an OpenAPI exploration, `evm-rpc`
+    /// for `rustman evm probe`. Added in 0.7; absent in older reports.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject: Option<String>,
+    /// The providers of an `evm-rpc` probe.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evm: Option<Box<EvmProbe>>,
 }
 
 /// A value one operation's response provides to another's parameter.

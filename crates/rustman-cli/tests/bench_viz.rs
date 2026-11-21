@@ -2,32 +2,20 @@
 //! and 7.1), on every platform.
 //!
 //! This test has no libtest harness (`harness = false`) so that its own
-//! executable can be the stub companion: started with [`STUB`] set, it
-//! answers `hello` with the views of that variable and saves every line it
-//! receives to the file named by [`STUB_LOG`]. Otherwise `main` runs the
-//! tests below in order and fails the process if one panics.
+//! executable can be the stub companion (see `common::viz_stub`).
 
 mod common;
 
-use std::io::{BufRead, Write};
-use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::path::Path;
 
+use common::viz_stub::{STUB, STUB_LOG, Test};
 use common::{rustman, write};
 use rustman_test_support::BenchServer;
 use serde_json::Value;
 
-/// Set (to a comma-separated view list, possibly empty) when this
-/// executable runs as the stub companion.
-const STUB: &str = "RUSTMAN_TEST_VIZ_STUB_VIEWS";
-/// Where the stub saves the lines it receives.
-const STUB_LOG: &str = "RUSTMAN_TEST_VIZ_STUB_LOG";
-
 const CANARY: &str = "canary-Vz9k-bench-viz-secret";
 const NO_BENCH_VIEW: &str = "viz companion has no bench view";
 const NO_STRESS_VIEW: &str = "viz companion has no stress view";
-
-type Test = (&'static str, fn());
 
 const TESTS: &[Test] = &[
     (
@@ -49,50 +37,7 @@ const TESTS: &[Test] = &[
 ];
 
 fn main() {
-    if let Some(views) = std::env::var_os(STUB) {
-        stub(&views.to_string_lossy());
-        return;
-    }
-    let filter = std::env::args().skip(1).find(|a| !a.starts_with('-'));
-    let mut failed = Vec::new();
-    for (name, test) in TESTS {
-        if filter.as_deref().is_some_and(|f| !name.contains(f)) {
-            continue;
-        }
-        let ok = std::panic::catch_unwind(test).is_ok();
-        println!("test {name} ... {}", if ok { "ok" } else { "FAILED" });
-        if !ok {
-            failed.push(*name);
-        }
-    }
-    if !failed.is_empty() {
-        eprintln!("failed: {failed:?}");
-        std::process::exit(101);
-    }
-}
-
-/// The stub companion: `hello_ack` with `views`, then every line received
-/// until stdin closes, saved at once to the log (written beside it first,
-/// then renamed, so a reader never sees half of it).
-fn stub(views: &str) {
-    let stdin = std::io::stdin();
-    let mut lines = stdin.lock().lines();
-    let _hello = lines.next();
-    let views: Vec<&str> = views.split(',').filter(|v| !v.is_empty()).collect();
-    let ack = serde_json::json!({
-        "type": "hello_ack",
-        "protocol": "rustman-viz/1",
-        "viewer": "stub",
-        "views": views,
-    });
-    let mut stdout = std::io::stdout();
-    writeln!(stdout, "{ack}").unwrap();
-    stdout.flush().unwrap();
-    let received: Vec<String> = lines.map_while(Result::ok).collect();
-    let log = PathBuf::from(std::env::var_os(STUB_LOG).unwrap());
-    let partial = log.with_extension("partial");
-    std::fs::write(&partial, received.join("\n")).unwrap();
-    std::fs::rename(partial, log).unwrap();
+    common::viz_stub::main(TESTS);
 }
 
 /// The counting server and the runtime it is served from.
@@ -261,16 +206,10 @@ fn a_stress_run_warns_once_without_a_stress_view() {
 
 /// The messages the stub received, once it has saved them.
 fn received(log: &Path) -> Vec<Value> {
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while !log.exists() {
-        assert!(Instant::now() < deadline, "the stub never saved its log");
-        std::thread::sleep(Duration::from_millis(20));
-    }
+    let messages = common::viz_stub::saved(log);
     let text = std::fs::read_to_string(log).unwrap();
     assert!(!text.contains(CANARY), "{text}");
-    text.lines()
-        .map(|l| serde_json::from_str(l).unwrap_or_else(|e| panic!("{l}: {e}")))
-        .collect()
+    messages
 }
 
 fn of_type<'a>(messages: &'a [Value], kind: &str) -> Vec<&'a Value> {

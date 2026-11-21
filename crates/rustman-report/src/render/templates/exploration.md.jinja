@@ -60,7 +60,7 @@ Operations exercised: {{ c.operations.covered }}/{{ c.operations.total }} ({{ c.
 | Operation | Statuses |
 |---|---|
 {% for row in c.matrix -%}
-| {{ row.operation | cell | code }} | {% for s in row.statuses %}{{ s.status }} {{ s.state }}{% if not loop.last %}, {% endif %}{% endfor %} |
+| {{ row.operation | cell | code }} | {% for s in row.statuses %}{{ s.status }} {{ s.class if s.class else s.state }}{% if not loop.last %}, {% endif %}{% endfor %} |
 {% endfor %}
 {%- if r.left_behind %}
 ## Left behind

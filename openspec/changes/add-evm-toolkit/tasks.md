@@ -46,11 +46,12 @@
 
 ## 6. Chain exploration
 
-- [ ] 6.1 Implement `rustman evm probe` on the exploration runner with the EVM probe catalog, safety policy budgets and read-only method allowlist; verify a test that the mock node never sees a write method.
-- [ ] 6.2 Implement method support matrix, archive detection, subscription check and per-method latency; verify against stub providers (archive, pruned, no-trace, silent WebSocket).
-- [ ] 6.3 Implement opt-in rate-limit discovery and multi-provider consistency (head drift, block hash, state at fixed block, chain-id mismatch → exit 2); verify with stubs that return 429 above a threshold and that disagree on state.
-- [ ] 6.4 Emit `rustman.report/v1` `kind: exploration`, `subject: evm-rpc`, apply `--fail-on`, and stream `--viz` events (latency heatmap, block-time/gas plots, call-trace graph); verify the report validates against the published schema and a viz stub receives the events.
-- [ ] 6.5 Document `rustman evm probe` in `docs/evm-probe.md`; verify example invocations in docs run against stubs.
+- [x] 6.1 Implement `rustman evm probe` on the exploration runner with the EVM probe catalog, safety policy budgets and read-only method allowlist; verify a test that the mock node never sees a write method.
+- [x] 6.2 Implement method support matrix, archive detection, subscription check and per-method latency; verify against stub providers (archive, pruned, no-trace, silent WebSocket).
+- [x] 6.3 Implement opt-in rate-limit discovery and multi-provider consistency (head drift, block hash, state at fixed block, chain-id mismatch → exit 2); verify with stubs that return 429 above a threshold and that disagree on state.
+- [x] 6.4 Emit `rustman.report/v1` `kind: exploration`, `subject: evm-rpc`, apply `--fail-on`, and stream `--viz` events (latency heatmap, block-time/gas plots, call-trace graph); verify the report validates against the published schema and a viz stub receives the events.
+  - Note: the `--viz` events are sent when the probe finishes, not streamed while it runs (`docs/evm-probe.md`).
+- [x] 6.5 Document `rustman evm probe` in `docs/evm-probe.md`; verify example invocations in docs run against stubs.
 
 ## 7. Blockchain GraphQL presets
 

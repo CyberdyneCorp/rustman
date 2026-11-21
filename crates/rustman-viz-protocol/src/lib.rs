@@ -19,11 +19,11 @@ pub use frame::{
     FrameError, LineDecoder, MAX_LINE_BYTES, decode_line, encode_inspect, encode_line,
 };
 pub use message::{
-    Assertions, BenchFinished, BenchThreshold, BenchTick, BlobRef, Body, Close, ErrorMessage,
-    ExchangeCompleted, ExplorationFinished, ExplorationStarted, Finding, Header, Hello, HelloAck,
-    HelloReject, HourOutcomes, InspectResponse, LatencyPoint, LoadReport, Message, MonitorTrend,
-    OpenView, Outcome, ProbeCompleted, ReportKind, RunFinished, RunStarted, RunState, RunSummary,
-    Severity, View,
+    Assertions, BenchFinished, BenchThreshold, BenchTick, BlobRef, Body, CallTrace, ChainBlock,
+    Close, ErrorMessage, ExchangeCompleted, ExplorationFinished, ExplorationStarted, Finding,
+    Header, Hello, HelloAck, HelloReject, HourOutcomes, InspectResponse, LatencyPoint, LoadReport,
+    Message, MonitorTrend, OpenView, Outcome, ProbeCompleted, ProbeLatency, ReportKind,
+    RunFinished, RunStarted, RunState, RunSummary, Severity, TraceNode, View,
 };
 
 /// The protocol this build speaks.

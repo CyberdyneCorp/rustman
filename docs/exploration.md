@@ -132,7 +132,7 @@ Findings on the same rule and operation are reported once, with the number of `o
 | `settings` | The probe selection, the safety flags and the budgets |
 | `summary.probes` | Probe totals by outcome: `passed`, `finding`, `blocked`, `skipped`, `not_run`, `failed` (a request error or a chain that stopped early), and `total` |
 | `summary.findings` | Distinct findings by severity |
-| `coverage` | `operations` exercised and documented `statuses` observed (`covered`, `total`, `percent`), and the `matrix`: each operation's documented statuses marked `observed`, `not-observed` or `blocked` (nothing was sent for the operation because its probes were blocked) |
+| `coverage` | `operations` exercised and documented `statuses` observed (`covered`, `total`, `percent`), and the `matrix`: each operation's documented statuses marked `observed`, `not-observed` or `blocked` (nothing was sent for the operation because its probes were blocked); an [`evm probe`](evm-probe.md) cell also has a `class` (`supported`, `unsupported`, `restricted`, `error` or `skipped (budget)`) |
 | `findings` | The findings, as above, each with its `remediation` and `reproduction` |
 | `probes` | Every probe with its `outcome` and, unless it passed, the `reason` (`blocked: ...`, `skipped: no producer`, `not run: budget`, `not run: interrupted`, or why it failed) |
 | `left_behind` | Created resources that were not deleted |

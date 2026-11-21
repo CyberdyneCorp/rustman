@@ -141,6 +141,42 @@ fn samples() -> Vec<Message> {
                 skipped: 0,
             }],
         })),
+        Message::ProbeLatency(ProbeLatency {
+            provider: "https://rpc-a.example/".into(),
+            method: "eth_call".into(),
+            samples: 3,
+            p50_ms: 12.5,
+            p95_ms: 30.0,
+            max_ms: 31.2,
+        }),
+        Message::ChainBlock(ChainBlock {
+            provider: "https://rpc-a.example/".into(),
+            number: 20_000_000,
+            timestamp: 1_717_000_000,
+            gas_used: 15_000_000,
+            gas_limit: 30_000_000,
+        }),
+        Message::CallTrace(Box::new(CallTrace {
+            provider: "https://rpc-a.example/".into(),
+            nodes: vec![
+                TraceNode {
+                    id: 0,
+                    parent: None,
+                    kind: "CALL".into(),
+                    to: Some("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48".into()),
+                    gas_used: Some(30_000),
+                    error: None,
+                },
+                TraceNode {
+                    id: 1,
+                    parent: Some(0),
+                    kind: "DELEGATECALL".into(),
+                    to: None,
+                    gas_used: None,
+                    error: Some("execution reverted".into()),
+                },
+            ],
+        })),
         Message::InspectResponse(Box::new(InspectResponse {
             request: Some("users/list".into()),
             status: Some(200),
@@ -196,7 +232,7 @@ fn every_message_round_trips_and_matches_the_schema() {
         assert_valid(&validator, &value);
         kinds.insert(message.kind().unwrap());
     }
-    assert_eq!(kinds.len(), 19, "every message type has a sample");
+    assert_eq!(kinds.len(), 22, "every message type has a sample");
 }
 
 #[test]
@@ -271,7 +307,7 @@ fn doc_examples() -> Vec<String> {
 fn every_example_in_the_protocol_doc_parses() {
     let validator = validator();
     let examples = doc_examples();
-    assert!(examples.len() >= 19, "{examples:?}");
+    assert!(examples.len() >= 22, "{examples:?}");
     let mut kinds = std::collections::HashSet::new();
     for line in examples {
         let message = decode_line(&line).unwrap_or_else(|e| panic!("{line}: {e}"));
@@ -280,7 +316,7 @@ fn every_example_in_the_protocol_doc_parses() {
     }
     assert_eq!(
         kinds.len(),
-        19,
+        22,
         "the doc shows every message type: {kinds:?}"
     );
 }

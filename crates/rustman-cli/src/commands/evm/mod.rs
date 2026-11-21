@@ -1,7 +1,8 @@
-//! `rustman evm call|decode|logs|tx|block|ens|fork` (add-evm-toolkit "EVM
-//! CLI commands"). The work is done by the `rustman-evm` crate; this module
-//! parses flags, resolves the endpoint with the environment's variables
-//! and secrets, and prints results (redacted) as text or `--json`.
+//! `rustman evm call|decode|logs|tx|block|ens|fork|probe` (add-evm-toolkit
+//! "EVM CLI commands", "chain-exploration"). The work is done by the
+//! `rustman-evm` crate; this module parses flags, resolves the endpoint
+//! with the environment's variables and secrets, and prints results
+//! (redacted) as text or `--json`.
 //!
 //! Exit codes follow the ROADMAP table: 0 success, 1 a failed assertion or
 //! something not found, 2 a configuration error, 3 an RPC transport error,
@@ -14,6 +15,7 @@ mod decode;
 mod ens;
 mod fork;
 mod logs;
+mod probe;
 mod tx;
 
 use std::path::Path;
@@ -50,7 +52,8 @@ Examples:
   rustman evm tx 0x5c50... --env mainnet --json
   rustman evm block latest
   rustman evm ens vitalik.eth
-  rustman evm fork --chain mainnet --block 20000000")]
+  rustman evm fork --chain mainnet --block 20000000
+  rustman evm probe https://rpc-a.example https://rpc-b.example")]
 pub struct EvmArgs {
     #[command(subcommand)]
     command: EvmCommand,
@@ -75,6 +78,9 @@ enum EvmCommand {
     /// Fork a chain with a local Anvil node and a temporary fork-<chain>
     /// environment, until Ctrl+C
     Fork(fork::ForkArgs),
+    /// Probe EVM RPC providers: method support, archive state, latency,
+    /// subscriptions, rate limits and cross-provider consistency
+    Probe(Box<probe::ProbeArgs>),
 }
 
 pub fn run(args: &EvmArgs) -> Result<u8, CliError> {
@@ -86,6 +92,7 @@ pub fn run(args: &EvmArgs) -> Result<u8, CliError> {
         EvmCommand::Block(args) => block::run(args),
         EvmCommand::Ens(args) => ens::run(args),
         EvmCommand::Fork(args) => fork::run(args),
+        EvmCommand::Probe(args) => probe::run(args),
     }
 }
 

@@ -53,6 +53,8 @@ EIP-1559 suggestion from `eth_feeHistory(10, "latest", [50])`: `max_priority_fee
 ### D10. Probe engine reuse
 `chain-exploration` reuses the exploration runner's scheduling, budget and findings types from `rustman-explore`, with an EVM-specific probe catalog. Reports use `rustman.report/v1` `kind: exploration` with an additive `subject: evm-rpc` field, so existing renderers and `report diff` work unchanged.
 
+As built, the probe reuses the safety layer under the exploration runner (`SafetyPolicy`, `Governor`/`Limits` pacing, concurrency, time budget and 429 backoff through `GovernedSender`) and the `rustman-report` exploration types (findings, coverage, probe results, severities), but not `rustman-explore`'s runner itself: that runner plans probes from OpenAPI operations, while a chain probe is a fixed sequence of dependent JSON-RPC checks per provider (head first, then the archive block below it, then comparisons at a common block). The per-provider `--budget` is counted by the probe's own meter, which also enforces the read-only method allowlist and records per-method latency (time on the wire, so the governor's pacing is never counted); the governor's `max_probes` stays the global ceiling. Report assembly helpers (totals, ids) mirror the exploration runner's small ones rather than adding a dependency from `rustman-evm` on `rustman-explore`.
+
 ### D11. GraphQL presets as a result decorator
 Presets don't change how GraphQL is sent. They add a schema-based detector, a scalar formatter applied at display time, pagination drivers that re-issue the operation with updated variables, and actionable-value detection in the TUI.
 

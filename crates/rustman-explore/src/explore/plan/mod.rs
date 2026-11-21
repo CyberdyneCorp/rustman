@@ -188,9 +188,10 @@ pub fn plan(model: &ApiModel, graph: &Graph, options: &PlanOptions<'_>) -> Plan 
             Family::Lifecycle => chains::lifecycle(&inputs, &selected),
             Family::Bola => chains::bola(&inputs, &selected),
             Family::Fuzz => single::fuzz(&inputs, &selected),
-            Family::UndocumentedStatus | Family::ErrorLeakage | Family::SecurityHeaders => {
-                Vec::new()
-            }
+            Family::UndocumentedStatus
+            | Family::ErrorLeakage
+            | Family::SecurityHeaders
+            | Family::EvmRpc => Vec::new(),
         };
         probes.extend(family_probes);
     }

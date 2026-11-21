@@ -26,9 +26,9 @@ use rustman_report::Report;
 use rustman_report::exploration::Severity as ReportSeverity;
 use rustman_viz_client::{ConnectOptions, Discovery, Stream, StreamOptions, VizError, Warn};
 use rustman_viz_protocol::{
-    Assertions, ExchangeCompleted, ExplorationFinished, ExplorationStarted, Finding, LoadReport,
-    Message, OpenView, Outcome, ProbeCompleted, ReportKind, RunFinished, RunStarted, RunState,
-    RunSummary, Severity, View,
+    Assertions, CallTrace, ChainBlock, ExchangeCompleted, ExplorationFinished, ExplorationStarted,
+    Finding, LoadReport, Message, OpenView, Outcome, ProbeCompleted, ProbeLatency, ReportKind,
+    RunFinished, RunStarted, RunState, RunSummary, Severity, TraceNode, View,
 };
 
 use crate::exit::{self, CliError};
@@ -367,6 +367,133 @@ impl ExploreViz {
         self.stream.send(&Message::ExplorationFinished(finished));
         self.stream.close();
     }
+}
+
+/// The warning when the companion cannot show a chain probe.
+pub const NO_CHAIN_PROBE_VIEW: &str = "viz companion has no chain_probe view";
+
+/// `rustman evm probe --viz`: the chain-probe view (latency heatmap,
+/// block-time and gas plots, call-trace graphs), fed from the finished
+/// report, whose every text is redacted.
+pub struct ChainProbeViz {
+    stream: Stream,
+}
+
+impl ChainProbeViz {
+    /// Open the chain-probe view; `None` after a warning and an HTML hint
+    /// when the companion is missing or has no such view.
+    pub fn start(title: &str, root: Option<&Path>) -> Option<Self> {
+        let opened = open_with(View::ChainProbe, title, root, NO_CHAIN_PROBE_VIEW);
+        match opened {
+            Ok(stream) => Some(Self { stream }),
+            Err(warning) => {
+                eprintln!("warning: {warning}");
+                eprintln!("hint: add --report html=report.html to get an HTML report instead");
+                None
+            }
+        }
+    }
+
+    /// Send the probe's results, then `close`.
+    pub fn finish(mut self, report: &ExplorationReport) {
+        for message in chain_probe_messages(report) {
+            self.stream.send(&message);
+        }
+        self.stream.close();
+    }
+}
+
+/// The messages of a finished chain probe, after `open_view`.
+pub fn chain_probe_messages(report: &ExplorationReport) -> Vec<Message> {
+    let mut messages = vec![Message::ExplorationStarted(ExplorationStarted {
+        started_at: report.started_at.clone(),
+        operations: count(report.operations.len()),
+        base_url: None,
+    })];
+    let providers = report.evm.iter().flat_map(|evm| &evm.providers);
+    for provider in providers {
+        let name = &provider.endpoint;
+        messages.extend(provider.latency.iter().map(|l| {
+            Message::ProbeLatency(ProbeLatency {
+                provider: name.clone(),
+                method: l.method.clone(),
+                samples: count(l.samples),
+                p50_ms: l.p50_ms,
+                p95_ms: l.p95_ms,
+                max_ms: l.max_ms,
+            })
+        }));
+        messages.extend(provider.blocks.iter().map(|b| {
+            Message::ChainBlock(ChainBlock {
+                provider: name.clone(),
+                number: b.number,
+                timestamp: b.timestamp,
+                gas_used: b.gas_used,
+                gas_limit: b.gas_limit,
+            })
+        }));
+        if !provider.trace.is_empty() {
+            let nodes = provider.trace.iter().map(|n| TraceNode {
+                id: count(n.id),
+                parent: n.parent.map(count),
+                kind: n.kind.clone(),
+                to: n.to.clone(),
+                gas_used: n.gas_used,
+                error: n.error.clone(),
+            });
+            messages.push(Message::CallTrace(Box::new(CallTrace {
+                provider: name.clone(),
+                nodes: nodes.collect(),
+            })));
+        }
+    }
+    messages.extend(report.findings.iter().map(|f| {
+        Message::Finding(Finding {
+            severity: severity(f.severity),
+            operation: f.operation.clone(),
+            title: f.message.clone(),
+            detail: Some(format!("rule {}", f.rule)),
+        })
+    }));
+    messages.push(Message::ExplorationFinished(ExplorationFinished {
+        state: RunState::Completed,
+        operations_total: count(report.coverage.operations.total),
+        operations_exercised: count(report.coverage.operations.covered),
+        status_codes_documented: count(report.coverage.statuses.total),
+        status_codes_seen: count(report.coverage.statuses.covered),
+    }));
+    messages
+}
+
+/// [`open`], refusing a companion whose `hello_ack` lacks `view`
+/// (`missing` is then the warning).
+fn open_with(
+    view: View,
+    title: &str,
+    root: Option<&Path>,
+    missing: &str,
+) -> Result<Stream, String> {
+    let program = Discovery::from_env()
+        .locate()
+        .map_err(|e| unavailable(&e))?;
+    let options = ConnectOptions {
+        log: root.and_then(log_file),
+        ..ConnectOptions::new(format!("rustman {}", rustman_core::VERSION))
+    };
+    let connection =
+        rustman_viz_client::connect(&program, &options).map_err(|e| unavailable(&e))?;
+    let has_view = connection.views.contains(&view);
+    let warn: Warn = Arc::new(|warning: &str| eprintln!("warning: {warning}"));
+    let mut stream = Stream::start(connection, StreamOptions::default(), warn);
+    if !has_view {
+        stream.close();
+        return Err(format!("{missing}; continuing without visuals"));
+    }
+    stream.send(&Message::OpenView(OpenView {
+        view,
+        title: Some(title.to_owned()),
+    }));
+    Ok(stream)
 }
 
 fn probe_outcome(outcome: &ProbeOutcome) -> Outcome {

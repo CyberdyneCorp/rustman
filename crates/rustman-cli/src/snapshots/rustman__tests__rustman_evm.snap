@@ -14,6 +14,7 @@ Commands:
   block   Show a block by number, tag or hash
   ens     Resolve an ENS name to an address, or an address to its verified primary name
   fork    Fork a chain with a local Anvil node and a temporary fork-<chain> environment, until Ctrl+C
+  probe   Probe EVM RPC providers: method support, archive state, latency, subscriptions, rate limits and cross-provider consistency
   help    Print this message or the help of the given subcommand(s)
 
 Options:
@@ -37,3 +38,4 @@ Examples:
   rustman evm block latest
   rustman evm ens vitalik.eth
   rustman evm fork --chain mainnet --block 20000000
+  rustman evm probe https://rpc-a.example https://rpc-b.example

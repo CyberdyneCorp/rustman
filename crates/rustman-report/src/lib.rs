@@ -10,6 +10,7 @@
 pub mod bench;
 pub mod contract;
 pub mod diff;
+mod evm_probe;
 pub mod exploration;
 mod json;
 mod pretty;
