@@ -110,6 +110,7 @@ fn flat(rps: f64, secs: u64) -> ModeSpec {
 /// replays) stops within 6 s of the first refusal, as a connection break.
 #[tokio::test]
 async fn a_target_that_falls_over_stops_the_load_within_six_seconds() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let ws = workspace(&server.origin());
     get(ws.path(), "api/fall.rman.yaml", "/fall?above=25");
@@ -152,6 +153,7 @@ async fn a_target_that_falls_over_stops_the_load_within_six_seconds() {
 /// load stops: recovered, no finding.
 #[tokio::test]
 async fn a_target_that_heals_is_reported_recovered() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let ws = workspace(&server.origin());
     get(
@@ -178,6 +180,7 @@ async fn a_target_that_heals_is_reported_recovered() {
 /// Task 5.2: a stub that never heals: `no-recovery` with its last status.
 #[tokio::test]
 async fn a_target_that_never_heals_gets_no_recovery() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let ws = workspace(&server.origin());
     get(
@@ -227,6 +230,7 @@ fn qty_fuzz(root: &Path, target: &str, path: &str) -> StressInput {
 /// body minimizes to `{"qty":"2"}`.
 #[tokio::test]
 async fn a_string_quantity_is_minimized_to_that_key_alone() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let ws = workspace(&server.origin());
     let outcome = run(qty_fuzz(ws.path(), &server.origin(), "/fuzz/qty")).await;
@@ -245,6 +249,7 @@ async fn a_string_quantity_is_minimized_to_that_key_alone() {
 /// the input gets a 400, so the finding is `load-dependent`.
 #[tokio::test]
 async fn a_failure_only_under_load_is_load_dependent() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let ws = workspace(&server.origin());
     get(ws.path(), "health.rman.yaml", "/");
@@ -266,6 +271,7 @@ async fn a_failure_only_under_load_is_load_dependent() {
 /// no minimization replay is sent afterwards.
 #[tokio::test]
 async fn ctrl_c_during_recovery_skips_minimization_replays() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let ws = workspace(&server.origin());
     get(ws.path(), "health.rman.yaml", "/");

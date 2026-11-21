@@ -165,3 +165,12 @@ pub fn fast_recovery() -> rustman_bench::stress::recovery::RecoveryTuning {
         ..Default::default()
     }
 }
+
+/// Held for the whole of a timing-sensitive test, so the tests of one
+/// binary run one at a time: in parallel they share the runner's CPU, and
+/// on a loaded CI machine one test's load inflated another's latency
+/// (an 814 ms p95 from a stub answering in a few ms).
+pub async fn serial() -> tokio::sync::MutexGuard<'static, ()> {
+    static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    LOCK.lock().await
+}

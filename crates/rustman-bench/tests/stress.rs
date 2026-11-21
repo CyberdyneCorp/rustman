@@ -159,6 +159,7 @@ fn rates(outcome: &StressOutcome) -> Vec<f64> {
 /// then bisection: 48 (broken), 40 (held).
 #[tokio::test]
 async fn the_breakpoint_climbs_then_bisects_to_the_knee() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let ws = workspace(&server.origin(), "");
     get(ws.path(), "api/load.rman.yaml", "/load?above=44&slow=400");
@@ -179,6 +180,7 @@ async fn the_breakpoint_climbs_then_bisects_to_the_knee() {
 /// A target that holds every rate: the search stops at `max_rps`.
 #[tokio::test]
 async fn a_breakpoint_that_never_breaks_stops_at_the_cap() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let ws = workspace(&server.origin(), "max_rps = 20\n");
     get(ws.path(), "api/ok.rman.yaml", "/");
@@ -203,6 +205,7 @@ async fn a_breakpoint_that_never_breaks_stops_at_the_cap() {
 /// seconds, a slow runner adds tens of milliseconds).
 #[tokio::test]
 async fn offering_the_cap_itself_is_not_throttled_into_a_false_break() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let ws = workspace(&server.origin(), "max_rps = 30\n");
     get(ws.path(), "api/ok.rman.yaml", "/");
@@ -231,6 +234,7 @@ async fn first_step_mode(server: &StressServer, path: &str, setup: Setup) -> Opt
 /// Task 2.4: one stub behavior per failure mode.
 #[tokio::test]
 async fn slow_responses_are_latency() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let setup = Setup::new(breakpoint(10.0, 2.0, 0)).slos(&["p95<100ms"]);
     let mode = first_step_mode(&server, "/load?above=0&slow=300", setup).await;
@@ -239,6 +243,7 @@ async fn slow_responses_are_latency() {
 
 #[tokio::test]
 async fn server_errors_are_server_errors() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let setup = Setup::new(breakpoint(10.0, 2.0, 0));
     let mode = first_step_mode(&server, "/status/500", setup).await;
@@ -247,6 +252,7 @@ async fn server_errors_are_server_errors() {
 
 #[tokio::test]
 async fn client_timeouts_are_timeouts() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let mut setup = Setup::new(breakpoint(10.0, 2.0, 0));
     setup.timeout = Duration::from_millis(300);
@@ -256,6 +262,7 @@ async fn client_timeouts_are_timeouts() {
 
 #[tokio::test]
 async fn closed_connections_are_connection_failures() {
+    let _serial = common::serial().await;
     let server = StressServer::start_refusing().await;
     let setup = Setup::new(breakpoint(10.0, 2.0, 0));
     let mode = first_step_mode(&server, "/", setup).await;
@@ -266,6 +273,7 @@ async fn closed_connections_are_connection_failures() {
 /// to about half of offered while latency is up.
 #[tokio::test]
 async fn falling_behind_the_offered_rate_is_saturation() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let mut setup = Setup::new(breakpoint(10.0, 2.0, 0)).slos(&["p95<500ms"]);
     setup.max_vus = Some(4);
@@ -275,6 +283,7 @@ async fn falling_behind_the_offered_rate_is_saturation() {
 
 #[tokio::test]
 async fn throttling_breaks_only_when_it_counts_as_failure() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let mut setup = Setup::new(breakpoint(10.0, 2.0, 0));
     setup.throttling_fails = true;
@@ -287,6 +296,7 @@ async fn throttling_breaks_only_when_it_counts_as_failure() {
 /// on to the cap.
 #[tokio::test]
 async fn a_rate_limiter_is_reported_as_rate_limited() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let ws = workspace(&server.origin(), "max_rps = 40\n");
     get(ws.path(), "api/t.rman.yaml", "/throttle?above=15&share=30");
@@ -310,6 +320,7 @@ async fn a_rate_limiter_is_reported_as_rate_limited() {
 /// side of it, so a slow runner's bursts or stalls do not move the verdict.
 #[tokio::test]
 async fn the_endpoint_that_degrades_first_is_named() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let ws = workspace(&server.origin(), "");
     get(ws.path(), "api/1-list.rman.yaml", "/load/list?above=1000");
@@ -352,6 +363,7 @@ async fn the_endpoint_that_degrades_first_is_named() {
 /// and one noisy tick in a 6 s window left no room on a loaded runner.
 #[tokio::test]
 async fn spike_recovery_is_measured_from_the_end_of_the_spike() {
+    let _serial = common::serial().await;
     const BASELINE_SECS: u64 = 10;
     const SPIKE_SECS: u64 = 2;
     let server = StressServer::start().await;
@@ -419,6 +431,7 @@ async fn spike_recovery_is_measured_from_the_end_of_the_spike() {
 /// against a stub whose latency grows by 15 ms every second.
 #[tokio::test]
 async fn an_accelerated_soak_against_a_leaking_stub_reports_latency_drift() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let ws = workspace(&server.origin(), "");
     get(ws.path(), "api/leak.rman.yaml", "/leak?base=20&per_sec=15");
@@ -457,6 +470,7 @@ async fn an_accelerated_soak_against_a_leaking_stub_reports_latency_drift() {
 /// 20 req/s: the step is client-saturated, never `breaking_rps`.
 #[tokio::test]
 async fn a_client_that_cannot_keep_up_never_sets_the_breaking_rate() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let ws = workspace(&server.origin(), "");
     get(ws.path(), "api/ok.rman.yaml", "/");
@@ -480,6 +494,7 @@ async fn a_client_that_cannot_keep_up_never_sets_the_breaking_rate() {
 /// `--production` repeating it, the run starts, sending valid requests.
 #[tokio::test]
 async fn production_with_both_opt_ins_runs() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let ws = workspace(
         &server.origin(),
@@ -508,6 +523,7 @@ async fn production_with_both_opt_ins_runs() {
 /// load (a usage error, exit 2); the cap is raised only in the table.
 #[tokio::test]
 async fn max_vus_above_the_cap_is_refused_before_any_load() {
+    let _serial = common::serial().await;
     let server = StressServer::start().await;
     let ws = workspace(&server.origin(), "max_vus = 8\n");
     get(ws.path(), "api/load.rman.yaml", "/load?above=1000");
