@@ -205,17 +205,22 @@ fn argument_counts_and_literals_are_checked() {
 fn abi_paths_cannot_escape_the_workspace() {
     let dir = workspace("http://127.0.0.1:1");
     let root = dir.path();
-    let outside = root.parent().unwrap().join("outside-abi.json");
-    fs::copy(fixture("Vault.abi.json"), &outside).unwrap();
-    write(
-        root,
-        "e.rman.yaml",
-        &call("../../outside-abi.json", "balance", "[]"),
+    // Named after this test's workspace: parallel test processes share the
+    // parent directory.
+    let name = format!(
+        "outside-{}.json",
+        root.file_name().unwrap().to_string_lossy()
     );
+    let outside = root.parent().unwrap().join(&name);
+    fs::copy(fixture("Vault.abi.json"), &outside).unwrap();
+    let escaping = format!("../../{name}");
+    write(root, "e.rman.yaml", &call(&escaping, "balance", "[]"));
     let err = checked(root, "e.rman.yaml").unwrap_err();
     fs::remove_file(outside).unwrap();
     assert!(
-        err.ends_with("abi path '../../outside-abi.json' resolves outside the workspace"),
+        err.ends_with(&format!(
+            "abi path '{escaping}' resolves outside the workspace"
+        )),
         "{err}"
     );
     write(

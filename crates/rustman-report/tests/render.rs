@@ -156,6 +156,7 @@ fn exploration() -> ExplorationReport {
             .map(|(s, state)| StatusCell {
                 status: (*s).into(),
                 state: *state,
+                class: None,
             })
             .collect(),
     };
@@ -221,6 +222,8 @@ fn exploration() -> ExplorationReport {
             operation("DELETE /users/{id}", Some("users")),
         ],
         dependencies: Vec::new(),
+        subject: None,
+        evm: None,
     }
 }
 

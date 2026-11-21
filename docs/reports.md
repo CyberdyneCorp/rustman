@@ -9,7 +9,7 @@ A report has a top-level `schema` (`rustman.report/v1`) and a `kind`:
 | Kind | Written by | Content |
 |------|------------|---------|
 | `run` | `rustman run --reporter json`, `rustman send` | Every request with its file, redacted exchange, timings, assertion results and captures; see [the CLI reference](cli.md#rustman-run) |
-| `exploration` | `rustman explore run` (always, as `.rustman/explorations/<id>/report.json`) | The seed, safety settings, probe totals by outcome, the coverage matrix, the findings with evidence and reproduction, and the resources left behind; see [Exploration](exploration.md#findings-and-the-report) |
+| `exploration` | `rustman explore run` (always, as `.rustman/explorations/<id>/report.json`) | The seed, safety settings, probe totals by outcome, the coverage matrix, the findings with evidence and reproduction, and the resources left behind; see [Exploration](exploration.md#findings-and-the-report). `rustman evm probe` writes one with `subject: evm-rpc`: its coverage matrix is methods × providers, and an `evm` section holds each provider's support, archive state, latency, subscriptions, rate limit, drift, blocks and trace; see [Probing EVM providers](evm-probe.md#reports-and-exit-codes) |
 | `contract` | `rustman contract diff --report json` | What a contract command checked, as one list of items, with a `mode` (`diff`, `pact-verify` or `conformance`); see [Contract reports](#contract-reports) |
 | `bench` | `rustman bench --report json=<file>` | The load profile, the target, latency and error statistics per request file and overall, a per-second time series, the threshold results and error samples; see [Bench reports](#bench-reports) |
 

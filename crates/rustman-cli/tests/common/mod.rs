@@ -3,6 +3,8 @@
 //! drives the `rustman` binary. Nothing here leaves the loopback interface.
 #![allow(dead_code)]
 
+pub mod viz_stub;
+
 use std::fs;
 use std::path::Path;
 

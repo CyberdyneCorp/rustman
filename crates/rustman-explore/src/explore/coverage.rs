@@ -50,6 +50,7 @@ pub fn coverage(model: &ApiModel, plan: &Plan, outcomes: &[&Outcome]) -> Coverag
                 StatusCell {
                     status: r.status.clone(),
                     state: if hit { Cell::Observed } else { unseen },
+                    class: None,
                 }
             })
             .collect();

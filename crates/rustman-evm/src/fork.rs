@@ -540,7 +540,12 @@ mod tests {
     #[tokio::test]
     async fn a_node_that_exits_on_its_own_is_seen() {
         let dir = tempfile::tempdir().unwrap();
-        let program = fake_anvil(dir.path(), "echo 'Listening on 127.0.0.1:41235'; exit 7");
+        // It stays up a moment after the line: one that exits at once can
+        // be seen exiting before its line is read (a start failure).
+        let program = fake_anvil(
+            dir.path(),
+            "echo 'Listening on 127.0.0.1:41235'; sleep 2; exit 7",
+        );
         let mut options = AnvilOptions::new(program);
         options.port = 0;
         options.ready_timeout = Duration::from_secs(20);

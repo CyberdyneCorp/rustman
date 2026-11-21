@@ -29,7 +29,9 @@ impl ViewKind {
             View::ResponseInspector => Some(Self::Inspector),
             // No bench, stress or monitor trend view yet: the companion
             // does not advertise them, and producers fall back.
-            View::Bench | View::Stress | View::MonitorTrend | View::Unknown => None,
+            View::Bench | View::Stress | View::MonitorTrend | View::ChainProbe | View::Unknown => {
+                None
+            }
         }
     }
 
@@ -127,7 +129,13 @@ mod tests {
     /// stress view landed in the protocol after the companion.
     #[test]
     fn views_without_a_dashboard_have_no_layout() {
-        for view in [View::Bench, View::Stress, View::MonitorTrend, View::Unknown] {
+        for view in [
+            View::Bench,
+            View::Stress,
+            View::MonitorTrend,
+            View::ChainProbe,
+            View::Unknown,
+        ] {
             assert_eq!(ViewKind::from_view(view), None, "{view:?}");
         }
     }

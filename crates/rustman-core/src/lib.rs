@@ -32,6 +32,7 @@ pub mod stress;
 pub mod text;
 pub mod trace;
 pub mod trust;
+pub mod url_secrets;
 pub mod vars;
 pub mod workspace;
 

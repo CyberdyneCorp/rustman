@@ -70,6 +70,15 @@ Monitor trends (`rustman monitor status --viz` and `v` in the TUI's Monitors vie
 ```
 
 
+Chain probes (`rustman evm probe --viz`, see [Probing EVM providers](evm-probe.md)) open the `chain_probe` view and send `exploration_started`, then per provider one `probe_latency` per method (the provider × method latency heatmap), one `chain_block` per recent block (block-time and gas plots) and, for a traced `--call`, one `call_trace` node graph; then the `finding`s, `exploration_finished` and `close`. Endpoints are redacted. A companion whose `hello_ack` lacks `chain_probe` gets nothing, and the probe warns and suggests `--report html=…`:
+
+```json
+{"type":"open_view","view":"chain_probe","title":"rustman evm probe"}
+{"type":"probe_latency","provider":"https://rpc-a.example/","method":"eth_call","samples":3,"p50_ms":12.5,"p95_ms":30.0,"max_ms":31.2}
+{"type":"chain_block","provider":"https://rpc-a.example/","number":20000000,"timestamp":1717000000,"gas_used":15000000,"gas_limit":30000000}
+{"type":"call_trace","provider":"https://rpc-a.example/","nodes":[{"id":0,"kind":"CALL","to":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48","gas_used":30000},{"id":1,"parent":0,"kind":"DELEGATECALL","error":"execution reverted"}]}
+```
+
 A response for the inspector, inline or by reference. Header values and bodies are redacted by the producer before they are written (secrets appear as `«redacted:name»`); the companion has no reveal function:
 
 ```json

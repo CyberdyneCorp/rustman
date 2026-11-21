@@ -108,7 +108,7 @@
         "properties": {
           "view": {
             "type": "string",
-            "description": "run_dashboard, exploration_dashboard, api_graph, response_inspector, bench, stress, monitor_trend"
+            "description": "run_dashboard, exploration_dashboard, api_graph, response_inspector, bench, stress, monitor_trend, chain_probe"
           },
           "title": {
             "type": "string"
@@ -828,6 +828,144 @@
                 "skipped": {
                   "type": "integer",
                   "minimum": 0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "probe_latency"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "provider",
+          "method",
+          "samples",
+          "p50_ms",
+          "p95_ms",
+          "max_ms"
+        ],
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "samples": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "p50_ms": {
+            "type": "number",
+            "minimum": 0
+          },
+          "p95_ms": {
+            "type": "number",
+            "minimum": 0
+          },
+          "max_ms": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "chain_block"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "provider",
+          "number",
+          "timestamp",
+          "gas_used",
+          "gas_limit"
+        ],
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "timestamp": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "gas_used": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "gas_limit": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "call_trace"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "provider",
+          "nodes"
+        ],
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "kind"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "parent": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "to": {
+                  "type": "string"
+                },
+                "gas_used": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "error": {
+                  "type": "string"
                 }
               }
             }

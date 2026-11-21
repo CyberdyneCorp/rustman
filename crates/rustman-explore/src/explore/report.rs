@@ -70,6 +70,8 @@ pub fn build(state: &State, plan: &Plan, model: &ApiModel, entries: &[Entry]) ->
         cleanup,
         operations: operations(model),
         dependencies: dependencies(state),
+        subject: None,
+        evm: None,
     }
 }
 

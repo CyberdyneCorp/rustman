@@ -27,6 +27,7 @@ pub mod explorer;
 pub mod fork;
 pub mod identity;
 pub mod load;
+pub mod probe;
 pub mod quantity;
 pub mod query;
 #[cfg(any(test, feature = "test-fixtures"))]

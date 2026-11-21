@@ -322,6 +322,39 @@ never\:"Never color"))' \
 '--help[Print help]' \
 && ret=0
 ;;
+(probe)
+_arguments "${_arguments_options[@]}" : \
+'--env=[Environment (default\: RUSTMAN_ENV, then default_environment)]:NAME:_default' \
+'--workspace=[Workspace directory (default\: search from the current directory upwards)]:DIR:_files' \
+'--methods=[Methods to probe\: standard, all, or a comma-separated list]:LIST:_default' \
+'--block=[Block of the archive check (default 1000000, at most head - 10000)]:N:_default' \
+'--budget=[Requests per provider at most]:N:_default' \
+'*--report=[Render the report as json, junit, markdown, html or sarif, written to a file or stdout, as in html=probe.html (repeatable)]:FORMAT[=PATH]:_default' \
+'--max-rate=[Highest rate tried by --rate-discovery, in req/s]:N:_default' \
+'--max-drift=[Head drift (in blocks) above which a provider is a medium finding]:BLOCKS:_default' \
+'--drift-interval=[Time between the 5 head samples of the drift check (default 2.5s\: 10 s in all)]:DURATION:_default' \
+'--call=[An eth_call compared across providers and traced\: <address>\:<calldata>]:ADDRESS:CALLDATA:_default' \
+'--address=[Address of the balance and state checks (default\: the zero address)]:ADDRESS:_default' \
+'--fail-on=[Exit 1 when a finding is at or above this severity\: critical, high, medium, low or info]:SEVERITY:_default' \
+'--rate=[Requests per second per provider (default\: \[safety\].rate, 10)]:N:_default' \
+'--concurrency=[Requests in flight per provider (default\: \[safety\].concurrency, 4)]:N:_default' \
+'*--production=[Confirm a production host (repeatable)]:HOST:_default' \
+'*--var=[Set a variable, above every other source (repeatable)\: --var k=v]:K=V:_default' \
+'--timeout=[Total timeout per node call\: 500ms, 5s, 2m, or milliseconds]:DURATION:_default' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'--viz[Show the results in the graphical viz companion (rustman-viz)]' \
+'--rate-discovery[Search for each provider'\''s rate limit with eth_blockNumber at 5, 10, 20 and 40 req/s]' \
+'-k[Do not verify TLS certificates]' \
+'--insecure[Do not verify TLS certificates]' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'*::providers -- Providers\: URLs (http, https, ws, wss), {{variables}}, or names of environments whose {{rpc}} is probed:_default' \
+&& ret=0
+;;
 (help)
 _arguments "${_arguments_options[@]}" : \
 ":: :_rustman__subcmd__evm__subcmd__help_commands" \
@@ -359,6 +392,10 @@ _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
 (fork)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(probe)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;

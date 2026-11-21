@@ -60,7 +60,7 @@
 <thead><tr><th>Operation</th><th>Statuses</th></tr></thead>
 <tbody>
 {% for row in c.matrix -%}
-<tr><td><code>{{ row.operation }}</code></td><td>{% for s in row.statuses %}<span class="state-{{ s.state }}">{{ s.status }} {{ s.state }}</span>{% if not loop.last %}, {% endif %}{% endfor %}</td></tr>
+<tr><td><code>{{ row.operation }}</code></td><td>{% for s in row.statuses %}<span class="state-{{ s.state }}">{{ s.status }} {{ s.class if s.class else s.state }}</span>{% if not loop.last %}, {% endif %}{% endfor %}</td></tr>
 {% endfor -%}
 </tbody>
 </table>

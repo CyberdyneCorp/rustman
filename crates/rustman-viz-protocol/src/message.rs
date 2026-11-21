@@ -30,6 +30,13 @@ pub enum Message {
     /// The trend of one monitor (add-scheduled-monitors), for the
     /// `monitor_trend` view.
     MonitorTrend(Box<MonitorTrend>),
+    /// The latency of one method on one provider (`rustman evm probe
+    /// --viz`), a cell of the latency heatmap.
+    ProbeLatency(ProbeLatency),
+    /// One recent block of one provider, for the block-time and gas plots.
+    ChainBlock(ChainBlock),
+    /// The call trace of `--call` on one provider, as a node graph.
+    CallTrace(Box<CallTrace>),
     InspectResponse(Box<InspectResponse>),
     /// A payload too large for one line, written to a file.
     BlobRef(BlobRef),
@@ -81,6 +88,9 @@ pub enum View {
     /// Uptime gauges, a latency plot and an outcome heatmap per monitor
     /// (`rustman monitor status --viz`, `v` in the TUI's Monitors view).
     MonitorTrend,
+    /// A provider × method latency heatmap, block-time and gas plots and
+    /// call-trace graphs (`rustman evm probe --viz`).
+    ChainProbe,
     /// A view added by a later minor version.
     #[serde(other)]
     Unknown,
@@ -320,6 +330,53 @@ pub struct MonitorTrend {
     pub hour_of_day: Vec<HourOutcomes>,
 }
 
+/// The latency of one method on one provider, in milliseconds.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProbeLatency {
+    /// The provider's endpoint, redacted.
+    pub provider: String,
+    pub method: String,
+    pub samples: u64,
+    pub p50_ms: f64,
+    pub p95_ms: f64,
+    pub max_ms: f64,
+}
+
+/// One block as a provider reported it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChainBlock {
+    pub provider: String,
+    pub number: u64,
+    /// Unix seconds.
+    pub timestamp: u64,
+    pub gas_used: u64,
+    pub gas_limit: u64,
+}
+
+/// A call trace as a node graph.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CallTrace {
+    pub provider: String,
+    /// Frames in depth-first order; the first is the root.
+    pub nodes: Vec<TraceNode>,
+}
+
+/// One frame of a call trace.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TraceNode {
+    pub id: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<u64>,
+    /// `CALL`, `STATICCALL`, `DELEGATECALL`, ...
+    pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub to: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gas_used: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
 /// One point of the latency plot.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LatencyPoint {
@@ -421,6 +478,9 @@ impl Message {
             Self::BenchTick(_) => "bench_tick",
             Self::BenchFinished(_) => "bench_finished",
             Self::MonitorTrend(_) => "monitor_trend",
+            Self::ProbeLatency(_) => "probe_latency",
+            Self::ChainBlock(_) => "chain_block",
+            Self::CallTrace(_) => "call_trace",
             Self::InspectResponse(_) => "inspect_response",
             Self::BlobRef(_) => "blob_ref",
             Self::Error(_) => "error",
