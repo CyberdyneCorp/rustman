@@ -347,9 +347,13 @@ async fn the_endpoint_that_degrades_first_is_named() {
 /// how late recovery comes. It checks what timing noise cannot change:
 /// recovery is never reported while the stub was still slow, and the
 /// reported point is the first one, counted from the end of the spike, of
-/// the run's own series where p95 is back within the limit.
+/// the run's own series where p95 is back within the limit. The trailing
+/// baseline is 10 s: recovery needs 3 good ticks after a 2 s slow tail,
+/// and one noisy tick in a 6 s window left no room on a loaded runner.
 #[tokio::test]
 async fn spike_recovery_is_measured_from_the_end_of_the_spike() {
+    const BASELINE_SECS: u64 = 10;
+    const SPIKE_SECS: u64 = 2;
     let server = StressServer::start().await;
     let ws = workspace(&server.origin(), "");
     let path = "/load/spike";
@@ -360,9 +364,9 @@ async fn spike_recovery_is_measured_from_the_end_of_the_spike() {
     );
     let spec = SpikeSpec {
         baseline_rps: 10.0,
-        baseline: Duration::from_secs(6),
+        baseline: Duration::from_secs(BASELINE_SECS),
         spike_factor: 5.0,
-        spike_duration: Duration::from_secs(2),
+        spike_duration: Duration::from_secs(SPIKE_SECS),
     };
     let setup = Setup {
         tuning: Tuning {
@@ -378,7 +382,7 @@ async fn spike_recovery_is_measured_from_the_end_of_the_spike() {
 
     // Ground truth from the stub: not recovered before it answered its
     // last slow request (less one 1 s tick, as points are per tick).
-    let spike_end = outcome.load_started + Duration::from_secs(8);
+    let spike_end = outcome.load_started + Duration::from_secs(BASELINE_SECS + SPIKE_SECS);
     let last_slow_answer = server.slow_until(path).unwrap() + Duration::from_millis(150);
     let expected = last_slow_answer.saturating_duration_since(spike_end);
     assert!(expected >= Duration::from_secs(2), "{expected:?}");
@@ -387,7 +391,7 @@ async fn spike_recovery_is_measured_from_the_end_of_the_spike() {
         "recovered after {recovered:?}, before the stub did ({expected:?})"
     );
 
-    // The reported point, counted from the end of the spike (tick 8), is
+    // The reported point, counted from the end of the spike, is
     // where the series is back within the limit, and the tick before it
     // is not.
     use rustman_bench::stress::spike::{RECOVERY_FACTOR, RECOVERY_SLACK_MS};
@@ -396,7 +400,7 @@ async fn spike_recovery_is_measured_from_the_end_of_the_spike() {
     let fine = |s: &rustman_report::bench::BenchSecond| {
         s.p95_ms <= limit && s.errors == 0 && s.requests > 0
     };
-    let at = 8 + usize::try_from(recovered.as_secs()).unwrap();
+    let at = usize::try_from(BASELINE_SECS + SPIKE_SECS + recovered.as_secs()).unwrap();
     assert!(
         fine(&outcome.series[at]),
         "tick {at}: {:?} (limit {limit}ms)",
