@@ -1,0 +1,16 @@
+version: 1
+kind: kafka
+name: Order created
+operation: produce
+brokers: ['127.0.0.1:9092']
+topic: orders
+partition: 0
+messages:
+  - key: order-1001
+    value: {id: 1001, pet_id: 42, quantity: 1, status: placed}
+    headers:
+      - {name: source, value: rustman}
+  - key: order-1002
+    value: {id: 1002, pet_id: 7, quantity: 2, status: placed}
+assertions:
+  - json: {path: '$.produced[0].partition', equals: 0}

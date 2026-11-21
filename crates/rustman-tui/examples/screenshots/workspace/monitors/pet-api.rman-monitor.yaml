@@ -1,0 +1,11 @@
+version: 1
+name: pet-api
+targets: [pets/get-pet.rman.yaml, pets/list-pets.rman.yaml]
+environment: local
+schedule: {every: 5m}
+alerts:
+  rules:
+    - consecutive_failures: 3
+    - latency_p95_gt: 800
+  notify:
+    - desktop: true
