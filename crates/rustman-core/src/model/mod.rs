@@ -12,6 +12,7 @@ pub mod http;
 pub mod jsonrpc;
 pub mod kind;
 pub mod mcp;
+pub mod messaging;
 pub mod signed_auth;
 pub mod snapshot;
 pub mod sse;
@@ -45,6 +46,13 @@ pub use kind::{
     BUILTIN_KINDS, COMMON_FIELDS, KindLoader, KindRegistry, OpaqueRequest, REQUEST_VERSION, Request,
 };
 pub use mcp::{McpOperation, McpRequest};
+pub use messaging::{
+    AckMode, Acks, AsyncApiRef, BrokerAuth, Brokers, KafkaProtocol, KafkaSecurity,
+    MESSAGING_DEFAULT_DURATION_MS, MESSAGING_DEFAULT_MAX_MESSAGE_BYTES,
+    MESSAGING_DEFAULT_MAX_MESSAGES, Message, MessageHeader, MessageProperties, MessagingKind,
+    MessagingLimits, MessagingRequest, MqttVersion, NAMED_QUEUE_ERROR, OPERATION_ERROR, Operation,
+    Payload, Qos, SaslMechanism, SchemaRegistry, SchemaVersion, Start, StartOffset,
+};
 pub use signed_auth::{AwsCredentials, AwsSigV4, Jwt, JwtAlgorithm};
 pub use snapshot::{
     ComparedPart, DEFAULT_SNAPSHOT_NAME, Preset, Replacement, SnapshotAssertion, SnapshotHeaders,

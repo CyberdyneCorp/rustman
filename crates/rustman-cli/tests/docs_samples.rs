@@ -176,7 +176,7 @@ fn unknown_kinds_get_generic_pages() {
     write(
         ws.path(),
         "events/orders.rman.yaml",
-        "version: 1\nkind: kafka\nname: Orders\ntopic: orders\nbrokers: localhost:9092\n",
+        "version: 1\nkind: nats\nname: Orders\ntopic: orders\nbrokers: localhost:9092\n",
     );
     let output = rustman(ws.path())
         .args(["docs", "build", "--format", "both"])
@@ -184,7 +184,7 @@ fn unknown_kinds_get_generic_pages() {
         .unwrap();
     assert_eq!(output.status.code(), Some(0), "{}", stderr(&output));
     let md = fs::read_to_string(ws.path().join("site/endpoints/events-orders.md")).unwrap();
-    assert!(md.contains("Kind: `kafka`"), "{md}");
+    assert!(md.contains("Kind: `nats`"), "{md}");
     assert!(md.contains("| `topic` | `orders` |"), "{md}");
     assert!(
         ws.path()

@@ -91,6 +91,7 @@ fn load(
             | Request::Grpc(_)
             | Request::Ws(_)
             | Request::Sse(_)
+            | Request::Messaging(_)
             | Request::Opaque(_),
         ) => None,
         Err(e) => {

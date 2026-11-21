@@ -1,7 +1,8 @@
 //! `rustman import`: collections from other tools (Postman, Insomnia,
 //! Bruno, HAR, `.http` files), `rustman import curl` for a single curl
-//! command, and `rustman import openapi` for a collection generated from
-//! an OpenAPI document.
+//! command, `rustman import openapi` for a collection generated from
+//! an OpenAPI document, and `rustman import asyncapi` for messaging
+//! requests generated from an AsyncAPI document.
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -66,6 +67,25 @@ enum ImportCommand {
     Http(SourceArgs),
     /// Create a collection from an OpenAPI 3.0 or 3.1 document (a file or URL)
     Openapi(OpenApiArgs),
+    /// Create Kafka, MQTT and AMQP requests from an AsyncAPI 2.6 or 3.0 document
+    Asyncapi(AsyncApiArgs),
+}
+
+#[derive(Debug, Args)]
+struct AsyncApiArgs {
+    /// The document: a file path or an http(s) URL, in JSON or YAML
+    #[arg(value_name = "SOURCE")]
+    source: String,
+    /// Write the requests to this folder (default: the API title in
+    /// kebab-case, in the workspace root); existing files are kept
+    #[arg(long, value_name = "DIR")]
+    into: Option<PathBuf>,
+    /// Fetch $refs to other http(s) documents instead of refusing them
+    #[arg(long)]
+    allow_remote_refs: bool,
+    /// Workspace directory (default: search from the current directory upwards)
+    #[arg(long, value_name = "DIR")]
+    workspace: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -209,6 +229,7 @@ pub fn run(args: &ImportArgs) -> Result<u8, CliError> {
     let (format, a, filter) = match command {
         ImportCommand::Curl(a) => return curl(a).map(|()| exit::SUCCESS),
         ImportCommand::Openapi(a) => return openapi(a).map(|()| exit::SUCCESS),
+        ImportCommand::Asyncapi(a) => return asyncapi(a).map(|()| exit::SUCCESS),
         ImportCommand::Har(h) => (Some(Format::Har), &h.source, h.filter()),
         ImportCommand::Auto(a) => (None, a, all()),
         ImportCommand::Postman(a) => (Some(Format::Postman), a, all()),
@@ -427,6 +448,36 @@ fn openapi(args: &OpenApiArgs) -> Result<(), CliError> {
                 "environment '{name}' already exists and was not changed (use --sync to update it)"
             )
         })
+        .collect();
+    print_warnings(&kept);
+    Ok(())
+}
+
+fn asyncapi(args: &AsyncApiArgs) -> Result<(), CliError> {
+    let root = rustman_core::discovery::find_root(&current_dir()?, args.workspace.as_deref())?;
+    let options = rustman_messaging::asyncapi::LoadOptions {
+        allow_remote_refs: args.allow_remote_refs,
+        ..Default::default()
+    };
+    let document =
+        exec::runtime()?.block_on(rustman_messaging::asyncapi::load(&args.source, &options))?;
+    let plan = rustman_messaging::asyncapi::plan(&document);
+    print_warnings(&plan.warnings);
+    let dir = match &args.into {
+        Some(dir) => current_dir()?.join(dir),
+        None => root.join(&plan.collection),
+    };
+    let outcome = rustman_messaging::asyncapi::write(&plan, &root, &dir)?;
+    let requests = plan.requests();
+    println!(
+        "imported {requests} operation{} into {}",
+        if requests == 1 { "" } else { "s" },
+        dir.strip_prefix(current_dir()?).unwrap_or(&dir).display()
+    );
+    let kept: Vec<String> = outcome
+        .kept
+        .iter()
+        .map(|path| format!("{path} already exists and was not changed"))
         .collect();
     print_warnings(&kept);
     Ok(())

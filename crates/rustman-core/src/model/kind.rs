@@ -15,6 +15,7 @@ use super::grpc::GrpcRequest;
 use super::http::HttpRequest;
 use super::jsonrpc::JsonrpcRequest;
 use super::mcp::McpRequest;
+use super::messaging::MessagingRequest;
 use super::sse::SseRequest;
 use super::ws::WsRequest;
 use crate::error::{LoadError, Position};
@@ -50,6 +51,8 @@ pub enum Request {
     Grpc(Box<GrpcRequest>),
     Ws(Box<WsRequest>),
     Sse(Box<SseRequest>),
+    /// `kind: kafka`, `kind: mqtt` or `kind: amqp`.
+    Messaging(Box<MessagingRequest>),
     /// A registered kind this build can list but not execute.
     Opaque(OpaqueRequest),
 }
@@ -64,6 +67,7 @@ impl Request {
             Self::Grpc(r) => &r.kind,
             Self::Ws(r) => &r.kind,
             Self::Sse(r) => &r.kind,
+            Self::Messaging(r) => &r.kind,
             Self::Opaque(r) => &r.kind,
         }
     }
@@ -77,6 +81,7 @@ impl Request {
             Self::Grpc(r) => &r.name,
             Self::Ws(r) => &r.name,
             Self::Sse(r) => &r.name,
+            Self::Messaging(r) => &r.name,
             Self::Opaque(r) => &r.name,
         }
     }
@@ -90,6 +95,7 @@ impl Request {
             Self::Grpc(r) => r.description.as_deref(),
             Self::Ws(r) => r.description.as_deref(),
             Self::Sse(r) => r.description.as_deref(),
+            Self::Messaging(r) => r.description.as_deref(),
             Self::Opaque(r) => r.description.as_deref(),
         }
     }
@@ -103,6 +109,7 @@ impl Request {
             Self::Grpc(r) => &r.tags,
             Self::Ws(r) => &r.tags,
             Self::Sse(r) => &r.tags,
+            Self::Messaging(r) => &r.tags,
             Self::Opaque(r) => &r.tags,
         };
         tags.as_deref().unwrap_or_default()
@@ -118,6 +125,7 @@ impl Request {
             Self::Grpc(r) => r.docs.as_ref(),
             Self::Ws(r) => r.docs.as_ref(),
             Self::Sse(r) => r.docs.as_ref(),
+            Self::Messaging(r) => r.docs.as_ref(),
             Self::Opaque(r) => r.docs.as_ref(),
         }
     }
@@ -133,6 +141,7 @@ impl Request {
             Self::Grpc(r) => r.variables.as_ref(),
             Self::Ws(r) => r.variables.as_ref(),
             Self::Sse(r) => r.variables.as_ref(),
+            Self::Messaging(r) => r.variables.as_ref(),
             Self::Opaque(r) => r.variables.as_ref(),
         }
     }
@@ -147,6 +156,7 @@ impl Request {
             Self::Grpc(r) => &r.kind,
             Self::Ws(r) => &r.kind,
             Self::Sse(r) => &r.kind,
+            Self::Messaging(r) => &r.kind,
             Self::Opaque(r) => &r.kind,
         };
         Some(format!(
@@ -207,7 +217,7 @@ pub struct KindRegistry {
 
 impl Default for KindRegistry {
     /// The built-in kinds: `http`, `graphql`, `jsonrpc`, `grpc`, `mcp`,
-    /// `ws` and `sse`.
+    /// `ws`, `sse`, `kafka`, `mqtt` and `amqp`.
     fn default() -> Self {
         Self {
             kinds: vec![
@@ -218,6 +228,9 @@ impl Default for KindRegistry {
                 ("mcp", load_mcp),
                 ("ws", load_ws),
                 ("sse", load_sse),
+                ("kafka", load_messaging),
+                ("mqtt", load_messaging),
+                ("amqp", load_messaging),
             ],
             fallback: None,
         }
@@ -365,6 +378,11 @@ fn load_ws(file: &Path, text: &str) -> Result<Request, LoadError> {
 fn load_sse(file: &Path, text: &str) -> Result<Request, LoadError> {
     let request = SseRequest::parse(file, text)?;
     Ok(Request::Sse(Box::new(request)))
+}
+
+fn load_messaging(file: &Path, text: &str) -> Result<Request, LoadError> {
+    let request = MessagingRequest::parse(file, text)?;
+    Ok(Request::Messaging(Box::new(request)))
 }
 
 #[derive(Deserialize)]

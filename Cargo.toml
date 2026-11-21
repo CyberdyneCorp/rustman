@@ -39,6 +39,7 @@ rustman-secrets = { path = "crates/rustman-secrets", version = "0.1.0" }
 rustman-plugin = { path = "crates/rustman-plugin", version = "0.1.0" }
 rustman-plugin-sdk = { path = "crates/rustman-plugin-sdk", version = "1.0.0" }
 rustman-proxy = { path = "crates/rustman-proxy", version = "0.1.0" }
+rustman-messaging = { path = "crates/rustman-messaging", version = "0.1.0" }
 
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
@@ -332,6 +333,20 @@ wit-bindgen = { version = "0.57.1", default-features = false, features = ["macro
 dlmalloc = { version = "0.2", default-features = false, features = ["global"] }
 # Plugin manifest versions (already in the tree via wasmtime).
 semver = { version = "1.0.27", default-features = false, features = ["std"] }
+
+# Messaging client (add-messaging-client design D1-D4): pure-Rust Kafka,
+# MQTT and AMQP 0-9-1 clients over rustls with the ring provider, and Avro
+# for Schema Registry payloads. rskafka keeps only the pure-Rust gzip and
+# snappy codecs (lz4 and zstd build C libraries); rdkafka (librdkafka),
+# paho-mqtt (Paho C) and amqprs are rejected. Only rumqttc's MQTT 3.1.1/5
+# codecs are used: its rustls features pin rustls-webpki 0.102
+# (RUSTSEC-2026-0049, -0098, -0099, -0104, -0382) and the unmaintained
+# rustls-pemfile, so the client runs over its own TCP, rustls and WebSocket
+# link (tokio-rustls, tokio-tungstenite).
+rskafka = { version = "0.6.0", default-features = false, features = ["transport-tls", "compression-gzip", "compression-snappy"] }
+rumqttc = { version = "0.25.1", default-features = false }
+lapin = { version = "4.12.3", default-features = false, features = ["rustls--ring", "rustls-native-certs", "tokio"] }
+apache-avro = { version = "0.23.0", default-features = false }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

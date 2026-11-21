@@ -1,0 +1,47 @@
+asyncapi: '2.6.0'
+info:
+  title: Legacy Shop
+  version: '1.0'
+servers:
+  rabbit:
+    url: amqp://rabbit.shop.example:5672
+    protocol: amqp
+channels:
+  order.created:
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: orders
+          type: topic
+    publish:
+      operationId: publishOrder
+      message:
+        $ref: '#/components/messages/OrderCreated'
+    subscribe:
+      operationId: onOrder
+      message:
+        oneOf:
+          - $ref: '#/components/messages/OrderCreated'
+          - name: OrderCancelled
+            payload:
+              type: object
+              properties:
+                reason:
+                  type: string
+  payments:
+    subscribe:
+      message:
+        payload:
+          type: string
+components:
+  messages:
+    OrderCreated:
+      payload:
+        type: object
+        required: [id]
+        properties:
+          id:
+            type: integer
+          note:
+            type: string

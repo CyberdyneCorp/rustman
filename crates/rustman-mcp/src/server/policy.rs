@@ -45,7 +45,9 @@ pub fn http_url(url: &str) -> String {
 /// The origins agents may reach: `[agent].allowed_hosts`, or else every
 /// `http(s)` origin among the active environment's variable values. A
 /// `grpc://` or `grpcs://` value counts as the `http` or `https` origin it
-/// is reached over, and so does a `ws://` or `wss://` value.
+/// is reached over, and so do `ws://`, `wss://` and broker URLs
+/// (`mqtt://`, `mqtts://`, `tcp://`, `ssl://`, `amqp://`, `amqps://`), as
+/// the messaging client parses them.
 pub fn allowlist(agent: &AgentSettings, environment: Option<&Environment>) -> Vec<Origin> {
     if !agent.allowed_hosts.is_empty() {
         return agent.allowed_hosts.clone();
@@ -56,7 +58,8 @@ pub fn allowlist(agent: &AgentSettings, environment: Option<&Environment>) -> Ve
         let VarValue::String(text) = value else {
             continue;
         };
-        if let Ok(origin) = Origin::of(&http_url(&http_form(text)))
+        if let Some(url) = http_form(text)
+            && let Ok(origin) = Origin::of(&http_url(&url))
             && !origins.contains(&origin)
         {
             origins.push(origin);
@@ -65,15 +68,30 @@ pub fn allowlist(agent: &AgentSettings, environment: Option<&Environment>) -> Ve
     origins
 }
 
-/// `text` with a `grpc` or `grpcs` scheme read as `http` or `https`.
-fn http_form(text: &str) -> String {
-    if let Some(rest) = text.strip_prefix("grpcs://") {
-        format!("https://{rest}")
+/// `text` with a `grpc` or `grpcs` scheme read as `http` or `https`, and a
+/// broker URL (`mqtt`, `mqtts`, `tcp`, `ssl`, `ws`, `wss`, `amqp`,
+/// `amqps`) as the origin it is checked as; `None` for a broker URL the
+/// messaging client would refuse, so it adds no origin.
+fn http_form(text: &str) -> Option<String> {
+    if let Some(url) = rustman_messaging::safety::http_url(text) {
+        Some(url)
+    } else if is_broker_url(text) {
+        None
+    } else if let Some(rest) = text.strip_prefix("grpcs://") {
+        Some(format!("https://{rest}"))
     } else if let Some(rest) = text.strip_prefix("grpc://") {
-        format!("http://{rest}")
+        Some(format!("http://{rest}"))
     } else {
-        text.to_owned()
+        Some(text.to_owned())
     }
+}
+
+fn is_broker_url(text: &str) -> bool {
+    let scheme = text.split_once("://").map(|(s, _)| s.to_ascii_lowercase());
+    matches!(
+        scheme.as_deref(),
+        Some("mqtt" | "mqtts" | "tcp" | "ssl" | "ws" | "wss" | "amqp" | "amqps")
+    )
 }
 
 /// The limits of a session: the `[safety]` rate and concurrency, shared by
@@ -252,6 +270,29 @@ mod tests {
         assert_eq!(hosts.len(), 1);
         assert_eq!(hosts[0].to_string(), "http://localhost:9000");
         assert!(allowlist(&AgentSettings::default(), None).is_empty());
+    }
+
+    #[test]
+    fn broker_values_count_as_the_origin_the_client_dials() {
+        // Regression: `ws://evil.example\@allowed.example/mqtt` added
+        // allowed.example, though the client would dial evil.example.
+        let local = env(
+            "local",
+            &[
+                ("ws", "ws://evil.example\\@allowed.example/mqtt"),
+                ("tcp", "tcp://app:pw@broker.example"),
+                ("amqp", "amqp://guest:guest@Rabbit.Example./%2f"),
+            ],
+            false,
+        );
+        let hosts: Vec<String> = allowlist(&AgentSettings::default(), Some(&local))
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(
+            hosts,
+            ["http://broker.example:1883", "http://rabbit.example:5672"]
+        );
     }
 
     #[test]

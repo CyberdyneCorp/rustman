@@ -246,6 +246,7 @@ pub fn run(state: &mut State, action: ActionId) -> Vec<Effect> {
     if action == ActionId::Escape
         && state.overlay.is_none()
         && (crate::realtime::close(state)
+            || crate::messaging::stop(state)
             || jsonrpc::stop_subscription(state)
             || send::cancel(state))
     {

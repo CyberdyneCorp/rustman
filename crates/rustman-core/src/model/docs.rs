@@ -65,7 +65,11 @@ mod tests {
             ),
             format!("{}url: ws://x/\n", head("ws")),
             format!("{}url: http://x/\n", head("sse")),
-            format!("{}topic: t\n", head("kafka")),
+            format!(
+                "{}operation: consume\nbrokers: k:9092\ntopic: t\n",
+                head("kafka")
+            ),
+            format!("{}subject: t\n", head("nats")),
         ];
         let registry = KindRegistry::default().with_opaque_fallback();
         for text in files {

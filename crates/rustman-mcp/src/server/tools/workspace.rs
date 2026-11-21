@@ -120,6 +120,10 @@ fn summary(request: &RequestRef<'_>) -> RequestSummary {
             Some(sse.effective_method().to_owned()),
             Some(sse.url.get().clone()),
         ),
+        Request::Messaging(m) => {
+            let brokers = m.brokers.as_ref().map(|b| b.0.join(","));
+            (None, brokers.or_else(|| m.broker.clone()))
+        }
         Request::Mcp(_) | Request::Opaque(_) => (None, None),
     };
     RequestSummary {

@@ -6,6 +6,7 @@ pub mod graphql;
 pub mod grpc;
 pub mod jsonrpc;
 pub mod mcp;
+pub mod messaging;
 pub mod placeholders;
 pub mod realtime;
 pub mod request;
@@ -18,6 +19,10 @@ pub use graphql::{ResolvedGraphql, resolve_graphql};
 pub use grpc::{GRPC_SENT_METHOD, ResolvedGrpc, ResolvedSchema, resolve_grpc};
 pub use jsonrpc::{ResolvedCall, ResolvedJsonrpc, resolve_jsonrpc};
 pub use mcp::{ResolvedMcp, resolve_mcp};
+pub use messaging::{
+    ResolvedAmqp, ResolvedAsyncApi, ResolvedMessage, ResolvedMessaging, ResolvedMqtt,
+    ResolvedPayload, ResolvedRegistry, resolve_messaging,
+};
 pub use placeholders::{PlaceholderVar, resolve_placeholders};
 pub use realtime::{
     ResolvedBinary, ResolvedFrame, ResolvedRealtime, ResolvedSse, ResolvedStep, ResolvedWs,

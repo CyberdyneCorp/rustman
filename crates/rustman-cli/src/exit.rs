@@ -96,6 +96,10 @@ pub enum CliError {
     /// A docs build that cannot run, or whose output held a secret.
     #[error(transparent)]
     Docs(#[from] rustman_docs::DocsError),
+    /// An AsyncAPI document that cannot be read, is invalid, or whose
+    /// import cannot be written.
+    #[error(transparent)]
+    AsyncApi(#[from] rustman_messaging::asyncapi::AsyncApiError),
 }
 
 impl From<RequestSnippetError> for CliError {
@@ -119,6 +123,7 @@ impl CliError {
             Self::Mcp(err) => mcp_code(err),
             Self::Grpc(err) => u8::try_from(err.exit_code()).unwrap_or(REQUEST),
             Self::Docs(err) => err.exit_code(),
+            Self::AsyncApi(err) => err.exit_code(),
             Self::Curl(_)
             | Self::History(_)
             | Self::Import(_)

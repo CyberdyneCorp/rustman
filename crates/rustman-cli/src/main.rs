@@ -106,6 +106,12 @@ enum Command {
     Plugin(commands::plugin::PluginArgs),
     /// Record HTTP(S) traffic through a local proxy; manage its local CA
     Record(commands::record::RecordArgs),
+    /// Produce to and consume from Kafka topics, without consumer groups
+    Kafka(commands::messaging::KafkaArgs),
+    /// Publish and subscribe to MQTT topics
+    Mqtt(commands::messaging::MqttArgs),
+    /// Publish to and consume from AMQP 0-9-1 (RabbitMQ) exchanges and queues
+    Amqp(commands::messaging::AmqpArgs),
 }
 
 fn main() -> ExitCode {
@@ -166,6 +172,9 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
         Command::Mock(args) => commands::mock::run(&args),
         Command::Ws(args) => commands::realtime::run_ws(&args),
         Command::Sse(args) => commands::realtime::run_sse(&args),
+        Command::Kafka(args) => commands::messaging::run_kafka(&args),
+        Command::Mqtt(args) => commands::messaging::run_mqtt(&args),
+        Command::Amqp(args) => commands::messaging::run_amqp(&args),
         Command::Contract(args) => commands::contract::run(&args),
         Command::Trace(args) => commands::trace::run(&args),
         Command::Viz(args) => commands::viz::run(&args),

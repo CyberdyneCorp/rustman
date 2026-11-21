@@ -645,6 +645,10 @@ assertions:
   - latency: {ttfb_lt: 5000}
 ```
 
+## Messaging requests
+
+A `kind: kafka`, `kind: mqtt` or `kind: amqp` file is one broker operation: `operation: produce` sends `messages`, `operation: consume` reads them. A missing or other `operation` fails to load with `messaging: operation must be produce or consume`. [messaging.md](messaging.md) describes every field, message payloads, the Kafka client, security and the Schema Registry.
+
 ## Collections
 
 Every folder under the workspace root is a collection, except `environments/`, folders whose name starts with `.` or `_` (such as `.rustman/`, `__snapshots__/` or `_removed/`), and folders with no request file at any depth (such as `mocks/`). Symlinked folders are not followed.
@@ -689,7 +693,7 @@ Paths containing `{{variables}}` are checked after the variables are resolved, b
 Load errors name the file and line, and Rustman reports every broken file at once:
 
 ```text
-legacy/soap.rman.yaml:2: unknown request kind 'soap' (expected one of: http, graphql, jsonrpc, grpc, mcp, ws, sse)
+legacy/soap.rman.yaml:2: unknown request kind 'soap' (expected one of: http, graphql, jsonrpc, grpc, mcp, ws, sse, kafka, mqtt, amqp)
 users/list.rman.yaml:5: unknown field `header`, expected one of version, kind, name, description, tags, docs, method, url, query, headers, body, auth, settings, transform, variables, assertions, captures
 ```
 

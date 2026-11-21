@@ -1,0 +1,8 @@
+Reading:
+  type: object
+  required: [celsius]
+  properties:
+    celsius:
+      type: number
+    room:
+      type: string

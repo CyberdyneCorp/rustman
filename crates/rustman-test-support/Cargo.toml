@@ -46,8 +46,14 @@ prost = { workspace = true, optional = true }
 prost-types = { workspace = true, optional = true }
 protox = { workspace = true, optional = true }
 tokio-stream = { workspace = true, optional = true, features = ["net"] }
+# The in-process MQTT broker (add-messaging-client), over the MQTT codec
+# and link of rustman-messaging.
+rustman-core = { workspace = true, optional = true }
+rustman-messaging = { workspace = true, optional = true }
+rumqttc = { workspace = true, optional = true }
 
 [features]
 # The in-process OTLP collector (add-trace-propagation section 4).
 otlp = ["dep:prost"]
+mqtt = ["dep:rustman-core", "dep:rustman-messaging", "dep:rumqttc"]
 grpc = ["dep:tonic", "dep:tonic-prost", "dep:tonic-web", "dep:tower-service", "dep:tonic-reflection", "dep:tonic-health", "dep:prost", "dep:prost-types", "dep:protox", "dep:tokio-stream"]

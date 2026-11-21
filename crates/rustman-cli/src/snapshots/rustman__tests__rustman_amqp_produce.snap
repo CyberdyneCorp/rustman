@@ -1,0 +1,56 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Publish messages (a kind: amqp request, or --value flags, or the lines of a piped stdin) with publisher confirms
+
+Usage: rustman amqp produce [OPTIONS] [REQUEST]
+
+Arguments:
+  [REQUEST]
+          A request file, its id or its name; without one, the flags describe the operation
+
+Options:
+      --broker <URL>
+          The broker URL: amqp:// or amqps://
+
+      --exchange <NAME>
+          The exchange (default: the default exchange)
+
+      --routing-key <KEY>
+          The routing key
+
+      --mandatory
+          Fail when no queue is bound for the routing key
+
+      --value <TEXT>
+          A message value (repeatable); without one, each line of a piped stdin is a message
+
+  -H, --header <NAME: VALUE>
+          Add a header to every message (repeatable): --header "source: cli"
+
+      --json
+          Print one JSON object per message
+
+      --env <NAME>
+          Environment (default: RUSTMAN_ENV, then default_environment)
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --var <K=V>
+          Set a variable, above every other source (repeatable): --var k=v
+
+      --no-history
+          Do not record the operation in history
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

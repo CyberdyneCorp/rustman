@@ -206,6 +206,8 @@ impl<'a> RequestRef<'a> {
             Request::Grpc(_) => return Vec::new(),
             Request::Ws(ws) => ws.headers.as_deref(),
             Request::Sse(sse) => sse.headers.as_deref(),
+            // Brokers do not speak HTTP: no headers are inherited.
+            Request::Messaging(_) => return Vec::new(),
             Request::Mcp(_) | Request::Opaque(_) => None,
         };
         let mut merged: Vec<NameValue> = Vec::new();
@@ -226,6 +228,8 @@ impl<'a> RequestRef<'a> {
             Request::Jsonrpc(jsonrpc) => jsonrpc.auth.as_ref(),
             Request::Ws(ws) => ws.auth.as_ref(),
             Request::Sse(sse) => sse.auth.as_ref(),
+            // Broker credentials are the request's own; no HTTP auth is inherited.
+            Request::Messaging(_) => return None,
             Request::Grpc(_) | Request::Mcp(_) | Request::Opaque(_) => None,
         };
         own.or_else(|| {
@@ -419,6 +423,7 @@ fn request_path_errors(
         Request::Grpc(grpc) => grpc.file_paths(),
         Request::Ws(ws) => ws.file_paths(),
         Request::Sse(sse) => sse.file_paths(),
+        Request::Messaging(messaging) => messaging.file_paths(),
         Request::Mcp(_) | Request::Opaque(_) => return Vec::new(),
     };
     paths

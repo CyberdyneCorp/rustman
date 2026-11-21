@@ -33,12 +33,14 @@ use rustman_http::runner::{RunContext, RunOptions, Runner, Sent};
 use rustman_jsonrpc::JsonrpcRunner;
 use rustman_mcp::client::oauth::OAuthOptions;
 use rustman_mcp::client::{ConnectOptions, McpRunner};
+use rustman_messaging::MessagingRunner;
 use rustman_realtime::RealtimeRunner;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio_util::sync::CancellationToken;
 
 use crate::app::{Action, Effect, Overlay, State};
 use crate::dialogs::Confirm;
+use crate::messaging::ConsumerLink;
 use crate::realtime::LiveLink;
 use crate::response::graphql::GraphqlView;
 use crate::response::grpc::GrpcView;
@@ -83,6 +85,8 @@ pub struct SendJob {
     /// trusted opens it (auth schemes, generators, transformers,
     /// assertions and kinds); an untrusted set stays unloaded.
     pub plugins: crate::plugin_trust::Gate,
+    /// A messaging tab's consumer: where its messages go.
+    pub messaging: Option<ConsumerLink>,
 }
 
 impl fmt::Debug for SendJob {
@@ -138,6 +142,11 @@ pub fn start_with(state: &mut State, validate: bool) -> Vec<Effect> {
     }
     let (seq, cancel) = tab.start(now);
     let realtime = tab.editor.realtime_mut().map(|e| e.live.connect());
+    let messaging = tab.editor.messaging_mut().map(|e| {
+        e.selected = None;
+        let (log, running) = e.consumer.connect();
+        ConsumerLink { log, running }
+    });
     let flight = tab.in_flight.as_ref().expect("just started");
     let job = SendJob {
         tab: tab.id,
@@ -155,6 +164,7 @@ pub fn start_with(state: &mut State, validate: bool) -> Vec<Effect> {
         typed: Arc::clone(&flight.typed),
         realtime,
         plugins: state.plugin_gate.clone(),
+        messaging,
     };
     state.status.in_flight = state.tabs.in_flight();
     vec![Effect::Send(Box::new(job))]
@@ -213,6 +223,9 @@ pub fn execute(job: &SendJob) -> Action {
 
 /// A send that could not start.
 fn failed(job: &SendJob, message: String) -> Received {
+    if let Some(link) = &job.messaging {
+        link.running.cancel();
+    }
     let (id, file) = names(job.path.as_deref());
     let record = RequestRecord::new(id, job.request.name().to_owned(), file);
     Received::without_body(record.errored(message))
@@ -421,6 +434,12 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         commands: Mutex::new(job.realtime.as_ref().and_then(LiveLink::take_commands)),
         ..RealtimeRunner::default()
     };
+    let (msg_feed, msg_entries) = unbounded_channel();
+    let messaging = MessagingRunner {
+        interactive: Some(job.stop.clone()),
+        feed: Some(msg_feed),
+        ..MessagingRunner::default()
+    };
     let options = RunOptions {
         cancel: job.cancel.clone(),
         history: place.history(),
@@ -430,6 +449,7 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         mcp: Some(&mcp),
         grpc: Some(&grpc),
         realtime: Some(&realtime),
+        messaging: Some(&messaging),
         snapshots: job.snapshots,
         plugins,
         ..RunOptions::default()
@@ -441,13 +461,9 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         secrets: &store,
         in_workspace: place.in_workspace,
     };
-    let providers = match crate::secret_providers::for_workspace(place.root, place.settings) {
-        Ok(providers) => providers,
+    let runner = match build_runner(ctx, options, place) {
+        Ok(runner) => runner,
         Err(message) => return failed(job, message),
-    };
-    let runner = match Runner::new(ctx, options) {
-        Ok(runner) => runner.with_secret_providers(providers),
-        Err(e) => return failed(job, e.to_string()),
     };
     let mut sent = tokio::select! {
         sent = runner.send(target, 1) => sent,
@@ -461,7 +477,11 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         () = crate::realtime::collect(rt_entries, job.realtime.as_ref().map(|l| &l.log)) => {
             unreachable!("the feed outlives the send")
         }
+        () = crate::messaging::collect(msg_entries, job.messaging.as_ref(), &job.stop) => {
+            unreachable!("the feed outlives the send")
+        }
     };
+    stop_messaging(job);
     jsonrpc.close().await;
     mcp.shutdown().await;
     if let Err(e) = runner.finish() {
@@ -495,6 +515,24 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         received.history = latencies(&store, &received.record.file);
     }
     received
+}
+
+/// The runner of one send, with the workspace's secret providers.
+fn build_runner<'a>(
+    ctx: RunContext<'a>,
+    options: RunOptions<'a>,
+    place: &Place<'_>,
+) -> Result<Runner<'a>, String> {
+    let providers = crate::secret_providers::for_workspace(place.root, place.settings)?;
+    let runner = Runner::new(ctx, options).map_err(|e| e.to_string())?;
+    Ok(runner.with_secret_providers(providers))
+}
+
+/// Mark the job's live consumer as no longer running.
+fn stop_messaging(job: &SendJob) {
+    if let Some(link) = &job.messaging {
+        link.running.cancel();
+    }
 }
 
 /// Sends `kind: mcp` requests as `rustman run` does without `--trust`: a
@@ -687,6 +725,7 @@ mod tests {
             typed: Typed::default(),
             realtime: None,
             plugins: crate::plugin_trust::Gate::default(),
+            messaging: None,
         };
         let mut other = job.clone();
         assert_eq!(job, other);

@@ -152,6 +152,9 @@ impl Runner<'_> {
             Request::Ws(_) | Request::Sse(_) => {
                 return Box::pin(self.execute_realtime(request, record, iteration)).await;
             }
+            Request::Messaging(_) => {
+                return Box::pin(self.execute_messaging(request, record, iteration)).await;
+            }
             Request::Opaque(opaque) => {
                 return Box::pin(self.execute_plugin_kind(request, opaque, record, iteration))
                     .await;

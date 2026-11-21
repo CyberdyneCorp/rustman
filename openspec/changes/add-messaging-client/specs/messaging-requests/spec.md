@@ -15,7 +15,7 @@ This change SHALL register request kinds `kafka`, `mqtt` and `amqp` in the `work
 - **THEN** the error's list of registered kinds SHALL include `kafka`, `mqtt` and `amqp`
 
 ### Requirement: Operation field
-Every messaging request file SHALL declare `operation: produce` or `operation: consume`, plus `brokers` (or `broker` for mqtt/amqp), the destination (`topic`, `exchange`/`routing_key` or `queue`) and connection settings (`tls`, `auth`). `{{variable}}` placeholders SHALL resolve in all string fields. A missing or other operation SHALL fail to load with `messaging: operation must be produce or consume`.
+Every messaging request file SHALL declare `operation: produce` or `operation: consume`, plus `brokers` (or `broker` for mqtt/amqp), the destination (`topic`, `exchange`/`routing_key` or `queue`) and connection settings (`tls`, plus `security` for Kafka or `auth` for mqtt/amqp). `{{variable}}` placeholders SHALL resolve in all string fields. A missing or other operation SHALL fail to load with `messaging: operation must be produce or consume`.
 
 #### Scenario: Missing operation
 - **GIVEN** a `kind: kafka` file without `operation`
@@ -23,7 +23,7 @@ Every messaging request file SHALL declare `operation: produce` or `operation: c
 - **THEN** loading SHALL fail with `messaging: operation must be produce or consume`
 
 ### Requirement: Message payloads
-A produce file SHALL accept `messages` (a list) where each entry has `value` (JSON/YAML value, text, or `{base64: ...}`/`{file: path}` for bytes), optional `key`, and `headers` (ordered name/value pairs). JSON values SHALL be serialized compactly as UTF-8. File paths SHALL NOT escape the workspace root.
+A produce file SHALL accept `messages` (a list) where each entry has `value` (JSON/YAML value, text, or `{base64: ...}`/`{file: path}` for bytes), optional `key`, and `headers` (ordered name/value pairs; Kafka record headers hold one value per name and are sent in name order, so a repeated name SHALL keep its last value with a warning). JSON values SHALL be serialized compactly as UTF-8. File paths SHALL NOT escape the workspace root.
 
 #### Scenario: JSON value with key and headers
 - **GIVEN** a produce entry `{key: "order-1", value: {id: 1, total: 9.5}, headers: [{name: source, value: rustman}]}`
@@ -31,7 +31,7 @@ A produce file SHALL accept `messages` (a list) where each entry has `value` (JS
 - **THEN** the broker SHALL receive key `order-1`, value `{"id":1,"total":9.5}` and header `source: rustman`
 
 ### Requirement: Kafka produce
-Kafka produce SHALL send each message to `topic`, to `partition` if set or else to the partition chosen by murmur2 hashing of the key (round-robin for keyless messages), with `acks: all` by default (`acks: leader` or `none` allowed). The exchange SHALL record partition and offset per message. Unknown topics SHALL fail with `kafka: unknown topic '<name>'`.
+Kafka produce SHALL send each message to `topic`, to `partition` if set or else to the partition chosen by murmur2 hashing of the key (round-robin for keyless messages), with `acks: all`. `acks: leader` and `acks: none` SHALL be accepted and sent as `acks: all` with a warning, because the pure-Rust client always waits for every in-sync replica (design D1). The exchange SHALL record partition and offset per message. Unknown topics SHALL fail with `kafka: unknown topic '<name>'`.
 
 #### Scenario: Offsets recorded
 - **GIVEN** a produce of 2 messages to topic `orders` with partition 0
@@ -51,8 +51,16 @@ Kafka consume SHALL read `topic` from `partitions` (default all) starting at `of
 - **WHEN** it runs
 - **THEN** no consumer group SHALL be joined and no offsets SHALL be committed on the broker
 
+### Requirement: Kafka consume memory bounds
+A Kafka response frame SHALL be at most the larger of the 4 MiB fetch size and `limits.max_message_bytes`, plus 1 MiB, and the fetched records waiting to be recorded SHALL take at most 64 MiB.
+
+#### Scenario: Oversized frame
+- **GIVEN** a consume with the default `limits.max_message_bytes` (1 MiB)
+- **WHEN** the broker answers a fetch with a 100 MB frame
+- **THEN** the consume SHALL fail without reading the frame body
+
 ### Requirement: Kafka security
-Kafka connections SHALL support `PLAINTEXT`, `SSL` (rustls with verification on, custom CA and client certificates as in `http-requests`), and SASL `PLAIN`, `SCRAM-SHA-256` and `SCRAM-SHA-512` over either. SASL passwords SHALL be supplied through `environments` secrets and redacted everywhere. An authentication failure SHALL produce `kafka: authentication failed (<mechanism>)`.
+Kafka connections SHALL support `PLAINTEXT`, `SSL` (rustls with verification on, custom CA and client certificates as in `http-requests`), and SASL `PLAIN`, `SCRAM-SHA-256` and `SCRAM-SHA-512` over either. SASL passwords SHALL be supplied through `environments` secrets and redacted everywhere; a password written as a literal SHALL be redacted as `«redacted:password»`. An authentication failure SHALL produce `kafka: authentication failed (<mechanism>)`.
 
 #### Scenario: SCRAM over TLS
 - **GIVEN** `security: {protocol: SASL_SSL, mechanism: SCRAM-SHA-512, username: app, password: "{{kafka_pw}}"}`
@@ -105,7 +113,7 @@ AMQP publish SHALL send to `exchange` (empty string for the default exchange) wi
 - **THEN** it SHALL fail with `amqp: unroutable` and the run SHALL exit with code 3
 
 ### Requirement: AMQP consume
-AMQP consume SHALL by default declare a server-named, exclusive, auto-delete queue, bind it to `exchange` with `binding_key`, and consume with auto-ack, so existing queues are untouched. Consuming from an existing named `queue` SHALL require `destructive: true` in the file because it removes messages; `ack: manual` with `requeue: true` SHALL be offered to inspect without removal.
+AMQP consume SHALL by default declare a server-named, exclusive, auto-delete queue, bind it to `exchange` with `binding_key`, and consume it, so existing queues are untouched. Consuming from an existing named `queue` SHALL require `destructive: true` in the file because it removes messages; `ack: manual` with `requeue: true` SHALL be offered to inspect without removal.
 
 #### Scenario: Temporary queue
 - **GIVEN** a consume with `exchange: orders` and `binding_key: "order.*"`
@@ -117,13 +125,34 @@ AMQP consume SHALL by default declare a server-named, exclusive, auto-delete que
 - **WHEN** the file loads
 - **THEN** it SHALL fail with `amqp: consuming from an existing queue removes messages; set destructive: true or use requeue`
 
+### Requirement: AMQP consume bounds
+Every AMQP consume SHALL set the prefetch count to the message bound and, unless `requeue` is set, acknowledge each delivery only after it is recorded, so a consume never removes or buffers more than `max_messages` messages.
+
+#### Scenario: Destructive consume of part of a queue
+- **GIVEN** a named queue holding 5 messages and a consume with `destructive: true` and `limits.max_messages: 2`
+- **WHEN** it runs
+- **THEN** 2 messages SHALL be recorded and 3 SHALL remain in the queue
+
 ### Requirement: Safety gating
-Producing (Kafka produce, MQTT publish, AMQP publish) SHALL be classified as a mutation, and consuming from a named AMQP queue without requeue as destructive, under the safety policy semantics of `api-exploration`. Interactive and CLI use by a human SHALL be allowed. Through `agent-mcp-interface`, produce SHALL require `[agent].allow_mutations` and destructive consume `[agent].allow_destructive`.
+Producing (Kafka produce, MQTT publish, AMQP publish) SHALL be classified as a mutation, and consuming from a named AMQP queue without requeue or through a persistent MQTT session (`clean_session: false`) as destructive, under the safety policy semantics of `api-exploration`. Interactive and CLI use by a human SHALL be allowed. Through `agent-mcp-interface`, produce SHALL require `[agent].allow_mutations` and destructive consume `[agent].allow_destructive`.
 
 #### Scenario: Read-only agent produces
 - **GIVEN** `[agent].allow_mutations = false`
 - **WHEN** an agent runs a kafka produce request file
 - **THEN** it SHALL be refused with `blocked: produce requires allow_mutations`, exit code 4 on CLI-mediated paths, and an audit log entry
+
+### Requirement: Broker endpoint checks
+Through `agent-mcp-interface`, every broker SHALL be checked against the agent allowlist as the `http`/`https` origin of the endpoint the client connects to, from one parse shared by the check and the connector. A broker containing a backslash, a control character or whitespace, or whose host is neither an IP literal nor a DNS name, SHALL be refused before anything connects, and audit entries SHALL never contain broker credentials.
+
+#### Scenario: Broker read differently by two parsers
+- **GIVEN** an agent allowlist naming `http://allowed.example` and an MQTT consume with `broker: 'ws://evil.example\@allowed.example/mqtt'`
+- **WHEN** an agent runs it
+- **THEN** it SHALL be refused as invalid input and nothing SHALL connect to either host
+
+#### Scenario: Broker credentials stay out of the audit
+- **GIVEN** an MQTT consume with `broker: tcp://app:pw@127.0.0.1:1883` outside the agent allowlist
+- **WHEN** an agent runs it
+- **THEN** it SHALL be refused with `blocked: host not allowed` and the audit entry SHALL name `http://127.0.0.1:1883`
 
 ### Requirement: Headless consume bounds
 Under `rustman run`, a consume SHALL stop after `limits.max_messages` (default 10) messages or `limits.duration_ms` (default 30000), whichever comes first, then disconnect cleanly. Assertions SHALL evaluate over the collected messages. Interactive consumers SHALL run until stopped.

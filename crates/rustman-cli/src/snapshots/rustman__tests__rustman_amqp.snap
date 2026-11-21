@@ -1,0 +1,29 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Publish to and consume from AMQP 0-9-1 (RabbitMQ) exchanges and queues
+
+Usage: rustman amqp [OPTIONS] <COMMAND>
+
+Commands:
+  produce  Publish messages (a kind: amqp request, or --value flags, or the lines of a piped stdin) with publisher confirms
+  consume  Consume messages and print them as they arrive
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help
+
+Examples:
+  rustman amqp produce --broker amqp://localhost --exchange orders --routing-key order.created --value '{"id":1}'
+  rustman amqp consume --broker amqp://localhost --exchange orders --binding-key 'order.*' --json
+  rustman amqp consume --broker amqp://localhost --queue payments --requeue --max-messages 5

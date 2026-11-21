@@ -1,0 +1,29 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Publish and subscribe to MQTT topics
+
+Usage: rustman mqtt [OPTIONS] <COMMAND>
+
+Commands:
+  produce  Publish messages (a kind: mqtt request, or --value flags, or the lines of a piped stdin)
+  consume  Subscribe to a topic filter and print messages as they arrive
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help
+
+Examples:
+  printf '21.5\n22.0\n' | rustman mqtt produce --broker mqtt://localhost --topic sensors/room1/temp
+  rustman mqtt consume --broker mqtts://broker.example --topic 'sensors/+/temp' --json
+  rustman mqtt consume sensors/temps.rman.yaml --max-messages 3

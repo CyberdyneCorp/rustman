@@ -1,0 +1,35 @@
+---
+source: crates/rustman-tui/src/messaging_tests.rs
+assertion_line: 171
+expression: screen
+---
+┌ orders ────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ CONSUME  localhost:9092,localhost:9093                                                                     │
+│ Messages  Compose  Broker  Assertions                                                                      │
+│ Stopped · 4 messages · Ctrl+Enter starts                                                                   │
+│ p0@0                     key=order-1  {"id":1,"type":"OrderCreated"}                                       │
+│ p0@1                     {"id":2,"total":9.5}                                                              │
+│ p1@0                     plain text                                                                        │
+│ p1@1                     {"base64":"AAEC/2hlbGxvIHdvcmxkIQ=="}                                             │
+│                                                                                                            │
+│ Value (binary, 16 B)                                                                                       │
+│ 00000000  00 01 02 ff 68 65 6c 6c 6f 20 77 6f 72 6c 64 21  ....hello.world!                                │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌ Response ──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ No response yet · press Ctrl+Enter to send                                                                 │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ demo │ env: local │ TLS verified │ 0 in flight                                                   Ctrl+Q quit

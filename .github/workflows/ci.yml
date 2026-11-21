@@ -304,6 +304,123 @@ jobs:
           RUSTMAN_ANVIL_URL=http://127.0.0.1:8545 \
             cargo test -p rustman-cli --test rpc_run --locked -- --nocapture
 
+  # add-messaging-client tasks 2.1-2.3, 5.1 and 6.1: Kafka produce and
+  # consume, a `start: before_next` consume in a run and the CLI, against
+  # Redpanda (PLAINTEXT on 9092, SASL SCRAM-SHA-512 on 9093). The broker
+  # tests return early everywhere else; here RUSTMAN_REQUIRE_BROKERS makes
+  # a missing variable a failure. After them, the PLAINTEXT broker
+  # must have no consumer group (consume joins none and commits nothing).
+  messaging-kafka:
+    runs-on: ubuntu-latest
+    env:
+      REDPANDA_IMAGE: redpandadata/redpanda:v24.2.27
+      SCRAM_PASSWORD: rustman-ci-scram
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - run: |
+          cargo test -p rustman-messaging --test kafka_broker --test runner --locked --no-run
+          cargo test -p rustman-cli --test messaging --locked --no-run
+      - name: Start the brokers
+        run: |
+          docker run -d --name redpanda -p 9092:9092 "$REDPANDA_IMAGE" redpanda start \
+            --mode dev-container --smp 1 \
+            --kafka-addr PLAINTEXT://0.0.0.0:9092 --advertise-kafka-addr PLAINTEXT://127.0.0.1:9092
+          docker run -d --name redpanda-scram -p 9093:9093 "$REDPANDA_IMAGE" redpanda start \
+            --mode dev-container --smp 1 \
+            --kafka-addr SASL://0.0.0.0:9093 --advertise-kafka-addr SASL://127.0.0.1:9093
+          for name in redpanda redpanda-scram; do
+            healthy=false
+            for _ in $(seq 1 60); do
+              if docker exec "$name" rpk cluster health 2>/dev/null | grep -q 'Healthy:.*true'; then
+                healthy=true
+                break
+              fi
+              sleep 1
+            done
+            if [ "$healthy" != true ]; then docker logs "$name"; echo "$name is not healthy"; exit 1; fi
+          done
+          docker exec redpanda-scram rpk security user create rustman \
+            -p "$SCRAM_PASSWORD" --mechanism SCRAM-SHA-512
+          docker exec redpanda-scram rpk cluster config set superusers '["rustman"]'
+          docker exec redpanda-scram rpk cluster config set enable_sasl true
+          docker exec redpanda-scram rpk topic create scram-check \
+            -X brokers=127.0.0.1:9093 -X user=rustman -X pass="$SCRAM_PASSWORD" \
+            -X sasl.mechanism=SCRAM-SHA-512
+      - name: Produce and consume through rustman-messaging
+        env:
+          RUSTMAN_KAFKA_BROKERS: 127.0.0.1:9092
+          RUSTMAN_KAFKA_SCRAM_BROKERS: 127.0.0.1:9093
+          RUSTMAN_KAFKA_SCRAM_PASSWORD: rustman-ci-scram
+          # A missing broker variable fails the tests instead of skipping them.
+          RUSTMAN_REQUIRE_BROKERS: kafka
+        run: |
+          cargo test -p rustman-messaging --test kafka_broker --test runner --locked -- --nocapture
+          cargo test -p rustman-cli --test messaging --locked -- --nocapture
+      - name: No consumer group was joined
+        run: |
+          groups=$(docker exec redpanda rpk group list | tail -n +2)
+          if [ -n "$groups" ]; then echo "unexpected consumer groups: $groups"; exit 1; fi
+
+  # add-messaging-client tasks 3.1-3.4: MQTT against Mosquitto (plain on
+  # 1883, mutual TLS on 8883 with certificates made here) and AMQP against
+  # RabbitMQ. The broker tests return early everywhere else; here
+  # RUSTMAN_REQUIRE_BROKERS makes a missing variable a failure.
+  messaging-mqtt-amqp:
+    runs-on: ubuntu-latest
+    env:
+      MOSQUITTO_IMAGE: eclipse-mosquitto:2.0.22
+      RABBITMQ_IMAGE: rabbitmq:4.1.4-alpine
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p rustman-messaging --test mosquitto --test rabbitmq --locked --no-run
+      - name: Make the TLS certificates
+        run: |
+          dir="$RUNNER_TEMP/mqtt-tls"
+          mkdir -p "$dir"
+          cd "$dir"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj "/CN=Rustman CI CA" \
+            -keyout ca.key -out ca.pem
+          openssl req -newkey rsa:2048 -nodes -subj "/CN=localhost" -keyout server.key -out server.csr
+          printf 'subjectAltName=DNS:localhost,IP:127.0.0.1\n' > server.ext
+          openssl x509 -req -in server.csr -CA ca.pem -CAkey ca.key -CAcreateserial -days 2 \
+            -extfile server.ext -out server.pem
+          openssl req -newkey rsa:2048 -nodes -subj "/CN=rustman-client" -keyout client.key -out client.csr
+          openssl x509 -req -in client.csr -CA ca.pem -CAkey ca.key -CAcreateserial -days 2 -out client.pem
+          chmod 644 ./*
+          printf 'listener 1883\nallow_anonymous true\n\nlistener 8883\ncafile /tls/ca.pem\ncertfile /tls/server.pem\nkeyfile /tls/server.key\nrequire_certificate true\n' > mosquitto.conf
+          echo "RUSTMAN_MQTT_TLS_DIR=$dir" >> "$GITHUB_ENV"
+      - name: Start the brokers
+        run: |
+          docker run -d --name mosquitto -p 1883:1883 -p 8883:8883 \
+            -v "$RUSTMAN_MQTT_TLS_DIR:/tls:ro" "$MOSQUITTO_IMAGE" mosquitto -c /tls/mosquitto.conf
+          docker run -d --name rabbitmq -p 5672:5672 "$RABBITMQ_IMAGE"
+          ready=false
+          for _ in $(seq 1 90); do
+            if nc -z 127.0.0.1 1883 && nc -z 127.0.0.1 8883 \
+              && docker exec rabbitmq rabbitmq-diagnostics -q check_port_connectivity >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then
+            docker logs mosquitto; docker logs rabbitmq; echo "the brokers are not ready"; exit 1
+          fi
+      - name: Publish and consume through rustman-messaging
+        env:
+          RUSTMAN_MQTT_BROKER: mqtt://127.0.0.1:1883
+          RUSTMAN_MQTTS_BROKER: mqtts://localhost:8883
+          RUSTMAN_AMQP_BROKER: amqp://guest:guest@127.0.0.1:5672/%2f
+          # A missing broker variable fails the tests instead of skipping them.
+          RUSTMAN_REQUIRE_BROKERS: mqtt,amqp
+        run: cargo test -p rustman-messaging --test mosquitto --test rabbitmq --locked -- --nocapture
+
   # add-secret-providers task 4.1: aws-secrets-manager and aws-ssm against
   # LocalStack (a JSON secret with a field, a SecureString parameter).
   secrets-localstack:

@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use super::graphql::GraphqlRecord;
 use super::jsonrpc::JsonrpcRecord;
 use super::mcp::McpRecord;
+use super::messaging::MessagingRecord;
 use super::plugin::{PluginKindRecord, TransformRecord};
 use super::realtime::RealtimeRecord;
 use crate::assertions::AssertionResult;
@@ -266,6 +267,10 @@ pub struct RequestRecord {
     /// absent for every other kind.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub realtime: Option<RealtimeRecord>,
+    /// The protocol, destination and messages of a Kafka, MQTT or AMQP
+    /// produce or consume; absent for every other kind.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub messaging: Option<MessagingRecord>,
     /// The trace context the request carried, when trace propagation was
     /// on or the request set its own; absent otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -306,6 +311,7 @@ impl RequestRecord {
             realtime: None,
             transform: None,
             plugin_kind: None,
+            messaging: None,
         }
     }
 
