@@ -79,3 +79,27 @@ fn a_literal_security_password_is_redacted_as_password() {
         "{recorded}"
     );
 }
+
+#[test]
+fn a_url_password_holding_a_slash_is_a_secret_and_never_echoed() {
+    // Regression: the userinfo was cut at the first '/', so this password
+    // was echoed by the invalid-broker error and never redacted.
+    let broker = "amqp://guest:SLASH/PW@rabbit/";
+    let text = format!(
+        "version: 1\nkind: amqp\nname: a\noperation: consume\nbroker: '{broker}'\nexchange: x\n"
+    );
+    let resolved = resolve(&text, "");
+    let redacted = resolved
+        .redactor()
+        .text(&format!("dial {broker}"))
+        .into_owned();
+    assert!(!redacted.contains("PW"), "{redacted}");
+    let err = rustman_messaging::endpoint::amqp(broker)
+        .unwrap_err()
+        .to_string();
+    assert!(!err.contains("SLASH"), "{err}");
+    let kafka = "version: 1\nkind: kafka\nname: k\noperation: consume\nbrokers: 'app:K/PW@h:9092'\ntopic: t\n";
+    let resolved = resolve(kafka, "");
+    let redacted = resolved.redactor().text("app:K/PW@h:9092").into_owned();
+    assert!(!redacted.contains("PW"), "{redacted}");
+}

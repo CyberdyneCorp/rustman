@@ -218,52 +218,38 @@ fn add_literal_credentials(resolved: &mut ResolvedMessaging) {
     }
 }
 
-/// Every non-empty password of `resolved`, as written and, for a URL,
-/// percent-decoded.
+/// Every non-empty password of `resolved`, as written and, for a broker
+/// URL, percent-decoded.
 fn literal_credentials(resolved: &ResolvedMessaging) -> Vec<String> {
-    let security = resolved.security.as_ref().and_then(|s| s.password.clone());
-    let auth = resolved.auth.as_ref().and_then(|a| a.password.clone());
-    let mut found: Vec<String> = [security, auth].into_iter().flatten().collect();
-    if let Some(password) = resolved.broker.as_deref().and_then(url_password) {
-        found.push(password.to_owned());
-        found.push(percent_decode(password));
-    }
-    found.retain(|v| !v.is_empty());
-    found.dedup();
+    let security = resolved
+        .security
+        .as_ref()
+        .and_then(|s| s.password.as_deref());
+    let auth = resolved.auth.as_ref().and_then(|a| a.password.as_deref());
+    let brokers = resolved.broker.iter().chain(&resolved.brokers);
+    super::broker_credentials::literal_credentials([security, auth], brokers.map(String::as_str))
+}
+
+/// The literal credentials written in `request` (not interpolated):
+/// what a saved file shows as text, the Schema Registry URL's password
+/// included. Values holding a `{{name}}` reference are left to the
+/// secret pass.
+pub fn request_literal_credentials(request: &MessagingRequest) -> Vec<String> {
+    let security = request
+        .security
+        .as_ref()
+        .and_then(|s| s.password.as_deref());
+    let auth = request.auth.as_ref().and_then(|a| a.password.as_deref());
+    let registry = request.schema_registry.as_ref().map(|r| &r.url);
+    let brokers = (request.broker.iter())
+        .chain(request.brokers.iter().flat_map(|b| &b.0))
+        .chain(registry);
+    let mut found = super::broker_credentials::literal_credentials(
+        [security, auth],
+        brokers.map(String::as_str),
+    );
+    found.retain(|v| !v.contains("{{"));
     found
-}
-
-/// The password of the userinfo of `url` (`scheme://user:password@host`).
-fn url_password(url: &str) -> Option<&str> {
-    let (_, rest) = url.split_once("://")?;
-    let authority = rest.split(['/', '?', '#']).next()?;
-    let (userinfo, _) = authority.rsplit_once('@')?;
-    userinfo.split_once(':').map(|(_, password)| password)
-}
-
-/// `text` with each `%XX` escape decoded; invalid escapes and invalid
-/// UTF-8 are kept as written.
-fn percent_decode(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut at = 0;
-    while at < bytes.len() {
-        let escaped = (bytes[at] == b'%')
-            .then(|| text.get(at + 1..at + 3))
-            .flatten()
-            .and_then(|hex| u8::from_str_radix(hex, 16).ok());
-        match escaped {
-            Some(byte) => {
-                out.push(byte);
-                at += 3;
-            }
-            None => {
-                out.push(bytes[at]);
-                at += 1;
-            }
-        }
-    }
-    String::from_utf8(out).unwrap_or_else(|_| text.to_owned())
 }
 
 fn interpolate(i: &mut Interpolator<'_, '_>, m: &MessagingRequest) -> ResolvedMessaging {
@@ -468,18 +454,4 @@ fn contain_payloads(
         }
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn url_passwords_are_found_and_decoded() {
-        assert_eq!(url_password("mqtt://app:pw%40x@h:1883/"), Some("pw%40x"));
-        assert_eq!(url_password("amqp://guest@rabbit"), None);
-        assert_eq!(url_password("amqp://rabbit:5672/v"), None);
-        assert_eq!(percent_decode("pw%40x%2"), "pw@x%2");
-        assert_eq!(percent_decode("a%2Fb+c"), "a/b+c");
-    }
 }

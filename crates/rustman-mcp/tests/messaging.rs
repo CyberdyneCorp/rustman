@@ -211,3 +211,58 @@ async fn the_audit_never_records_broker_credentials() {
     let all = serde_json::to_string(&lines).unwrap();
     assert!(!all.contains("hunter2-pw"), "{all}");
 }
+
+async fn call(client: &Client, tool: &str, args: Value) -> String {
+    let params = CallToolRequestParams::new(tool.to_owned())
+        .with_arguments(args.as_object().unwrap().clone());
+    let result = client.call_tool(params).await.unwrap();
+    assert_ne!(result.is_error, Some(true), "{result:?}");
+    serde_json::to_string(&result).unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn list_and_get_request_never_show_literal_broker_passwords() {
+    // Regression: only `kind: http` literals were redacted, so messaging
+    // request files reached agents with their passwords in clear.
+    let ws = workspace("127.0.0.1:9", "");
+    let files = [
+        (
+            "events/kafka.rman.yaml",
+            "version: 1\nkind: kafka\nname: K\noperation: consume\nbrokers: 'h:9092'\ntopic: t\nsecurity:\n  protocol: SASL_SSL\n  mechanism: PLAIN\n  username: app\n  password: kafka-LIT-pw-1\nschema_registry:\n  url: 'http://reg:REG-url-pw-5@registry.example'\n  auth: {type: basic, username: r, password: REG-auth-pw-6}\n",
+        ),
+        (
+            "events/mqtt.rman.yaml",
+            "version: 1\nkind: mqtt\nname: M\noperation: consume\nbroker: 'mqtts://app:MQTT-url-pw%2F2@broker.example'\nauth: {username: app, password: MQTT-auth-pw-3}\ntopic: t/#\n",
+        ),
+        (
+            "events/amqp.rman.yaml",
+            "version: 1\nkind: amqp\nname: A\noperation: consume\nbroker: 'amqp://guest:AMQP/url-pw-4@rabbit.example/'\nexchange: x\n",
+        ),
+        (
+            "events/ws.rman.yaml",
+            "version: 1\nkind: mqtt\nname: W\noperation: consume\nbroker: 'wss://app:WS-url-pw-7@broker.example/mqtt'\ntopic: t\n",
+        ),
+    ];
+    for (path, text) in files {
+        write(ws.path(), path, text);
+    }
+    let client = connect(ws.path()).await;
+    let mut shown = vec![call(&client, "list_requests", json!({})).await];
+    for id in ["events/kafka", "events/mqtt", "events/amqp", "events/ws"] {
+        shown.push(call(&client, "get_request", json!({"path": id})).await);
+    }
+    let all = shown.join("\n");
+    for leaked in [
+        "kafka-LIT-pw-1",
+        "MQTT-url-pw",
+        "MQTT-auth-pw-3",
+        "AMQP/url-pw-4",
+        "url-pw-4",
+        "REG-url-pw-5",
+        "REG-auth-pw-6",
+        "WS-url-pw-7",
+    ] {
+        assert!(!all.contains(leaked), "{leaked} in {all}");
+    }
+    assert!(all.contains("rabbit.example"), "{all}");
+}

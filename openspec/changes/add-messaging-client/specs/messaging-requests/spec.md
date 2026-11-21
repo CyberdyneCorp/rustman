@@ -126,7 +126,12 @@ AMQP consume SHALL by default declare a server-named, exclusive, auto-delete que
 - **THEN** it SHALL fail with `amqp: consuming from an existing queue removes messages; set destructive: true or use requeue`
 
 ### Requirement: AMQP consume bounds
-Every AMQP consume SHALL set the prefetch count to the message bound and, unless `requeue` is set, acknowledge each delivery only after it is recorded, so a consume never removes or buffers more than `max_messages` messages.
+Every AMQP consume SHALL set the prefetch count to the message bound (at most 100 when deliveries are acknowledged) and, unless `requeue` is set, acknowledge each delivery only after it is recorded, so a consume never removes or buffers more than `max_messages` messages. The client SHALL ask for an AMQP `frame_max` of at most 128 KiB, never 0, so the negotiated frame size never exceeds it whatever the server announces.
+
+#### Scenario: Server announces a huge frame size
+- **GIVEN** a server whose Connection.Tune announces `frame_max` 16 MiB (or 0)
+- **WHEN** the client connects
+- **THEN** its Tune-Ok SHALL carry `frame_max` 131072
 
 #### Scenario: Destructive consume of part of a queue
 - **GIVEN** a named queue holding 5 messages and a consume with `destructive: true` and `limits.max_messages: 2`
@@ -154,6 +159,38 @@ Through `agent-mcp-interface`, every broker SHALL be checked against the agent a
 - **WHEN** an agent runs it
 - **THEN** it SHALL be refused with `blocked: host not allowed` and the audit entry SHALL name `http://127.0.0.1:1883`
 
+### Requirement: Numeric broker hosts
+A broker host whose last label is numeric (digits, or `0x` with hex digits) SHALL be refused unless it is a strict dotted-decimal IPv4 address without leading zeros, which is then the address dialed, so the policy and the resolver can never read it differently.
+
+#### Scenario: Octal host
+- **GIVEN** an MQTT consume with `broker: mqtt://0177.0.0.1:1883`
+- **WHEN** it runs
+- **THEN** it SHALL be refused as invalid input and nothing SHALL connect
+
+### Requirement: Invalid broker errors
+An invalid-broker error SHALL show only `<scheme>://«invalid broker»`, never the broker text, and a broker URL that does not parse SHALL have its userinfo read up to its last `@`, its password redacted as a secret.
+
+#### Scenario: Password holding a slash
+- **GIVEN** an AMQP consume with `broker: 'amqp://guest:SLASH/PW@rabbit/'`
+- **WHEN** it runs
+- **THEN** the error SHALL name `amqp://«invalid broker»` and no output SHALL contain `SLASH/PW`
+
+### Requirement: Agent Schema Registry redirects
+Agent runs SHALL NOT follow Schema Registry redirects, since only the registry's base URL is checked against the allowlist.
+
+#### Scenario: Registry redirect in an agent run
+- **GIVEN** an allowed `schema_registry.url` that answers with a redirect to another host
+- **WHEN** an agent runs the request
+- **THEN** the redirect SHALL NOT be followed
+
+### Requirement: Literal credentials in agent views
+Through `agent-mcp-interface`, `list_requests` SHALL show messaging brokers without their userinfo and `get_request` SHALL redact the literal credentials of messaging files: `security.password`, `auth.password`, broker and Schema Registry URL passwords (as written and percent-decoded) and the registry's `auth`.
+
+#### Scenario: Literal AMQP password
+- **GIVEN** an AMQP request file with `broker: 'amqp://guest:AMQP-url-pw@rabbit.example/'`
+- **WHEN** an agent calls `list_requests` and `get_request`
+- **THEN** neither result SHALL contain `AMQP-url-pw`
+
 ### Requirement: Headless consume bounds
 Under `rustman run`, a consume SHALL stop after `limits.max_messages` (default 10) messages or `limits.duration_ms` (default 30000), whichever comes first, then disconnect cleanly. Assertions SHALL evaluate over the collected messages. Interactive consumers SHALL run until stopped.
 
@@ -161,6 +198,14 @@ Under `rustman run`, a consume SHALL stop after `limits.max_messages` (default 1
 - **GIVEN** a consume with `limits.duration_ms: 2000` on a topic that receives nothing
 - **WHEN** it runs in `rustman run`
 - **THEN** it SHALL end after 2 s with zero messages collected
+
+### Requirement: Unbounded consume window
+An unbounded (interactive) consume SHALL keep at most its newest 10000 messages and 64 MiB (of messages as JSON) in its exchange, dropping the oldest and recording how many were `dropped`.
+
+#### Scenario: Long interactive consume
+- **GIVEN** an interactive consume that receives 10005 messages
+- **WHEN** it is stopped
+- **THEN** the exchange SHALL hold the newest 10000 messages and `dropped: 5`
 
 ### Requirement: Produce then consume chaining
 Within one `rustman run`, a consume step SHALL be able to start before a later produce step (`start: before_next`), subscribing first so that messages caused by the next request are not missed. Collected messages SHALL become available to assertions after the produce step completes.

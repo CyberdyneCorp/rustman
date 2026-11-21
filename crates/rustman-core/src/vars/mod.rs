@@ -1,6 +1,7 @@
 //! Variables: `{{name}}` templates, dynamic values and the precedence chain
 //! (design D8, environments spec).
 
+pub mod broker_credentials;
 pub mod dynamic;
 pub mod graphql;
 pub mod grpc;

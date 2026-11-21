@@ -25,6 +25,13 @@ pub use publish::{confirmation_error, properties};
 
 pub(crate) const PROTOCOL: &str = "amqp";
 
+/// The largest AMQP frame the client accepts (RabbitMQ's default). `lapin`
+/// sizes its buffers from the negotiated frame size, and takes the
+/// server's when the client asks for none, so a broker announcing 0 or a
+/// huge `frame_max` would make it allocate gigabytes; it keeps the
+/// smaller of the two when both are set.
+pub const FRAME_MAX: u32 = 128 * 1024;
+
 /// Run the publish or consume of a `kind: amqp` request.
 pub async fn run(
     resolved: &ResolvedMessaging,
@@ -57,7 +64,17 @@ pub fn broker_uri(resolved: &ResolvedMessaging) -> Result<AMQPUri, MessagingErro
         uri.authority.userinfo.username = auth.username.clone();
         uri.authority.userinfo.password = auth.password.clone().unwrap_or_default();
     }
+    uri.query.frame_max = Some(frame_max(uri.query.frame_max));
     Ok(uri)
+}
+
+/// The frame size asked for: the broker URL's `frame_max`, at most
+/// [`FRAME_MAX`]; never 0, which would let the server choose. (`lapin`
+/// raises a value under the protocol minimum, 8192, to it.)
+pub fn frame_max(configured: Option<u32>) -> u32 {
+    configured
+        .filter(|&size| size != 0)
+        .map_or(FRAME_MAX, |size| size.min(FRAME_MAX))
 }
 
 async fn connect(
@@ -112,6 +129,14 @@ pub(crate) fn broker_error(what: &str, error: &lapin::Error) -> MessagingError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_frame_size_is_capped_and_never_zero() {
+        assert_eq!(frame_max(None), FRAME_MAX);
+        assert_eq!(frame_max(Some(0)), FRAME_MAX);
+        assert_eq!(frame_max(Some(8192)), 8192);
+        assert_eq!(frame_max(Some(u32::MAX)), FRAME_MAX);
+    }
 
     #[test]
     fn refused_logins_are_authentication_failures() {

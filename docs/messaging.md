@@ -118,6 +118,8 @@ Consumed keys and values in the Confluent wire format (magic byte 0 and a 4-byte
 
 With `subject`, produce encodes each JSON value with that subject's schema (`schema_version`, default `latest`) and sends it in the wire format.
 
+Registry requests follow redirects as HTTP requests do, except in agent runs (see [Safety](#safety)): there a redirect is not followed and its schema fetch fails with `the registry answered HTTP 302` (a warning on consume).
+
 ## MQTT
 
 ```yaml
@@ -203,7 +205,7 @@ requeue: true        # inspect without removing
 # or: destructive: true, with ack: auto (default) or manual
 ```
 
-Every consume sets the prefetch to `limits.max_messages`, so the broker never delivers more messages than are recorded and the client holds at most that many. `limits.max_message_bytes` trims what is recorded; the AMQP client still receives each message body whole, so consume only from brokers you trust. With `requeue: true` deliveries stay unacknowledged and are all handed back to the queue when the consume ends. With `destructive: true` each message is acknowledged (and so removed) right after it is recorded, whether `ack` is `auto` or `manual`; messages beyond `max_messages` stay in the queue.
+Every consume sets the prefetch to `limits.max_messages` (at most 100 when each delivery is acknowledged as it is recorded; with `requeue: true` it is `limits.max_messages`, since every delivery stays unacknowledged), so the broker never delivers more messages than are recorded and the client holds at most that many. `limits.max_message_bytes` trims what is recorded; the AMQP client still receives each message body whole (it cannot refuse a delivery by its announced size), so the memory in flight is at most the prefetch times the broker's largest message: consume only from brokers you trust. The client asks for a frame size of at most 128 KiB (a `frame_max` in the broker URL can lower it, and `frame_max=0` means the cap), and keeps the smaller of that and the broker's, so a broker announcing a huge or unlimited `frame_max` cannot make it allocate large buffers. With `requeue: true` deliveries stay unacknowledged and are all handed back to the queue when the consume ends. With `destructive: true` each message is acknowledged (and so removed) right after it is recorded, whether `ack` is `auto` or `manual`; messages beyond `max_messages` stay in the queue.
 
 ## AsyncAPI import
 
@@ -286,7 +288,7 @@ Set `limits.max_messages` to the number of events you expect, so the consume end
 
 ### History
 
-Each produce or consume is one history entry with protocol `kafka`, `mqtt` or `amqp` under `record.messaging`: the brokers, the destination, each message's metadata, and its key and value. Keys and values larger than 64 KiB are kept as a 64 KiB text preview with `truncated: true` and their full `size` (a 200 KiB value is stored as a 64 KiB preview and `size: 204800`). Secrets are replaced by `«redacted:name»` before anything is stored or printed, including credentials written as literals (`security.password`, `auth.password` and the password of a broker URL, shown as `«redacted:password»`) and secrets that appear in payloads or headers. Messaging entries are not replayed by `rustman history replay`.
+Each produce or consume is one history entry with protocol `kafka`, `mqtt` or `amqp` under `record.messaging`: the brokers, the destination, each message's metadata, and its key and value. An unbounded consume (the TUI) keeps only its newest 10000 messages and 64 MiB (of messages as JSON) in the exchange, so memory and the history entry stay bounded; the oldest beyond that are dropped and counted in `dropped`. Keys and values larger than 64 KiB are kept as a 64 KiB text preview with `truncated: true` and their full `size` (a 200 KiB value is stored as a 64 KiB preview and `size: 204800`). Secrets are replaced by `«redacted:name»` before anything is stored or printed, including credentials written as literals (`security.password`, `auth.password` and the password of a broker URL, shown as `«redacted:password»`; a URL that does not parse, such as `amqp://guest:pa/ss@rabbit/` with an unencoded `/`, has its userinfo read up to the last `@`, so such a password is redacted too) and secrets that appear in payloads or headers. Messaging entries are not replayed by `rustman history replay`.
 
 ## Safety
 
@@ -295,10 +297,12 @@ Producing (Kafka produce, MQTT publish, AMQP publish) is a mutation, and consumi
 Agents run messaging request files through `send_request` and `run_collection` of `rustman mcp serve`. Before anything connects:
 
 - a produce needs `[agent] allow_mutations = true`, else it is refused with `blocked: produce requires allow_mutations`; a named-queue consume needs `[agent] allow_destructive = true` (`blocked: consuming from an existing queue requires allow_destructive`), and so does an MQTT consume with `clean_session: false` (`blocked: consuming through a persistent session (clean_session: false) requires allow_destructive`);
-- every broker must pass the agent allowlist, checked as an origin: a Kafka `host:port` as `http://host:port` (port 9092 when none is given), `mqtt://`, `tcp://` and `amqp://` as `http://`, `mqtts://`, `ssl://` and `amqps://` as `https://`, and `ws://`/`wss://` as their HTTP origin, with the protocol's default port when the URL has none (1883, 8883, 5672, 5671, 80, 443). The host and port checked are the ones the client connects to: one parse serves both, hosts are lowercased and lose a trailing dot, and a broker containing a backslash, a control character or whitespace, or whose host is neither an IP address nor a DNS name, is refused as invalid input (as is a Kafka broker with credentials or a path). Audit entries name the checked origins, never the broker's credentials. Broker URL values of the active environment count for the allowlist; Kafka brokers, which are not URLs, need `[agent] allowed_hosts`, such as `["http://localhost:9092"]`;
-- a Kafka request's `schema_registry.url` must pass the allowlist too, as a read;
+- every broker must pass the agent allowlist, checked as an origin: a Kafka `host:port` as `http://host:port` (port 9092 when none is given), `mqtt://`, `tcp://` and `amqp://` as `http://`, `mqtts://`, `ssl://` and `amqps://` as `https://`, and `ws://`/`wss://` as their HTTP origin, with the protocol's default port when the URL has none (1883, 8883, 5672, 5671, 80, 443). The host and port checked are the ones the client connects to: one parse serves both, hosts are lowercased and lose a trailing dot, and a broker containing a backslash, a control character or whitespace, or whose host is neither an IP address nor a DNS name, is refused as invalid input (as is a Kafka broker with credentials or a path). A host whose last label is numeric (`127.1`, `0177.0.0.1`, `0x7f.1`, `2130706433`, `1.2.3.0x`) must be a dotted-decimal IPv4 address without leading zeros, since URL parsers and resolvers read the other forms differently. An invalid-broker error never repeats the broker: it shows `<scheme>://«invalid broker»`. Audit entries name the checked origins, never the broker's credentials. Broker URL values of the active environment count for the allowlist; Kafka brokers, which are not URLs, need `[agent] allowed_hosts`, such as `["http://localhost:9092"]`;
+- a Kafka request's `schema_registry.url` must pass the allowlist too, as a read, and registry redirects are not followed, since only that URL was checked;
 - only the Kafka bootstrap brokers are checked: the client then connects to the brokers the cluster advertises in its metadata, so allow only bootstrap brokers you trust;
 - a produce or a destructive consume is confirmed by the human, as for an HTTP `POST`.
+
+`list_requests` shows messaging brokers without their userinfo, and `get_request` returns the file with its literal broker credentials (`security.password`, `auth.password`, broker and Schema Registry URL passwords, as written and percent-decoded, and the registry's `auth`) replaced by `«redacted:password»`; as for HTTP literals, values shorter than 6 characters are not redacted, so keep credentials in secrets.
 
 A refusal is the tool's `blocked` error and gets an audit log entry. Agent consumes stop after at most 100 messages or 60 s. In a run, a refused operation is an error, and the run exits 4 instead of 3.
 

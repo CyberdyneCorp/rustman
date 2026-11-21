@@ -70,7 +70,7 @@ fn the_password_may_hold_an_at_sign() {
     let err = policy(kafka("app:p@ss@allowed.example:9092"));
     assert_eq!(
         err,
-        "error: kafka: invalid broker '«redacted:userinfo»@allowed.example:9092': expected host:port"
+        "error: kafka: invalid broker '«invalid broker»': expected host:port"
     );
 }
 
@@ -145,7 +145,7 @@ fn schemes_choose_the_transport_and_default_port() {
     assert_eq!(policy(mqtt("ssl://h")), "https://h:8883");
     assert_eq!(
         policy(mqtt("http://h")),
-        "error: mqtt: invalid broker 'http://h': unsupported scheme 'http'"
+        "error: mqtt: invalid broker 'http://«invalid broker»': unsupported scheme 'http'"
     );
     assert!(refused(&policy(kafka("h:9092/path"))));
     assert!(refused(&policy(kafka("h:9092?x=1"))));
@@ -169,4 +169,93 @@ fn shown_brokers_hide_their_userinfo() {
         "«redacted:userinfo»@h:9092"
     );
     assert_eq!(without_userinfo("mqtt://h/a@b"), "mqtt://h/a@b");
+}
+
+/// Hosts whose last label is numeric but which are not strict
+/// dotted-decimal IPv4: URL parsers read them as IPv4 (octal, hex or
+/// short forms), resolvers may not.
+const NUMERIC_HOSTS: [&str; 10] = [
+    "0177.0.0.1",
+    "1.2.3.0x",
+    "2130706433",
+    "0x7f.1",
+    "012.0.0.01",
+    "0177.0.0.01",
+    "127.1",
+    "0X7F.0.0.1",
+    "127.0.0.0x1",
+    "1.2.3.4.5",
+];
+
+#[test]
+fn numeric_hosts_must_be_strict_dotted_decimal_for_every_protocol() {
+    // Regression: `0177.0.0.1` on a non-special scheme was kept as a DNS
+    // name and dialed through getaddrinfo (decimal 177.0.0.1 on macOS)
+    // while the policy read it as 127.0.0.1.
+    let mut accepted = Vec::new();
+    for host in NUMERIC_HOSTS {
+        let mut check = |broker: String, shown: String| {
+            if !refused(&shown) {
+                accepted.push(format!("{broker} -> {shown}"));
+            }
+        };
+        let broker = format!("{host}:9092");
+        check(broker.clone(), policy(kafka(&broker)));
+        for scheme in ["mqtt://", "tcp://", "mqtts://", "ssl://", ""] {
+            let broker = format!("{scheme}{host}:1883");
+            check(broker.clone(), policy(mqtt(&broker)));
+        }
+        for scheme in ["amqp", "amqps"] {
+            let broker = format!("{scheme}://{host}/%2f");
+            check(broker.clone(), amqp_policy(&broker));
+        }
+    }
+    assert!(accepted.is_empty(), "{accepted:#?}");
+}
+
+#[test]
+fn strict_ipv4_hosts_are_dialed_as_the_policy_reads_them() {
+    assert_eq!(policy(kafka("127.0.0.1.:9092")), "http://127.0.0.1:9092");
+    assert_eq!(policy(mqtt("tcp://10.0.0.1")), "http://10.0.0.1:1883");
+    assert_eq!(amqp_policy("amqps://10.0.0.1"), "https://10.0.0.1:5671");
+    // ws is a special scheme: the URL parser itself normalizes the IPv4
+    // forms, and the dialed and checked host are its result.
+    let e = mqtt("ws://0177.0.0.1/mqtt").unwrap();
+    assert_eq!(e.host, "127.0.0.1");
+    assert_eq!(e.ws_url.as_deref(), Some("ws://127.0.0.1/mqtt"));
+    // A numeric label before a name is a DNS name for every parser.
+    assert_eq!(
+        policy(kafka("0177.example:9092")),
+        "http://0177.example:9092"
+    );
+    assert_eq!(
+        policy(mqtt("mqtt://1.0x7f.example")),
+        "http://1.0x7f.example:1883"
+    );
+}
+
+#[test]
+fn invalid_broker_errors_never_echo_the_broker() {
+    // Regression: the userinfo was cut at the first '/', so a password
+    // holding one was echoed in the error.
+    let err = amqp_policy("amqp://guest:SLASH/PW@rabbit/");
+    assert!(
+        err.starts_with("error: amqp: invalid broker 'amqp://«invalid broker»': "),
+        "{err}"
+    );
+    assert!(!err.contains("SLASH"), "{err}");
+    for broker in [
+        "mqtt://app:Q?PW@h",
+        "mqtts://app:H#PW@h",
+        "ws://app:S/PW@h/mqtt",
+    ] {
+        let err = policy(mqtt(broker));
+        assert!(refused(&err) && !err.contains("PW"), "{err}");
+        assert!(err.contains("://«invalid broker»'"), "{err}");
+    }
+    let err = policy(kafka("app:K/PW@h:9092"));
+    assert!(
+        err.starts_with("error: kafka: invalid broker '«invalid broker»': ") && !err.contains("PW"),
+        "{err}"
+    );
 }

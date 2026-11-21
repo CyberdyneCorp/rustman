@@ -38,3 +38,12 @@
 
 - [ ] 6.1 `rustman kafka|mqtt|amqp produce|consume` with flags, `--json` lines and stdin produce. Verify with assert_cmd tests against the CI broker containers for the consume-to-JSON-lines and stdin-produce scenarios.
 - [x] 6.2 TUI messaging pane: broker/destination form, produce composer, live consumer list with pause, value rendering (JSON, decoded schema registry, hex) and a buffer cap of 10000 messages and 64 MiB (the oldest dropped beyond it, with a notice). Verify with ratatui `TestBackend` snapshot tests.
+
+## 7. Security hardening
+
+- [x] 7.1 Refuse numeric last host labels that are not strict dotted-decimal IPv4 for Kafka, MQTT (`mqtt`/`tcp`/`mqtts`/`ssl`) and AMQP brokers, and dial the parsed IP. Verify with endpoint tests for `0177.0.0.1`, `1.2.3.0x`, `2130706433`, `0x7f.1`, `012.0.0.01`, `0177.0.0.01` and `127.1` on every scheme.
+- [x] 7.2 Redact literal messaging credentials (security/auth passwords, broker and registry URL passwords raw and percent-decoded, registry auth) in MCP output, and show brokers without userinfo in `list_requests`. Verify with an MCP test that `list_requests` and `get_request` never contain them.
+- [x] 7.3 Never echo a broker in invalid-broker errors, and read the userinfo of an unparseable broker up to its last `@`, registering its password as a secret. Verify with error-text and redactor tests for `amqp://guest:SLASH/PW@rabbit/`.
+- [x] 7.4 Cap the AMQP `frame_max` at 128 KiB (never 0) and keep acknowledged consumes at most 100 deliveries in flight. Verify with a fake AMQP server announcing 16 MiB and 0 that Tune-Ok carries 131072.
+- [x] 7.5 Do not follow Schema Registry redirects in agent runs. Verify with a test that a redirect to another host is not followed with the agent runner and is with a human's.
+- [x] 7.6 Keep a window of the newest 10000 messages and 64 MiB in unbounded consume exchanges, counting `dropped`. Verify with exchange unit tests.

@@ -6,7 +6,14 @@
 //!
 //! Every consume uses manual acks with the prefetch capped at the message
 //! bound: the broker never pushes (or removes) more messages than are
-//! recorded, which also bounds the deliveries held in memory.
+//! recorded, which also bounds the deliveries held in memory. `lapin`
+//! assembles a whole message body before handing it over (4.12.3 has no
+//! hook to refuse a delivery by its announced body size; bodies are cut
+//! to `limits.max_message_bytes` only once received), so the memory in
+//! flight is at most the prefetch times the broker's largest message.
+//! Acknowledged consumes therefore keep at most [`ACK_PREFETCH`]
+//! deliveries in flight; a requeue consume must hold every delivery
+//! unacked, so its prefetch is the message bound.
 
 use futures_util::StreamExt;
 use lapin::message::Delivery;
@@ -27,8 +34,11 @@ use crate::{ConsumedMessage, MessagingError, MessagingExchange, RunOptions, slee
 /// The binding key of a temporary queue without `binding_key`.
 pub const DEFAULT_BINDING_KEY: &str = "#";
 
-/// The prefetch of an unbounded (interactive) consume.
+/// The prefetch of an unbounded (interactive) requeue consume.
 pub const UNBOUNDED_PREFETCH: u16 = 1000;
+
+/// The most deliveries an acknowledged consume has in flight.
+pub const ACK_PREFETCH: u16 = 100;
 
 /// How deliveries are acknowledged.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -54,11 +64,16 @@ fn mode_of(named: bool, amqp: &rustman_core::vars::ResolvedAmqp) -> ConsumeMode 
 }
 
 /// The prefetch count: the message bound, so the broker never delivers
-/// more than will be recorded.
-pub fn prefetch(bounds: Option<crate::Bounds>) -> u16 {
-    bounds.map_or(UNBOUNDED_PREFETCH, |b| {
+/// more than will be recorded, and at most [`ACK_PREFETCH`] when each
+/// delivery is acknowledged as it is recorded.
+pub fn prefetch(bounds: Option<crate::Bounds>, mode: ConsumeMode) -> u16 {
+    let bound = bounds.map_or(UNBOUNDED_PREFETCH, |b| {
         u16::try_from(b.max_messages.max(1)).unwrap_or(u16::MAX)
-    })
+    });
+    match mode {
+        ConsumeMode::Ack => bound.min(ACK_PREFETCH),
+        ConsumeMode::Requeue => bound,
+    }
 }
 
 pub async fn consume(
@@ -78,7 +93,7 @@ pub async fn consume(
     };
     exchange.queue = Some(queue.clone());
     channel
-        .basic_qos(prefetch(options.bounds), BasicQosOptions::default())
+        .basic_qos(prefetch(options.bounds, mode), BasicQosOptions::default())
         .await
         .map_err(|e| broker_error("cannot set the prefetch count", &e))?;
     let consume_options = BasicConsumeOptions {
@@ -158,7 +173,7 @@ async fn collect(
     let max = options.bounds.map_or(u64::MAX, |b| b.max_messages);
     let max_bytes =
         usize::try_from(resolved.limits.effective_max_message_bytes()).unwrap_or(usize::MAX);
-    while (exchange.messages.len() as u64) < max {
+    while exchange.received() < max {
         let delivery = tokio::select! {
             () = options.cancel.cancelled() => return Ok(()),
             () = sleep_until(deadline) => return Ok(()),
@@ -179,7 +194,7 @@ async fn collect(
         if let Some(feed) = &options.feed {
             let _ = feed.send(message.clone());
         }
-        exchange.messages.push(message);
+        exchange.record(message, options.bounds.is_none());
         *last_tag = Some(delivery.delivery_tag);
     }
     Ok(())
@@ -293,10 +308,25 @@ mod tests {
             max_messages,
             duration: std::time::Duration::from_secs(1),
         };
-        assert_eq!(prefetch(Some(bounds(2))), 2);
-        assert_eq!(prefetch(Some(bounds(0))), 1);
-        assert_eq!(prefetch(Some(bounds(1_000_000))), u16::MAX);
-        assert_eq!(prefetch(None), UNBOUNDED_PREFETCH);
+        let requeue = ConsumeMode::Requeue;
+        assert_eq!(prefetch(Some(bounds(2)), requeue), 2);
+        assert_eq!(prefetch(Some(bounds(0)), requeue), 1);
+        assert_eq!(prefetch(Some(bounds(1_000_000)), requeue), u16::MAX);
+        assert_eq!(prefetch(None, requeue), UNBOUNDED_PREFETCH);
+    }
+
+    #[test]
+    fn acknowledged_consumes_keep_few_deliveries_in_flight() {
+        let bounds = |max_messages| crate::Bounds {
+            max_messages,
+            duration: std::time::Duration::from_secs(1),
+        };
+        assert_eq!(prefetch(Some(bounds(2)), ConsumeMode::Ack), 2);
+        assert_eq!(
+            prefetch(Some(bounds(5_000)), ConsumeMode::Ack),
+            ACK_PREFETCH
+        );
+        assert_eq!(prefetch(None, ConsumeMode::Ack), ACK_PREFETCH);
     }
 
     #[test]

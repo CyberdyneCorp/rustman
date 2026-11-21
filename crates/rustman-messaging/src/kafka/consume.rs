@@ -107,7 +107,7 @@ impl Consume<'_> {
         let max = options.bounds.map_or(u64::MAX, |b: Bounds| b.max_messages);
         let max_bytes = usize::try_from(self.resolved.limits.effective_max_message_bytes())
             .unwrap_or(usize::MAX);
-        while (exchange.messages.len() as u64) < max {
+        while exchange.received() < max {
             let fetched = tokio::select! {
                 () = options.cancel.cancelled() => return Ok(()),
                 () = sleep_until(deadline) => return Ok(()),
@@ -127,7 +127,7 @@ impl Consume<'_> {
             if let Some(feed) = &options.feed {
                 let _ = feed.send(message.clone());
             }
-            exchange.messages.push(message);
+            exchange.record(message, options.bounds.is_none());
         }
         Ok(())
     }
@@ -299,19 +299,8 @@ mod tests {
             },
             offset: 3,
         };
-        let mut exchange = MessagingExchange {
-            protocol: "kafka",
-            operation: "consume",
-            brokers: String::new(),
-            destination: "t".to_owned(),
-            queue: None,
-            security: None,
-            produced: Vec::new(),
-            messages: Vec::new(),
-            warnings: Vec::new(),
-            asyncapi: None,
-            duration_ms: 0,
-        };
+        let mut exchange = MessagingExchange::default();
+        exchange.destination = "t".to_owned();
         let message = record_message(None, 0, record, 10, &mut exchange).await;
         assert_eq!(message.key, Some(serde_json::json!("kkkkkkkkkk")));
         assert_eq!(message.value, Some(serde_json::json!("vvvvvvvvvv")));

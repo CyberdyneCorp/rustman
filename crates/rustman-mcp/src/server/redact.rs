@@ -4,9 +4,10 @@
 //! the session's secret values (and their base64 forms) and the sensitive
 //! header names, so no code path can skip it.
 
-use rustman_core::model::{Auth, NameValue, Request};
+use rustman_core::model::{Auth, MessagingRequest, NameValue, Request};
 use rustman_core::redact::{MIN_HEADER_CREDENTIAL, base64_forms, remember_for_logs};
 use rustman_core::secret::placeholder;
+use rustman_core::vars::messaging::{LITERAL_CREDENTIAL, request_literal_credentials};
 use rustman_core::{Redactor, Secret, Workspace};
 use serde_json::Value;
 
@@ -83,11 +84,25 @@ impl OutputRedactor {
     }
 
     /// The literal credentials of a request: its sensitive header values
-    /// and its auth block. Saved files are returned as text, where
+    /// and its auth block, or for a messaging request its broker
+    /// passwords (`security.password`, `auth.password`, broker URL
+    /// passwords as written and percent-decoded) and Schema Registry
+    /// credentials. Saved files are returned as text, where
     /// [`mask_headers`] cannot see a header.
     pub fn add_request_literals(&mut self, request: &Request) {
-        if let Request::Http(http) = request {
-            self.add_literals(http.headers.as_deref(), http.auth.as_ref());
+        match request {
+            Request::Http(http) => self.add_literals(http.headers.as_deref(), http.auth.as_ref()),
+            Request::Messaging(messaging) => self.add_messaging_literals(messaging),
+            _ => {}
+        }
+    }
+
+    fn add_messaging_literals(&mut self, messaging: &MessagingRequest) {
+        for value in request_literal_credentials(messaging) {
+            self.add_literal(LITERAL_CREDENTIAL, &value);
+        }
+        if let Some(registry) = &messaging.schema_registry {
+            self.add_literals(None, registry.auth.as_ref());
         }
     }
 
