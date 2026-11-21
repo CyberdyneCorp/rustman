@@ -222,6 +222,12 @@ async fn listen(setup: Setup, output: Output, max: Option<u64>) -> Result<u8, Cl
         .await?
         .with_verifiers(verifiers);
     let addr = listener.local_addr();
+    // Ctrl+C is watched on its own thread (registered before the banner,
+    // which whoever reads may answer with an interrupt) and events are
+    // written on another, so a reader that stops reading never stalls the
+    // listener.
+    let cancel = CancellationToken::new();
+    cancel_on_ctrl_c(&cancel);
     output.banner(&listener.banner());
     if is_remote(addr) {
         eprintln!("warning: {}", remote_warning(addr));
@@ -232,10 +238,6 @@ async fn listen(setup: Setup, output: Output, max: Option<u64>) -> Result<u8, Cl
             .ok(),
         None => None,
     };
-    // Ctrl+C is watched on its own thread and events are written on
-    // another, so a reader that stops reading never stalls the listener.
-    let cancel = CancellationToken::new();
-    cancel_on_ctrl_c(&cancel);
     let writer = Writer::spawn(output);
     let handle = listener.spawn();
     let end = tokio::select! {

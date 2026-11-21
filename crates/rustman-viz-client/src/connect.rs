@@ -60,12 +60,13 @@ pub fn connect(program: &Path, options: &ConnectOptions) -> Result<Connection, V
         .as_deref()
         .and_then(|path| OpenOptions::new().create(true).append(true).open(path).ok())
         .map_or_else(Stdio::null, Stdio::from);
-    let mut child = Command::new(program)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(stderr)
-        .spawn()
-        .map_err(|e| VizError::failed(format!("cannot start {}: {e}", program.display())))?;
+    let mut child = crate::spawn(
+        Command::new(program)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(stderr),
+    )
+    .map_err(|e| VizError::failed(format!("cannot start {}: {e}", program.display())))?;
     match handshake(&mut child, options) {
         Ok((stdin, viewer, views)) => Ok(Connection {
             child,

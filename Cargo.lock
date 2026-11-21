@@ -6480,6 +6480,7 @@ dependencies = [
  "rustman-realtime",
  "rustman-secrets",
  "rustman-test-support",
+ "rustman-viz-client",
  "rustman-viz-protocol",
  "rustman-webhook",
  "serde",

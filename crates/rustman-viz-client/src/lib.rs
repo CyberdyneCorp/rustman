@@ -10,10 +10,12 @@
 
 mod connect;
 mod discovery;
+mod spawn;
 mod stream;
 
 pub use connect::{ConnectOptions, Connection, connect};
 pub use discovery::{Discovery, probe};
+pub use spawn::{retry_busy, spawn};
 pub use stream::{EXITED, Stream, StreamOptions, Warn};
 
 use rustman_viz_protocol::PROTOCOL;

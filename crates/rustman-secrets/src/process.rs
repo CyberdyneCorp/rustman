@@ -39,6 +39,24 @@ pub async fn run_group(ctx: &Context, argv: &[String]) -> Result<Output, RunErro
     spawn_and_wait(ctx, argv, None, true).await
 }
 
+/// `command.spawn()`, retried a few times with a short backoff while the
+/// program is "text file busy": on Linux a program just written can still
+/// be held open for writing by a child another thread forked meanwhile,
+/// until that child's own `exec` (milliseconds).
+async fn spawn(command: &mut Command) -> std::io::Result<tokio::process::Child> {
+    let mut pause = std::time::Duration::from_millis(10);
+    for _ in 0..5 {
+        match command.spawn() {
+            Err(e) if e.kind() == ErrorKind::ExecutableFileBusy => {
+                tokio::time::sleep(pause).await;
+                pause *= 2;
+            }
+            result => return result,
+        }
+    }
+    command.spawn()
+}
+
 async fn spawn_and_wait(
     ctx: &Context,
     argv: &[String],
@@ -78,7 +96,7 @@ async fn spawn_and_wait(
             command.env(name, value);
         }
     }
-    let mut child = command.spawn().map_err(|e| match e.kind() {
+    let mut child = spawn(&mut command).await.map_err(|e| match e.kind() {
         ErrorKind::NotFound => RunError::NotFound,
         _ => RunError::Failed(e.to_string()),
     })?;

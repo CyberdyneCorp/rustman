@@ -110,13 +110,14 @@ fn probe_cached(program: &Path) -> Result<(), VizError> {
 /// Run `program --protocol-check` and check that one of the protocols it
 /// prints (one per line) is this build's.
 pub fn probe(program: &Path) -> Result<(), VizError> {
-    let mut child = Command::new(program)
-        .arg(PROTOCOL_CHECK)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| VizError::failed(format!("cannot start {}: {e}", program.display())))?;
+    let mut child = crate::spawn(
+        Command::new(program)
+            .arg(PROTOCOL_CHECK)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null()),
+    )
+    .map_err(|e| VizError::failed(format!("cannot start {}: {e}", program.display())))?;
     let stdout = child
         .stdout
         .take()
