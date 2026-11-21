@@ -344,7 +344,7 @@ mod tests {
     fn unknown_kinds_list_the_plugin_kinds_too() {
         assert_eq!(
             unknown_kind("echo", &["soap".to_owned()]),
-            "unknown request kind 'echo' (expected one of: http, graphql, jsonrpc, grpc, mcp, ws, sse, soap)"
+            "unknown request kind 'echo' (expected one of: http, graphql, jsonrpc, grpc, mcp, ws, sse, kafka, mqtt, amqp, soap)"
         );
     }
 

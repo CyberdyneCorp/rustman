@@ -26,7 +26,9 @@ pub const REQUEST_VERSION: u64 = 1;
 
 /// The built-in request kinds. Plugins can never register these names
 /// (plugins spec, "Request kind extension point").
-pub const BUILTIN_KINDS: [&str; 7] = ["http", "graphql", "jsonrpc", "grpc", "mcp", "ws", "sse"];
+pub const BUILTIN_KINDS: [&str; 10] = [
+    "http", "graphql", "jsonrpc", "grpc", "mcp", "ws", "sse", "kafka", "mqtt", "amqp",
+];
 
 /// The keys every request file may have, whatever its kind.
 pub const COMMON_FIELDS: [&str; 6] = [
