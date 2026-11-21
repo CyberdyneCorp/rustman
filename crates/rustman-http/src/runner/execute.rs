@@ -413,8 +413,15 @@ impl Runner<'_> {
         report
     }
 
-    /// Add `secrets` to the values every sink of this run redacts.
+    /// Add `secrets` to the values every sink of this run redacts, and to
+    /// the secrets of its plugins: a provider value or captured secret
+    /// reaches a plugin only with its `secrets:read` grant.
     pub(super) fn remember(&self, secrets: &[Secret<String>]) {
+        if let Some(plugins) = &self.options.plugins
+            && !secrets.is_empty()
+        {
+            plugins.learn_secrets(secrets);
+        }
         let mut known = self.known.lock().unwrap_or_else(PoisonError::into_inner);
         for secret in secrets {
             known.add(secret);

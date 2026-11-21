@@ -4,7 +4,7 @@
 //! for fakes, so plugin tests are deterministic.
 
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, PoisonError, RwLock};
 use std::time::SystemTime;
 
 use rustman_core::{Redactor, Secret};
@@ -60,7 +60,26 @@ pub struct HostContext {
     /// Every secret of the session. A plugin sees one in clear only with
     /// `secrets:read:<name>`; everything it logs is redacted of all of them.
     pub secrets: Vec<Secret<String>>,
+    /// Secrets the session's sends resolved after loading (provider
+    /// values, captured secrets): redacted like `secrets`, granted by the
+    /// same name.
+    learned: RwLock<Vec<Secret<String>>>,
     pub services: Arc<dyn HostServices>,
+}
+
+/// The most learned secrets a session keeps; the oldest go first. A load
+/// test capturing a new token every iteration must not grow without bound.
+const MAX_LEARNED: usize = 1024;
+
+impl std::fmt::Debug for HostContext {
+    /// The root and the secret names, never a value.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let names: Vec<&str> = self.secrets.iter().map(Secret::name).collect();
+        f.debug_struct("HostContext")
+            .field("root", &self.root)
+            .field("secrets", &names)
+            .finish_non_exhaustive()
+    }
 }
 
 impl HostContext {
@@ -68,6 +87,7 @@ impl HostContext {
         Self {
             root: root.into(),
             secrets: Vec::new(),
+            learned: RwLock::default(),
             services: Arc::new(SystemServices::default()),
         }
     }
@@ -82,13 +102,26 @@ impl HostContext {
         self
     }
 
+    /// Make `secrets` secrets of the session from now on (see
+    /// [`rustman_core::plugins::Extensions::learn_secrets`]).
+    pub fn learn(&self, secrets: &[Secret<String>]) {
+        let mut learned = self.learned.write().unwrap_or_else(PoisonError::into_inner);
+        for secret in secrets {
+            let known =
+                |s: &Secret<String>| s.name() == secret.name() && s.expose() == secret.expose();
+            if self.secrets.iter().any(known) || learned.iter().any(known) {
+                continue;
+            }
+            if learned.len() == MAX_LEARNED {
+                learned.remove(0);
+            }
+            learned.push(secret.clone());
+        }
+    }
+
     /// A redactor of every secret of the session.
     pub fn redactor(&self) -> Redactor {
-        let mut redactor = Redactor::new();
-        for secret in &self.secrets {
-            redactor.add(secret);
-        }
-        redactor
+        self.input_redactor(|_| false)
     }
 
     /// A redactor of the secrets `granted` does not name: what values
@@ -96,8 +129,11 @@ impl HostContext {
     /// `secrets:read:<name>` sees `«redacted:<name>»`.
     pub fn input_redactor(&self, granted: impl Fn(&str) -> bool) -> Redactor {
         let mut redactor = Redactor::new();
-        for secret in self.secrets.iter().filter(|s| !granted(s.name())) {
-            redactor.add(secret);
+        let learned = self.learned.read().unwrap_or_else(PoisonError::into_inner);
+        for secret in self.secrets.iter().chain(learned.iter()) {
+            if !granted(secret.name()) {
+                redactor.add(secret);
+            }
         }
         redactor
     }

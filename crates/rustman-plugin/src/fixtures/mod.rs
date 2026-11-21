@@ -16,7 +16,8 @@ mod extensions;
 mod points;
 
 pub use extensions::{
-    REPORT_PREFIX, faker, hmac_signer, host_rewriter, price_check, report_renderer, trapping_auth,
+    REPORT_PREFIX, faker, hmac_signer, host_rewriter, param_echo, price_check, report_renderer,
+    trapping_auth,
 };
 pub use points::{SOAP_SCHEMA, copy_importer, kind_plugin, xor_transformer};
 

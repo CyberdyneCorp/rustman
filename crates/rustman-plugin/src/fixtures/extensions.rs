@@ -437,6 +437,45 @@ pub fn host_rewriter() -> Vec<u8> {
     component("auth", "", &data, &body)
 }
 
+/// An auth plugin (`v1`) that adds the value of its first param, as it
+/// received it, as the query parameter `p`: what a plugin sees of a
+/// param, redacted or not, reaches the server.
+pub fn param_echo() -> Vec<u8> {
+    let mut data = Data::default();
+    let schemes = data.string_list(&["v1"]);
+    let (name, name_len) = data.string("p");
+    let (no_param, no_param_len) = data.string("no params");
+    let pair = RET2 + 32;
+    let body = format!(
+        r#"
+      (func (export "{AUTH}#schemes") (result i32) (i32.const {schemes}))
+      (func (export "{AUTH}#sign") (param i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)
+        (if (i32.eqz (local.get 11))
+          (then (return (call $err_string (i32.const {no_param}) (i32.const {no_param_len})))))
+        (i32.store (i32.const {pair}) (i32.const {name}))
+        (i32.store (i32.const {p4}) (i32.const {name_len}))
+        (i32.store (i32.const {p8}) (i32.load offset=8 (local.get 10)))
+        (i32.store (i32.const {p12}) (i32.load offset=12 (local.get 10)))
+        (i32.store8 (i32.const {AREA}) (i32.const 0))
+        (i32.store (i32.const {a4}) (i32.const 0))
+        (i32.store (i32.const {a8}) (i32.const 0))
+        (i32.store (i32.const {a12}) (i32.const {pair}))
+        (i32.store (i32.const {a16}) (i32.const 1))
+        (i32.store8 (i32.const {a20}) (i32.const 0))
+        (i32.const {AREA}))
+    "#,
+        p4 = pair + 4,
+        p8 = pair + 8,
+        p12 = pair + 12,
+        a4 = AREA + 4,
+        a8 = AREA + 8,
+        a12 = AREA + 12,
+        a16 = AREA + 16,
+        a20 = AREA + 20,
+    );
+    component("auth", "", &data, &body)
+}
+
 /// An auth plugin (`v1`) whose `sign` traps (`unreachable`).
 pub fn trapping_auth() -> Vec<u8> {
     let mut data = Data::default();
