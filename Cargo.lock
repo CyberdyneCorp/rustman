@@ -5294,6 +5294,7 @@ dependencies = [
  "rustman-mock",
  "rustman-monitor",
  "rustman-plugin",
+ "rustman-proxy",
  "rustman-realtime",
  "rustman-report",
  "rustman-secrets",
@@ -5723,6 +5724,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustman-proxy"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "bytes",
+ "globset",
+ "http",
+ "http-body",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "insta",
+ "jsonschema",
+ "rcgen",
+ "ring",
+ "rustls",
+ "rustls-pki-types",
+ "rustman-core",
+ "rustman-http",
+ "rustman-import",
+ "rustman-test-support",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "toml 1.2.1+spec-1.1.0",
+ "x509-parser",
+ "zeroize",
+]
+
+[[package]]
 name = "rustman-realtime"
 version = "0.1.0"
 dependencies = [
@@ -5849,6 +5885,7 @@ dependencies = [
  "rustman-mock",
  "rustman-monitor",
  "rustman-plugin",
+ "rustman-proxy",
  "rustman-realtime",
  "rustman-secrets",
  "rustman-test-support",

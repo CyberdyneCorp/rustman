@@ -272,10 +272,12 @@ pub fn decide(state: &mut State, decision: Decision) -> Vec<Effect> {
         Decision::Cancel => {
             crate::webhook::cancel_confirm(state);
             crate::mock_server::cancel_confirm(state);
+            crate::recorder::cancel_confirm(state);
             Vec::new()
         }
         Decision::WebhookStart => crate::webhook::confirm_remote(state),
         Decision::MockStart => crate::mock_server::confirm_remote(state),
+        Decision::RecorderStart => crate::recorder::confirm_remote(state),
         Decision::SaveAndClose(id) => {
             state.pending.close_after_save.push(id);
             save_tab(state, id)
@@ -356,6 +358,7 @@ pub fn input_key(state: &mut State, chord: crate::keymap::Chord) -> Vec<Effect> 
             Purpose::Webhook(prompt) => crate::webhook::submit(state, prompt, &text),
             Purpose::Mock(prompt) => crate::mock_server::submit(state, prompt, &text),
             Purpose::Mcp(prompt) => crate::mcp::submit(state, prompt, &text),
+            Purpose::Recorder(prompt) => crate::recorder::submit(state, prompt, &text),
             purpose => submit(state, purpose, &text),
         },
     }
@@ -391,9 +394,11 @@ fn submit(state: &mut State, purpose: Purpose, text: &str) -> Vec<Effect> {
             }
             save_tab(state, tab)
         }
-        Purpose::SaveBody { .. } | Purpose::Webhook(_) | Purpose::Mock(_) | Purpose::Mcp(_) => {
-            Vec::new()
-        }
+        Purpose::SaveBody { .. }
+        | Purpose::Webhook(_)
+        | Purpose::Mock(_)
+        | Purpose::Mcp(_)
+        | Purpose::Recorder(_) => Vec::new(),
     }
 }
 

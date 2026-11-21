@@ -31,6 +31,8 @@ pub enum Decision {
     WebhookStart,
     /// Start the mock server on a network-reachable address.
     MockStart,
+    /// Start the recording proxy on a network-reachable address.
+    RecorderStart,
     /// Send the tab's GraphQL request without checking its document.
     SendUnvalidated(TabId),
     Cancel,
@@ -114,6 +116,20 @@ impl Confirm {
             message: format!("Start anyway? {warning}."),
             choices: vec![
                 ("Start", Decision::WebhookStart),
+                ("Cancel", Decision::Cancel),
+            ],
+            selected: 1,
+        }
+    }
+
+    /// Start the recording proxy on an address reachable from the network
+    /// (traffic-recorder spec: Loopback by default). Cancel is preselected.
+    pub fn recorder_remote(warning: &str) -> Self {
+        Self {
+            title: " Traffic recorder ".into(),
+            message: format!("Start anyway? {warning}."),
+            choices: vec![
+                ("Start", Decision::RecorderStart),
                 ("Cancel", Decision::Cancel),
             ],
             selected: 1,
@@ -217,6 +233,8 @@ pub enum Purpose {
     Mock(crate::mock_server::Prompt),
     /// An MCP inspector prompt (save the last call).
     Mcp(crate::mcp::Prompt),
+    /// A recorder pane prompt (the HAR file to export to).
+    Recorder(crate::recorder::Prompt),
 }
 
 /// A one-line text prompt.

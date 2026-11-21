@@ -23,6 +23,7 @@ rustman-viz-protocol.workspace = true
 rustman-webhook.workspace = true
 rustman-mock.workspace = true
 rustman-monitor.workspace = true
+rustman-proxy.workspace = true
 ratatui.workspace = true
 crossterm.workspace = true
 thiserror.workspace = true

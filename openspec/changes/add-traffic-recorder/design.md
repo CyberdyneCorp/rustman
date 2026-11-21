@@ -43,6 +43,9 @@ A capture keeps the full exchange in memory (unredacted). Every outward path (pa
 
 Using the same writer means re-saving produces no diff.
 
+### D3a. Testing interception without the OS keychain
+The CA key has no file fallback, so a cross-platform CI test of `rustman record --intercept` needs a stand-in. Debug builds (the ones `cargo test` runs) read `RUSTMAN_RECORD_TEST_KEYCHAIN`, a directory used as a keychain (one user-only file per entry), and `RUSTMAN_RECORD_TEST_STOP_AFTER`, a capture count after which recording stops as Ctrl+C would (a test cannot send Ctrl+C to a child on Windows). Both hooks are inert in release builds, so a shipped binary never writes a CA key to a file.
+
 ### D6. Reverse mode shares the pipeline
 `--upstream` swaps the accept loop. Requests arrive as origin-form, and the proxy forwards them to the fixed upstream. Everything after accept is shared code.
 
@@ -51,7 +54,9 @@ Using the same writer means re-saving produces no diff.
 - [The user trusts a CA, which becomes a long-lived interception capability] → The CA is created only on request and installed only with typed confirmation. Its key never leaves the keychain, `pathlen:0`, 1-year expiry, and `rotate`/`uninstall` are one command. The TUI status bar shows `CA TRUSTED` while installed.
 - [Recording other people's traffic with `--allow-remote`] → It's off by default, needs a flag plus a warning (and a confirmation in the TUI), and the listen address is printed prominently.
 - [Secret detection misses an unusual field name] → The entropy heuristic warns about suspicious values. Saving prints a summary of the values it parameterized, and `--store-secrets` is opt-in. Users review the diff before committing, and that's documented.
-- [Memory growth from long sessions] → `max_captures` and `max_buffer_bytes` bounds, plus body truncation.
+- [Memory growth from long sessions] → `max_captures` and `max_buffer_bytes` bounds, plus body truncation. The copies of bodies still in flight (up to 512 connections, each intercepted HTTP/2 connection capped at 100 streams) draw on a shared budget of `max_buffer_bytes`; past it a copy stops growing and is marked `truncated` while the traffic still flows, so worst-case capture memory is about twice `max_buffer_bytes`.
+- [Hanging upstreams and idle connections holding slots] → a response-head timeout (60 s, counted once the request body is sent, so uploads are not cut) answers `504`; opaque tunnels and intercepted connections without a byte for 5 minutes are closed. Both are `[record]` settings (`response_timeout_ms`, `idle_timeout_ms`).
+- [A proxy reachable from the network used to reach internal services (SSRF)] → for clients not on loopback, the proxy is deny-by-default: only globally routable addresses are reached (`rustman_http::address::is_public_ip`, shared so other server components can reuse it). Literal hosts get `403` at once; names are checked on the addresses DNS returned, and those same addresses are connected to, so DNS rebinding cannot pass the check. Loopback clients keep full reach, since recording local and private APIs from this machine is the main use case.
 - [Certificate pinning makes some apps unrecordable] → A clear `TLS REJECTED` hint. Excluding the host still lets the app work.
 
 ## Migration Plan

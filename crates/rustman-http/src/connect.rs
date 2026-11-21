@@ -38,6 +38,9 @@ pub(crate) struct ConnectorConfig {
     /// (needed for h2c prior knowledge).
     pub tunnel_plain: bool,
     pub timeout: Duration,
+    /// Addresses a direct connection must never reach: a target that
+    /// resolves to one is refused before any connection attempt.
+    pub deny: Option<fn(IpAddr) -> bool>,
 }
 
 #[derive(Clone)]
@@ -196,6 +199,14 @@ impl Inner {
     async fn dial(&self, target: &Target) -> Result<Dialed, RequestError> {
         let (addrs, dns) = self.resolve(&target.host, target.port).await?;
         self.dns.check(&target.host, &addrs)?;
+        if let Some(deny) = self.config.deny
+            && addrs.iter().any(|a| deny(a.ip()))
+        {
+            return Err(RequestError::Network(format!(
+                "refused: {} resolves to a denied address",
+                target.host
+            )));
+        }
         let started = Instant::now();
         let tcp = connect_any(&target.host, target.port, &addrs).await?;
         Ok(Dialed {

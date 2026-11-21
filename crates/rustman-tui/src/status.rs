@@ -42,6 +42,10 @@ pub struct StatusInfo {
     pub webhook: Option<WebhookBadge>,
     /// MCP sampling or elicitation requests waiting for the user.
     pub mcp: Option<McpBadge>,
+    /// The recording proxy, while it runs.
+    pub recorder: Option<RecorderBadge>,
+    /// Rustman installed the workspace's recorder CA in a trust store.
+    pub ca_trusted: bool,
     /// The collector client spans are exported to (`[trace.export]`), as
     /// `host:port`.
     pub otlp: Option<String>,
@@ -57,6 +61,14 @@ pub struct McpBadge {
 /// The running webhook listener in the status bar.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WebhookBadge {
+    pub addr: String,
+    /// Reachable from the network: shown as a warning on every screen.
+    pub remote: bool,
+}
+
+/// The running recording proxy in the status bar.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecorderBadge {
     pub addr: String,
     /// Reachable from the network: shown as a warning on every screen.
     pub remote: bool,
@@ -115,6 +127,28 @@ fn left_spans(workspace: &str, info: &StatusInfo, ui: &UiOptions) -> Vec<Span<'s
     ]
 }
 
+/// The recording proxy and the `CA TRUSTED` badge (traffic-recorder
+/// design, Risks: shown while the CA is installed).
+fn recorder_spans(info: &StatusInfo, spans: &mut Vec<Span<'static>>, ui: &UiOptions) {
+    let theme = &ui.theme;
+    if let Some(recorder) = &info.recorder {
+        spans.push(if recorder.remote {
+            let text = format!(" RECORDER ON NETWORK {} ", recorder.addr);
+            Span::styled(text, theme.badge(Token::Error))
+        } else {
+            Span::styled(
+                format!("record {} ", recorder.addr),
+                theme.fg(Token::Accent),
+            )
+        });
+        spans.push(Span::raw(" "));
+    }
+    if info.ca_trusted {
+        spans.push(Span::styled(" CA TRUSTED ", theme.badge(Token::Warn)));
+        spans.push(Span::raw(" "));
+    }
+}
+
 fn right_spans(info: &StatusInfo, quit: &str, ui: &UiOptions) -> Vec<Span<'static>> {
     let theme = &ui.theme;
     let mut spans = Vec::new();
@@ -135,6 +169,7 @@ fn right_spans(info: &StatusInfo, quit: &str, ui: &UiOptions) -> Vec<Span<'stati
         });
         spans.push(Span::raw(" "));
     }
+    recorder_spans(info, &mut spans, ui);
     if let Some(mcp) = info.mcp {
         let text = format!(" MCP APPROVAL ({}) ", mcp.pending);
         spans.push(Span::styled(text, theme.badge(Token::Warn)));
@@ -272,6 +307,8 @@ mod tests {
             secrets_visible: true,
             webhook: None,
             mcp: None,
+            recorder: None,
+            ca_trusted: false,
             otlp: None,
         };
         insta::assert_snapshot!(text(&info));

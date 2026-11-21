@@ -351,7 +351,7 @@ fn is_static(url: &str, mime: &str) -> bool {
 }
 
 /// Transport and browser-managed headers, never written to request files.
-fn is_transport_header(name: &str) -> bool {
+pub fn is_transport_header(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
     lower.starts_with(':')
         || lower.starts_with("sec-")

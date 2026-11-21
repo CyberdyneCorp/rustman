@@ -38,6 +38,7 @@ pub fn shell_key(state: &mut State, chord: Chord) -> Vec<Effect> {
         _ => match crate::webhook::key(state, chord)
             .or_else(|| crate::mock_server::key(state, chord))
             .or_else(|| crate::mcp::key(state, chord))
+            .or_else(|| crate::recorder::key(state, chord))
             .or_else(|| viewer_keys::box_key(state, chord))
             .or_else(|| review::key(state, chord))
         {
@@ -289,7 +290,14 @@ pub fn run(state: &mut State, action: ActionId) -> Vec<Effect> {
         ActionId::McpOpen => {
             state.webhook.open = false;
             state.mock.open = false;
+            state.recorder.open = false;
             return crate::mcp::toggle_pane(state);
+        }
+        ActionId::RecorderOpen => {
+            state.webhook.open = false;
+            state.mock.open = false;
+            state.mcp.open = false;
+            return crate::recorder::toggle_pane(state);
         }
         ActionId::ReportHtml => return crate::response::html::start(state),
         ActionId::GraphqlRefreshSchema if grpc::is_active(state) => return grpc::refresh(state),

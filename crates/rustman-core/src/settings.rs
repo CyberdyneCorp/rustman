@@ -59,6 +59,20 @@ const KNOWN_KEYS: &[(&str, &[&str])] = &[
     ("monitors", &["retention"]),
     // Read by rustman-webhook (add-webhook-inspector).
     ("webhook", &["host", "port", "verifiers"]),
+    // Read by rustman-proxy (add-traffic-recorder).
+    (
+        "record",
+        &[
+            "host",
+            "port",
+            "intercept",
+            "max_body",
+            "max_captures",
+            "max_buffer_bytes",
+            "response_timeout_ms",
+            "idle_timeout_ms",
+        ],
+    ),
     // Read by rustman-mock (add-openapi-mock-server).
     (
         "mock",

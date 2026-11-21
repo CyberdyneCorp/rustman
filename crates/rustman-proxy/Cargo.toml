@@ -1,0 +1,48 @@
+[package]
+name = "rustman-proxy"
+description = "Local recording proxy: forward proxy, CONNECT tunnels, scoped HTTPS interception and the local CA"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+rustman-core.workspace = true
+rustman-http.workspace = true
+rustman-import.workspace = true
+base64.workspace = true
+bytes.workspace = true
+globset.workspace = true
+http.workspace = true
+http-body.workspace = true
+http-body-util.workspace = true
+hyper = { workspace = true, features = ["server", "client", "http1", "http2"] }
+hyper-util = { workspace = true, features = ["server", "server-auto", "tokio", "http1", "http2"] }
+rcgen = { workspace = true, features = ["x509-parser"] }
+ring.workspace = true
+rustls.workspace = true
+rustls-pki-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+time = { workspace = true, features = ["std"] }
+tokio = { workspace = true, features = ["net", "time", "rt", "sync", "macros", "io-util"] }
+tokio-rustls.workspace = true
+tokio-util = { workspace = true, features = ["rt"] }
+toml.workspace = true
+x509-parser.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+jsonschema.workspace = true
+rustman-test-support.workspace = true
+hyper = { workspace = true, features = ["client", "http1", "http2"] }
+hyper-util = { workspace = true, features = ["tokio", "http1", "http2"] }
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "io-util", "test-util"] }

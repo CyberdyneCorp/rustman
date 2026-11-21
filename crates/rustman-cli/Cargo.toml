@@ -41,6 +41,7 @@ rustman-secrets.workspace = true
 # Plugins (add-plugin-system task 1.1): wasmtime, behind the default
 # `plugins` feature.
 rustman-plugin = { workspace = true, optional = true }
+rustman-proxy.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
 anstream.workspace = true

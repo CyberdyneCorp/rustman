@@ -8,7 +8,7 @@ Writing request files by hand is the slowest part of adopting Rustman for an exi
 
 - New `rustman record` command: a local HTTP(S) forward proxy bound to `127.0.0.1:8888` by default, plus a reverse-proxy mode (`--upstream <url>`) for clients that can't use a proxy.
 - HTTPS interception only for hosts in an include list, using a per-workspace local CA. The CA is generated on request, its private key lives in the OS keychain, and it is never trusted automatically. Other hosts pass through as opaque CONNECT tunnels.
-- `rustman record ca install | uninstall | export | rotate` with explicit warnings.
+- `rustman record ca install | uninstall | export | rotate | remove` with explicit warnings.
 - Filters by host glob, method, content type, and a default "drop static assets" rule.
 - A live capture list in the TUI (a pane registered through the `tui` extension point) and JSON-lines output in the CLI.
 - Saving captures as request files: dedupe by method + templated path, ids parameterized into variables, base URL extracted into an environment, and detected secrets turned into secret placeholders (never written raw).

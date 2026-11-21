@@ -1,0 +1,22 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Create this workspace's local CA (key in the OS keychain, certificate in the user config directory); it is not trusted until `ca install`
+
+Usage: rustman record ca init [OPTIONS]
+
+Options:
+      --workspace <DIR>
+          Workspace whose CA to use (default: search from the current directory upwards)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

@@ -1,0 +1,28 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Manage this workspace's local CA, used to decrypt intercepted hosts
+
+Usage: rustman record ca [OPTIONS] <COMMAND>
+
+Commands:
+  init       Create this workspace's local CA (key in the OS keychain, certificate in the user config directory); it is not trusted until `ca install`
+  export     Print the CA certificate (PEM, never the key) and its fingerprint
+  install    Trust the CA in this machine's trust store, after confirmation
+  uninstall  Remove the CA from every trust store Rustman installed it in
+  rotate     Replace the CA: uninstall and delete the old one, create a new one
+  remove     Delete the CA: uninstall it, then delete its key from the keychain and its certificate
+  help       Print this message or the help of the given subcommand(s)
+
+Options:
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

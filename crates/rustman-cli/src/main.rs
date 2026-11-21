@@ -104,6 +104,8 @@ enum Command {
     /// scaffold and test new ones
     #[cfg(feature = "plugins")]
     Plugin(commands::plugin::PluginArgs),
+    /// Record HTTP(S) traffic through a local proxy; manage its local CA
+    Record(commands::record::RecordArgs),
 }
 
 fn main() -> ExitCode {
@@ -171,6 +173,7 @@ fn dispatch(command: Command) -> Result<u8, exit::CliError> {
         Command::Monitor(args) => commands::monitor::run(&args),
         #[cfg(feature = "plugins")]
         Command::Plugin(args) => commands::plugin::run(&args),
+        Command::Record(args) => commands::record::run(&args),
     }
 }
 

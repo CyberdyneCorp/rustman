@@ -23,6 +23,7 @@ pub mod monitor;
 pub mod plugin;
 pub mod plugins;
 pub mod realtime;
+pub mod record;
 pub mod report;
 pub mod rpc;
 pub mod run;

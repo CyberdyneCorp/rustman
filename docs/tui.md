@@ -51,7 +51,7 @@ The sidebar shows the workspace as a collection tree, the request editor edits t
 
 ### Status bar
 
-The bottom line shows, from the left: the workspace name (or `Scratch session`), the active environment (`env: NAME` or `no environment`), `TLS verified` or a red `TLS: INSECURE` badge while certificate verification is off (`verify_tls = false` in `rustman.toml`, or `settings: verify_tls: false` in the request open in the current tab), and how many requests are in flight. On the right: the vim mode (`NORMAL`, `INSERT`, `VISUAL`) when vim keys are on, a `SECRETS VISIBLE` badge in the warning colour while secrets are revealed, the webhook listener's address while it runs (`webhook 127.0.0.1:9090`, or a red `WEBHOOK ON NETWORK 0.0.0.0:9090` badge when it is reachable from the network; see [Webhook pane](#webhook-pane)), and the quit hint.
+The bottom line shows, from the left: the workspace name (or `Scratch session`), the active environment (`env: NAME` or `no environment`), `TLS verified` or a red `TLS: INSECURE` badge while certificate verification is off (`verify_tls = false` in `rustman.toml`, or `settings: verify_tls: false` in the request open in the current tab), and how many requests are in flight. On the right: the vim mode (`NORMAL`, `INSERT`, `VISUAL`) when vim keys are on, a `SECRETS VISIBLE` badge in the warning colour while secrets are revealed, the webhook listener's address while it runs (`webhook 127.0.0.1:9090`, or a red `WEBHOOK ON NETWORK 0.0.0.0:9090` badge when it is reachable from the network; see [Webhook pane](#webhook-pane)), the recording proxy's address while it runs (`record 127.0.0.1:8888`, or a red `RECORDER ON NETWORK` badge) and a `CA TRUSTED` badge while the workspace's recorder CA is installed in a trust store (see [Recorder pane](#recorder-pane)), and the quit hint.
 
 ### Toasts and the notification log
 
@@ -239,6 +239,10 @@ Each ends with `Export HTML report: H`. `H` (response focused, or **Export HTML 
 
 `?` opens the help; other letters do nothing while the pane is shown. Quitting the TUI stops the listener.
 
+### Recorder pane
+
+`Alt+P` (or **Traffic recorder** in the palette) shows the [traffic recorder](record.md) pane: start and stop the recording proxy, follow its captures live, filter and mark them, inspect one (redacted), and save the marked captures as request files or export them as HAR. The keys and the `CA TRUSTED` status badge are described in [The TUI recorder pane](record.md#the-tui-recorder-pane).
+
 ### Mock server pane
 
 `Alt+O` (or **Mock server** in the palette) shows the [mock server](mock.md) in place of the request and response panes; `Esc` or `Alt+O` hides it again, and the server keeps running while it is hidden. The pane shows the server's state and address, and the live request log: time, method, status, the [response source](mock.md#request-log) (`example`, `synthesized`, `prefer`, `override`, `stateful`, `proxy`, `cors` or `error`), the path, the operation or override that answered, and the first validation error. Reload notices appear in the log too. Entries are redacted by the server; credentials such as `Authorization` show as placeholders.
@@ -417,6 +421,7 @@ The table below is generated from the action registry; a test fails if it drifts
 | Webhook inspector | `webhook.open` | `Alt+W` |  |
 | Mock server | `mock.open` | `Alt+O` |  |
 | MCP inspector | `mcp.open` | `Alt+I` |  |
+| Traffic recorder | `recorder.open` | `Alt+P` |  |
 | Refresh GraphQL schema | `graphql.refresh_schema` | `Ctrl+G` |  |
 | Start GraphQL subscription | `graphql.subscription_start` | `Alt+S` |  |
 | Stop GraphQL subscription | `graphql.subscription_stop` | `Alt+X` |  |
