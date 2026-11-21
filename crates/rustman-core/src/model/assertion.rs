@@ -65,6 +65,17 @@ pub enum Assertion {
     /// `evm: {...}`: a check of a decoded EVM call (add-evm-toolkit),
     /// evaluated by `rustman-evm`.
     Evm(Box<Checked<super::evm_check::EvmAssertion>>),
+    /// `subgraph: {max_lag_blocks: N}`: a subgraph indexed within N blocks
+    /// of the chain head, without indexing errors (add-evm-toolkit
+    /// "blockchain-graphql").
+    Subgraph(SubgraphAssertion),
+}
+
+/// `subgraph: {max_lag_blocks: N}`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SubgraphAssertion {
+    pub max_lag_blocks: u64,
 }
 
 /// The key naming an assertion's type.
@@ -95,6 +106,7 @@ enum AssertionKey {
     CloseCode,
     Plugin,
     Evm,
+    Subgraph,
 }
 
 impl<'de> Deserialize<'de> for Assertion {
@@ -156,6 +168,7 @@ impl<'de> Visitor<'de> for AssertionVisitor {
             AssertionKey::CloseCode => Assertion::CloseCode(map.next_value()?),
             AssertionKey::Plugin => Assertion::Plugin(map.next_value()?),
             AssertionKey::Evm => Assertion::Evm(map.next_value()?),
+            AssertionKey::Subgraph => Assertion::Subgraph(map.next_value()?),
         };
         if let Some(extra) = map.next_key::<String>()? {
             return Err(de::Error::custom(format!(
@@ -194,6 +207,7 @@ impl AssertionKey {
             Self::CloseCode => "close_code",
             Self::Plugin => "plugin",
             Self::Evm => "evm",
+            Self::Subgraph => "subgraph",
         }
     }
 }

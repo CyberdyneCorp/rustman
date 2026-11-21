@@ -122,6 +122,7 @@ pub const DEFAULT: &[Builtin] = &[
     (Context::Global, "Ctrl+G", ActionId::GraphqlRefreshSchema),
     (Context::Global, "Alt+S", ActionId::GraphqlSubscriptionStart),
     (Context::Global, "Alt+X", ActionId::GraphqlSubscriptionStop),
+    (Context::Global, "Alt+G", ActionId::GraphqlPaginate),
     (Context::Global, "Alt+A", ActionId::SnapshotReview),
     (Context::Global, "Ctrl+O", ActionId::TraceOpen),
     (Context::Editor, "Ctrl+E", ActionId::EditorExternal),
@@ -167,6 +168,8 @@ pub const DEFAULT: &[Builtin] = &[
     (Context::Response, "D", ActionId::ResponseDiff),
     (Context::Response, "s", ActionId::ResponseSaveBody),
     (Context::Response, "H", ActionId::ReportHtml),
+    (Context::Response, "u", ActionId::GraphqlDisplay),
+    (Context::Response, "L", ActionId::GraphqlLinks),
 ];
 
 /// The `vim` preset for lists and panes (spec: Vim mode). Modal editing in

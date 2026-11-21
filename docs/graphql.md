@@ -39,6 +39,7 @@ auth:
 | `method` | no | `POST` | `GET` sends a query as URL parameters; mutations cannot use it. |
 | `apq` | no | `false` | Automatic Persisted Queries. |
 | `schema_file` | no | | An SDL or introspection JSON file used instead of the schema cache (see [Schema file](#schema-file)). |
+| `preset` | no | detected | `geth` (EIP-1767) or `subgraph` (The Graph): blockchain display and helpers (see [Blockchain GraphQL presets](evm.md#blockchain-graphql-presets)). |
 | `ws_protocol` | no | `auto` | `auto`, `graphql-transport-ws` or `graphql-ws` (the legacy subscriptions-transport-ws protocol). |
 | `connection_params` | no | | The `connection_init` payload of WebSocket subscriptions. |
 | `max_events` | no | `10` | Headless subscriptions stop after this many events (at least 1). |

@@ -78,6 +78,9 @@ pub enum ActionId {
     GraphqlRefreshSchema,
     GraphqlSubscriptionStart,
     GraphqlSubscriptionStop,
+    GraphqlPaginate,
+    GraphqlDisplay,
+    GraphqlLinks,
     CopyAs,
     ImportOpen,
     SnapshotReview,
@@ -101,7 +104,7 @@ const fn def(action: ActionId, id: &'static str, title: &'static str) -> ActionD
 }
 
 /// Every action, in the order the palette and the docs list them.
-pub const REGISTRY: [ActionDef; 77] = [
+pub const REGISTRY: [ActionDef; 80] = [
     def(ActionId::RequestSend, "request.send", "Send request"),
     def(ActionId::RequestCancel, "request.cancel", "Cancel request"),
     def(ActionId::RequestSave, "request.save", "Save request"),
@@ -236,6 +239,21 @@ pub const REGISTRY: [ActionDef; 77] = [
         ActionId::GraphqlSubscriptionStop,
         "graphql.subscription_stop",
         "Stop GraphQL subscription",
+    ),
+    def(
+        ActionId::GraphqlPaginate,
+        "graphql.paginate",
+        "Send following subgraph pagination",
+    ),
+    def(
+        ActionId::GraphqlDisplay,
+        "graphql.display",
+        "Cycle blockchain scalar display",
+    ),
+    def(
+        ActionId::GraphqlLinks,
+        "graphql.links",
+        "Open result value in EVM toolkit",
     ),
     def(ActionId::CopyAs, "request.copy_as", "Copy as…"),
     def(ActionId::ImportOpen, "import.open", "Import…"),

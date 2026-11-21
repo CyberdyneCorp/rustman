@@ -112,6 +112,7 @@ fn execute_other(effect: Effect) -> Action {
         Effect::Mcp(job) => crate::mcp::execute(*job),
         Effect::Recorder(job) => crate::recorder::execute(*job),
         Effect::GraphqlSchema(job) => graphql_schema::execute(&job),
+        Effect::EvmLookup(job) => crate::chain_links::execute(&job),
         Effect::GrpcSchema(job) => crate::grpc::execute(&job),
         Effect::Snippet(job) => crate::copy_as::execute(&job),
         Effect::Import(job) => crate::import_dialog::execute(&job),

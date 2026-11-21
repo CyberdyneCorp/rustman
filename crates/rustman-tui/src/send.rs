@@ -26,7 +26,8 @@ use rustman_core::snapshot::SnapshotMode;
 use rustman_core::vars::Lookup;
 use rustman_core::workspace::RequestRef;
 use rustman_core::{Redactor, Workspace};
-use rustman_graphql::{GraphqlRunner, Interactive, SubscriptionEvent};
+use rustman_evm::gql::RpcHead;
+use rustman_graphql::{GraphqlRunner, Interactive, Paginate, SubscriptionEvent};
 use rustman_grpc::GrpcRunner;
 use rustman_http::Exchange;
 use rustman_http::runner::{RunContext, RunOptions, Runner, Sent};
@@ -35,7 +36,7 @@ use rustman_mcp::client::oauth::OAuthOptions;
 use rustman_mcp::client::{ConnectOptions, McpRunner};
 use rustman_messaging::MessagingRunner;
 use rustman_realtime::RealtimeRunner;
-use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio_util::sync::CancellationToken;
 
 use crate::app::{Action, Effect, Overlay, State};
@@ -87,6 +88,8 @@ pub struct SendJob {
     pub plugins: crate::plugin_trust::Gate,
     /// A messaging tab's consumer: where its messages go.
     pub messaging: Option<ConsumerLink>,
+    /// `graphql.paginate`: follow subgraph pagination (`id_gt`).
+    pub paginate: bool,
 }
 
 impl fmt::Debug for SendJob {
@@ -165,9 +168,31 @@ pub fn start_with(state: &mut State, validate: bool) -> Vec<Effect> {
         realtime,
         plugins: state.plugin_gate.clone(),
         messaging,
+        paginate: false,
     };
     state.status.in_flight = state.tabs.in_flight();
     vec![Effect::Send(Box::new(job))]
+}
+
+/// `graphql.paginate`: send the current GraphQL tab following subgraph
+/// pagination (`id_gt`, at most 20 pages), the pages concatenated.
+pub fn start_paged(state: &mut State) -> Vec<Effect> {
+    if state
+        .tabs
+        .active()
+        .and_then(|t| t.editor.graphql())
+        .is_none()
+    {
+        state.notify(Severity::Info, "Pagination applies to GraphQL requests");
+        return Vec::new();
+    }
+    let mut effects = start(state);
+    for effect in &mut effects {
+        if let Effect::Send(job) = effect {
+            job.paginate = true;
+        }
+    }
+    effects
 }
 
 /// The first error of a GraphQL tab's document, which blocks its send.
@@ -408,14 +433,7 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         Err(message) => return failed(job, message),
     };
     let (feed, events) = unbounded_channel();
-    let graphql = GraphqlRunner {
-        validate: job.validate,
-        interactive: Some(Interactive {
-            stop: job.stop.clone(),
-            feed: Some(feed),
-        }),
-        ..GraphqlRunner::default()
-    };
+    let graphql = graphql_runner(job, feed);
     let (rpc_feed, rpc_events) = unbounded_channel();
     let jsonrpc = JsonrpcRunner {
         interactive: Some(rustman_jsonrpc::Interactive {
@@ -507,10 +525,11 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         _ => None,
     };
     let reviews = std::mem::take(&mut sent.snapshots);
+    let redactor = sent.redactor.clone();
     let mut received = prepare(sent, http);
     received.export_warnings = export_warnings;
     received.snapshots = Reviews::new(reviews, job.snapshots);
-    received.graphql = graphql_view(&received);
+    received.graphql = graphql_view(&received, &redactor);
     received.jsonrpc = received
         .record
         .jsonrpc
@@ -536,6 +555,24 @@ fn build_runner<'a>(
     let providers = crate::secret_providers::for_workspace(place.root, place.settings)?;
     let runner = Runner::new(ctx, options).map_err(|e| e.to_string())?;
     Ok(runner.with_secret_providers(providers))
+}
+
+/// The GraphQL runner of a send: subscriptions run until stopped, events
+/// go to `feed`, subgraph freshness is read, and the job's pagination.
+fn graphql_runner(job: &SendJob, feed: UnboundedSender<SubscriptionEvent>) -> GraphqlRunner {
+    GraphqlRunner {
+        validate: job.validate,
+        interactive: Some(Interactive {
+            stop: job.stop.clone(),
+            feed: Some(feed),
+        }),
+        paginate: job.paginate.then(Paginate::default),
+        chain_head: Some(Arc::new(RpcHead::new(Arc::new(
+            rustman_http::HttpEngine::new(),
+        )))),
+        freshness: true,
+        ..GraphqlRunner::default()
+    }
 }
 
 /// Mark the job's live consumer as no longer running.
@@ -566,14 +603,15 @@ fn typed_messages(job: &SendJob) -> Option<UnboundedReceiver<serde_json::Value>>
 }
 
 /// The GraphQL result of a GraphQL exchange, from its redacted record and
-/// body (a body spooled to disk is only in the Body tab).
-fn graphql_view(received: &Received) -> Option<Box<GraphqlView>> {
+/// body (a body spooled to disk is only in the Body tab); its formatted
+/// forms are redacted again with `redactor`.
+fn graphql_view(received: &Received, redactor: &Redactor) -> Option<Box<GraphqlView>> {
     let record = received.record.graphql.as_ref()?;
     let body = match &received.source {
         Some(Source::Memory(bytes)) => Some(bytes.as_ref()),
         _ => None,
     };
-    Some(Box::new(GraphqlView::new(record, body)))
+    Some(Box::new(GraphqlView::new(record, body).redacted(redactor)))
 }
 
 /// Keep a subscription's events for the live view. Never returns: the
@@ -736,6 +774,7 @@ mod tests {
             realtime: None,
             plugins: crate::plugin_trust::Gate::default(),
             messaging: None,
+            paginate: false,
         };
         let mut other = job.clone();
         assert_eq!(job, other);

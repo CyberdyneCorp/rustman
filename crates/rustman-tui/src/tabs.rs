@@ -305,6 +305,16 @@ impl Tabs {
         id
     }
 
+    /// Open `request` in a new, never saved tab (dirty until saved).
+    pub fn open_unsaved(&mut self, request: &Request, registry: &Registry) -> TabId {
+        let editor = registry.open(request);
+        let id = self.push(None, editor);
+        if let Some(tab) = self.list.last_mut() {
+            tab.dirty = true;
+        }
+        id
+    }
+
     fn push(&mut self, path: Option<PathBuf>, editor: Box<dyn PaneEditor>) -> TabId {
         self.next_id += 1;
         let id = self.next_id;

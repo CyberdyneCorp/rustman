@@ -494,6 +494,83 @@ rustman evm fork --env staging --json
 
 Edits change only the top-level `function`, `args` and `block` lines of the file; comments and the other fields are kept. An `evm-tx` opens read-only with `evm-tx: signing is not available yet; nothing was signed or sent`. After a send, the status bar shows the chain and the node client of the endpoint, such as `Base (8453) · geth 1.14.11`.
 
+## Blockchain GraphQL presets
+
+GraphQL endpoints that serve chain data get presets on top of the [GraphQL client](graphql.md). A preset never changes what is sent: it formats what is shown, pages through subgraph lists, measures a subgraph's freshness and links results into the toolkit.
+
+| Preset | For | Detected when the schema has |
+|---|---|---|
+| `geth` | geth's EIP-1767 endpoint, usually `<rpc>/graphql` | `Query.block` and `Query.logs`, and the `Long` and `Bytes32` scalars |
+| `subgraph` | The Graph and compatible indexers | `Query._meta` |
+
+The preset is detected from the active schema (`schema_file` or the schema cache) and shown in the TUI's schema line (`preset subgraph`) and in `rustman graphql query`'s status line. A request file can name it with `preset:`; an explicit preset wins, and on a schema without its markers a warning is shown: `schema does not look like geth EIP-1767` (or `schema does not look like a subgraph`).
+
+```yaml
+version: 1
+kind: graphql
+name: Latest block
+endpoint: '{{rpc}}/graphql'
+preset: geth
+schema_file: geth.graphql
+document: '{ block { number hash gasUsed baseFeePerGas miner { address balance } } }'
+```
+
+### Scalar display
+
+With a preset active, `BigInt`, `BigDecimal` and `Long` values are shown as exact decimals (geth's hex `BigInt` and `Long` included), `Bytes` and `Bytes32` as `0x` hex, and addresses in EIP-55 checksummed form: fields typed `Address`, and any other 20-byte `0x` value, whatever its field name or type (`Bytes`, `ID` or `String`; a subgraph's usual `account { id }`), as the TUI's result links take them. A `BigInt` in an object that also has a `decimals` field can be shown in token units: `"1000000000000000000000"` with `decimals: 18` is `1000 (18 decimals)`.
+
+This is display only. Assertions, captures, history and `--json` output read the raw JSON as the server sent it, so a `data` assertion compares the lowercase address the subgraph returned:
+
+```yaml
+assertions:
+  - data: {path: $.token.owner, equals: '0xd8da6bf26964af9d7eed9e03e53415d37aa96045'}
+```
+
+`rustman graphql query` prints formatted values; `--raw` prints them as received and `--units` adds the token-unit form. In the TUI, `u` in the response cycles **formatted**, **units** and **raw**, named at the end of the summary line. A formatted value is redacted again before it is shown, so a checksummed address that is a secret never appears.
+
+### Pagination
+
+For subgraph lists, `rustman graphql query <request> --paginate` (and `Alt+G` in the TUI) sends the operation again and again, concatenating the pages into one array per paginated field. A paginated field is a top-level field with a `first` argument:
+
+- `id_gt` (the default) follows `where: {id_gt: $var}`: the variable starts at `""` (unless the request sets it) and is set to the last item's `id`;
+- `--paginate skip` follows `skip: $var`, starting at 0 and moved on by `first`.
+
+```graphql
+query Transfers($last: ID) {
+  transfers(first: 1000, where: {id_gt: $last}) { id from to value transactionHash }
+}
+```
+
+Paging stops when a page returns fewer than `first` items, after `--max-pages` pages (default 20, at most 1000) with the warning `stopped at --max-pages 20`, or once the page bodies read reach 64 MiB in all, with the warning `stopped after N pages: they reached the 64 MiB pagination limit`. A later page that fails (a transport error, a result with errors, or a body that is not a GraphQL result) ends paging: the pages read before it are kept as the result, followed by the failing page's own errors and the error `--paginate: page N failed (<why>); keeping the N-1 pages read before it`, and the exit code is non-zero. A failing first page is the result as it is. An operation without a field taking `first`, or without the cursor variable, fails before anything is sent, with an error starting `graphql: --paginate:` and exit code 3. Pagination applies to HTTP operations, not subscriptions.
+
+### Subgraph freshness
+
+For the `subgraph` preset, Rustman sends `{ _meta { block { number } hasIndexingErrors } }` to the subgraph and reads the chain head (`eth_blockNumber`) from the environment's EVM node, the `rpc` variable. The node gets none of the GraphQL request's headers or auth: a subgraph API key never reaches it. The lag is shown in the TUI and on `rustman graphql query`'s status line as `lag 12 blocks`; without an `rpc` variable it is `unknown (no rpc)`. `rustman run` reads freshness only for requests with a `subgraph` assertion:
+
+```yaml
+version: 1
+kind: graphql
+name: Indexer is fresh
+endpoint: '{{subgraph}}'
+schema_file: subgraph.graphql
+document: '{ tokens(first: 1) { id totalSupply decimals } }'
+assertions:
+  - subgraph: {max_lag_blocks: 50}
+```
+
+The assertion fails when the lag exceeds the bound (`subgraph lag 120 blocks exceeds 50`), when `hasIndexingErrors` is true (`subgraph has indexing errors`), and without an `rpc` variable (`cannot compute lag: no rpc configured`). On a request without the subgraph preset it is an error.
+
+### Links into the toolkit
+
+In the TUI, `L` in the response lists the addresses (20-byte values) and transaction hashes (32-byte values in fields named `hash`, `transactionHash`, `txHash`, ...) of a result with a preset. Choosing one offers:
+
+- **Decode transaction**: the transaction and its receipt decoded, as `rustman evm tx` shows them;
+- **Show balance**: the address's balance in the native currency;
+- **Call contract**: a new `evm-call` tab to the address (ERC-20 ABI, `totalSupply`) to edit;
+- **Open in explorer**: the explorer page from the known-chain registry, when the environment pins `chain_id`.
+
+Lookups read the environment's `rpc`, check its `chain_id` pin first, use read-only methods only and are redacted. Links whose value is a secret are left out.
+
 ## Agent tools
 
 `rustman mcp serve` registers six read-only tools (see the [tool reference](agent.md#tool-reference)):

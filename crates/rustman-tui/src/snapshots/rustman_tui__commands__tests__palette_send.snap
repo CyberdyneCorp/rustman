@@ -8,7 +8,7 @@ expression: text
 │                       │ › send                                                               │                       │
 │                       │                                                                      │                       │
 │                       │  Send request                                    Ctrl+Enter, Ctrl+R  │                       │
-│                       │                                                                      │                       │
+│                       │  Send following subgraph pagination                           Alt+G  │                       │
 │                       │                                                                      │                       │
 │                       │                                                                      │                       │
 │                       │                                                                      │                       │

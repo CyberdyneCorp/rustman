@@ -25,6 +25,7 @@ pub mod events;
 pub mod exec;
 pub mod explorer;
 pub mod fork;
+pub mod gql;
 pub mod identity;
 pub mod load;
 pub mod probe;

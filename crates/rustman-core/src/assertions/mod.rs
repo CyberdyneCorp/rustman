@@ -21,6 +21,7 @@ mod response;
 mod schema;
 mod shown;
 mod status;
+mod subgraph;
 mod value;
 
 use std::fmt;
@@ -37,6 +38,7 @@ pub use plugin::PluginCalls;
 pub use realtime::{RealtimeFacts, wait_matches};
 pub use response::{GrpcView, ResponseView};
 pub use schema::MAX_VIOLATIONS;
+pub use subgraph::{NO_RPC as SUBGRAPH_NO_RPC, NOT_SUBGRAPH};
 
 use expected::Interp;
 use response::Parsed;
@@ -168,12 +170,25 @@ pub fn evaluate_realtime(
     evaluate_all(assertions, response, ctx, Facts::Realtime(facts))
 }
 
+/// Evaluate the assertions of a GraphQL request with what its preset
+/// learned about the subgraph (`subgraph` assertions read it).
+pub fn evaluate_graphql(
+    assertions: &[Assertion],
+    response: &ResponseView<'_>,
+    ctx: &Context<'_, '_>,
+    subgraph: Option<&crate::run::SubgraphFacts>,
+) -> Vec<AssertionResult> {
+    let facts = subgraph.map_or(Facts::None, Facts::Subgraph);
+    evaluate_all(assertions, response, ctx, facts)
+}
+
 /// What a protocol client learned besides the response.
 #[derive(Clone, Copy)]
 enum Facts<'f> {
     None,
     Mcp(&'f McpFacts),
     Realtime(&'f RealtimeFacts),
+    Subgraph(&'f crate::run::SubgraphFacts),
 }
 
 fn evaluate_all(
@@ -212,6 +227,13 @@ fn evaluate_one(
         Assertion::Metadata(metadata) => header::metadata(metadata, view, interp),
         Assertion::Plugin(plugin) => plugin::evaluate(plugin, response, ctx.plugins),
         Assertion::Evm(_) => Check::new("evm", "evm").error(EVM_NEEDS_DECODER),
+        Assertion::Subgraph(check) => {
+            let subgraph = match facts {
+                Facts::Subgraph(facts) => Some(facts),
+                _ => None,
+            };
+            subgraph::evaluate(check, subgraph)
+        }
         Assertion::Snapshot(snapshot) => {
             Check::new("snapshot", format!("snapshot {}", snapshot.name()))
                 .error(SNAPSHOT_NEEDS_RUNNER)

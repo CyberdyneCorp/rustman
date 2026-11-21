@@ -85,6 +85,18 @@ pub fn schema_line(editor: &GraphqlEditor, ctx: &RenderCtx) -> Line<'static> {
         SchemaState::Failed(reason) => (format!("No schema: {reason}"), Token::Warn),
     };
     let mut spans = vec![Span::styled(format!(" {text}"), theme.fg(token))];
+    if let Some(preset) = editor.preset() {
+        spans.push(Span::styled(
+            format!(" {dot} preset {}", preset.name),
+            theme.fg(Token::Info),
+        ));
+        if let Some(warning) = preset.warning {
+            spans.push(Span::styled(
+                format!(" {dot} {warning}"),
+                theme.fg(Token::Warn),
+            ));
+        }
+    }
     if let Some(file) = editor.document_file() {
         spans.push(Span::styled(
             format!(" {dot} from {file} (read-only)"),

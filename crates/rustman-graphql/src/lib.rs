@@ -20,6 +20,8 @@ pub mod fetch;
 pub mod highlight;
 pub mod introspection;
 pub mod operation;
+pub mod paginate;
+pub mod preset;
 pub mod response;
 pub mod run;
 pub mod schema;
@@ -42,8 +44,12 @@ pub use explorer::{
 pub use fetch::{Introspected, introspect, refresh_schema};
 pub use highlight::{Highlight, TokenClass, highlight};
 pub use operation::{OperationKind, SelectedOperation, check_http_method, select_operation};
+pub use paginate::{DEFAULT_MAX_PAGES, MAX_PAGED_BYTES, MAX_PAGES_LIMIT, PageMode, Paginate};
 pub use response::{GraphqlResponse, NOT_GRAPHQL, ResponseError, ResultStatus};
-pub use run::{Delivery, Executed, Execution, GraphqlRunner, Interactive, execute};
+pub use run::{
+    ChainHead, Delivery, Executed, Execution, GraphqlRunner, Interactive, META_QUERY, execute,
+    execute_paged,
+};
 pub use schema::GraphqlSchema;
 pub use source::{ActiveSchema, SchemaOrigin, active_schema};
 pub use subscription::{

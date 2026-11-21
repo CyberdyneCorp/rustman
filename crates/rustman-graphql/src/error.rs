@@ -56,6 +56,9 @@ pub enum GraphqlError {
     /// neither parsed nor recorded.
     #[error("HTTP: the response body is larger than the {0} byte limit (max_body_bytes)")]
     BodyTooLarge(u64),
+    /// `--paginate` cannot page this operation.
+    #[error("graphql: --paginate: {0}")]
+    Paginate(String),
     /// The transport failed; the message is redacted.
     #[error(transparent)]
     Transport(#[from] RequestError),
