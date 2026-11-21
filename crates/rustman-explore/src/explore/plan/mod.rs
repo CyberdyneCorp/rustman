@@ -263,9 +263,7 @@ pub fn glob(pattern: &str, text: &str) -> bool {
 }
 
 /// A literal made safe to embed in a template: `{{` becomes `\{{`.
-pub fn escape(text: &str) -> String {
-    text.replace("{{", "\\{{")
-}
+pub use rustman_core::vars::template::escape;
 
 /// `value` with every string (keys included) escaped.
 pub fn escape_json(value: &Value) -> Value {

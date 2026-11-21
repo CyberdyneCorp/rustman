@@ -17,6 +17,7 @@ pub mod import;
 pub mod init;
 pub mod mcp;
 pub mod mcp_client;
+pub mod messaging;
 pub mod mock;
 pub mod monitor;
 #[cfg(feature = "plugins")]

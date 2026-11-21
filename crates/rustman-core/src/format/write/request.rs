@@ -27,6 +27,7 @@ pub fn request_to_yaml(request: &Request) -> String {
         Request::Ws(ws) => ws.source.clone(),
         Request::Sse(sse) if sse.source.is_empty() => super::realtime::sse_to_yaml(sse),
         Request::Sse(sse) => sse.source.clone(),
+        Request::Messaging(messaging) => messaging.source.clone(),
         Request::Opaque(opaque) => opaque.source.clone(),
     }
 }

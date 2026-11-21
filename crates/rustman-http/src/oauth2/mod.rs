@@ -84,6 +84,7 @@ pub fn cache_key(request: &RequestRef<'_>) -> String {
         rustman_core::model::Request::Sse(sse) => sse.auth.is_some(),
         rustman_core::model::Request::Mcp(_)
         | rustman_core::model::Request::Grpc(_)
+        | rustman_core::model::Request::Messaging(_)
         | rustman_core::model::Request::Opaque(_) => false,
     };
     let owner = request

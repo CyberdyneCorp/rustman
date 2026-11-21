@@ -17,6 +17,7 @@ use rustman_grpc::GrpcRunner;
 use rustman_http::runner::{BailScope, RunContext, Runner};
 use rustman_jsonrpc::JsonrpcRunner;
 use rustman_mcp::client::McpRunner;
+use rustman_messaging::MessagingRunner;
 use rustman_realtime::RealtimeRunner;
 use rustman_report::{Report, ReportTarget, Reporter, RunReport};
 
@@ -179,6 +180,8 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
     options.grpc = Some(&grpc);
     let realtime = RealtimeRunner::default();
     options.realtime = Some(&realtime);
+    let messaging = MessagingRunner::default();
+    options.messaging = Some(&messaging);
     if viz.is_some() {
         options.observer = Some(&observe);
     }
@@ -223,13 +226,14 @@ fn viz_title(paths: &[PathBuf]) -> String {
 }
 
 /// The run's exit code; a run whose errors include a call a method guard
-/// refused exits 4, like `rustman rpc`.
+/// refused (like `rustman rpc`), or a messaging operation the safety
+/// policy refused, exits 4.
 fn exit_code(record: &RunRecord) -> u8 {
     let code = run_code(&record.summary);
     let guarded = record.requests.iter().any(|r| {
-        r.jsonrpc
-            .as_ref()
-            .is_some_and(|j| j.refusal == Some(RpcRefusal::Guard))
+        let rpc = r.jsonrpc.as_ref();
+        rpc.is_some_and(|j| j.refusal == Some(RpcRefusal::Guard))
+            || r.messaging.as_ref().is_some_and(|m| m.blocked)
     });
     if code == REQUEST && guarded {
         SAFETY
@@ -399,4 +403,35 @@ fn write_targets(targets: &[ReportTarget], record: &RunRecord) -> Result<(), Cli
         return Ok(());
     }
     super::report::write_all(targets, &Report::Run(Box::new(RunReport::new(record))))
+}
+
+#[cfg(test)]
+mod tests {
+    use rustman_core::run::{MessagingRecord, Summary};
+
+    use super::*;
+
+    fn run_of(requests: Vec<RequestRecord>) -> RunRecord {
+        RunRecord {
+            started_at: String::new(),
+            environment: None,
+            summary: Summary::of(&requests, 1.0, false),
+            requests,
+        }
+    }
+
+    #[test]
+    fn a_produce_the_safety_policy_refused_exits_4() {
+        let mut refused = RequestRecord::new("p".into(), "p".into(), "p.rman.yaml".into())
+            .errored("blocked: produce requires allow_mutations".into());
+        refused.messaging = Some(MessagingRecord {
+            protocol: "kafka".into(),
+            operation: "produce".into(),
+            blocked: true,
+            exchange: None,
+        });
+        assert_eq!(exit_code(&run_of(vec![refused.clone()])), SAFETY);
+        refused.messaging.as_mut().unwrap().blocked = false;
+        assert_eq!(exit_code(&run_of(vec![refused])), REQUEST);
+    }
 }

@@ -17,7 +17,7 @@ const CANARY: &str = "canary-c0py-as-7e1f";
 const TOML: &str = "[workspace]\nname = \"demo\"\nversion = 1\n\n[defaults]\n\
     default_environment = \"dev\"\n";
 
-/// A workspace with `me` (a bearer secret), `events` (kind `kafka`) and
+/// A workspace with `me` (a bearer secret), `events` (kind `nats`) and
 /// the environment `dev`, whose secret `token` is stored.
 pub(crate) fn fixture() -> (tempfile::TempDir, State) {
     let tmp = workspace(&[
@@ -33,7 +33,7 @@ pub(crate) fn fixture() -> (tempfile::TempDir, State) {
         ),
         (
             "events.rman.yaml",
-            "version: 1\nkind: kafka\nname: Events\ntopic: orders\n",
+            "version: 1\nkind: nats\nname: Events\ntopic: orders\n",
         ),
     ]);
     SecretStore::open(&tmp.path().join("ws"), SecretBackend::File)
@@ -146,7 +146,7 @@ fn an_unsupported_kind_toasts_and_opens_no_picker() {
     crate::workbench::open_path(&mut state, Path::new("events.rman.yaml"));
     press(&mut state, "Alt+c");
     assert!(state.overlay.is_none());
-    assert!(toasts(&state).contains(&"No snippet export for kind 'kafka'".to_owned()));
+    assert!(toasts(&state).contains(&"No snippet export for kind 'nats'".to_owned()));
     assert!(state.clipboard.is_none());
 }
 

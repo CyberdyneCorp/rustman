@@ -239,7 +239,7 @@ fn mcp_and_unregistered_kinds_get_generic_pages() {
     write(
         ws.path(),
         "events/orders.rman.yaml",
-        "version: 1\nkind: kafka\nname: Orders\ntopic: orders\nheaders:\n  - name: Authorization\n    value: Bearer literal-kafka-cred\n",
+        "version: 1\nkind: nats\nname: Orders\ntopic: orders\nheaders:\n  - name: Authorization\n    value: Bearer literal-kafka-cred\n",
     );
     let workspace = rustman_docs::load_workspace(ws.path(), Some(ws.path())).unwrap();
     let mut options = rustman_docs::BuildOptions::new(ws.path().join("site"));
@@ -251,7 +251,7 @@ fn mcp_and_unregistered_kinds_get_generic_pages() {
     assert!(mcp.contains("server files"), "{mcp}");
     assert!(mcp.contains("operation tools/call"), "{mcp}");
     let kafka = read(&site, "endpoints/events-orders.md");
-    assert!(kafka.contains("Kind: `kafka`"), "{kafka}");
+    assert!(kafka.contains("Kind: `nats`"), "{kafka}");
     assert!(kafka.contains("| `topic` | `orders` |"), "{kafka}");
     assert!(!kafka.contains("literal-kafka-cred"), "{kafka}");
     assert!(!kafka.contains("Code samples"), "{kafka}");

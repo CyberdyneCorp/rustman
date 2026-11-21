@@ -131,6 +131,12 @@ pub fn is_variable_name(name: &str) -> bool {
             .any(|c| c.is_whitespace() || c == '{' || c == '}')
 }
 
+/// A literal made safe to embed in a template: every `{{` written as
+/// `\{{`, so interpolation leaves it as is.
+pub fn escape(text: &str) -> String {
+    text.replace("{{", "\\{{")
+}
+
 impl fmt::Display for Template {
     /// Writes the template back in source form.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -186,6 +192,10 @@ mod tests {
         assert_eq!(parse("\\{{not_a_var}}"), [lit("{{not_a_var}}")]);
         assert_eq!(parse("a\\{{b}} {{c}}"), [lit("a{{b}} "), var("c")]);
         assert!(Template::parse("\\{{x}}").unwrap().is_literal());
+        assert_eq!(
+            parse(&escape("{{secret:env/HOME}}")),
+            [lit("{{secret:env/HOME}}")]
+        );
     }
 
     #[test]

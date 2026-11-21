@@ -5,7 +5,7 @@
 
 use rustman_core::Redactor;
 use rustman_core::data_rows::secret_by_name;
-use rustman_core::model::{Body, JsonContent, NameValue, PartSource, Request};
+use rustman_core::model::{Body, JsonContent, MessagingRequest, NameValue, PartSource, Request};
 use serde_json::Value;
 
 use crate::rendered::{add_literal, credential_header};
@@ -55,7 +55,24 @@ pub fn add_request_literals(redactor: &mut Redactor, request: &Request) {
             add_url(redactor, &r.url);
             add_body(redactor, r.body.as_ref());
         }
+        Request::Messaging(r) => add_messaging(redactor, r),
         Request::Opaque(_) => {}
+    }
+}
+
+/// The broker URL's userinfo and the literal broker passwords of a
+/// messaging request.
+fn add_messaging(redactor: &mut Redactor, request: &MessagingRequest) {
+    if let Some(broker) = &request.broker {
+        add_url(redactor, broker);
+    }
+    let security = request
+        .security
+        .as_deref()
+        .and_then(|s| s.password.as_ref());
+    let auth = request.auth.as_ref().and_then(|a| a.password.as_ref());
+    for password in [security, auth].into_iter().flatten() {
+        add_named(redactor, "password", password);
     }
 }
 
@@ -166,6 +183,20 @@ mod tests {
         );
         assert_eq!(redactor.text("-a pw-literal-123"), "-a «redacted:password»");
         assert_eq!(redactor.text("page=2"), "page=2");
+    }
+
+    #[test]
+    fn literal_broker_passwords_are_redacted() {
+        let text = "version: 1\nkind: kafka\nname: k\noperation: consume\nbrokers: a:9092\ntopic: t\nsecurity: {protocol: SASL_SSL, mechanism: PLAIN, username: u, password: kafka-literal-pw}\n";
+        let request = MessagingRequest::parse(std::path::Path::new("k.rman.yaml"), text).unwrap();
+        let mut redactor = Redactor::new();
+        add_request_literals(&mut redactor, &Request::Messaging(Box::new(request)));
+        assert_eq!(redactor.text("kafka-literal-pw"), "«redacted:password»");
+        let mut redactor = Redactor::new();
+        let text = "version: 1\nkind: mqtt\nname: m\noperation: consume\nbroker: mqtt://app:mqtt-literal-pw@h\ntopic: t\n";
+        let request = MessagingRequest::parse(std::path::Path::new("m.rman.yaml"), text).unwrap();
+        add_request_literals(&mut redactor, &Request::Messaging(Box::new(request)));
+        assert!(!redactor.text("mqtt-literal-pw").contains("mqtt-literal-pw"));
     }
 
     #[test]

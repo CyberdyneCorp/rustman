@@ -1,0 +1,46 @@
+---
+source: crates/rustman-messaging/tests/asyncapi.rs
+expression: rendered(&plan)
+---
+collection: legacy-shop
+- environments/rabbit.yaml
+- asyncapi.json
+- order-created/publish-order.rman.yaml
+- order-created/on-order.rman.yaml
+- payments/subscribe-payments.rman.yaml
+
+=== environments/rabbit.yaml
+variables:
+  broker: "amqp://rabbit.shop.example:5672"
+
+=== order-created/publish-order.rman.yaml
+version: 1
+kind: amqp
+name: "publishOrder"
+operation: produce
+broker: "{{broker}}"
+exchange: "orders"
+routing_key: "order.created"
+asyncapi: {document: "../asyncapi.json", message: "OrderCreated"}
+messages:
+  - value: {"id":0}
+
+=== order-created/on-order.rman.yaml
+version: 1
+kind: amqp
+name: "onOrder"
+operation: consume
+broker: "{{broker}}"
+exchange: "orders"
+binding_key: "order.created"
+asyncapi: {document: "../asyncapi.json", message: "OrderCreated"}
+
+=== payments/subscribe-payments.rman.yaml
+version: 1
+kind: amqp
+name: "subscribe-payments"
+operation: consume
+broker: "{{broker}}"
+queue: "payments"
+requeue: true
+asyncapi: {document: "../asyncapi.json", message: "subscribe-payments-message"}

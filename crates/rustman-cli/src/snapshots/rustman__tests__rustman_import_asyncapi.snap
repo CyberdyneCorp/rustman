@@ -1,0 +1,32 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Create Kafka, MQTT and AMQP requests from an AsyncAPI 2.6 or 3.0 document
+
+Usage: rustman import asyncapi [OPTIONS] <SOURCE>
+
+Arguments:
+  <SOURCE>
+          The document: a file path or an http(s) URL, in JSON or YAML
+
+Options:
+      --into <DIR>
+          Write the requests to this folder (default: the API title in kebab-case, in the workspace root); existing files are kept
+
+      --allow-remote-refs
+          Fetch $refs to other http(s) documents instead of refusing them
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

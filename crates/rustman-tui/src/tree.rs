@@ -74,6 +74,7 @@ pub fn badge(request: &Request) -> Badge {
         Request::Grpc(_) => ("GRPC".to_owned(), Token::Info),
         Request::Ws(_) => ("WS".to_owned(), Token::Info),
         Request::Sse(_) => ("SSE".to_owned(), Token::Info),
+        Request::Messaging(m) => (m.kind.to_ascii_uppercase(), Token::Info),
         Request::Opaque(opaque) => {
             let text = match opaque.kind.as_str() {
                 "graphql" => "GQL".to_owned(),

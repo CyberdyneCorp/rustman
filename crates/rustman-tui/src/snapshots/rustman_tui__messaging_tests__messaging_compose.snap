@@ -1,0 +1,28 @@
+---
+source: crates/rustman-tui/src/messaging_tests.rs
+expression: screen
+---
+┌ publish ───────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ PRODUCE  {{mqtt}}                                                                                          │
+│ Messages  Compose  Broker  Assertions                                                                      │
+│ Messages (YAML): a list of {key, value, headers}; Ctrl+R produces them                                     │
+│ - value:                                                                                                   │
+│     temp: 21.5                                                                                             │
+│     token: '{{mqtt_pw}}'                                                                                   │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌ Response ──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ No response yet · press Ctrl+Enter to send                                                                 │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ demo │ env: local │ TLS verified │ 0 in flight                                                   Ctrl+Q quit

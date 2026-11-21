@@ -144,6 +144,15 @@ A `kind: ws` or `kind: sse` request (see [WebSocket and SSE](realtime.md#in-the-
 
 `Ctrl+R` connects. The session runs the file's steps, then stays open until you close it (no headless bounds); while it is open, `Ctrl+R` sends the Compose frame instead of starting another send, and `Esc` closes the session with code 1000, keeping its timeline. A second `Esc` cancels outright. When the session ends, the response viewer shows its record and assertions as for any request, and it is recorded in history. Entries are redacted before they reach the pane: a secret of the request that a server echoes shows as `«redacted:<name>»`.
 
+### The messaging editor
+
+A `kind: kafka`, `kind: mqtt` or `kind: amqp` request (see [Messaging](messaging.md#tui)) opens in the messaging editor. The first row shows `PRODUCE` or `CONSUME` and the broker address. The editor tabs are `Messages`, `Compose`, `Broker` and `Assertions` (`1`–`4` with the tab bar focused).
+
+- **Messages** shows the consumer: `Consuming · 120 messages`, one row per message (where it came from, its key and the start of its value) and, below, the selected message's value: pretty-printed JSON, `decoded from Schema Registry id <n>`, text, or a hex dump for binary values. With the content focused, `↑`/`↓` (or `k`/`j`) select a message, `g` goes to the first and `G` (or `End`) follows the newest, and `p` (or Space) pauses the list (`Paused · 120 messages (8 more since the pause)`). The pane keeps at most 10000 messages; when the buffer is full the consumer stops (`Buffer full`).
+- **Compose** holds the messages a produce sends, **Broker** the destination and connection settings, and **Assertions** the assertions, each as YAML.
+
+`Ctrl+R` runs the operation. A consume has no headless bounds: it runs until `Esc` stops it, keeping what it collected; a second `Esc` cancels outright. When it ends, the response viewer shows its record and assertions, and it is recorded in history. Messages are redacted before they reach the pane.
+
 ### Variables
 
 Every `{{variable}}` in the URL, params, headers, auth and body is highlighted: in the accent colour when it resolves, in the error colour (and underlined, so it shows without colour) when no layer defines it. When the cursor is on a variable (in the URL, a text body, or the selected table row) a line at the bottom of the editor shows its value and the layer it comes from, e.g. `{{base_url}} = http://localhost:8080 · environment`, or `{{base_url}} is not defined in any layer`. Variables are looked up with the request's own precedence (request, collection, active environment, `rustman.toml`). Secrets are never read for this and show masked, `{{token}} = •••••••• · secret (environment)`, unless you [reveal secrets](#environments-and-secrets).

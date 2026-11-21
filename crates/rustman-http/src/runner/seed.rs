@@ -15,7 +15,7 @@ use rustman_core::model::Request;
 use rustman_core::secret::Secret;
 use rustman_core::vars::{
     Layer, Lookup, Resolver, SecretLookup, VarSource, resolve_graphql, resolve_grpc,
-    resolve_jsonrpc, resolve_mcp, resolve_realtime, resolve_request,
+    resolve_jsonrpc, resolve_mcp, resolve_messaging, resolve_realtime, resolve_request,
 };
 use rustman_core::workspace::RequestRef;
 
@@ -43,6 +43,7 @@ impl Runner<'_> {
                 Request::Mcp(_) => drop(resolve_mcp(request, &resolver)),
                 Request::Grpc(_) => drop(resolve_grpc(request, &resolver)),
                 Request::Ws(_) | Request::Sse(_) => drop(resolve_realtime(request, &resolver)),
+                Request::Messaging(_) => drop(resolve_messaging(request, &resolver)),
                 _ => drop(resolve_request(request, &resolver)),
             }
         }

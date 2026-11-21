@@ -39,6 +39,9 @@ Commands:
   docs         Generate static API documentation from the workspace, or preview it
   monitor      Scheduled monitors: run collections on a schedule, store the results locally and alert
   record       Record HTTP(S) traffic through a local proxy; manage its local CA
+  kafka        Produce to and consume from Kafka topics, without consumer groups
+  mqtt         Publish and subscribe to MQTT topics
+  amqp         Publish to and consume from AMQP 0-9-1 (RabbitMQ) exchanges and queues
   help         Print this message or the help of the given subcommand(s)
 
 Options:

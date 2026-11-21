@@ -54,6 +54,11 @@ pub mod launch;
 pub mod layout;
 mod live_screen;
 pub mod mcp;
+pub mod messaging;
+pub mod messaging_pane;
+#[cfg(test)]
+mod messaging_tests;
+mod messaging_view;
 pub mod mock_server;
 pub mod monitor_viz;
 pub mod monitors;

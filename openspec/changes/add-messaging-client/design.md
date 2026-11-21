@@ -45,9 +45,13 @@ The runner starts the consume task, waits until it's subscribed (Kafka: offsets 
 ## Risks / Trade-offs
 
 - [rskafka lacks some features, e.g. idempotent producer, transactions, OAUTHBEARER] → Documented as unsupported. Producing for tests doesn't need exactly-once. OAUTHBEARER can come later.
-- [Reading every partition of large topics from `earliest` floods the user] → Headless bounds plus a TUI consumer that pauses fetching when its buffer exceeds 10000 messages.
+- [rskafka always produces with `acks: all`, keeps record headers in a name-keyed map, and connects to the brokers the cluster metadata advertises] → `acks: leader`/`none` are sent as `acks: all` with a warning; repeated header names keep the last value with a warning; the safety policy can check only the bootstrap brokers, so docs/messaging.md tells users to allow only bootstrap brokers they trust.
+- [lapin assembles a whole AMQP body before handing it over] → `limits.max_message_bytes` trims what is recorded, but a hostile broker can still make the client buffer one large body; the prefetch cap bounds how many bodies are held at once.
+- [Reading every partition of large topics from `earliest` floods the user] → Headless bounds plus a TUI consumer that pauses fetching when its buffer exceeds 10000 messages, and drops its oldest messages beyond 64 MiB.
+- [A hostile Kafka broker sends huge frames] → rskafka's `max_message_size` is set to the larger of the 4 MiB fetch size and `limits.max_message_bytes`, plus 1 MiB, instead of its 100 MB default, and the reader queue holds at most 64 MiB of records.
+- [The allowlist check and the connector read a broker differently (`ws://evil\@allowed/`)] → `endpoint.rs` parses every broker once; the policy origin and the dialed host and port come from that parse, and backslashes, control characters, whitespace and non-DNS hosts are refused.
 - [Consuming from a named queue is destructive] → Load-time refusal without `destructive: true`, plus a requeue mode and agent gating.
-- [Broker integration tests need Docker] → testcontainers-based tests run in a dedicated CI job on Linux. Unit tests use protocol-level fakes where possible.
+- [Broker integration tests need Docker] → broker tests run in dedicated Linux CI jobs (`messaging-kafka`, `messaging-mqtt-amqp`) whose service containers (Redpanda, Mosquitto, RabbitMQ) are started by the job, like the existing `jsonrpc-anvil` and `secrets-vault` jobs; the tests read the broker addresses from environment variables and return early without them, so the Linux, macOS and Windows test jobs stay hermetic. This replaces the `testcontainers` crate (which would add a Docker client dependency to every test build). Unit tests use protocol-level fakes where possible.
 
 ## Migration Plan
 

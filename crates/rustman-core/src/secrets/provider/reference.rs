@@ -79,11 +79,16 @@ pub fn mentions_reference(text: &str) -> bool {
 
 /// Every malformed `{{secret:...}}` placeholder of a file's raw text, with
 /// its 1-based line, so loading a workspace reports them before any send.
+/// An escaped `\{{` is a literal, as in templates.
 pub fn malformed_in(text: &str) -> Vec<(usize, String)> {
     let mut found = Vec::new();
     let mut offset = 0;
     while let Some(start) = text[offset..].find("{{") {
         let open = offset + start + 2;
+        if text[..offset + start].ends_with('\\') {
+            offset = open;
+            continue;
+        }
         let Some(len) = text[open..].find("}}") else {
             break;
         };
@@ -169,5 +174,7 @@ mod tests {
         assert_eq!(found[1].0, 3);
         assert!(malformed_in("{{base_url}} {{secret:a/b#c}} {{open").is_empty());
         assert!(malformed_in("{{ secret:op/Eng Team/Stripe/token }}").is_empty());
+        assert!(malformed_in("'\\{{secret:env:HOME}}' \\{{secret:vault}}").is_empty());
+        assert_eq!(malformed_in("\\{{secret:ok/x}} {{secret:vault}}").len(), 1);
     }
 }

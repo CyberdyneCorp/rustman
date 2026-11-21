@@ -4,6 +4,7 @@
 
 pub mod bad_api;
 pub mod bench;
+pub mod brokers;
 pub mod certs;
 pub mod digest;
 pub mod files;
@@ -16,6 +17,8 @@ pub mod grpc;
 pub mod jsonrpc;
 pub mod mcp_http;
 pub mod mcp_oauth;
+#[cfg(feature = "mqtt")]
+pub mod mqtt_broker;
 pub mod oauth;
 pub mod openapi;
 #[cfg(feature = "otlp")]

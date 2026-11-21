@@ -10,6 +10,7 @@ mod filter;
 mod graphql;
 mod jsonrpc;
 mod mcp;
+mod messaging;
 mod plan;
 mod plugin;
 mod realtime;
@@ -25,6 +26,7 @@ pub use jsonrpc::{
     RpcSubscriptionRecord,
 };
 pub use mcp::{MAX_RECORDED_NOTIFICATIONS, McpRecord};
+pub use messaging::MessagingRecord;
 pub use plan::{Plan, plan};
 pub use plugin::{PluginKindRecord, TransformRecord};
 pub use realtime::{

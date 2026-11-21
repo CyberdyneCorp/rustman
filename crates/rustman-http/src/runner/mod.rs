@@ -25,6 +25,7 @@ mod grpc;
 mod history;
 mod jsonrpc;
 mod mcp;
+mod messaging;
 mod plugins;
 mod realtime;
 mod record;
@@ -69,6 +70,7 @@ pub use grpc::{
 };
 pub use jsonrpc::{JsonrpcCall, JsonrpcCallCheck, JsonrpcExecutor, JsonrpcFuture, JsonrpcOutcome};
 pub use mcp::{McpCall, McpExecutor, McpFuture, McpOutcome};
+pub use messaging::{MessagingCall, MessagingExecutor, MessagingFuture, MessagingOutcome};
 pub use realtime::{RealtimeCall, RealtimeExecutor, RealtimeFuture, RealtimeOutcome};
 pub use record::{exchange_record, timings_record};
 
@@ -143,6 +145,9 @@ pub struct RunOptions<'a> {
     /// Runs `kind: ws` and `kind: sse` sessions; without one they are
     /// skipped as an unsupported kind.
     pub realtime: Option<&'a dyn RealtimeExecutor>,
+    /// Runs `kind: kafka`, `kind: mqtt` and `kind: amqp` operations;
+    /// without one they are skipped as an unsupported kind.
+    pub messaging: Option<&'a dyn MessagingExecutor>,
     /// Sends every request instead of the engine; `None` for the CLI and
     /// the TUI.
     pub gate: Option<&'a dyn SendGate>,
@@ -206,6 +211,7 @@ impl Default for RunOptions<'_> {
             mcp: None,
             grpc: None,
             realtime: None,
+            messaging: None,
             gate: None,
             snapshots: SnapshotMode::Record,
             trace: false,
@@ -300,6 +306,9 @@ pub struct Runner<'a> {
     /// Where `{{secret:...}}` references are fetched from when a request
     /// is sent; without them every reference is unresolved.
     secret_providers: Option<Arc<SecretProviders>>,
+    /// The subscription signals of `start: before_next` consumes, by
+    /// request id, until the consume takes its own.
+    ready: Mutex<Vec<(String, tokio::sync::oneshot::Sender<()>)>>,
 }
 
 impl<'a> Runner<'a> {
@@ -341,6 +350,7 @@ impl<'a> Runner<'a> {
             link,
             export,
             secret_providers: None,
+            ready: Mutex::new(Vec::new()),
         };
         runner.remember(&trace_secrets.unwrap_or_default());
         runner.remember(&link_secrets.unwrap_or_default());
@@ -465,14 +475,56 @@ impl<'a> Runner<'a> {
     ) {
         // The semaphore is never closed, so acquiring cannot fail.
         let _permit = semaphore.acquire().await.ok();
-        for &index in unit {
-            let sent = self.send(&plan.requests[index], iteration).await;
-            if let Some(observer) = self.options.observer {
-                observer(&sent.record, &sent.redactor);
+        let mut rest = unit.iter().copied().peekable();
+        while let Some(index) = rest.next() {
+            let request = &plan.requests[index];
+            let next = rest.peek().copied();
+            match next.filter(|_| messaging::starts_before_next(request)) {
+                Some(next) => {
+                    rest.next();
+                    let (consumed, after) = self.consume_around(plan, index, next, iteration).await;
+                    self.keep(slots, index, consumed);
+                    self.keep(slots, next, after);
+                }
+                None => {
+                    let sent = self.send(request, iteration).await;
+                    self.keep(slots, index, sent);
+                }
             }
-            let mut slots = slots.lock().unwrap_or_else(PoisonError::into_inner);
-            slots[index] = Some(sent.record);
         }
+    }
+
+    /// Run the `start: before_next` consume `consume`: once it is
+    /// subscribed (or done), run `next` while it collects, and finish when
+    /// both have.
+    async fn consume_around(
+        &self,
+        plan: &Plan<'_>,
+        consume: usize,
+        next: usize,
+        iteration: u32,
+    ) -> (Sent, Sent) {
+        let (ready, subscribed) = tokio::sync::oneshot::channel();
+        self.leave_ready(&plan.requests[consume], ready);
+        let mut consumed = Box::pin(self.send(&plan.requests[consume], iteration));
+        let early = tokio::select! {
+            sent = &mut consumed => Some(sent),
+            _ = subscribed => None,
+        };
+        let after = self.send(&plan.requests[next], iteration);
+        match early {
+            Some(sent) => (sent, after.await),
+            None => futures_util::future::join(consumed, after).await,
+        }
+    }
+
+    /// Report `sent` to the observer and keep its record in slot `index`.
+    fn keep(&self, slots: &Mutex<Vec<Option<RequestRecord>>>, index: usize, sent: Sent) {
+        if let Some(observer) = self.options.observer {
+            observer(&sent.record, &sent.redactor);
+        }
+        let mut slots = slots.lock().unwrap_or_else(PoisonError::into_inner);
+        slots[index] = Some(sent.record);
     }
 }
 

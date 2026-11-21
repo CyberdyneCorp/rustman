@@ -1,0 +1,89 @@
+asyncapi: 3.0.0
+info:
+  title: Shop Events
+  version: 1.0.0
+servers:
+  production:
+    host: kafka.shop.example:{port}
+    protocol: kafka
+    description: The production cluster
+    variables:
+      port:
+        default: "9092"
+  sensors:
+    host: mqtt.shop.example
+    protocol: mqtt
+  web:
+    host: shop.example
+    protocol: https
+channels:
+  orders:
+    address: orders
+    servers:
+      - $ref: '#/servers/production'
+    messages:
+      order:
+        $ref: '#/components/messages/OrderCreated'
+  temperature:
+    address: sensors/{room}/temp
+    servers:
+      - $ref: '#/servers/sensors'
+    messages:
+      reading:
+        $ref: '#/components/messages/Reading'
+operations:
+  sendOrder:
+    action: send
+    summary: Publish a new order
+    channel:
+      $ref: '#/channels/orders'
+    messages:
+      - $ref: '#/channels/orders/messages/order'
+  onOrder:
+    action: receive
+    channel:
+      $ref: '#/channels/orders'
+  publishReading:
+    action: send
+    channel:
+      $ref: '#/channels/temperature'
+    bindings:
+      mqtt:
+        qos: 2
+        retain: true
+      ws:
+        method: GET
+  watchTemperature:
+    action: receive
+    channel:
+      $ref: '#/channels/temperature'
+components:
+  messages:
+    OrderCreated:
+      name: OrderCreated
+      payload:
+        $ref: '#/components/schemas/Order'
+      examples:
+        - payload:
+            id: 1
+            type: OrderCreated
+            total: 9.5
+      bindings:
+        kafka:
+          key:
+            type: string
+            format: uuid
+    Reading:
+      payload:
+        $ref: 'schemas.yaml#/Reading'
+  schemas:
+    Order:
+      type: object
+      required: [id, type]
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        total:
+          type: number

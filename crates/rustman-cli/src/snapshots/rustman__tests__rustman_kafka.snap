@@ -1,0 +1,29 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Produce to and consume from Kafka topics, without consumer groups
+
+Usage: rustman kafka [OPTIONS] <COMMAND>
+
+Commands:
+  produce  Produce messages (a kind: kafka request, or --value flags, or the lines of a piped stdin) and print their partitions and offsets
+  consume  Read messages from a topic and print them as they arrive
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help
+
+Examples:
+  rustman kafka produce --brokers localhost:9092 --topic orders --key order-1 --value '{"id":1}'
+  rustman kafka consume --brokers localhost:9092 --topic orders --offset earliest --max-messages 5 --json
+  rustman kafka consume events/orders.rman.yaml --duration 10s

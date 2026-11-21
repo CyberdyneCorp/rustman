@@ -22,6 +22,7 @@ use crate::grpc_pane::{GrpcEditor, GrpcPane};
 use crate::http_pane::HttpPane;
 use crate::jsonrpc_pane::{JsonrpcEditor, JsonrpcPane};
 use crate::keymap::{Chord, Keymap};
+use crate::messaging_pane::{MessagingEditor, MessagingPane};
 use crate::realtime_pane::{RealtimeEditor, RealtimePane};
 use crate::theme::Token;
 use crate::vars_view::VarScope;
@@ -104,6 +105,13 @@ pub trait PaneEditor: fmt::Debug + Send {
     fn realtime_mut(&mut self) -> Option<&mut RealtimeEditor> {
         None
     }
+    /// The messaging editor, for its live consumer.
+    fn messaging(&self) -> Option<&MessagingEditor> {
+        None
+    }
+    fn messaging_mut(&mut self) -> Option<&mut MessagingEditor> {
+        None
+    }
 }
 
 /// A pane registered for one request kind.
@@ -121,8 +129,9 @@ pub struct Registry {
 }
 
 impl Registry {
-    /// The panes shipped here: `http`, `graphql`, `jsonrpc`, `grpc`, and
-    /// the realtime pane for `ws` and `sse`.
+    /// The panes shipped here: `http`, `graphql`, `jsonrpc`, `grpc`, the
+    /// realtime pane for `ws` and `sse`, and the messaging pane for
+    /// `kafka`, `mqtt` and `amqp`.
     pub fn builtin() -> Self {
         Self {
             panes: vec![
@@ -132,6 +141,9 @@ impl Registry {
                 &GrpcPane,
                 &RealtimePane::WS,
                 &RealtimePane::SSE,
+                &MessagingPane::KAFKA,
+                &MessagingPane::MQTT,
+                &MessagingPane::AMQP,
             ],
             plugin_kinds: Vec::new(),
         }
@@ -274,7 +286,9 @@ mod tests {
         let registry = Registry::builtin();
         assert_eq!(
             registry.kinds(),
-            ["http", "graphql", "jsonrpc", "grpc", "ws", "sse"]
+            [
+                "http", "graphql", "jsonrpc", "grpc", "ws", "sse", "kafka", "mqtt", "amqp"
+            ]
         );
         let http = load("version: 1\nkind: http\nname: A\nurl: http://x/\n");
         let editor = registry.open(&http);

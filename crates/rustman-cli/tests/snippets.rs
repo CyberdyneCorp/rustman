@@ -225,7 +225,7 @@ fn other_kinds_exit_2() {
     write(
         ws.path(),
         "events/k.rman.yaml",
-        "version: 1\nkind: kafka\nname: k\n",
+        "version: 1\nkind: nats\nname: k\n",
     );
     rustman(ws.path())
         .args([

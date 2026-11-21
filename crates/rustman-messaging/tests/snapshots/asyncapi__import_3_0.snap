@@ -1,0 +1,70 @@
+---
+source: crates/rustman-messaging/tests/asyncapi.rs
+expression: rendered(&plan)
+---
+collection: shop-events
+- environments/production.yaml
+- environments/sensors.yaml
+- asyncapi.json
+- orders/send-order.rman.yaml
+- orders/on-order.rman.yaml
+- temperature/publish-reading.rman.yaml
+- temperature/watch-temperature.rman.yaml
+
+=== environments/production.yaml
+# The production cluster
+variables:
+  brokers: "kafka.shop.example:9092"
+
+=== environments/sensors.yaml
+variables:
+  broker: "mqtt://mqtt.shop.example"
+
+=== orders/send-order.rman.yaml
+version: 1
+kind: kafka
+name: "sendOrder"
+description: "Publish a new order"
+operation: produce
+brokers: "{{brokers}}"
+topic: "orders"
+asyncapi: {document: "../asyncapi.json", message: "OrderCreated"}
+messages:
+  - value: {"id":1,"type":"OrderCreated","total":9.5}
+    key: "00000000-0000-4000-8000-000000000000"
+
+=== orders/on-order.rman.yaml
+version: 1
+kind: kafka
+name: "onOrder"
+operation: consume
+brokers: "{{brokers}}"
+topic: "orders"
+asyncapi: {document: "../asyncapi.json", message: "OrderCreated"}
+
+=== temperature/publish-reading.rman.yaml
+version: 1
+kind: mqtt
+name: "publishReading"
+operation: produce
+broker: "{{broker}}"
+topic: "sensors/{{room}}/temp"
+qos: 2
+retain: true
+asyncapi: {document: "../asyncapi.json", message: "reading"}
+variables:
+  room: "example"
+messages:
+  - value: {"celsius":0.0}
+
+=== temperature/watch-temperature.rman.yaml
+version: 1
+kind: mqtt
+name: "watchTemperature"
+operation: consume
+broker: "{{broker}}"
+topic: "sensors/+/temp"
+asyncapi: {document: "../asyncapi.json", message: "reading"}
+
+warning: asyncapi: the ws binding at /operations/publishReading is ignored
+warning: asyncapi: server 'web' uses protocol 'https', which Rustman does not speak; no environment was created

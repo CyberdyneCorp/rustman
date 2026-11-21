@@ -9,6 +9,7 @@ mod explore;
 #[cfg(feature = "grpc")]
 pub mod grpc;
 mod history;
+pub mod messaging;
 pub mod realtime;
 pub mod reference;
 pub(crate) mod reports;

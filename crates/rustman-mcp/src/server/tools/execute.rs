@@ -23,6 +23,7 @@ use rustman_report::{Report, RunReport};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use super::messaging::AgentMessaging;
 use super::{Call, output};
 use crate::server::confirm::Confirm;
 use crate::server::context::{AgentContext, JobCaller, Target, ToolOutput};
@@ -319,11 +320,13 @@ async fn send_one(
 ) -> Result<Sent, ToolError> {
     let ctx = &call.ctx;
     let gate = AgentGate::new(ctx, &call.peer, &call.target);
+    let messaging = AgentMessaging::new(ctx, &call.peer, &call.target);
     let environment = ctx.environment();
     let ws = ctx.workspace();
     options.history = history(ctx);
     options.gate = Some(&gate);
     options.plugins = ctx.plugins();
+    options.messaging = Some(&messaging);
     let run_ctx = RunContext {
         root: &ws.root,
         settings: &ws.settings,
@@ -337,7 +340,7 @@ async fn send_one(
     if let Err(err) = runner.finish() {
         tracing::warn!("cookies: {err}");
     }
-    match gate.refused() {
+    match gate.refused().or_else(|| messaging.refused()) {
         Some(err) => Err(err),
         None => Ok(sent),
     }
@@ -580,6 +583,7 @@ async fn run_job(
         job_id: job.id.clone(),
     };
     let target = Target::default();
+    let messaging = AgentMessaging::for_job(&ctx, &peer, &target, caller.clone());
     let agent = AgentGate::for_job(&ctx, &peer, &target, caller);
     let gate = Counting {
         inner: &agent,
@@ -594,6 +598,7 @@ async fn run_job(
         cancel: job.cancel_token(),
         history: history(&ctx),
         gate: Some(&gate),
+        messaging: Some(&messaging),
         snapshots: SnapshotMode::Ci,
         plugins: ctx.plugins(),
         ..RunOptions::default()
