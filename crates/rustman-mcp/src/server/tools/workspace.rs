@@ -2,6 +2,7 @@
 //! `get_request`, `list_environments` and `select_environment`.
 
 use rustman_core::model::{KindRegistry, Request};
+use rustman_core::vars::broker_credentials::without_userinfo;
 use rustman_core::workspace::RequestRef;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -121,8 +122,13 @@ fn summary(request: &RequestRef<'_>) -> RequestSummary {
             Some(sse.url.get().clone()),
         ),
         Request::Messaging(m) => {
-            let brokers = m.brokers.as_ref().map(|b| b.0.join(","));
-            (None, brokers.or_else(|| m.broker.clone()))
+            let shown = |b: &String| without_userinfo(b);
+            let brokers = m
+                .brokers
+                .as_ref()
+                .map(|b| b.0.iter().map(shown).collect::<Vec<_>>());
+            let brokers = brokers.map(|b| b.join(","));
+            (None, brokers.or_else(|| m.broker.as_ref().map(shown)))
         }
         Request::Mcp(_) | Request::Opaque(_) => (None, None),
     };

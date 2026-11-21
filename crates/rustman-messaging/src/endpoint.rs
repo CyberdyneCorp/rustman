@@ -6,7 +6,8 @@
 //! A broker containing a backslash, a control character or whitespace is
 //! refused outright, since URL parsers disagree on them. Hosts are
 //! lowercased, lose a trailing dot and must be an IP literal or a DNS
-//! name (`a-z`, `0-9`, `-`, `_`, `.`).
+//! name (`a-z`, `0-9`, `-`, `_`, `.`) whose last label is not numeric.
+//! Errors never echo the broker, which may hold a password.
 
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
@@ -185,26 +186,33 @@ pub fn amqp(broker: &str) -> Result<(Endpoint, AMQPUri), MessagingError> {
     Ok((endpoint, uri))
 }
 
-/// The error for `broker` of `protocol`, which names it without its
-/// credentials.
+/// The error for `broker` of `protocol`. It never echoes the broker,
+/// whose text may hold a password no parser found: only its scheme and
+/// [`INVALID_BROKER`].
 fn invalid(protocol: &'static str, broker: &str) -> impl Fn(&str) -> MessagingError {
-    let shown = without_userinfo(broker);
+    let shown = shown_invalid(broker);
     move |why| MessagingError::Invalid(format!("{protocol}: invalid broker '{shown}': {why}"))
 }
 
-/// `broker` for display: any userinfo replaced by a marker.
+/// `<scheme>://«invalid broker»`, or the marker alone without a valid
+/// scheme.
+fn shown_invalid(broker: &str) -> String {
+    let scheme = broker.split_once("://").map(|(scheme, _)| scheme);
+    let valid = scheme.filter(|s| {
+        s.starts_with(|c: char| c.is_ascii_alphabetic())
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+    });
+    match valid {
+        Some(scheme) => format!("{scheme}://{INVALID_BROKER}"),
+        None => INVALID_BROKER.to_owned(),
+    }
+}
+
+/// `broker` for display: any userinfo replaced by a marker (see
+/// [`rustman_core::vars::broker_credentials`]).
 pub fn without_userinfo(broker: &str) -> String {
-    let (scheme, rest) = broker.split_once("://").unwrap_or(("", broker));
-    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
-    let Some(at) = rest[..end].rfind('@') else {
-        return broker.to_owned();
-    };
-    let prefix = if scheme.is_empty() {
-        String::new()
-    } else {
-        format!("{scheme}://")
-    };
-    format!("{prefix}«redacted:userinfo»{}", &rest[at..])
+    rustman_core::vars::broker_credentials::without_userinfo(broker)
 }
 
 /// Refuse text URL parsers disagree on: backslashes, control characters
@@ -229,15 +237,22 @@ fn url_host(url: &Url) -> Result<String, &'static str> {
 }
 
 /// `host` as an IP literal or a lowercase DNS name without a trailing
-/// dot.
+/// dot. A host whose last label is numeric must be a strict
+/// dotted-decimal IPv4 address: URL parsers (and so the policy) read
+/// `0177.0.0.1`, `127.1` or `0x7f.1` as IPv4 in octal, short or hex
+/// form while a resolver may read them otherwise, so the text dialed and
+/// the text checked could differ.
 fn normal_host(host: &str) -> Result<String, &'static str> {
     if let Ok(ip) = host.parse::<Ipv6Addr>() {
         return Ok(ip.to_string());
     }
-    if let Ok(ip) = host.parse::<Ipv4Addr>() {
+    let name = host.strip_suffix('.').unwrap_or(host).to_ascii_lowercase();
+    if let Ok(ip) = name.parse::<Ipv4Addr>() {
         return Ok(ip.to_string());
     }
-    let name = host.strip_suffix('.').unwrap_or(host).to_ascii_lowercase();
+    if ends_in_number(&name) {
+        return Err("a numeric host must be a dotted-decimal IPv4 address");
+    }
     let label_ok = |l: &str| {
         !l.is_empty()
             && l.len() <= 63
@@ -248,6 +263,27 @@ fn normal_host(host: &str) -> Result<String, &'static str> {
         return Err("the host must be an IP address or a DNS name");
     }
     Ok(name)
+}
+
+/// Whether the last label of `name` (lowercase, without a trailing dot)
+/// is a number as the WHATWG URL host parser reads one: decimal or octal
+/// digits, or `0x` with hex digits (or none). Such a host is parsed as
+/// IPv4 by URL parsers.
+fn ends_in_number(name: &str) -> bool {
+    let mut labels = name.rsplit('.');
+    let last = match labels.next() {
+        Some("") => labels.next().unwrap_or_default(),
+        Some(last) => last,
+        None => "",
+    };
+    if last.is_empty() {
+        return false;
+    }
+    if last.bytes().all(|b| b.is_ascii_digit()) {
+        return true;
+    }
+    last.strip_prefix("0x")
+        .is_some_and(|hex| hex.bytes().all(|b| b.is_ascii_hexdigit()))
 }
 
 #[cfg(test)]

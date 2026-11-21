@@ -255,7 +255,7 @@ async fn collect(
         usize::try_from(resolved.limits.effective_max_message_bytes()).unwrap_or(usize::MAX);
     let mut ping = tokio::time::interval(KEEP_ALIVE / 2);
     ping.reset();
-    while (exchange.messages.len() as u64) < max {
+    while exchange.received() < max {
         let packet = tokio::select! {
             () = options.cancel.cancelled() => return Ok(()),
             () = sleep_until(deadline) => return Ok(()),
@@ -269,7 +269,7 @@ async fn collect(
             if let Some(feed) = &options.feed {
                 let _ = feed.send(message.clone());
             }
-            exchange.messages.push(message);
+            exchange.record(message, options.bounds.is_none());
         }
     }
     Ok(())

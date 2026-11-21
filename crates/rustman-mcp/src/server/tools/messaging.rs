@@ -9,7 +9,8 @@
 //! the client dials; a broker that does not parse is `invalid_input`,
 //! and audits never name its raw text), and a produce
 //! is confirmed by the human as for any mutation. Consumes are capped at
-//! 100 messages and 60 s. A refusal becomes the tool's error, so it is
+//! 100 messages and 60 s, and Schema Registry redirects are not followed
+//! (only the registry's base URL is authorized). A refusal becomes the tool's error, so it is
 //! audited as `blocked`.
 
 use std::sync::{Mutex, PoisonError};
@@ -50,13 +51,7 @@ impl<'a, C: Confirm> AgentMessaging<'a, C> {
             ctx,
             confirm,
             target,
-            runner: MessagingRunner {
-                ceiling: Some(Bounds {
-                    max_messages: MAX_MESSAGES,
-                    duration: MAX_DURATION,
-                }),
-                ..MessagingRunner::default()
-            },
+            runner: agent_runner(),
             refused: Mutex::new(None),
             job: None,
         }
@@ -140,11 +135,40 @@ impl<C: Confirm> MessagingExecutor for AgentMessaging<'_, C> {
     }
 }
 
+/// The runner of agent operations: consumes capped, and no Schema
+/// Registry redirect followed.
+fn agent_runner() -> MessagingRunner {
+    MessagingRunner {
+        ceiling: Some(Bounds {
+            max_messages: MAX_MESSAGES,
+            duration: MAX_DURATION,
+        }),
+        no_registry_redirects: true,
+        ..MessagingRunner::default()
+    }
+}
+
 /// The HTTP method a policy class is checked and confirmed as.
 fn method_of(class: MethodClass) -> &'static str {
     match class {
         MethodClass::ReadOnly => "GET",
         MethodClass::Mutation => "POST",
         MethodClass::Destructive => "DELETE",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn agent_runs_cap_consumes_and_do_not_follow_registry_redirects() {
+        let runner = agent_runner();
+        assert!(runner.no_registry_redirects);
+        let ceiling = runner.ceiling.unwrap();
+        assert_eq!(
+            (ceiling.max_messages, ceiling.duration),
+            (MAX_MESSAGES, MAX_DURATION)
+        );
     }
 }

@@ -9,12 +9,14 @@
 //! TUI), follow it live (a feed of consumed messages) and gate it with a
 //! permission (agents: produce needs `allow_mutations`).
 
+use std::borrow::Cow;
 use std::time::Duration;
 
 use rustman_core::Redactor;
 use rustman_core::model::MessagingLimits;
 use rustman_core::run::redact_value;
 use rustman_core::safety::Permission;
+use rustman_core::vars::ResolvedMessaging;
 use rustman_http::runner::{MessagingCall, MessagingExecutor, MessagingFuture, MessagingOutcome};
 use serde_json::Value;
 use tokio::sync::mpsc;
@@ -42,6 +44,9 @@ pub struct MessagingRunner {
     /// Agent paths: operations whose class this permission does not allow
     /// are refused before anything connects. `None` (a human) runs all.
     pub permission: Option<Permission>,
+    /// Agent paths: the Schema Registry's redirects are not followed, since
+    /// only its base URL was checked against the allowlist.
+    pub no_registry_redirects: bool,
 }
 
 impl MessagingExecutor for MessagingRunner {
@@ -80,8 +85,22 @@ impl MessagingRunner {
         }
     }
 
+    /// `resolved` as this run sends it: without Schema Registry redirects
+    /// when [`Self::no_registry_redirects`] is set.
+    pub fn governed<'r>(&self, resolved: &'r ResolvedMessaging) -> Cow<'r, ResolvedMessaging> {
+        if !self.no_registry_redirects || resolved.schema_registry.is_none() {
+            return Cow::Borrowed(resolved);
+        }
+        let mut governed = resolved.clone();
+        if let Some(registry) = &mut governed.schema_registry {
+            registry.http.settings.follow_redirects = Some(false);
+        }
+        Cow::Owned(governed)
+    }
+
     async fn run(&self, call: MessagingCall<'_>) -> MessagingOutcome {
-        let resolved = call.resolved;
+        let governed = self.governed(call.resolved);
+        let resolved = governed.as_ref();
         if let Some(permission) = self.permission
             && let Err(refusal) = safety::check(permission, resolved)
         {

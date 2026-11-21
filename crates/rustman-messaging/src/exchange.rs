@@ -116,7 +116,7 @@ impl SecuritySummary {
 }
 
 /// One produce or consume.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
 pub struct MessagingExchange {
     pub protocol: &'static str,
     pub operation: &'static str,
@@ -138,6 +138,25 @@ pub struct MessagingExchange {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub asyncapi: Option<String>,
     pub duration_ms: u64,
+    /// An unbounded (interactive) consume: how many of the oldest
+    /// messages were dropped to keep its window (see [`Self::record`]).
+    #[serde(skip_serializing_if = "is_zero")]
+    pub dropped: u64,
+    /// The size of each kept message as JSON, for the window.
+    #[serde(skip)]
+    sizes: Vec<usize>,
+    #[serde(skip)]
+    window_bytes: usize,
+}
+
+/// The most messages an unbounded consume keeps.
+pub const WINDOW_MESSAGES: usize = 10_000;
+
+/// The most bytes (of messages as JSON) an unbounded consume keeps.
+pub const WINDOW_BYTES: usize = 64 * 1024 * 1024;
+
+fn is_zero(n: &u64) -> bool {
+    *n == 0
 }
 
 impl MessagingExchange {
@@ -155,6 +174,45 @@ impl MessagingExchange {
             warnings: Vec::new(),
             asyncapi: None,
             duration_ms: 0,
+            dropped: 0,
+            sizes: Vec::new(),
+            window_bytes: 0,
+        }
+    }
+
+    /// Every message consumed, kept or dropped.
+    pub fn received(&self) -> u64 {
+        self.messages.len() as u64 + self.dropped
+    }
+
+    /// Keep a consumed `message`. A `windowed` (unbounded, interactive)
+    /// consume keeps only its newest [`WINDOW_MESSAGES`] messages and
+    /// [`WINDOW_BYTES`]: the oldest are dropped and counted in
+    /// [`Self::dropped`], so memory and history stay bounded however long
+    /// it runs.
+    pub fn record(&mut self, message: ConsumedMessage, windowed: bool) {
+        let size = if windowed { json_size(&message) } else { 0 };
+        self.messages.push(message);
+        self.sizes.push(size);
+        self.window_bytes += size;
+        if windowed {
+            self.trim_window();
+        }
+    }
+
+    /// Drop the oldest messages beyond the window, keeping the newest.
+    fn trim_window(&mut self) {
+        let mut drop = self.messages.len().saturating_sub(WINDOW_MESSAGES);
+        let mut bytes = self.window_bytes - self.sizes[..drop].iter().sum::<usize>();
+        while bytes > WINDOW_BYTES && drop + 1 < self.messages.len() {
+            bytes -= self.sizes[drop];
+            drop += 1;
+        }
+        if drop > 0 {
+            self.messages.drain(..drop);
+            self.sizes.drain(..drop);
+            self.window_bytes = bytes;
+            self.dropped += drop as u64;
         }
     }
 
@@ -179,10 +237,73 @@ impl MessagingExchange {
     }
 }
 
+/// The length of `message` as JSON.
+fn json_size(message: &ConsumedMessage) -> usize {
+    serde_json::to_vec(message).map_or(0, |bytes| bytes.len())
+}
+
 fn protocol_name(kind: MessagingKind) -> &'static str {
     kind.as_str()
 }
 
 fn operation_name(operation: Operation) -> &'static str {
     operation.as_str()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn message(bytes: usize) -> ConsumedMessage {
+        ConsumedMessage::with_value(&vec![b'v'; bytes], usize::MAX)
+    }
+
+    #[test]
+    fn an_unbounded_consume_keeps_a_window_of_its_newest_messages() {
+        // Regression: interactive consumes kept every message, so a long
+        // TUI consume grew without bound.
+        let mut exchange = MessagingExchange::default();
+        for offset in 0..(WINDOW_MESSAGES as i64 + 5) {
+            exchange.record(
+                ConsumedMessage {
+                    offset: Some(offset),
+                    ..message(1)
+                },
+                true,
+            );
+        }
+        assert_eq!(exchange.messages.len(), WINDOW_MESSAGES);
+        assert_eq!(exchange.dropped, 5);
+        assert_eq!(exchange.received(), WINDOW_MESSAGES as u64 + 5);
+        assert_eq!(exchange.messages[0].offset, Some(5));
+        assert_eq!(exchange.to_value()["dropped"], 5);
+    }
+
+    #[test]
+    fn the_window_also_bounds_the_bytes_kept() {
+        let mut exchange = MessagingExchange::default();
+        let big = 4 * 1024 * 1024;
+        for _ in 0..40 {
+            exchange.record(message(big), true);
+        }
+        let kept: usize = exchange.messages.iter().map(|m| m.size).sum();
+        assert!(kept <= WINDOW_BYTES, "{kept}");
+        assert!(exchange.messages.len() >= 15, "{}", exchange.messages.len());
+        assert_eq!(exchange.received(), 40);
+        // One message larger than the window is still kept.
+        exchange.record(message(WINDOW_BYTES + 1), true);
+        assert_eq!(exchange.messages.len(), 1);
+        assert_eq!(exchange.received(), 41);
+    }
+
+    #[test]
+    fn bounded_consumes_keep_every_message() {
+        let mut exchange = MessagingExchange::default();
+        for _ in 0..(WINDOW_MESSAGES + 1) {
+            exchange.record(message(1), false);
+        }
+        assert_eq!(exchange.messages.len(), WINDOW_MESSAGES + 1);
+        assert_eq!(exchange.dropped, 0);
+        assert!(exchange.to_value().get("dropped").is_none());
+    }
 }

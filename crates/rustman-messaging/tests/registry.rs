@@ -161,3 +161,42 @@ async fn registry_credentials_are_sent_and_never_shown() {
     let authorization = hits[0].header("authorization").unwrap();
     assert!(authorization.starts_with("Basic "), "{authorization}");
 }
+
+#[tokio::test]
+async fn agent_runs_do_not_follow_registry_redirects() {
+    // Regression: agents authorize only the registry's base URL, but its
+    // requests followed redirects to any host.
+    let elsewhere = GraphqlHttpServer::start(answer).await;
+    let redirector = rustman_test_support::server::TestServer::http().await;
+    let base = redirector.url(&format!(
+        "/redirect/302?to={}",
+        elsewhere.url("/schemas/ids/7")
+    ));
+    let text = format!(
+        "version: 1\nkind: kafka\nname: r\noperation: consume\nbrokers: k:9092\ntopic: t\nschema_registry:\n  url: '{base}&x='\n"
+    );
+    let resolved = common::resolve(&text, "");
+    let agent = rustman_messaging::MessagingRunner {
+        no_registry_redirects: true,
+        ..rustman_messaging::MessagingRunner::default()
+    };
+    let governed = agent.governed(&resolved);
+    let registry = RegistryClient::new(governed.schema_registry.as_ref().unwrap()).unwrap();
+    let warning = registry
+        .decode(&avro_order(1, "OrderCreated"))
+        .await
+        .unwrap()
+        .unwrap_err();
+    assert!(warning.contains("HTTP 302"), "{warning}");
+    assert!(elsewhere.hits().is_empty(), "{:?}", elsewhere.hits());
+    // A human's run follows it.
+    let human = rustman_messaging::MessagingRunner::default();
+    let governed = human.governed(&resolved);
+    let registry = RegistryClient::new(governed.schema_registry.as_ref().unwrap()).unwrap();
+    let decoded = registry
+        .decode(&avro_order(1, "OrderCreated"))
+        .await
+        .unwrap();
+    assert!(decoded.is_ok(), "{decoded:?}");
+    assert_eq!(elsewhere.hits().len(), 1);
+}
