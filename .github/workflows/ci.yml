@@ -403,7 +403,8 @@ jobs:
           ready=false
           for _ in $(seq 1 90); do
             if nc -z 127.0.0.1 1883 && nc -z 127.0.0.1 8883 \
-              && docker exec rabbitmq rabbitmq-diagnostics -q check_port_connectivity >/dev/null 2>&1; then
+              && nc -z 127.0.0.1 5672 \
+              && docker logs rabbitmq 2>&1 | grep -q "Server startup complete"; then
               ready=true
               break
             fi
