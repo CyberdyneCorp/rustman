@@ -40,6 +40,7 @@ pub fn environments(
             secrets: secrets.to_vec(),
             production: false,
             trace: Default::default(),
+            chain_id: None,
         });
     }
     out

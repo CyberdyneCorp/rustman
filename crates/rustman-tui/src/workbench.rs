@@ -113,7 +113,14 @@ pub fn open_path(state: &mut State, path: &Path) {
         return;
     };
     let registry = Registry::of(state);
-    state.tabs.open(path, &request, &registry);
+    let id = state.tabs.open(path, &request, &registry);
+    let root = workspace(state).map(|ws| ws.root.clone());
+    if let (Some(root), Some(editor)) = (
+        root,
+        state.tabs.get_mut(id).and_then(|t| t.editor.evm_mut()),
+    ) {
+        editor.load_abi(&root, path);
+    }
     state.shell.focus = Focus::Url;
     state.shell.overlay_open = false;
 }

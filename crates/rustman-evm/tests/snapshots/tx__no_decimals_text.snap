@@ -1,0 +1,21 @@
+---
+source: crates/rustman-evm/tests/tx.rs
+expression: report.render()
+---
+tx         0x1111111111111111111111111111111111111111111111111111111111111111
+chain      Ethereum Mainnet (1)
+status     reverted
+block      16
+from       0x7e4c83cb3b38C128E42286dB909E410B1bC60038
+to         0x00000000000000000000000000000000000dEc01
+value      0 ETH
+nonce      3
+gas used   21000
+gas price  1 gwei
+fee        0.000021 ETH
+input      -
+logs
+  [0] 0x00000000000000000000000000000000000dEc01 Transfer(from=0x7e4c83cb3b38C128E42286dB909E410B1bC60038, to=0x5e3D81ECeb0c7D9bA1E6cfDAcE631B165a149d3F, value=250000000)
+  [1] 0x00000000000000000000000000000000000dEc01 Transfer(from=0x5e3D81ECeb0c7D9bA1E6cfDAcE631B165a149d3F, to=0x7e4c83cb3b38C128E42286dB909E410B1bC60038, value=5)
+  [2] 0x0000000000000000000000000000000000000aBc topics=[0xabababababababababababababababababababababababababababababababab] data=0x1234
+warning: decimals() unavailable; showing raw amount

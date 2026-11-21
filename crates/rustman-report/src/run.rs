@@ -68,7 +68,8 @@ pub struct RunRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data_row: Option<DataRow>,
     pub status: Status,
-    /// `bail`, `interrupted` or `unsupported_kind`.
+    /// `bail`, `interrupted`, `unsupported_kind` or
+    /// `signing_not_requested`.
     pub skip_reason: Option<String>,
     pub error: Option<String>,
     pub exchange: Option<Exchange>,
@@ -313,6 +314,7 @@ fn skip_reason(reason: SkipReason) -> String {
         SkipReason::Bail => "bail",
         SkipReason::Interrupted => "interrupted",
         SkipReason::UnsupportedKind => "unsupported_kind",
+        SkipReason::SigningNotRequested => "signing_not_requested",
     }
     .to_owned()
 }

@@ -135,13 +135,14 @@ pub fn snapshot_names(request: &Request) -> Option<Vec<String>> {
     let assertions = match request {
         Request::Http(http) => http.assertions.as_deref(),
         Request::Graphql(graphql) => graphql.assertions.as_deref(),
-        // JSON-RPC and gRPC calls, realtime sessions and messaging
-        // requests have no snapshot assertions: nothing is declared.
+        // JSON-RPC and gRPC calls, realtime sessions, messaging requests
+        // and EVM requests have no snapshot assertions: nothing is declared.
         Request::Jsonrpc(_)
         | Request::Grpc(_)
         | Request::Ws(_)
         | Request::Sse(_)
-        | Request::Messaging(_) => {
+        | Request::Messaging(_)
+        | Request::Evm(_) => {
             return Some(Vec::new());
         }
         Request::Mcp(mcp) => mcp.assertions.as_deref(),

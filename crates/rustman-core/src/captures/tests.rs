@@ -25,6 +25,7 @@ fn environment(secrets: &[&str]) -> Environment {
         secrets: secrets.iter().map(|s| (*s).to_owned()).collect(),
         production: false,
         trace: Default::default(),
+        chain_id: None,
     }
 }
 

@@ -51,8 +51,13 @@ impl Session {
         let ws = self.ws.as_ref().ok_or(ConfigError::NoWorkspace)?;
         let found = ws.find_request(target, &self.cwd)?;
         if !(kind.matches)(found.request()) {
+            let article = if kind.name.starts_with(['a', 'e', 'i', 'o', 'u']) {
+                "an"
+            } else {
+                "a"
+            };
             let message = format!(
-                "request '{}' is not a {} request",
+                "request '{}' is not {article} {} request",
                 found.entry.id(),
                 kind.name
             );

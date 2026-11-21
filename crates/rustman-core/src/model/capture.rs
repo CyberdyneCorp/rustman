@@ -14,7 +14,16 @@ pub enum CaptureSource {
     Cookie,
     /// A gRPC response header or trailer (add-grpc-client).
     Metadata,
+    /// A decoded output of an EVM call (add-evm-toolkit).
+    EvmOutput,
+    /// A field of a decoded EVM event.
+    EvmEvent,
+    /// A field of an EVM transaction receipt.
+    EvmReceipt,
 }
+
+/// The receipt fields `from: evm_receipt` captures.
+pub const EVM_RECEIPT_FIELDS: [&str; 4] = ["contractAddress", "blockNumber", "status", "gasUsed"];
 
 impl CaptureSource {
     pub fn as_str(self) -> &'static str {
@@ -25,6 +34,9 @@ impl CaptureSource {
             Self::BodyRegex => "body_regex",
             Self::Cookie => "cookie",
             Self::Metadata => "metadata",
+            Self::EvmOutput => "evm_output",
+            Self::EvmEvent => "evm_event",
+            Self::EvmReceipt => "evm_receipt",
         }
     }
 
@@ -34,6 +46,9 @@ impl CaptureSource {
             Self::Header | Self::Cookie | Self::Metadata => (&["name"], &[]),
             Self::Status => (&[], &[]),
             Self::BodyRegex => (&["pattern"], &["group"]),
+            Self::EvmOutput => (&["output"], &[]),
+            Self::EvmEvent => (&["event", "field"], &[]),
+            Self::EvmReceipt => (&["field"], &[]),
         }
     }
 }
@@ -52,6 +67,13 @@ pub struct Capture {
     pub pattern: Option<String>,
     /// Capture group of `pattern` (default 1, or the whole match when it has no groups).
     pub group: Option<u32>,
+    /// The output name or index, for `from: evm_output`.
+    pub output: Option<super::evm_check::OutputRef>,
+    /// The event signature, for `from: evm_event`.
+    pub event: Option<String>,
+    /// The event or receipt field, for `from: evm_event` and
+    /// `from: evm_receipt`.
+    pub field: Option<String>,
     pub required: Option<bool>,
     pub persist: Option<bool>,
 }
@@ -64,9 +86,20 @@ impl Validate for Capture {
             ("name", given(self.name.is_some())),
             ("pattern", given(self.pattern.is_some())),
             ("group", given(self.group.is_some())),
+            ("output", given(self.output.is_some())),
+            ("event", given(self.event.is_some())),
+            ("field", given(self.field.is_some())),
         ];
         let what = format!("capture from '{}'", self.from.as_str());
-        check_fields(&what, &present, required, optional)
+        check_fields(&what, &present, required, optional)?;
+        let receipt_field = self.field.as_deref().unwrap_or_default();
+        if self.from == CaptureSource::EvmReceipt && !EVM_RECEIPT_FIELDS.contains(&receipt_field) {
+            return Err(format!(
+                "capture from 'evm_receipt': field must be one of {}",
+                EVM_RECEIPT_FIELDS.join(", ")
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -95,5 +128,23 @@ mod tests {
         assert_eq!(err.message, "capture from 'json' requires 'path'");
         let err = captures("- {var: t, from: status, name: x}\n").unwrap_err();
         assert_eq!(err.message, "capture from 'status' does not accept 'name'");
+    }
+
+    #[test]
+    fn evm_captures_load_and_are_checked() {
+        let ok = captures(
+            "- {var: owner, from: evm_output, output: 0}\n- {var: to, from: evm_event, event: \"Transfer(address,address,uint256)\", field: to}\n- {var: block, from: evm_receipt, field: blockNumber}\n",
+        )
+        .unwrap();
+        assert_eq!(ok[0].from, CaptureSource::EvmOutput);
+        let err = captures("- {var: t, from: evm_event, event: X()}\n").unwrap_err();
+        assert_eq!(err.message, "capture from 'evm_event' requires 'field'");
+        let err = captures("- {var: t, from: evm_receipt, field: logs}\n").unwrap_err();
+        assert_eq!(
+            err.message,
+            "capture from 'evm_receipt': field must be one of contractAddress, blockNumber, status, gasUsed"
+        );
+        let err = captures("- {var: t, from: json, path: $.a, output: 1}\n").unwrap_err();
+        assert_eq!(err.message, "capture from 'json' does not accept 'output'");
     }
 }

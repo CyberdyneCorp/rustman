@@ -40,6 +40,7 @@ rustman-plugin = { path = "crates/rustman-plugin", version = "0.1.0" }
 rustman-plugin-sdk = { path = "crates/rustman-plugin-sdk", version = "1.0.0" }
 rustman-proxy = { path = "crates/rustman-proxy", version = "0.1.0" }
 rustman-messaging = { path = "crates/rustman-messaging", version = "0.1.0" }
+rustman-evm = { path = "crates/rustman-evm", version = "0.1.0" }
 
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
@@ -347,6 +348,13 @@ rskafka = { version = "0.6.0", default-features = false, features = ["transport-
 rumqttc = { version = "0.25.1", default-features = false }
 lapin = { version = "4.12.3", default-features = false, features = ["rustls--ring", "rustls-native-certs", "tokio"] }
 apache-avro = { version = "0.23.0", default-features = false }
+# EVM toolkit (add-evm-toolkit design D1): U256 and EIP-55 addresses,
+# runtime JSON ABIs and dynamic ABI encoding, pinned to one minor version.
+# Without alloy-provider/transport (requests go through rustman-jsonrpc) and
+# without the signer and consensus crates (the signing stream adds those).
+alloy-primitives = { version = "~1.7.3", default-features = false, features = ["std"] }
+alloy-json-abi = { version = "~1.7.3", default-features = false, features = ["std", "serde_json"] }
+alloy-dyn-abi = { version = "~1.7.3", default-features = false, features = ["std"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

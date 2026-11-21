@@ -7,6 +7,7 @@ pub mod contract;
 pub mod cookies;
 pub mod docs;
 pub mod env;
+pub mod evm;
 pub mod exec;
 pub mod explore;
 pub mod export;
@@ -53,7 +54,7 @@ pub fn print_warnings(warnings: &[String]) {
 }
 
 /// `--env` and `--workspace`, shared by commands that act on one environment.
-#[derive(Debug, Args)]
+#[derive(Clone, Debug, Args)]
 pub struct EnvSelection {
     /// Environment (default: RUSTMAN_ENV, then default_environment)
     #[arg(long, value_name = "NAME")]

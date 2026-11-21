@@ -43,6 +43,7 @@ rustman-secrets.workspace = true
 # `plugins` feature.
 rustman-plugin = { workspace = true, optional = true }
 rustman-proxy.workspace = true
+rustman-evm.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
 anstream.workspace = true

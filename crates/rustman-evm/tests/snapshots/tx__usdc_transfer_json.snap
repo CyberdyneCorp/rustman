@@ -1,0 +1,45 @@
+---
+source: crates/rustman-evm/tests/tx.rs
+expression: report.to_json()
+---
+{
+  "hash": "0xdeed52ec1e92d0ca8834284f39ed5e37ff6106b6bb09a9dc37fb6d1c01b0a8f6",
+  "chain_id": 1,
+  "status": "success",
+  "block": 26459415,
+  "from": "0x7e4c83cb3b38C128E42286dB909E410B1bC60038",
+  "to": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+  "value": "0",
+  "nonce": 8,
+  "gas_used": "45160",
+  "effective_gas_price": "321846610",
+  "fee": "14534592907600",
+  "input": "0xa9059cbb0000000000000000000000005e3d81eceb0c7d9ba1e6cfdace631b165a149d3f000000000000000000000000000000000000000000000000000000000ee6b280",
+  "decoded_input": {
+    "function": "transfer(address,uint256)",
+    "args": {
+      "to": "0x5e3D81ECeb0c7D9bA1E6cfDAcE631B165a149d3F",
+      "amount": "250000000"
+    }
+  },
+  "logs": [
+    {
+      "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+      "index": 912,
+      "topics": [
+        "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+        "0x0000000000000000000000007e4c83cb3b38c128e42286db909e410b1bc60038",
+        "0x0000000000000000000000005e3d81eceb0c7d9ba1e6cfdace631b165a149d3f"
+      ],
+      "data": "0x000000000000000000000000000000000000000000000000000000000ee6b280",
+      "decoded": "Transfer(from=0x7e4c83cb3b38C128E42286dB909E410B1bC60038, to=0x5e3D81ECeb0c7D9bA1E6cfDAcE631B165a149d3F, value=250.00 USDC)",
+      "fields": {
+        "from": "0x7e4c83cb3b38C128E42286dB909E410B1bC60038",
+        "to": "0x5e3D81ECeb0c7D9bA1E6cfDAcE631B165a149d3F",
+        "value": "250000000"
+      },
+      "removed": false
+    }
+  ],
+  "warnings": []
+}

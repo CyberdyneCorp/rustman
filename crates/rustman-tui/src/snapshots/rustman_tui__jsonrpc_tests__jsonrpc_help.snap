@@ -7,7 +7,7 @@ expression: screen
 │ Call  Batch  Headers  Auth  Assertions                                                           │
 │ Catalog: 4 methods (Ctrl+Space completes the method)                                             │
 │ Method  eth_blockNumber                                                                          │
-│ Params (JSON)                                                                                    │
+│ Params (JSON) · eth_blockNumber()                                                                │
 │ [                                                                                                │
 │   "{{api_key}}"                                                                                  │
 │ ]                                                                                                │

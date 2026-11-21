@@ -378,3 +378,36 @@ fn an_environment_trace_block_enables_propagation() {
             .any(|h| h[0] == "baggage" && h[1] == "tenant=acme")
     );
 }
+
+#[test]
+fn an_evm_tx_is_never_sent() {
+    let server = Server::http();
+    let ws = workspace(&server);
+    let tx = "version: 1\nkind: evm-tx\nname: pay\nrpc: \"{{base_url}}/rpc\"\nto: \"0x5FbDB2315678afecb367f032d93F642f64180aa3\"\nabi: erc20\nfunction: transfer\nargs: [\"0x5FbDB2315678afecb367f032d93F642f64180aa3\", \"1\"]\n";
+    write(ws.path(), "pay.rman.yaml", tx);
+    rustman(ws.path())
+        .args(["send", "pay", "--env", "dev"])
+        .assert()
+        .code(4)
+        .stderr(predicate::str::contains(
+            "evm-tx: signing is not available yet; nothing was signed or sent",
+        ));
+    // An evm-call file names the commands that do send it.
+    let call = "version: 1\nkind: evm-call\nname: supply\nrpc: \"{{base_url}}/rpc\"\nto: \"0x5FbDB2315678afecb367f032d93F642f64180aa3\"\nabi: erc20\nfunction: totalSupply\n";
+    write(ws.path(), "supply.rman.yaml", call);
+    rustman(ws.path())
+        .args(["send", "supply", "--env", "dev"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains(
+            "request 'supply' is an evm-call request; send it with `rustman evm call` or `rustman run`",
+        ));
+    // Scenario "Runner skips evm-tx": a run without --sign reports the file
+    // as skipped and does not fail. Regression: it was counted as errored
+    // (exit 3), failing every collection holding an evm-tx file.
+    rustman(ws.path())
+        .args(["run", "pay.rman.yaml", "--env", "dev", "--no-history"])
+        .assert()
+        .code(0)
+        .stdout(predicate::str::contains("skipped (signing not requested)"));
+}

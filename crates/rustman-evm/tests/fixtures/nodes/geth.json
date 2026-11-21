@@ -1,0 +1,5 @@
+[
+  {"method": "eth_chainId", "params": [], "result": "0x1"},
+  {"method": "web3_clientVersion", "params": [], "result": "Geth/v1.14.11-stable/linux-amd64/go1.23.2"},
+  {"method": "net_version", "params": [], "result": "1"}
+]

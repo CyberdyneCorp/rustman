@@ -1,0 +1,5 @@
+[
+  {"method": "eth_chainId", "params": [], "result": "0x2105"},
+  {"method": "web3_clientVersion", "params": [], "result": "reth/v1.1.0-1ba631b/x86_64-unknown-linux-gnu"},
+  {"method": "net_version", "params": [], "result": "8453"}
+]

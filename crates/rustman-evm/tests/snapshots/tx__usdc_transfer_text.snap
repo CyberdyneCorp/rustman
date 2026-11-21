@@ -1,0 +1,18 @@
+---
+source: crates/rustman-evm/tests/tx.rs
+expression: report.render()
+---
+tx         0xdeed52ec1e92d0ca8834284f39ed5e37ff6106b6bb09a9dc37fb6d1c01b0a8f6
+chain      Ethereum Mainnet (1)
+status     success
+block      26459415
+from       0x7e4c83cb3b38C128E42286dB909E410B1bC60038
+to         0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
+value      0 ETH
+nonce      8
+gas used   45160
+gas price  0.32184661 gwei
+fee        0.0000145345929076 ETH
+input      transfer(to=0x5e3D81ECeb0c7D9bA1E6cfDAcE631B165a149d3F, amount=250000000)
+logs
+  [912] 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 Transfer(from=0x7e4c83cb3b38C128E42286dB909E410B1bC60038, to=0x5e3D81ECeb0c7D9bA1E6cfDAcE631B165a149d3F, value=250.00 USDC)

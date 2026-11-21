@@ -182,6 +182,7 @@ mod tests {
             secrets: vec!["token".into()],
             production: false,
             trace: Default::default(),
+            chain_id: None,
         }
     }
 

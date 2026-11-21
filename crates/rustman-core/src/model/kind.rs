@@ -10,6 +10,7 @@ use serde::Deserialize;
 
 use super::common::Variables;
 use super::docs::DocsMeta;
+use super::evm::{EvmRequest, SIGNING_UNAVAILABLE};
 use super::graphql::GraphqlRequest;
 use super::grpc::GrpcRequest;
 use super::http::HttpRequest;
@@ -26,8 +27,9 @@ pub const REQUEST_VERSION: u64 = 1;
 
 /// The built-in request kinds. Plugins can never register these names
 /// (plugins spec, "Request kind extension point").
-pub const BUILTIN_KINDS: [&str; 10] = [
-    "http", "graphql", "jsonrpc", "grpc", "mcp", "ws", "sse", "kafka", "mqtt", "amqp",
+pub const BUILTIN_KINDS: [&str; 12] = [
+    "http", "graphql", "jsonrpc", "grpc", "mcp", "ws", "sse", "kafka", "mqtt", "amqp", "evm-call",
+    "evm-tx",
 ];
 
 /// The keys every request file may have, whatever its kind.
@@ -55,6 +57,8 @@ pub enum Request {
     Sse(Box<SseRequest>),
     /// `kind: kafka`, `kind: mqtt` or `kind: amqp`.
     Messaging(Box<MessagingRequest>),
+    /// `evm-call` and `evm-tx` (add-evm-toolkit).
+    Evm(Box<EvmRequest>),
     /// A registered kind this build can list but not execute.
     Opaque(OpaqueRequest),
 }
@@ -70,6 +74,7 @@ impl Request {
             Self::Ws(r) => &r.kind,
             Self::Sse(r) => &r.kind,
             Self::Messaging(r) => &r.kind,
+            Self::Evm(r) => r.kind(),
             Self::Opaque(r) => &r.kind,
         }
     }
@@ -84,6 +89,7 @@ impl Request {
             Self::Ws(r) => &r.name,
             Self::Sse(r) => &r.name,
             Self::Messaging(r) => &r.name,
+            Self::Evm(r) => r.common().name,
             Self::Opaque(r) => &r.name,
         }
     }
@@ -98,6 +104,7 @@ impl Request {
             Self::Ws(r) => r.description.as_deref(),
             Self::Sse(r) => r.description.as_deref(),
             Self::Messaging(r) => r.description.as_deref(),
+            Self::Evm(r) => r.common().description,
             Self::Opaque(r) => r.description.as_deref(),
         }
     }
@@ -112,6 +119,7 @@ impl Request {
             Self::Ws(r) => &r.tags,
             Self::Sse(r) => &r.tags,
             Self::Messaging(r) => &r.tags,
+            Self::Evm(r) => return r.common().tags.unwrap_or_default(),
             Self::Opaque(r) => &r.tags,
         };
         tags.as_deref().unwrap_or_default()
@@ -128,6 +136,7 @@ impl Request {
             Self::Ws(r) => r.docs.as_ref(),
             Self::Sse(r) => r.docs.as_ref(),
             Self::Messaging(r) => r.docs.as_ref(),
+            Self::Evm(r) => r.common().docs,
             Self::Opaque(r) => r.docs.as_ref(),
         }
     }
@@ -144,6 +153,7 @@ impl Request {
             Self::Ws(r) => r.variables.as_ref(),
             Self::Sse(r) => r.variables.as_ref(),
             Self::Messaging(r) => r.variables.as_ref(),
+            Self::Evm(r) => r.common().variables,
             Self::Opaque(r) => r.variables.as_ref(),
         }
     }
@@ -159,6 +169,10 @@ impl Request {
             Self::Ws(r) => &r.kind,
             Self::Sse(r) => &r.kind,
             Self::Messaging(r) => &r.kind,
+            Self::Evm(r) if matches!(**r, EvmRequest::Tx(_)) => {
+                return Some(SIGNING_UNAVAILABLE.to_owned());
+            }
+            Self::Evm(r) => r.kind(),
             Self::Opaque(r) => &r.kind,
         };
         Some(format!(
@@ -219,7 +233,7 @@ pub struct KindRegistry {
 
 impl Default for KindRegistry {
     /// The built-in kinds: `http`, `graphql`, `jsonrpc`, `grpc`, `mcp`,
-    /// `ws`, `sse`, `kafka`, `mqtt` and `amqp`.
+    /// `ws`, `sse`, `kafka`, `mqtt`, `amqp`, `evm-call` and `evm-tx`.
     fn default() -> Self {
         Self {
             kinds: vec![
@@ -233,6 +247,8 @@ impl Default for KindRegistry {
                 ("kafka", load_messaging),
                 ("mqtt", load_messaging),
                 ("amqp", load_messaging),
+                ("evm-call", load_evm),
+                ("evm-tx", load_evm),
             ],
             fallback: None,
         }
@@ -385,6 +401,11 @@ fn load_sse(file: &Path, text: &str) -> Result<Request, LoadError> {
 fn load_messaging(file: &Path, text: &str) -> Result<Request, LoadError> {
     let request = MessagingRequest::parse(file, text)?;
     Ok(Request::Messaging(Box::new(request)))
+}
+
+fn load_evm(file: &Path, text: &str) -> Result<Request, LoadError> {
+    let request = EvmRequest::parse(file, text)?;
+    Ok(Request::Evm(Box::new(request)))
 }
 
 #[derive(Deserialize)]

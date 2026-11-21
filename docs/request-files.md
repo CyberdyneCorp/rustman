@@ -59,7 +59,7 @@ Every request file has these fields, in this order:
 | Field | Required | Meaning |
 |-------|----------|---------|
 | `version` | yes | Always `1`. |
-| `kind` | yes | The request kind: `http`, `graphql`, `jsonrpc`, `grpc` or `mcp`. |
+| `kind` | yes | The request kind: `http`, `graphql`, `jsonrpc`, `grpc`, `mcp`, `ws`, `sse`, `evm-call` or `evm-tx`. |
 | `name` | yes | The name shown in reports and used by `rustman send <name>`. |
 | `description` | no | Free text. |
 | `tags` | no | A list of strings. |
@@ -68,7 +68,7 @@ Every request file has these fields, in this order:
 | `assertions` | no | Checks on the response (see [assertions.md](assertions.md)). |
 | `captures` | no | Values extracted from the response for later requests. |
 
-`graphql` files have their own fields (see [GraphQL requests](#graphql-requests)); their `variables` are GraphQL variables sent with the operation, not a layer of Rustman variables. `jsonrpc`, `mcp` and `grpc` files have their own fields too (see their sections below), and `rustman run` runs them alongside `http` and `graphql` requests. A kind this build does not know is reported as skipped with `request kind '<kind>' is not supported by this build`.
+`graphql` files have their own fields (see [GraphQL requests](#graphql-requests)); their `variables` are GraphQL variables sent with the operation, not a layer of Rustman variables. `jsonrpc`, `mcp` and `grpc` files have their own fields too (see their sections below), and `rustman run` runs them alongside `http` and `graphql` requests. `evm-call` and `evm-tx` files are described in [EVM toolkit](evm.md#request-files). A kind this build does not know is reported as skipped with `request kind '<kind>' is not supported by this build`.
 
 ## HTTP requests
 
@@ -693,7 +693,7 @@ Paths containing `{{variables}}` are checked after the variables are resolved, b
 Load errors name the file and line, and Rustman reports every broken file at once:
 
 ```text
-legacy/soap.rman.yaml:2: unknown request kind 'soap' (expected one of: http, graphql, jsonrpc, grpc, mcp, ws, sse, kafka, mqtt, amqp)
+legacy/soap.rman.yaml:2: unknown request kind 'soap' (expected one of: http, graphql, jsonrpc, grpc, mcp, ws, sse, kafka, mqtt, amqp, evm-call, evm-tx)
 users/list.rman.yaml:5: unknown field `header`, expected one of version, kind, name, description, tags, docs, method, url, query, headers, body, auth, settings, transform, variables, assertions, captures
 ```
 

@@ -219,8 +219,33 @@ impl JsonrpcEditor {
     }
 
     /// Why the params do not parse; `None` when they do (or are empty).
+    /// Why the params cannot be sent: not JSON, or, for a method of the
+    /// built-in EVM catalog, a value of the wrong type (a bad EIP-55
+    /// checksum, non-hex data, an unknown block tag). Params holding
+    /// `{{variables}}` are checked only once resolved, when sent.
     pub fn params_error(&self) -> Option<String> {
-        params_value(&self.params.text()).err()
+        let text = self.params.text();
+        let params = match params_value(&text) {
+            Ok(params) => params,
+            Err(e) => return Some(e),
+        };
+        if text.contains("{{") {
+            return None;
+        }
+        let method = self.method.text();
+        rustman_evm::catalog::check_params(method.trim(), params.as_ref())
+            .err()
+            .map(|e| format!("Params: {e}"))
+    }
+
+    /// The params label: for a method of the built-in EVM catalog, its
+    /// typed params, such as `eth_getBalance(address: address, block:
+    /// block tag)`.
+    pub fn params_label(&self) -> String {
+        match rustman_evm::catalog::find(&self.method.text()) {
+            Some(method) => format!("Params (JSON) · {}", method.signature()),
+            None => "Params (JSON)".to_owned(),
+        }
     }
 
     /// The request as edited.
@@ -595,6 +620,32 @@ mod tests {
         for c in text.chars() {
             editor.key(Focus::EditorBody, Chord::plain(Code::Char(c)), None);
         }
+    }
+
+    #[test]
+    fn evm_catalog_methods_show_typed_params_and_reject_bad_values() {
+        let editor = JsonrpcEditor::new(&request(
+            "method: eth_getBalance\nparams: ['0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96046', latest]\n",
+        ));
+        assert_eq!(
+            editor.params_label(),
+            "Params (JSON) · eth_getBalance(address: address, block: block tag)"
+        );
+        assert_eq!(
+            editor.params_error().as_deref(),
+            Some("Params: param 'address': invalid EIP-55 checksum")
+        );
+        let good = JsonrpcEditor::new(&request(
+            "method: eth_getBalance\nparams: ['0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045', latest]\n",
+        ));
+        assert_eq!(good.params_error(), None);
+        let templated = JsonrpcEditor::new(&request(
+            "method: eth_getBalance\nparams: ['{{owner}}', latest]\n",
+        ));
+        assert_eq!(templated.params_error(), None);
+        let other = JsonrpcEditor::new(&request("method: my_method\nparams: ['x']\n"));
+        assert_eq!(other.params_label(), "Params (JSON)");
+        assert_eq!(other.params_error(), None);
     }
 
     #[test]

@@ -29,6 +29,7 @@ pub mod secrets;
 pub mod settings;
 pub mod snapshot;
 pub mod stress;
+pub mod text;
 pub mod trace;
 pub mod trust;
 pub mod vars;

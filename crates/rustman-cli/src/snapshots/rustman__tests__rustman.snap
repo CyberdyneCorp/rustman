@@ -23,6 +23,7 @@ Commands:
   graphql      Introspect GraphQL schemas and send GraphQL operations
   grpc         List and describe gRPC services, call methods and check health
   rpc          Send JSON-RPC calls and batches, and fetch OpenRPC catalogs
+  evm          EVM chains: read-only contract calls, decoding, logs, transactions, blocks, ENS and local Anvil forks
   history      List, inspect, replay and clear past exchanges (redacted)
   mcp          Serve the workspace to AI agents over MCP (Model Context Protocol)
   mcp-client   Explore and call MCP servers: their tools, resources and prompts

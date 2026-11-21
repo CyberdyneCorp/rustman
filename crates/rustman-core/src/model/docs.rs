@@ -66,6 +66,10 @@ mod tests {
             format!("{}url: ws://x/\n", head("ws")),
             format!("{}url: http://x/\n", head("sse")),
             format!(
+                "{}rpc: http://x/\nto: '0x1'\nabi: erc20\nfunction: name\n",
+                head("evm-call")
+            ),
+            format!(
                 "{}operation: consume\nbrokers: k:9092\ntopic: t\n",
                 head("kafka")
             ),

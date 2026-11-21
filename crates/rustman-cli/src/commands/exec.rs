@@ -310,8 +310,10 @@ async fn watch_interrupts(
 
 fn quit_interrupted() {
     eprintln!("interrupted again: quitting");
-    // `exit` runs no destructor: stop the servers' process trees first.
+    // `exit` runs no destructor: stop the servers' process trees and the
+    // Anvil forks first.
     rustman_mcp::client::kill_all_servers();
+    rustman_evm::fork::kill_all_forks();
     std::process::exit(i32::from(crate::exit::INTERRUPTED));
 }
 

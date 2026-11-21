@@ -1,0 +1,5 @@
+[
+  {"method": "eth_chainId", "params": [], "result": "0x3e7"},
+  {"method": "web3_clientVersion", "params": [], "error": {"code": -32601, "message": "the method web3_clientVersion does not exist/is not available"}},
+  {"method": "net_version", "params": [], "result": "999"}
+]

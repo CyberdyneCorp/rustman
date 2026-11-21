@@ -23,6 +23,7 @@ never\:"Never color"))' \
         case $line[1] in
             (call)
 _arguments "${_arguments_options[@]}" : \
+'()*--param=[A typed param of a built-in eth_*, net_* or web3_* method (repeatable)\: --param address=0xd8dA... --param block=latest]:NAME=VALUE:_default' \
 '*-H+[Add a header (repeatable)\: --header "Authorization\: Basic {{auth}}"]:NAME: VALUE:_default' \
 '*--header=[Add a header (repeatable)\: --header "Authorization\: Basic {{auth}}"]:NAME: VALUE:_default' \
 '(--notify)--id=[Send this id instead of 1 (an integer, or else a string)]:ID:_default' \
@@ -131,6 +132,233 @@ _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
 (discover)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(evm)
+_arguments "${_arguments_options[@]}" : \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_rustman__subcmd__evm_commands" \
+"*::: :->evm" \
+&& ret=0
+
+    case $state in
+    (evm)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rustman-evm-command-$line[1]:"
+        case $line[1] in
+            (call)
+_arguments "${_arguments_options[@]}" : \
+'--to=[The contract\: an address or ENS name (an ad-hoc call)]:ADDRESS:_default' \
+'--abi=[The ABI of an ad-hoc call\: erc20, erc721, erc1155 or a path from the workspace root]:ABI:_default' \
+'--function=[The function of an ad-hoc call\: a name or a full signature]:FUNCTION:_default' \
+'--block=[The block\: latest, finalized, a number or a hash (ad-hoc calls)]:BLOCK:_default' \
+'--from=[The caller address (ad-hoc calls)]:ADDRESS:_default' \
+'--value=[The value sent with the call, such as "1 ether" (ad-hoc calls)]:AMOUNT:_default' \
+'--env=[Environment (default\: RUSTMAN_ENV, then default_environment)]:NAME:_default' \
+'--workspace=[Workspace directory (default\: search from the current directory upwards)]:DIR:_files' \
+'--rpc=[The node\: a URL or a {{variable}} (default\: the environment'\''s {{rpc}})]:URL:_default' \
+'*--var=[Set a variable, above every other source (repeatable)\: --var k=v]:K=V:_default' \
+'--timeout=[Total timeout per node call\: 500ms, 5s, 2m, or milliseconds]:DURATION:_default' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'--estimate[Also report eth_estimateGas for the same call]' \
+'--trace[Also print the call tree (debug_traceCall, then trace_call)]' \
+'--no-history[Do not record the call in history]' \
+'-k[Do not verify TLS certificates]' \
+'--insecure[Do not verify TLS certificates]' \
+'--json[Print one JSON object instead of text]' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'*::positionals -- An evm-call request (file, id or name); with --to, the function'\''s arguments instead:_default' \
+&& ret=0
+;;
+(decode)
+_arguments "${_arguments_options[@]}" : \
+'--abi=[The ABI\: erc20, erc721, erc1155, or a JSON ABI or Foundry/Hardhat artifact path from the workspace root]:ABI:_default' \
+'*--topic=[A log topic (repeatable, topic 0 first)\: decode DATA as a log]:TOPIC:_default' \
+'--env=[Environment (default\: RUSTMAN_ENV, then default_environment)]:NAME:_default' \
+'--workspace=[Workspace directory (default\: search from the current directory upwards)]:DIR:_files' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'--json[Print one JSON object instead of text]' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':data -- Call data, revert data or log data, as 0x-prefixed hex:_default' \
+&& ret=0
+;;
+(logs)
+_arguments "${_arguments_options[@]}" : \
+'*--address=[Logs from this contract (repeatable; any contract when absent)]:ADDRESS:_default' \
+'--event=[Topic 0 as an event signature\: "Transfer(address,address,uint256)"]:SIGNATURE:_default' \
+'*--topic=[A further topic, in order (32-byte hex, a signature, or * for any)]:TOPIC:_default' \
+'(--heads)--from-block=[Query logs from this block instead of streaming (with --to-block, default latest)]:BLOCK:_default' \
+'--to-block=[The last block of a query]:BLOCK:_default' \
+'--max-events=[Stop streaming after N events (reorged logs not counted)]:N:_default' \
+'--duration=[Stop streaming after this long\: 30s, 5m]:DURATION:_default' \
+'--poll-interval=[How often to poll over HTTP (default 2s)]:DURATION:_default' \
+'--env=[Environment (default\: RUSTMAN_ENV, then default_environment)]:NAME:_default' \
+'--workspace=[Workspace directory (default\: search from the current directory upwards)]:DIR:_files' \
+'--rpc=[The node\: a URL or a {{variable}} (default\: the environment'\''s {{rpc}})]:URL:_default' \
+'*--var=[Set a variable, above every other source (repeatable)\: --var k=v]:K=V:_default' \
+'--timeout=[Total timeout per node call\: 500ms, 5s, 2m, or milliseconds]:DURATION:_default' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'(--address --event --topic)--heads[Stream new block headers instead of logs]' \
+'-k[Do not verify TLS certificates]' \
+'--insecure[Do not verify TLS certificates]' \
+'--json[Print one JSON object instead of text]' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(tx)
+_arguments "${_arguments_options[@]}" : \
+'--env=[Environment (default\: RUSTMAN_ENV, then default_environment)]:NAME:_default' \
+'--workspace=[Workspace directory (default\: search from the current directory upwards)]:DIR:_files' \
+'--rpc=[The node\: a URL or a {{variable}} (default\: the environment'\''s {{rpc}})]:URL:_default' \
+'*--var=[Set a variable, above every other source (repeatable)\: --var k=v]:K=V:_default' \
+'--timeout=[Total timeout per node call\: 500ms, 5s, 2m, or milliseconds]:DURATION:_default' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'-k[Do not verify TLS certificates]' \
+'--insecure[Do not verify TLS certificates]' \
+'--json[Print one JSON object instead of text]' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':hash -- The transaction hash:_default' \
+&& ret=0
+;;
+(block)
+_arguments "${_arguments_options[@]}" : \
+'--env=[Environment (default\: RUSTMAN_ENV, then default_environment)]:NAME:_default' \
+'--workspace=[Workspace directory (default\: search from the current directory upwards)]:DIR:_files' \
+'--rpc=[The node\: a URL or a {{variable}} (default\: the environment'\''s {{rpc}})]:URL:_default' \
+'*--var=[Set a variable, above every other source (repeatable)\: --var k=v]:K=V:_default' \
+'--timeout=[Total timeout per node call\: 500ms, 5s, 2m, or milliseconds]:DURATION:_default' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'-k[Do not verify TLS certificates]' \
+'--insecure[Do not verify TLS certificates]' \
+'--json[Print one JSON object instead of text]' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::block -- A block number, a tag (latest, finalized, safe, earliest, pending) or a block hash:_default' \
+&& ret=0
+;;
+(ens)
+_arguments "${_arguments_options[@]}" : \
+'--env=[Environment (default\: RUSTMAN_ENV, then default_environment)]:NAME:_default' \
+'--workspace=[Workspace directory (default\: search from the current directory upwards)]:DIR:_files' \
+'--rpc=[The node\: a URL or a {{variable}} (default\: the environment'\''s {{rpc}})]:URL:_default' \
+'*--var=[Set a variable, above every other source (repeatable)\: --var k=v]:K=V:_default' \
+'--timeout=[Total timeout per node call\: 500ms, 5s, 2m, or milliseconds]:DURATION:_default' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'-k[Do not verify TLS certificates]' \
+'--insecure[Do not verify TLS certificates]' \
+'--json[Print one JSON object instead of text]' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':target -- An ENS name (vitalik.eth) or an address:_default' \
+&& ret=0
+;;
+(fork)
+_arguments "${_arguments_options[@]}" : \
+'(--env --rpc)--chain=[The chain to fork\: an environment name, a chain name or a chain id (else --env or --rpc names the endpoint)]:CHAIN:_default' \
+'--block=[Fork at this block number (default\: the latest)]:N:_default' \
+'--port=[The local port (default 8545)]:PORT:_default' \
+'--env=[Environment (default\: RUSTMAN_ENV, then default_environment)]:NAME:_default' \
+'--workspace=[Workspace directory (default\: search from the current directory upwards)]:DIR:_files' \
+'--rpc=[The node\: a URL or a {{variable}} (default\: the environment'\''s {{rpc}})]:URL:_default' \
+'*--var=[Set a variable, above every other source (repeatable)\: --var k=v]:K=V:_default' \
+'--timeout=[Total timeout per node call\: 500ms, 5s, 2m, or milliseconds]:DURATION:_default' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'-k[Do not verify TLS certificates]' \
+'--insecure[Do not verify TLS certificates]' \
+'--json[Print one JSON object instead of text]' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_rustman__subcmd__evm__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rustman-evm-help-command-$line[1]:"
+        case $line[1] in
+            (call)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(decode)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(logs)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(tx)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(block)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(ens)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(fork)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;

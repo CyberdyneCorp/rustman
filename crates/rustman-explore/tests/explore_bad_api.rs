@@ -43,6 +43,7 @@ fn environment(name: &str) -> Environment {
         secrets: vec!["bearerAuth_token".into()],
         production: false,
         trace: Default::default(),
+        chain_id: None,
     }
 }
 
@@ -55,6 +56,7 @@ fn plain_environment(name: &str, token: &str) -> Environment {
         secrets: Vec::new(),
         production: false,
         trace: Default::default(),
+        chain_id: None,
     }
 }
 

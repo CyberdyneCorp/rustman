@@ -4,7 +4,7 @@ use serde_json::Value;
 use serde_json_path::JsonPath;
 
 use crate::assertions::{ResponseView, regex};
-use crate::model::{Capture, CaptureSource};
+use crate::model::{Capture, CaptureSource, OutputRef};
 
 /// Why a capture produced no value.
 #[derive(Debug, PartialEq, Eq)]
@@ -38,6 +38,73 @@ pub(super) fn extract(capture: &Capture, response: &ResponseView<'_>) -> Result<
         }
         CaptureSource::BodyRegex => body_regex(&field(&capture.pattern), capture.group, response),
         CaptureSource::Metadata => metadata(&field(&capture.name), response),
+        CaptureSource::EvmOutput | CaptureSource::EvmEvent | CaptureSource::EvmReceipt => {
+            evm(capture, response)
+        }
+    }
+}
+
+/// An EVM capture reads the document `rustman-evm` puts in the body:
+/// `{"outputs": [{name, value}], "events": [{signature, fields}],
+/// "receipt": {...}}`, its values already decimal strings and checksummed
+/// addresses.
+fn evm(capture: &Capture, response: &ResponseView<'_>) -> Result<String, Miss> {
+    let document = response
+        .json()
+        .ok()
+        .filter(|d| d.get("outputs").is_some())
+        .ok_or_else(|| Miss::Error(format!("{}: not an EVM result", capture.from.as_str())))?;
+    let field = capture.field.as_deref().unwrap_or_default();
+    let found = match capture.from {
+        CaptureSource::EvmOutput => evm_output(&document, capture.output.as_ref()),
+        CaptureSource::EvmEvent => {
+            let event = capture.event.as_deref().unwrap_or_default();
+            evm_event(&document, event, field)
+        }
+        _ => document.get("receipt").and_then(|r| r.get(field)).cloned(),
+    };
+    match found {
+        Some(Value::String(text)) => Ok(text),
+        Some(Value::Null) | None => Err(Miss::NoMatch(evm_missing(capture, field))),
+        Some(other) => Ok(other.to_string()),
+    }
+}
+
+fn evm_output(document: &Value, output: Option<&OutputRef>) -> Option<Value> {
+    let outputs = document.get("outputs")?.as_array()?;
+    let found = match output? {
+        OutputRef::Index(index) => outputs.get(*index),
+        OutputRef::Name(name) => outputs
+            .iter()
+            .find(|o| o.get("name").and_then(Value::as_str) == Some(name.as_str())),
+    };
+    found?.get("value").cloned()
+}
+
+fn evm_event(document: &Value, event: &str, field: &str) -> Option<Value> {
+    let wanted = event.replace(' ', "");
+    document
+        .get("events")?
+        .as_array()?
+        .iter()
+        .filter(|e| e.get("removed").and_then(Value::as_bool) != Some(true))
+        .find(|e| e.get("signature").and_then(Value::as_str) == Some(wanted.as_str()))?
+        .get("fields")?
+        .get(field)
+        .cloned()
+}
+
+fn evm_missing(capture: &Capture, field: &str) -> String {
+    match capture.from {
+        CaptureSource::EvmOutput => {
+            let output = capture.output.as_ref().map(ToString::to_string);
+            format!("no output {}", output.unwrap_or_default())
+        }
+        CaptureSource::EvmEvent => format!(
+            "no {} event with field {field}",
+            capture.event.as_deref().unwrap_or_default()
+        ),
+        _ => format!("no receipt field {field}"),
     }
 }
 
@@ -115,9 +182,58 @@ mod tests {
             name: None,
             pattern: None,
             group: None,
+            output: None,
+            event: None,
+            field: None,
             required: None,
             persist: None,
         }
+    }
+
+    #[test]
+    fn evm_captures_read_the_evm_document() {
+        let doc = r#"{"outputs": [{"name": "", "value": "0xAbC"}, {"name": "balance", "value": "42"}],
+            "events": [{"signature": "Transfer(address,address,uint256)", "removed": true, "fields": {"to": "0xOld"}},
+                       {"signature": "Transfer(address,address,uint256)", "fields": {"to": "0xNew", "value": "7"}}],
+            "receipt": {"blockNumber": "12", "status": true}}"#;
+        let r = response(doc);
+        let out = |o: OutputRef| Capture {
+            output: Some(o),
+            ..capture(CaptureSource::EvmOutput)
+        };
+        assert_eq!(extract(&out(OutputRef::Index(0)), &r), Ok("0xAbC".into()));
+        assert_eq!(
+            extract(&out(OutputRef::Name("balance".into())), &r),
+            Ok("42".into())
+        );
+        assert_eq!(
+            extract(&out(OutputRef::Index(5)), &r),
+            Err(Miss::NoMatch("no output 5".into()))
+        );
+        let event = Capture {
+            event: Some("Transfer(address, address, uint256)".into()),
+            field: Some("to".into()),
+            ..capture(CaptureSource::EvmEvent)
+        };
+        assert_eq!(
+            extract(&event, &r),
+            Ok("0xNew".into()),
+            "reorged logs are skipped"
+        );
+        let receipt = |f: &str| Capture {
+            field: Some(f.into()),
+            ..capture(CaptureSource::EvmReceipt)
+        };
+        assert_eq!(extract(&receipt("blockNumber"), &r), Ok("12".into()));
+        assert_eq!(extract(&receipt("status"), &r), Ok("true".into()));
+        assert_eq!(
+            extract(&receipt("gasUsed"), &r),
+            Err(Miss::NoMatch("no receipt field gasUsed".into()))
+        );
+        assert_eq!(
+            extract(&receipt("gasUsed"), &response("{}")),
+            Err(Miss::Error("evm_receipt: not an EVM result".into()))
+        );
     }
 
     fn json_at(path: &str) -> Capture {

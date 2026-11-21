@@ -142,7 +142,7 @@ A refused send exits 2. `settings.validate: false` in a request file, or `--no-v
 $ rustman rpc call http://127.0.0.1:8332 getblockcount --header "Authorization: Basic {{btc_auth}}" --env dev
 800000
 $ rustman rpc call {{rpc_url}} eth_getBalance '["0x00000000000000000000000000000000000000aa", "latest"]'
-"0x0"
+0 ETH
 $ rustman rpc call wss://node.example/ws eth_subscribe '["newHeads"]' \
     --subscribe eth_subscription --unsubscribe eth_unsubscribe --max-events 3
 ```
@@ -157,9 +157,10 @@ $ rustman rpc call wss://node.example/ws eth_subscribe '["newHeads"]' \
 | `--raw` | Print the response envelopes (and event messages) as received |
 | `--json` | Print the whole exchange (status, calls, attempts, events, assertions) as one JSON object |
 | `--no-validate` | Skip the OpenRPC check |
+| `--param name=value` | A typed param of a built-in `eth_*`, `net_*` or `web3_*` method (repeatable), instead of the params JSON; see [Typed JSON-RPC methods](evm.md#typed-json-rpc-methods) |
 | `--env`, `--workspace`, `--var`, `--timeout`, `--insecure`, `--no-history` | As for `rustman send` |
 
-Outside a workspace, endpoint calls still work (history goes to the platform data folder). Every output comes from the redacted record, so no secret is ever printed.
+A native amount (`eth_getBalance`, `eth_gasPrice`) prints as `1 ETH`, its wei, gwei and hex forms on stderr; `--raw` and `--json` keep the hex. Outside a workspace, endpoint calls still work (history goes to the platform data folder). Every output comes from the redacted record, so no secret is ever printed.
 
 ## rustman rpc batch
 

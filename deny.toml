@@ -25,6 +25,11 @@ ignore = [
     # recipients pull p256 with crypto-bigint 0.5 (RUSTSEC-2026-0387).
     { id = "RUSTSEC-2026-0374", reason = "unmaintained basic-toml via age's compile-time i18n macro; reads only age's bundled i18n.toml" },
     { id = "RUSTSEC-2026-0173", reason = "unmaintained proc-macro-error2 via age's compile-time i18n macro; compile-time diagnostics only" },
+    # paste is unmaintained (archived, declared complete). It comes only
+    # through alloy-primitives and syn-solidity (the EVM toolkit,
+    # add-evm-toolkit design D1), which use it as a proc macro to build
+    # identifiers at compile time; it does not run in Rustman or read input.
+    { id = "RUSTSEC-2024-0436", reason = "unmaintained paste proc macro via alloy-primitives; compile-time identifier pasting only" },
 ]
 
 [licenses]
