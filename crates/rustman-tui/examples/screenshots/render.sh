@@ -44,5 +44,9 @@ grpc=(--open grpc/list-products.rman.yaml --response "$here/grpc-list-products.j
 frame grpc "${grpc[@]}" --keys "Ctrl+B"
 frame grpc-timeline "${grpc[@]}" --keys "Ctrl+B Tab 2 Tab Tab ] ]"
 frame mcp --keys "Alt+I Down Enter"
+frame messaging --open events/order-created.rman.yaml --keys "Ctrl+B Tab 2 Tab"
+# The Monitors view reads results relative to now: write them just before.
+python3 "$here/monitor-store.py" petstore-api
+frame monitors "${pet[@]}" --keys "Ctrl+P m o n i t o r s Enter"
 
 rm -rf "$work"

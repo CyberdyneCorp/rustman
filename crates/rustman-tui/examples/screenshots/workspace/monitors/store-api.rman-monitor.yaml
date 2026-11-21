@@ -1,0 +1,5 @@
+version: 1
+name: store-api
+targets: [store/]
+environment: local
+schedule: {cron: "*/15 * * * *", tz: UTC}
