@@ -287,25 +287,31 @@ fn replace_data(executed: &mut Executed, data: Value, errors: Vec<Value>) {
     result.exchange.spill = None;
 }
 
-async fn deliver(
-    exec: &Execution<'_>,
-    resolved: &ResolvedGraphql,
-    operation: &HttpOperation,
-) -> Result<Delivery, GraphqlError> {
+/// Send `operation` over the request's transport. Each transport's
+/// future is built in this frame and boxed: in a debug build an inline
+/// future takes a stack slot of its own in every caller's poll frame, and
+/// the CLI polls a run on a main thread of 1 MiB on Windows.
+fn deliver<'a>(
+    exec: &'a Execution<'_>,
+    resolved: &'a ResolvedGraphql,
+    operation: &'a HttpOperation,
+) -> Pin<Box<dyn Future<Output = Result<Delivery, GraphqlError>> + Send + 'a>> {
     let options = exec.options;
-    Ok(match exec.graphql.effective_transport() {
-        GraphqlTransport::Http => Delivery::Http(Box::new(
-            execute_http(exec.engine, options, resolved, operation).await?,
-        )),
-        GraphqlTransport::Ws => {
+    match exec.graphql.effective_transport() {
+        GraphqlTransport::Http => Box::pin(async move {
+            let result = execute_http(exec.engine, options, resolved, operation).await?;
+            Ok(Delivery::Http(Box::new(result)))
+        }),
+        GraphqlTransport::Ws => Box::pin(async move {
             let protocol = exec.graphql.effective_ws_protocol();
             let sub = subscribe_ws(resolved, operation, protocol, options, &exec.subscribe);
-            Delivery::Subscription(Box::new(sub.await?))
-        }
-        GraphqlTransport::Sse => Delivery::Subscription(Box::new(
-            subscribe_sse(exec.engine, options, resolved, operation, &exec.subscribe).await?,
-        )),
-    })
+            Ok(Delivery::Subscription(Box::new(sub.await?)))
+        }),
+        GraphqlTransport::Sse => Box::pin(async move {
+            let sub = subscribe_sse(exec.engine, options, resolved, operation, &exec.subscribe);
+            Ok(Delivery::Subscription(Box::new(sub.await?)))
+        }),
+    }
 }
 
 /// Reads the chain head from an EVM node, for a subgraph's freshness.
@@ -405,16 +411,19 @@ impl GraphqlRunner {
                 subscribe,
             };
             // `exec` holds the feed's sender: dropping it ends `forward`.
+            // Boxed, like the freshness check below, to keep this future and
+            // its poll frames small: the CLI polls a run on its main thread,
+            // whose stack is 1 MiB on Windows.
             match self.paginate {
-                Some(paginate) => execute_paged(&exec, paginate).await,
-                None => execute(&exec).await,
+                Some(paginate) => Box::pin(execute_paged(&exec, paginate)).await,
+                None => Box::pin(execute(&exec)).await,
             }
         };
         let forward = self.forward(events, call);
         let (executed, ()) = tokio::join!(send, forward);
         let mut outcome = outcome(executed?, call.graphql);
         if self.reads_freshness(call.graphql) {
-            self.freshness(call, &mut outcome.record).await;
+            Box::pin(self.freshness(call, &mut outcome.record)).await;
         }
         Ok(outcome)
     }
@@ -435,7 +444,7 @@ impl GraphqlRunner {
             rpc: call.chain_rpc.is_some(),
             ..SubgraphFacts::default()
         };
-        match fetch_meta(call).await {
+        match Box::pin(fetch_meta(call)).await {
             Ok((block, errors)) => {
                 facts.indexed_block = Some(block);
                 facts.has_indexing_errors = errors;

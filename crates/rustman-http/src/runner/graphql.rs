@@ -119,7 +119,7 @@ impl Runner<'_> {
         let chain_rpc = match executor.wants_chain_rpc(graphql)
             && resolver.lookup(CHAIN_RPC_VARIABLE).is_some()
         {
-            true => Some(self.resolve_chain_rpc(request).await),
+            true => Some(Box::pin(self.resolve_chain_rpc(request)).await),
             false => None,
         };
         let call = GraphqlCall {

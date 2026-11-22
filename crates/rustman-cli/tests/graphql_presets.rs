@@ -287,3 +287,30 @@ fn run_fails_a_stale_subgraph_and_compares_raw_values() {
         "the raw comparison passes: {out}"
     );
 }
+
+/// A run polls its requests on the main thread, whose stack is 1 MiB on
+/// Windows; in a debug build a subgraph request with its freshness check
+/// overflowed it until the graphql runner boxed its large futures. Unix
+/// only: `ulimit -s` sets the main thread's stack there.
+#[cfg(unix)]
+#[test]
+fn a_subgraph_run_fits_a_small_main_thread_stack() {
+    let served = serve();
+    let dir = workspace(&served, true);
+    let bin = assert_cmd::cargo::cargo_bin("rustman");
+    let script = format!(
+        "ulimit -s 896 && exec '{}' run stale.rman.yaml --env dev",
+        bin.display()
+    );
+    let output = std::process::Command::new("sh")
+        .args(["-c", &script])
+        .current_dir(dir.path())
+        .env("RUSTMAN_SECRET_STORE", "file")
+        .env("RUSTMAN_DATA_DIR", common::test_data_dir())
+        .env_remove("RUSTMAN_ENV")
+        .output()
+        .unwrap();
+    let out = String::from_utf8_lossy(&output.stdout).into_owned();
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert!(out.contains("subgraph lag 120 blocks exceeds 50"), "{out}");
+}
