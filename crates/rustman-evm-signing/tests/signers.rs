@@ -347,3 +347,73 @@ fn an_unreadable_keystore_fails_closed() {
         assert!(err.to_string().contains("unreadable keystore"), "{err}");
     }
 }
+
+/// A change to a keystore's `crypto`.
+type Edit = fn(&mut serde_json::Value);
+
+#[test]
+fn a_malformed_cipher_is_refused_before_decrypting() {
+    // Regression: `cipherparams.iv = "00"` made the decryption panic (exit
+    // 101, no report), a longer IV was truncated (the IV is not covered by
+    // the MAC, so another key came out), and `cipher` was never read.
+    let edits: [(&str, Edit); 7] = [
+        ("cipherparams.iv has 2 hex digits, not 32", |c| {
+            c["cipherparams"]["iv"] = serde_json::json!("00");
+        }),
+        ("cipherparams.iv has 34 hex digits, not 32", |c| {
+            c["cipherparams"]["iv"] = serde_json::json!("1010101010101010101010101010101000");
+        }),
+        ("cipherparams.iv is not hex", |c| {
+            c["cipherparams"]["iv"] = serde_json::json!("zz101010101010101010101010101010");
+        }),
+        ("cipher is not aes-128-ctr", |c| {
+            c["cipher"] = serde_json::json!("aes-256-gcm");
+        }),
+        ("ciphertext has 62 hex digits, not 64", |c| {
+            let short = &c["ciphertext"].as_str().unwrap()[2..];
+            c["ciphertext"] = serde_json::json!(short);
+        }),
+        ("mac is not hex", |c| {
+            c["mac"] = serde_json::json!("not-hex")
+        }),
+        ("kdfparams.salt is not hex", |c| {
+            c["kdfparams"]["salt"] = serde_json::json!("xyz");
+        }),
+    ];
+    for (reason, edit) in edits {
+        let err = unlock_edited(edit);
+        assert_eq!(err.exit_code(), 2, "{reason}: {err}");
+        assert!(err.to_string().contains("malformed keystore"), "{err}");
+        assert!(err.to_string().ends_with(reason), "{reason}: {err}");
+    }
+}
+
+#[test]
+fn a_keystore_whose_key_is_not_its_address_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let fixture = std::fs::read_to_string(FIXTURES.join("keystores/anvil0.json")).unwrap();
+    let mut json: serde_json::Value = serde_json::from_str(&fixture).unwrap();
+    json["address"] = serde_json::json!("70997970c51812dc3a010c7d01b50e0d17dc79c8");
+    std::fs::write(dir.path().join("other.json"), json.to_string()).unwrap();
+    // Without an address field, the key is taken as it is.
+    json.as_object_mut().unwrap().remove("address");
+    std::fs::write(dir.path().join("bare.json"), json.to_string()).unwrap();
+    let set = signers(
+        "[signers.other]\nkeystore = \"other.json\"\n[signers.bare]\nkeystore = \"bare.json\"\n",
+    );
+    let mut ctx = context(Some(PASSWORD), &no_prompt, None);
+    ctx.root = dir.path();
+    let err = unlock(set.get("other").unwrap(), &ctx).unwrap_err();
+    assert_eq!(err.exit_code(), 2, "{err}");
+    assert!(
+        err.to_string().contains(
+            "decrypts to 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266, not its 'address' 0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+        ),
+        "{err}"
+    );
+    let bare = unlock(set.get("bare").unwrap(), &ctx).unwrap();
+    assert_eq!(
+        bare.address().to_checksum(None),
+        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    );
+}

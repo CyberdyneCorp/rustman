@@ -139,18 +139,31 @@ fn unlock_keystore(
             &prompted
         }
     };
-    let key = decrypt_checked(id, path, password)?;
-    from_key_bytes(id, &key)
+    let (key, address) = decrypt_checked(id, path, password)?;
+    let signer = from_key_bytes(id, &key)?;
+    match address {
+        Some(address) if address != signer.address() => Err(EvmError::config(format!(
+            "signer '{id}': keystore {} decrypts to {}, not its 'address' {}; refusing a keystore whose key does not match it",
+            path.display(),
+            signer.address().to_checksum(None),
+            address.to_checksum(None)
+        ))),
+        _ => Ok(signer),
+    }
 }
 
 /// The largest keystore file read; a Web3 Secret Storage file is under
 /// 1 KiB.
 const MAX_KEYSTORE_BYTES: u64 = 64 * 1024;
 
-/// Read the keystore once, refuse a costly or malformed key derivation,
-/// then decrypt exactly the bytes that were checked (from a private copy,
-/// so the file cannot be swapped between the check and the decryption).
-fn decrypt_checked(id: &str, path: &Path, password: &str) -> Result<Zeroizing<Vec<u8>>, EvmError> {
+/// The decrypted key and the keystore's `address`, when it has one.
+type Decrypted = (Zeroizing<Vec<u8>>, Option<Address>);
+
+/// Read the keystore once, refuse a costly or malformed key derivation
+/// and a malformed cipher, then decrypt exactly the bytes that were
+/// checked (from a private copy, so the file cannot be swapped between
+/// the check and the decryption).
+fn decrypt_checked(id: &str, path: &Path, password: &str) -> Result<Decrypted, EvmError> {
     let unreadable = |reason: String| {
         EvmError::config(format!(
             "signer '{id}': unreadable keystore {}: {reason}",
@@ -166,10 +179,72 @@ fn decrypt_checked(id: &str, path: &Path, password: &str) -> Result<Zeroizing<Ve
             path.display()
         ))
     })?;
+    let address = check_cipher(&json).map_err(|reason| {
+        EvmError::config(format!(
+            "signer '{id}': malformed keystore {}: {reason}",
+            path.display()
+        ))
+    })?;
     let copy = private_copy(&bytes).map_err(|e| unreadable(e.to_string()))?;
-    eth_keystore::decrypt_key(copy.path(), password.as_bytes())
+    let key = eth_keystore::decrypt_key(copy.path(), password.as_bytes())
         .map(Zeroizing::new)
-        .map_err(|e| keystore_error(id, &e))
+        .map_err(|e| keystore_error(id, &e))?;
+    Ok((key, address))
+}
+
+/// The one cipher a keystore may use, and its parameter lengths in hex
+/// digits: a 16-byte IV, a 32-byte encrypted key, a 32-byte MAC.
+const CIPHER: &str = "aes-128-ctr";
+const IV_HEX: usize = 32;
+const CIPHERTEXT_HEX: usize = 64;
+const MAC_HEX: usize = 64;
+
+/// Check the cipher of a keystore, failing closed: the decryption ignores
+/// `cipher`, panics on a short IV and truncates a long one (the IV is not
+/// covered by the MAC). Returns its `address`, which the decrypted key
+/// must match.
+fn check_cipher(json: &serde_json::Value) -> Result<Option<Address>, String> {
+    let crypto = json
+        .get("crypto")
+        .or_else(|| json.get("Crypto"))
+        .ok_or("no 'crypto'")?;
+    if crypto["cipher"].as_str() != Some(CIPHER) {
+        return Err(format!("cipher is not {CIPHER}"));
+    }
+    hex_field(
+        "cipherparams.iv",
+        &crypto["cipherparams"]["iv"],
+        Some(IV_HEX),
+    )?;
+    hex_field("ciphertext", &crypto["ciphertext"], Some(CIPHERTEXT_HEX))?;
+    hex_field("mac", &crypto["mac"], Some(MAC_HEX))?;
+    hex_field("kdfparams.salt", &crypto["kdfparams"]["salt"], None)?;
+    match json.get("address") {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(value) => {
+            let text = value.as_str().ok_or("address is not a string")?;
+            let text = text.strip_prefix("0x").unwrap_or(text);
+            hex_field("address", &serde_json::json!(text), Some(40))?;
+            text.parse::<Address>()
+                .map(Some)
+                .map_err(|_| "address is not an address".to_owned())
+        }
+    }
+}
+
+/// `value` is a non-empty string of hex digit pairs (`len` digits when
+/// given), without `0x`.
+fn hex_field(name: &str, value: &serde_json::Value, len: Option<usize>) -> Result<(), String> {
+    let text = value.as_str().ok_or(format!("no '{name}'"))?;
+    let hex =
+        !text.is_empty() && text.len() % 2 == 0 && text.bytes().all(|b| b.is_ascii_hexdigit());
+    match (hex, len) {
+        (false, _) => Err(format!("{name} is not hex")),
+        (true, Some(len)) if text.len() != len => {
+            Err(format!("{name} has {} hex digits, not {len}", text.len()))
+        }
+        _ => Ok(()),
+    }
 }
 
 fn read_bounded(path: &Path) -> Result<Vec<u8>, String> {
