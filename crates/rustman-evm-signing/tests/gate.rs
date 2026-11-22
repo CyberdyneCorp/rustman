@@ -59,6 +59,32 @@ fn a_protected_chain_in_headless_signing_chains_is_a_config_error() {
 }
 
 #[test]
+fn a_public_mainnet_in_headless_signing_chains_is_a_config_error() {
+    // Regression: Base, Arbitrum, Polygon... were accepted, so
+    // `--sign --yes-local` in CI signed on a real-money chain without a
+    // prompt.
+    for (id, label) in [
+        (8453, "Base (8453)"),
+        (10, "OP Mainnet (10)"),
+        (42_161, "Arbitrum One (42161)"),
+        (137, "Polygon PoS (137)"),
+    ] {
+        let text = format!("allow_signing = true\nheadless_signing_chains = [1337, {id}]");
+        let err = check_enabled(&settings(&text)).unwrap_err();
+        assert_eq!(err.exit_code(), 2, "{err}");
+        assert_eq!(
+            err.to_string(),
+            format!(
+                "[evm] headless_signing_chains: {label} is a mainnet; only test and private chains can be signed on without a prompt; remove it"
+            )
+        );
+    }
+    // Testnets and unknown (private) ids are fine.
+    let fine = "allow_signing = true\nheadless_signing_chains = [11155111, 17000, 31337, 424242]";
+    assert!(check_enabled(&settings(fine)).is_ok());
+}
+
+#[test]
 fn a_built_in_chain_keeps_its_name_and_currency_when_signing() {
     // Regression: [evm.chains.1] renamed mainnet and changed its decimals,
     // so the confirmation showed a wrong value and the name to type.

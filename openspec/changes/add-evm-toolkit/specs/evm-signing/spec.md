@@ -42,6 +42,11 @@ Signers SHALL be configured in `[evm.signers.<id>]` as one of: `keystore` (path 
 - **WHEN** the transaction is prepared
 - **THEN** it SHALL be refused with `raw private keys are not accepted; import the key with 'rustman evm signer import'`
 
+#### Scenario: Malformed keystore refused
+- **GIVEN** a keystore whose `cipher` is not `aes-128-ctr`, whose IV is not 32 hex digits, or whose key does not match its `address`
+- **WHEN** the signer is unlocked
+- **THEN** it SHALL fail with a configuration error (exit code 2) and nothing SHALL be signed
+
 #### Scenario: Keystore password from secret
 - **GIVEN** `[evm.signers.deployer] keystore = "~/.foundry/keystores/deployer"` and `password = "{{secret:deployer_pw}}"`
 - **WHEN** a transaction is signed
@@ -80,7 +85,7 @@ Before signing, the system SHALL show a confirmation containing: chain name and 
 - **THEN** nothing SHALL be signed or sent and the exit code SHALL be 4
 
 #### Scenario: Interrupted
-- **WHEN** the user presses Ctrl+C at the confirmation, or at any point before the transaction is sent
+- **WHEN** the user presses Ctrl+C at the confirmation, or at any point before the transaction is signed
 - **THEN** nothing SHALL be signed or sent, the error SHALL be `interrupted; nothing was signed or sent` and the exit code SHALL be 130
 
 ### Requirement: Chain id must match
@@ -169,3 +174,37 @@ If `eth_sendRawTransaction` fails (transport error, RPC error, or an answer othe
 - **GIVEN** the node drops the connection, answers an RPC error, or answers another hash for `eth_sendRawTransaction`
 - **WHEN** no receipt comes within the receipt timeout
 - **THEN** history SHALL contain an audit entry with the local hash, chain, signer, `to` and nonce and status `broadcast-unknown`, without the signed bytes, and the command SHALL exit with code 3
+
+### Requirement: Interrupted after sending still audited
+Once a transaction is signed, Ctrl+C SHALL NOT drop it: the send SHALL be awaited, and Ctrl+C during the receipt wait SHALL record the audit entry with status `pending` (or `broadcast-unknown`), print the hash and explorer URL and exit with code 3, also in `rustman run --sign`.
+
+#### Scenario: Ctrl+C during the receipt wait
+- **GIVEN** the node accepted the transaction and does not mine it
+- **WHEN** the user presses Ctrl+C after `sent 0x…`
+- **THEN** history SHALL contain the audit entry with status `pending` and the command SHALL exit with code 3
+
+### Requirement: Confirmation shows what is signed
+The confirmation SHALL NOT pass through secret redaction. A transaction field resolved from a secret SHALL be refused with exit code 4. Input typed before a prompt SHALL be discarded (Unix).
+
+#### Scenario: Field from a secret
+- **GIVEN** an `evm-tx` argument resolved from a secret
+- **WHEN** the user runs `rustman evm send t.rman.yaml --sign`
+- **THEN** it SHALL be refused with exit code 4 before anything is signed
+
+#### Scenario: Type-ahead discarded
+- **GIVEN** `y` typed before the summary is shown
+- **WHEN** the prompt is asked
+- **THEN** that input SHALL be discarded and SHALL NOT confirm
+
+### Requirement: Headless signing limits
+A built-in mainnet in `[evm] headless_signing_chains` SHALL be a configuration error. `--yes-local` SHALL refuse (exit code 4) a max cost above `[evm] max_cost` (default 1 native unit); on a terminal the summary SHALL warn instead.
+
+#### Scenario: Mainnet listed as headless
+- **GIVEN** `headless_signing_chains = [8453]`
+- **WHEN** a transaction is prepared
+- **THEN** it SHALL fail with a configuration error naming Base as a mainnet
+
+#### Scenario: Max cost above the cap
+- **GIVEN** a max cost of 300 ETH on chain 31337 and the default `max_cost`
+- **WHEN** `--yes-local` confirms it
+- **THEN** it SHALL be refused with exit code 4 and nothing SHALL be signed

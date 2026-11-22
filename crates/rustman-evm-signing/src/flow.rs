@@ -5,7 +5,8 @@
 //! 1. `[evm] allow_signing = true`;
 //! 2. no key material as a signer value; the preview is shown (naming the
 //!    signer only when it is a configured id);
-//! 3. `--sign` (without it the preview is all that happens);
+//! 3. `--sign` (without it the preview is all that happens), and no
+//!    transaction field from a secret (the confirmation must show it);
 //! 4. a signer id from `--signer`, `RUSTMAN_EVM_SIGNER` or the request's
 //!    `signer`, a plain identifier configured in `[evm.signers]`;
 //! 5. the environment pins `chain_id` and the node's `eth_chainId` matches;
@@ -21,16 +22,24 @@
 //! receipt, and history keeps an audit entry without the signed bytes or
 //! any key material, also when the receipt never came or could not be
 //! read, and when the send itself failed (`broadcast-unknown`, with the
-//! hash computed from the signed bytes). Ctrl+C before the transaction is sent stops with exit code 130
-//! and nothing signed or sent: the console's prompt is interrupted, and
-//! the flow checks again after the confirmation and right before sending.
+//! hash computed from the signed bytes).
+//!
+//! Ctrl+C before the transaction is signed stops with exit code 130 and
+//! nothing signed or sent: the preparation is raced against it, the
+//! console's prompt is interrupted, and the flow checks once more right
+//! before signing. From the signature on, Ctrl+C no longer drops the
+//! flow: the send is awaited, and Ctrl+C during the receipt wait ends it
+//! with the audit entry (status `pending`, or `broadcast-unknown` when the
+//! send failed) and the hash, as an unconfirmed transaction (exit code 3).
+//! A run's executor is therefore not cancelled from outside: [`Signing`]
+//! watches [`Console::cancelled`] itself.
 //!
 //! A [`Signing`] keeps the nonces of one run, so consecutive transactions
 //! of a signer use increasing nonces, and signs one transaction at a time
 //! (prompts never interleave).
 
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use alloy_json_abi::{Function, JsonAbi};
 use alloy_primitives::B256;
@@ -55,12 +64,12 @@ use serde_json::Value;
 use zeroize::Zeroizing;
 
 use crate::config::{SignerConfig, SignerSource, Signers};
-use crate::confirm::{self, Confirmation, Mode, Summary};
+use crate::confirm::{self, Confirmation, Mode, Summary, SummaryParts};
 use crate::display::{Preview, render_call, signer_label, token_amount_input};
 use crate::fees::{FeeInputs, fees, gas_limit};
 use crate::gate::{
-    Simulation, check_chain, check_enabled, check_sign_flag, check_simulation, require_pin,
-    select_signer, simulate,
+    Simulation, check_chain, check_enabled, check_sign_flag, check_simulation,
+    check_visible_fields, require_pin, select_signer, simulate,
 };
 use crate::nonce::Nonces;
 use crate::rawkey::refuse_raw_key;
@@ -144,6 +153,22 @@ struct Context<'a> {
     function: Function,
 }
 
+/// A confirmed transaction, ready to sign.
+struct Ready<'a> {
+    ctx: Context<'a>,
+    signer: UnlockedSigner,
+    summary: Summary,
+    confirmation: Confirmation,
+}
+
+/// How often the gate looks at Ctrl+C while it waits on the node.
+const CANCEL_POLL: Duration = Duration::from_millis(50);
+
+/// The error of Ctrl+C before anything is signed.
+fn interrupted() -> EvmError {
+    EvmError::Interrupted(INTERRUPTED.to_owned())
+}
+
 impl<'c> Signing<'c> {
     pub fn new(
         options: SignOptions,
@@ -164,6 +189,17 @@ impl<'c> Signing<'c> {
     /// transaction is sent, how it ended.
     pub async fn send(&self, call: &EvmTxCall<'_>) -> Result<Ending, EvmError> {
         let _one = self.one_at_a_time.lock().await;
+        // Nothing is signed yet: Ctrl+C drops the preparation.
+        let ready = tokio::select! {
+            biased;
+            () = self.interrupted() => return Err(interrupted()),
+            ready = self.prepare(call) => ready?,
+        };
+        self.sign_and_wait(call, ready).await
+    }
+
+    /// Every precondition, the summary and the user's confirmation.
+    async fn prepare<'a>(&self, call: &'a EvmTxCall<'_>) -> Result<Ready<'a>, EvmError> {
         let (ctx, config, id) = self.preconditions(call).await?;
         let signer = self.unlock(call, config).await?;
         self.check_interrupted()?;
@@ -173,11 +209,36 @@ impl<'c> Signing<'c> {
         let summary = self
             .summarize(call, &ctx, &id, &signer, &request, &simulation)
             .await?;
-        self.console.show(&shown(call, &summary.render()));
+        let cost = confirm::cost_warning(&summary, &ctx.settings)?;
+        self.console
+            .show(&confirmation_text(&summary, cost.as_deref()));
         let confirmation = self.confirm(&summary, &ctx.settings)?;
         self.check_interrupted()?;
         // The chain is asked once more, right before signing.
         check_chain(&ctx.rpc, &ctx.registry, ctx.pin).await?;
+        Ok(Ready {
+            ctx,
+            signer,
+            summary,
+            confirmation,
+        })
+    }
+
+    /// Sign, send and wait for the receipt. Not raced against Ctrl+C: once
+    /// the signed bytes may have left the process, the flow always ends
+    /// with an audit entry.
+    async fn sign_and_wait(
+        &self,
+        call: &EvmTxCall<'_>,
+        ready: Ready<'_>,
+    ) -> Result<Ending, EvmError> {
+        let Ready {
+            ctx,
+            signer,
+            summary,
+            confirmation,
+        } = ready;
+        // The last moment Ctrl+C means nothing was signed or sent.
         self.check_interrupted()?;
         let broadcasted = sign_and_send(&summary.tx, &signer, confirmation, &ctx.rpc).await?;
         // The nonce counts as used even when the send failed: the
@@ -206,10 +267,17 @@ impl<'c> Signing<'c> {
             .await)
     }
 
+    /// Resolves once Ctrl+C was pressed.
+    async fn interrupted(&self) {
+        while !self.console.cancelled() {
+            tokio::time::sleep(CANCEL_POLL).await;
+        }
+    }
+
     /// Ctrl+C was pressed: stop before anything is sent.
     fn check_interrupted(&self) -> Result<(), EvmError> {
         match self.console.cancelled() {
-            true => Err(EvmError::Interrupted(INTERRUPTED.to_owned())),
+            true => Err(interrupted()),
             false => Ok(()),
         }
     }
@@ -234,6 +302,7 @@ impl<'c> Signing<'c> {
         let (abi, function) = abi_and_function(call)?;
         self.show_preview(call, &settings, &tx, &function);
         check_sign_flag(self.options.sign)?;
+        check_visible_fields(&tx.secret_fields)?;
         let id = select_signer(flag, tx.signer.as_deref())?.to_owned();
         let config = Signers::from_settings(&settings)?.get(&id)?.clone();
         let environment = call.environment;
@@ -362,7 +431,7 @@ impl<'c> Signing<'c> {
             fees,
         };
         let decoded = decoded_call(ctx, &tx).await;
-        Ok(Summary {
+        Summary::new(SummaryParts {
             chain: ctx.chain.clone(),
             signer_id: id.to_owned(),
             signer: signer.address(),
@@ -408,9 +477,7 @@ impl<'c> Signing<'c> {
     /// Ask the console; Ctrl+C at the prompt is an interruption.
     fn ask(&self, question: &str) -> Result<String, EvmError> {
         self.check_interrupted()?;
-        self.console
-            .ask(question)
-            .ok_or_else(|| EvmError::Interrupted(INTERRUPTED.to_owned()))
+        self.console.ask(question).ok_or_else(interrupted)
     }
 
     /// Wait for the receipt, check it and keep the audit entry. The
@@ -433,7 +500,12 @@ impl<'c> Signing<'c> {
             started: Instant::now(),
         };
         let timeout = seconds(self.options.wait.timeout);
-        let receipt = match wait_for_receipt(&ctx.rpc, hash, &self.options.wait).await {
+        let waited = tokio::select! {
+            biased;
+            waited = wait_for_receipt(&ctx.rpc, hash, &self.options.wait) => waited,
+            () = self.interrupted() => return sent.interrupted(),
+        };
+        let receipt = match waited {
             Waited::Mined(receipt) => receipt,
             waited => return sent.not_mined(waited, &timeout),
         };
@@ -485,6 +557,22 @@ impl Sent<'_, '_, '_> {
                 .push(format!("{failure}; the transaction was mined all the same"));
         }
         Ok((mined, outcome))
+    }
+
+    /// Ctrl+C during the receipt wait: the transaction is out (or may be),
+    /// so the audit entry is kept, `pending` (or `broadcast-unknown`).
+    fn interrupted(&self) -> Ending {
+        let (hash, summary) = (self.hash, self.summary);
+        if let Some(failure) = self.failure {
+            let message = format!(
+                "interrupted; transaction {hash} may have been sent ({failure}) and its receipt was not awaited; check the explorer for {hash} before sending it again"
+            );
+            return self.unconfirmed(message, receipt::audit_broadcast_unknown(summary, hash));
+        }
+        let message = format!(
+            "interrupted; transaction {hash} was sent and its receipt was not awaited; check the explorer for {hash}"
+        );
+        self.unconfirmed(message, receipt::audit(summary, hash, None))
     }
 
     /// No receipt within `timeout`: the error and the audit entry,
@@ -592,6 +680,19 @@ fn refusal_record(call: &EvmTxCall<'_>, error: &EvmError) -> RequestRecord {
 fn shown(call: &EvmTxCall<'_>, text: &str) -> String {
     let redactor = call.runner.known_secrets();
     rustman_core::text::printable(&redactor.text(text)).into_owned()
+}
+
+/// The confirmation as shown: escaped value by value, never redacted. A
+/// redactor replaces every occurrence of a secret's value, so a short
+/// password would hide part of an address, and the user must see exactly
+/// what is signed. No transaction field holds a secret
+/// ([`check_visible_fields`]) and no password is part of the summary.
+/// `cost` is the warning of a max cost above `[evm] max_cost`.
+fn confirmation_text(summary: &Summary, cost: Option<&str>) -> String {
+    match cost {
+        Some(warning) => format!("WARNING: {}\n{}", printable_line(warning), summary.render()),
+        None => summary.render(),
+    }
 }
 
 /// The typed-name question of a protected chain, on one line.
@@ -742,7 +843,7 @@ mod tests {
             wei: U256::from(1_000_000_000_u64),
             suggested: true,
         };
-        Summary {
+        Summary::new(SummaryParts {
             chain: ChainRegistry::built_in().get(chain_id),
             signer_id: "deployer".to_owned(),
             signer: Address::repeat_byte(1),
@@ -761,7 +862,8 @@ mod tests {
                 },
             },
             reverted: None,
-        }
+        })
+        .unwrap()
     }
 
     fn confirm_on(terminal: &Terminal, chain_id: u64) -> Result<Confirmation, EvmError> {

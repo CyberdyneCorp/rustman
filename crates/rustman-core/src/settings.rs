@@ -107,6 +107,7 @@ const KNOWN_KEYS: &[(&str, &[&str])] = &[
             "signers",
             "protected_chains",
             "headless_signing_chains",
+            "max_cost",
         ],
     ),
     // Trace propagation (add-trace-propagation).

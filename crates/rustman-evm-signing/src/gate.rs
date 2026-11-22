@@ -17,6 +17,7 @@
 use alloy_json_abi::{Function, JsonAbi};
 use alloy_primitives::U256;
 use rustman_evm::call::{BlockSel, CallReport, CallRequest, run_call};
+use rustman_evm::chain::is_built_in_mainnet;
 use rustman_evm::identity::Pin;
 use rustman_evm::quantity::parse_hex_u64;
 use rustman_evm::rpc::{Rpc, call};
@@ -41,16 +42,36 @@ fn refused(message: impl Into<String>) -> EvmError {
     EvmError::Refused(message.into())
 }
 
-/// `[evm] allow_signing = true`, and no protected chain (chain 1 or one
-/// of `[evm] protected_chains`) in `[evm] headless_signing_chains`.
+/// `[evm] allow_signing = true`, and in `[evm] headless_signing_chains`
+/// neither a protected chain (chain 1 or one of `[evm] protected_chains`)
+/// nor a built-in mainnet (Base, OP, Arbitrum, Polygon...): `--yes-local`
+/// signs without a prompt, which only test and private chains allow.
 pub fn check_enabled(settings: &EvmSettings) -> Result<(), EvmError> {
     if !settings.allow_signing {
         return Err(refused(SIGNING_DISABLED));
     }
     let headless = &settings.headless_signing_chains;
-    match headless.iter().find(|&&id| is_protected(id, settings)) {
-        Some(id) => Err(EvmError::config(format!(
+    if let Some(id) = headless.iter().find(|&&id| is_protected(id, settings)) {
+        return Err(EvmError::config(format!(
             "[evm] headless_signing_chains: chain {id} is protected (chain 1 and [evm] protected_chains always need the chain name typed); remove it"
+        )));
+    }
+    match headless.iter().find(|&&id| is_built_in_mainnet(id)) {
+        Some(&id) => Err(EvmError::config(format!(
+            "[evm] headless_signing_chains: {} is a mainnet; only test and private chains can be signed on without a prompt; remove it",
+            ChainRegistry::built_in().get(id).label()
+        ))),
+        None => Ok(()),
+    }
+}
+
+/// A transaction field whose value came from a secret cannot be
+/// confirmed: the summary would have to hide it, and signing a value the
+/// user cannot see is not a confirmation.
+pub fn check_visible_fields(secret_fields: &[&str]) -> Result<(), EvmError> {
+    match secret_fields.first() {
+        Some(field) => Err(refused(format!(
+            "evm-tx: '{field}' comes from a secret; a transaction field must be shown in the confirmation, so it cannot hold a secret; nothing was signed or sent"
         ))),
         None => Ok(()),
     }

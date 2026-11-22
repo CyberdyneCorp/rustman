@@ -31,7 +31,7 @@ use rustman_evm_signing::receipt::{self, Mined};
 use rustman_evm_signing::send::{Broadcasted, Wait, Waited, sign_and_send, wait_for_receipt};
 use rustman_evm_signing::transaction::UnsignedTx;
 use rustman_evm_signing::{
-    Confirmation, Signers, Summary, UnlockContext, UnlockedSigner, Zeroizing, unlock,
+    Confirmation, Signers, Summary, SummaryParts, UnlockContext, UnlockedSigner, Zeroizing, unlock,
 };
 use rustman_http::{HttpEngine, SendOptions};
 use serde_json::{Value, json};
@@ -152,7 +152,7 @@ async fn add(
         .next(rpc, 31_337, signer.address(), None)
         .await
         .unwrap();
-    let summary = Summary {
+    let summary = Summary::new(SummaryParts {
         chain: ChainRegistry::built_in().get(31_337),
         signer_id: "dev".to_owned(),
         signer: signer.address(),
@@ -168,7 +168,8 @@ async fn add(
             fees,
         },
         reverted: None,
-    };
+    })
+    .unwrap();
     let settings = EvmSettings::default();
     let confirmation = Confirmation::local_headless(&summary, &settings).unwrap();
     let hash = sign_and_send(&summary.tx, signer, confirmation, rpc)
@@ -290,7 +291,7 @@ async fn a_transaction_that_is_never_mined_times_out() {
             .await
             .unwrap(),
     };
-    let summary = Summary {
+    let summary = Summary::new(SummaryParts {
         chain: ChainRegistry::built_in().get(31_337),
         signer_id: "dev".to_owned(),
         signer: signer.address(),
@@ -298,7 +299,8 @@ async fn a_transaction_that_is_never_mined_times_out() {
         call: "add(amount=1)".to_owned(),
         tx,
         reverted: None,
-    };
+    })
+    .unwrap();
     let confirmation = Confirmation::local_headless(&summary, &EvmSettings::default()).unwrap();
     let hash = sign_and_send(&summary.tx, &signer, confirmation, &rpc)
         .await

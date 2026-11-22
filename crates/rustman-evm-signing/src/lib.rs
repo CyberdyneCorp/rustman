@@ -36,7 +36,7 @@ pub mod transaction;
 
 pub use alloy_primitives::B256;
 pub use config::{SignerConfig, SignerSource, Signers};
-pub use confirm::{Confirmation, Mode, Summary};
+pub use confirm::{Confirmation, Mode, Summary, SummaryParts};
 pub use flow::{Console, Ending, SignOptions, Signing};
 pub use rawkey::{RAW_KEY_REFUSED, is_raw_key, refuse_raw_key};
 pub use signer::{UnlockContext, UnlockedSigner, unlock};

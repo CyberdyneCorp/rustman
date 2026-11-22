@@ -7052,6 +7052,7 @@ dependencies = [
  "rpassword",
  "rskafka",
  "rumqttc",
+ "rustix",
  "rustman-bench",
  "rustman-cli",
  "rustman-contract",

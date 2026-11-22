@@ -40,7 +40,7 @@ api_key = "{{etherscan_key}}"
 | `[evm.explorers.<id>]` | none | `api_url` and `api_key` of an Etherscan-compatible API (the V2 multichain shape, with a `chainid` parameter). |
 | `allow_raw_send_local` | `false` | Reserved: would let `jsonrpc` files send raw transactions to chain 31337. Not honored in this build; see [Send methods](#send-methods). |
 | `allow_signing`, `signers` | unset | Read by the signing gate: see [EVM signing](evm-signing.md). |
-| `protected_chains`, `headless_signing_chains` | unset | Reserved for the signing confirmation (not available yet). |
+| `protected_chains`, `headless_signing_chains`, `max_cost` | unset | Read by the signing confirmation: see [EVM signing](evm-signing.md#confirmation). |
 
 A key Rustman does not know under `[evm]` is a warning when the workspace loads (`rustman.toml: unknown key 'evm.<key>' ignored`); `rustman-evm` rejects misspelled keys inside `[evm.chains.*]` and `[evm.explorers.*]`, and table keys that are not integer chain ids.
 

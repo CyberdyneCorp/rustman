@@ -15,7 +15,7 @@ use rustman_evm_signing::fees::{Fee, Fees};
 use rustman_evm_signing::send::{Broadcast, Broadcasted, sign_and_send};
 use rustman_evm_signing::transaction::UnsignedTx;
 use rustman_evm_signing::{
-    Confirmation, Signers, Summary, UnlockContext, UnlockedSigner, Zeroizing, unlock,
+    Confirmation, Signers, Summary, SummaryParts, UnlockContext, UnlockedSigner, Zeroizing, unlock,
 };
 use serde_json::json;
 
@@ -33,11 +33,15 @@ fn fee(gwei_tenths: u64, suggested: bool) -> Fee {
 }
 
 fn summary(chain_id: u64) -> Summary {
+    Summary::new(parts(chain_id)).unwrap()
+}
+
+fn parts(chain_id: u64) -> SummaryParts {
     let chain = ChainRegistry::built_in().get(chain_id);
     let to: Address = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
         .parse()
         .unwrap();
-    Summary {
+    SummaryParts {
         chain,
         signer_id: "deployer".to_owned(),
         signer: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
@@ -80,10 +84,11 @@ fn the_confirmation_lists_every_required_field() {
              \x20 max cost     0.0009127305 ETH\n"
         )
     );
-    let mut forced = summary(11_155_111);
+    let mut forced = parts(11_155_111);
     forced.reverted = Some("reverted: InsufficientBalance(5, 10)".to_owned());
     assert!(
-        forced
+        Summary::new(forced)
+            .unwrap()
             .render()
             .starts_with("WARNING: SIMULATION REVERTED: reverted: InsufficientBalance(5, 10)\n")
     );
@@ -91,11 +96,11 @@ fn the_confirmation_lists_every_required_field() {
 
 #[test]
 fn legacy_transactions_show_the_gas_price() {
-    let mut legacy = summary(31_337);
+    let mut legacy = parts(31_337);
     legacy.tx.fees = Fees::Legacy {
         gas_price: fee(200, false),
     };
-    let shown = legacy.render();
+    let shown = Summary::new(legacy).unwrap().render();
     assert!(shown.contains("  gas price    20 gwei\n"), "{shown}");
     assert!(!shown.contains("max fee"), "{shown}");
 }
@@ -218,10 +223,10 @@ protected_chains = [11155111]",
 fn a_newline_in_a_value_cannot_draw_a_fake_field() {
     // Regression: a chain name or decoded argument with a newline drew a
     // line that looked like another field.
-    let mut forged = summary(31_337);
+    let mut forged = parts(31_337);
     forged.chain.name = "x\n  value        0 ETH".to_owned();
     forged.call = "transfer(to=\n  max cost     0 ETH)".to_owned();
-    let shown = forged.render();
+    let shown = Summary::new(forged).unwrap().render();
     assert_eq!(
         shown.lines().filter(|l| l.starts_with("  value")).count(),
         1,
@@ -305,8 +310,9 @@ fn a_protected_chain_without_a_name_is_never_confirmed() {
     // Regression: a protected chain configured with an empty name was
     // confirmed by typing nothing.
     let protected = settings("protected_chains = [4242]");
-    let mut nameless = summary(4242);
+    let mut nameless = parts(4242);
     nameless.chain.name = "  ".to_owned();
+    let nameless = Summary::new(nameless).unwrap();
     for typed in [None, Some(""), Some("  ")] {
         let err = Confirmation::interactive(&nameless, &protected, "yes", typed).unwrap_err();
         assert_eq!(err.exit_code(), 4);
@@ -315,4 +321,41 @@ fn a_protected_chain_without_a_name_is_never_confirmed() {
             "protected chain 4242 has no name to type; set [evm.chains.4242] name; cancelled; nothing was signed or sent"
         );
     }
+}
+
+#[test]
+fn yes_local_never_signs_above_the_max_cost() {
+    // Regression: the per-field ceilings (10 000 gwei, 30 M gas) allowed
+    // a max cost of about 300 ETH, signed with no prompt on 31337.
+    let mut costly = parts(31_337);
+    costly.tx.gas_limit = U256::from(30_000_000);
+    costly.tx.fees = Fees::Eip1559 {
+        max_fee: fee(100_000, true),
+        max_priority_fee: fee(15, true),
+    };
+    let costly = Summary::new(costly).unwrap();
+    let plain = settings("");
+    let err = Confirmation::local_headless(&costly, &plain).unwrap_err();
+    assert_eq!(err.exit_code(), 4);
+    assert_eq!(
+        err.to_string(),
+        "max cost 300 ETH is above [evm] max_cost (1 ETH); --yes-local does not sign above it (confirm on a terminal, or raise [evm] max_cost); nothing was signed or sent"
+    );
+    // On a terminal it is a warning, and the user decides.
+    let warning = rustman_evm_signing::confirm::cost_warning(&costly, &plain).unwrap();
+    assert_eq!(
+        warning.as_deref(),
+        Some("max cost 300 ETH is above [evm] max_cost (1 ETH)")
+    );
+    assert!(Confirmation::interactive(&costly, &plain, "y", None).is_ok());
+    // The cap is configurable; a value at or under it signs.
+    let raised = settings("max_cost = \"300\"");
+    assert!(Confirmation::local_headless(&costly, &raised).is_ok());
+    assert_eq!(
+        rustman_evm_signing::confirm::cost_warning(&summary(31_337), &plain).unwrap(),
+        None
+    );
+    let bad = settings("max_cost = \"lots\"");
+    let err = Confirmation::local_headless(&costly, &bad).unwrap_err();
+    assert_eq!(err.exit_code(), 2, "{err}");
 }

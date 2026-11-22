@@ -24,7 +24,7 @@ k256.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
-tokio = { workspace = true, features = ["sync", "time"] }
+tokio = { workspace = true, features = ["macros", "sync", "time"] }
 toml.workspace = true
 zeroize.workspace = true
 

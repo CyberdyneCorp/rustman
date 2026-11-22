@@ -2,7 +2,9 @@
 //! confirmation", "Mainnet typed confirmation", "Headless signing
 //! restricted to local chains").
 //!
-//! A [`Summary`] lists what will be signed. A [`Confirmation`] is the
+//! A [`Summary`] lists what will be signed; [`Summary::new`] refuses one
+//! whose transaction is for another chain than the one shown, and its
+//! fields cannot be changed afterwards. A [`Confirmation`] is the
 //! user's approval of exactly that summary: it can only come from
 //! [`Confirmation::interactive`] (the CLI prompt, with the user's
 //! answers) or [`Confirmation::local_headless`] (`--yes-local`
@@ -12,11 +14,15 @@
 //! Chain 1 and `[evm] protected_chains` are never local: a protected
 //! chain listed in `headless_signing_chains` still needs its name typed,
 //! and both constructors check that themselves rather than trusting the
-//! caller's [`Mode`].
+//! caller's [`Mode`], from the chain id the transaction is signed for.
+//!
+//! `--yes-local` never signs a transaction whose max cost (gas limit ×
+//! max fee + value) is above `[evm] max_cost` (default: 1 of the chain's
+//! native unit); on a terminal, the summary warns about it.
 
-use alloy_primitives::{Address, B256};
+use alloy_primitives::{Address, B256, U256};
 use rustman_core::text::printable_line;
-use rustman_evm::quantity::{Denomination, Form, Quantity};
+use rustman_evm::quantity::{Denomination, Form, Quantity, parse_units};
 use rustman_evm::{ChainInfo, EvmError, EvmSettings, LOCAL_CHAIN_ID};
 
 use crate::fees::Fees;
@@ -29,9 +35,9 @@ pub const DECLINED: &str = "cancelled; nothing was signed or sent";
 /// (`--force-revert`).
 pub const SIMULATION_REVERTED: &str = "SIMULATION REVERTED";
 
-/// What the confirmation shows.
+/// What the confirmation shows, as the parts of a [`Summary`].
 #[derive(Clone, Debug, PartialEq)]
-pub struct Summary {
+pub struct SummaryParts {
     pub chain: ChainInfo,
     pub signer_id: String,
     pub signer: Address,
@@ -44,7 +50,49 @@ pub struct Summary {
     pub reverted: Option<String>,
 }
 
+/// What the confirmation shows: built by [`Summary::new`] only, read
+/// through [`std::ops::Deref`], never changed.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Summary {
+    parts: SummaryParts,
+}
+
+impl std::ops::Deref for Summary {
+    type Target = SummaryParts;
+
+    fn deref(&self) -> &SummaryParts {
+        &self.parts
+    }
+}
+
+/// The refusal of a summary whose transaction is for another chain.
+fn chain_mismatch(parts: &SummaryParts) -> EvmError {
+    EvmError::Refused(format!(
+        "the transaction is for chain {} but the summary shows {}; nothing was signed or sent",
+        parts.tx.chain_id,
+        parts.chain.label()
+    ))
+}
+
 impl Summary {
+    /// The summary of `parts`; refused when the transaction's chain id is
+    /// not the chain shown.
+    pub fn new(parts: SummaryParts) -> Result<Self, EvmError> {
+        match parts.tx.chain_id == parts.chain.id {
+            true => Ok(Self { parts }),
+            false => Err(chain_mismatch(&parts)),
+        }
+    }
+
+    /// The chain id the transaction is signed for, when the summary shows
+    /// that chain.
+    fn signed_chain(&self) -> Result<u64, EvmError> {
+        match self.tx.chain_id == self.chain.id {
+            true => Ok(self.tx.chain_id),
+            false => Err(chain_mismatch(&self.parts)),
+        }
+    }
+
     /// The fields in display order: label and value.
     pub fn fields(&self) -> Vec<(&'static str, String)> {
         let native = Denomination::native(&self.chain);
@@ -171,6 +219,34 @@ fn headless_refusal(chain: &ChainInfo, local: bool) -> String {
     }
 }
 
+/// The default `[evm] max_cost`: 1 of the chain's native unit.
+pub const DEFAULT_MAX_COST: &str = "1";
+
+/// `[evm] max_cost` (a decimal amount of `chain`'s native unit) in wei.
+pub fn max_cost(chain: &ChainInfo, settings: &EvmSettings) -> Result<U256, EvmError> {
+    let text = settings.max_cost.as_deref().unwrap_or(DEFAULT_MAX_COST);
+    parse_units(text.trim(), chain.decimals)
+        .map_err(|e| EvmError::config(format!("[evm] max_cost = \"{text}\": {e}")))
+}
+
+/// `max cost 2 ETH is above [evm] max_cost (1 ETH)` when the summary's
+/// max cost (gas limit × max fee + value) is above the cap; an invalid
+/// `[evm] max_cost` is an error.
+pub fn cost_warning(summary: &Summary, settings: &EvmSettings) -> Result<Option<String>, EvmError> {
+    let cap = max_cost(&summary.chain, settings)?;
+    let cost = summary.tx.max_cost();
+    if cost <= cap {
+        return Ok(None);
+    }
+    let native = Denomination::native(&summary.chain);
+    let shown = |v: U256| Quantity::from(v).show(Form::Native, &native);
+    Ok(Some(format!(
+        "max cost {} is above [evm] max_cost ({})",
+        shown(cost),
+        shown(cap)
+    )))
+}
+
 /// Whether `answer` is `y` or `yes` (any case).
 pub fn is_yes(answer: &str) -> bool {
     matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes")
@@ -186,19 +262,21 @@ impl Confirmation {
     /// The user's answers to the prompt: `answer` must be
     /// `y` or `yes`; on a protected chain (chain 1, `[evm]
     /// protected_chains`), `typed` must be the chain's name exactly.
-    /// Whether the chain is protected is decided here, from the summary's
-    /// chain and `settings`. Anything else cancels (exit code 4).
+    /// Whether the chain is protected is decided here, from the chain id
+    /// the transaction is signed for and `settings`. Anything else
+    /// cancels (exit code 4).
     pub fn interactive(
         summary: &Summary,
         settings: &EvmSettings,
         answer: &str,
         typed: Option<&str>,
     ) -> Result<Self, EvmError> {
+        let chain_id = summary.signed_chain()?;
         if !is_yes(answer) {
             return Err(EvmError::Refused(DECLINED.to_owned()));
         }
         let name = summary.chain.name.trim();
-        let protected = is_protected(summary.chain.id, settings);
+        let protected = is_protected(chain_id, settings);
         if protected && name.is_empty() {
             return Err(EvmError::Refused(format!(
                 "protected chain {} has no name to type; set [evm.chains.{}] name; {DECLINED}",
@@ -213,12 +291,19 @@ impl Confirmation {
         Ok(Self::of(summary))
     }
 
-    /// `--yes-local` on a local chain: no prompt.
+    /// `--yes-local` on a local chain: no prompt, and never above
+    /// `[evm] max_cost`.
     pub fn local_headless(summary: &Summary, settings: &EvmSettings) -> Result<Self, EvmError> {
-        match is_local(summary.chain.id, settings) {
-            true => Ok(Self::of(summary)),
-            false => Err(EvmError::Refused(headless_refusal(&summary.chain, false))),
+        let chain_id = summary.signed_chain()?;
+        if !is_local(chain_id, settings) {
+            return Err(EvmError::Refused(headless_refusal(&summary.chain, false)));
         }
+        if let Some(over) = cost_warning(summary, settings)? {
+            return Err(EvmError::Refused(format!(
+                "{over}; --yes-local does not sign above it (confirm on a terminal, or raise [evm] max_cost); nothing was signed or sent"
+            )));
+        }
+        Ok(Self::of(summary))
     }
 
     fn of(summary: &Summary) -> Self {
@@ -230,5 +315,64 @@ impl Confirmation {
     /// Whether this confirms `tx`.
     pub(crate) fn covers(&self, tx: &UnsignedTx) -> bool {
         self.digest == tx.signing_hash()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use alloy_primitives::U256;
+    use rustman_evm::ChainRegistry;
+
+    use super::*;
+    use crate::fees::Fee;
+
+    fn parts(chain_id: u64, tx_chain_id: u64) -> SummaryParts {
+        let fee = Fee {
+            wei: U256::from(1_000_000_000_u64),
+            suggested: true,
+        };
+        SummaryParts {
+            chain: ChainRegistry::built_in().get(chain_id),
+            signer_id: "dev".to_owned(),
+            signer: Address::repeat_byte(1),
+            to_name: None,
+            call: "f()".to_owned(),
+            tx: UnsignedTx {
+                chain_id: tx_chain_id,
+                nonce: 0,
+                to: Address::repeat_byte(2),
+                value: U256::ZERO,
+                input: Vec::new(),
+                gas_limit: U256::from(21_000),
+                fees: Fees::Eip1559 {
+                    max_fee: fee,
+                    max_priority_fee: fee,
+                },
+            },
+            reverted: None,
+        }
+    }
+
+    #[test]
+    fn a_summary_showing_another_chain_than_the_transaction_is_never_confirmed() {
+        // Regression: the local/protected decision read the summary's
+        // chain while the signature covered the transaction's chain id, so
+        // a summary of chain 31337 with a chain-1 transaction got a
+        // headless confirmation and a mainnet signature.
+        let crafted = Summary {
+            parts: parts(31_337, 1),
+        };
+        let settings = EvmSettings::default();
+        let err = Confirmation::local_headless(&crafted, &settings).unwrap_err();
+        assert_eq!(err.exit_code(), 4);
+        assert_eq!(
+            err.to_string(),
+            "the transaction is for chain 1 but the summary shows Anvil/Hardhat local (31337); nothing was signed or sent"
+        );
+        let err = Confirmation::interactive(&crafted, &settings, "y", None).unwrap_err();
+        assert_eq!(err.exit_code(), 4);
+        assert!(Summary::new(parts(31_337, 1)).is_err());
+        let fine = Summary::new(parts(31_337, 31_337)).unwrap();
+        assert!(Confirmation::local_headless(&fine, &settings).is_ok());
     }
 }

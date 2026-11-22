@@ -43,7 +43,7 @@ error: unknown signer (configured: ci, deployer)
 
 ### Keystore signers
 
-The keystore is decrypted in memory only when the gate needs the signer, after the chain check. The file is read once (at most 64 KiB) and its key derivation is checked before it runs: `kdf` must be `scrypt` (n <= 2^18, r <= 8, p <= 4, n × r × p <= 2^21: geth's standard n = 2^18, r = 8, p = 1 is the ceiling) or `pbkdf2` (c <= 10 000 000) with matching parameters and `dklen` 32, so a hostile keystore cannot hang the process; standard Foundry, geth and MetaMask keystores are well inside. Anything else is refused as a configuration error (exit code 2). `~/` is the home directory; a relative path starts at the workspace root. The `password` is resolved like any variable, so keep it in a secret (a `{{secret:provider/path}}` reference or a variable listed in the environment's `secrets`); its value is redacted from every output. Without `password`, the password is asked on the terminal with no echo (a terminal that cannot be read is reported with its I/O error, exit code 2); without a terminal, the gate refuses:
+The keystore is decrypted in memory only when the gate needs the signer, after the chain check. The file is read once (at most 64 KiB) and its key derivation is checked before it runs: `kdf` must be `scrypt` (n <= 2^18, r <= 8, p <= 4, n × r × p <= 2^21: geth's standard n = 2^18, r = 8, p = 1 is the ceiling) or `pbkdf2` (c <= 10 000 000) with matching parameters and `dklen` 32, so a hostile keystore cannot hang the process; standard Foundry, geth and MetaMask keystores are well inside. Anything else is refused as a configuration error (exit code 2). The cipher is checked the same way: `cipher` must be `aes-128-ctr`, `cipherparams.iv` exactly 32 hex digits, `ciphertext` 64 and `mac` 64, every field valid hex (`malformed keystore` otherwise, exit code 2); after decryption, a keystore with an `address` must decrypt to that address. `~/` is the home directory; a relative path starts at the workspace root. The `password` is resolved like any variable, so keep it in a secret (a `{{secret:provider/path}}` reference or a variable listed in the environment's `secrets`); its value is redacted from every output. Without `password`, the password is asked on the terminal with no echo (a terminal that cannot be read is reported with its I/O error, exit code 2); without a terminal, the gate refuses:
 
 ```text
 error: signer 'deployer': the keystore password is needed; set password = "{{secret:...}}" in [evm.signers.deployer] or run in a terminal
@@ -97,12 +97,13 @@ Key material only lives in memory inside `Secret` holders and is zeroized when d
    error: add --sign to sign and send
    ```
 
-4. A valid signer id configured in `[evm.signers]` (exit code 2 when missing, invalid or unknown).
-5. The environment pins `chain_id`: `signing requires 'chain_id' in environment '<env>'` otherwise (or `signing requires an environment with 'chain_id'; select one with --env` without an environment).
-6. The node's `eth_chainId`, asked again right before signing, equals the pin: `chain mismatch: environment 'dev' expects 31337 (Anvil/Hardhat local), endpoint reports 11155111 (Sepolia)` otherwise.
-7. The transaction can be confirmed: a terminal, or `--yes-local` on a local chain (see [Confirmation](#confirmation)). Without one the gate refuses here, before the key is unlocked or anything simulated.
-8. The signer unlocks.
-9. The simulation, `eth_call` from the signer at `pending` and `eth_estimateGas`, succeeds. A revert is shown decoded and refused:
+4. No transaction field (`to`, `args`, `value`, `gas`, the fees, `nonce`) comes from a secret: the confirmation must show what is signed, so `evm-tx: 'args' comes from a secret; a transaction field must be shown in the confirmation, so it cannot hold a secret; nothing was signed or sent`.
+5. A valid signer id configured in `[evm.signers]` (exit code 2 when missing, invalid or unknown).
+6. The environment pins `chain_id`: `signing requires 'chain_id' in environment '<env>'` otherwise (or `signing requires an environment with 'chain_id'; select one with --env` without an environment).
+7. The node's `eth_chainId`, asked again right before signing, equals the pin: `chain mismatch: environment 'dev' expects 31337 (Anvil/Hardhat local), endpoint reports 11155111 (Sepolia)` otherwise.
+8. The transaction can be confirmed: a terminal, or `--yes-local` on a local chain (see [Confirmation](#confirmation)). Without one the gate refuses here, before the key is unlocked or anything simulated.
+9. The signer unlocks.
+10. The simulation, `eth_call` from the signer at `pending` and `eth_estimateGas`, succeeds. A revert is shown decoded and refused:
 
    ```text
    error: simulation reverted: InsufficientBalance(available=5, required=10); nothing was signed or sent (add --force-revert to sign anyway)
@@ -110,10 +111,10 @@ Key material only lives in memory inside `Secret` holders and is zeroized when d
 
    With `--force-revert` the gate goes on, prints `warning: SIMULATION REVERTED: ...`, and the confirmation starts with the same warning. A reverting call has no gas estimate, so a forced transaction needs `gas` in the request.
 
-10. The confirmation (see below).
-11. `eth_chainId` once more, immediately before signing.
+11. The confirmation (see below).
+12. `eth_chainId` once more, immediately before signing.
 
-Nothing is signed or sent by a refusal, and loading a workspace with `evm-tx` files never calls a node or touches a signer. Ctrl+C at any prompt, or anywhere before the transaction is sent, stops with `interrupted; nothing was signed or sent` and exit code 130; the gate checks once more right after the confirmation and right before sending.
+Nothing is signed or sent by a refusal, and loading a workspace with `evm-tx` files never calls a node or touches a signer. Ctrl+C at any prompt, or anywhere before the transaction is signed, stops with `interrupted; nothing was signed or sent` and exit code 130; the gate checks once more right after the confirmation and right before signing. Once the transaction is signed, Ctrl+C no longer drops it: the send is awaited, and Ctrl+C during the receipt wait ends it with the audit record (`"status": "pending"`, or `broadcast-unknown` when the send failed), `error: interrupted; transaction 0x… was sent and its receipt was not awaited; check the explorer for 0x…`, the explorer link, and exit code 3.
 
 ## Fees, gas and nonces
 
@@ -123,6 +124,7 @@ Values set in the request win; the rest are suggested by the node and labelled `
 - **Legacy** (`type: legacy`): `gas_price`, by default `eth_gasPrice`; EIP-155 replay protection embeds the chain id. `max_fee` and `max_priority_fee` are refused.
 - **Gas limit**: `gas`, by default the simulation's `eth_estimateGas` × 1.2, rounded up.
 - **Ceilings**: a node cannot inflate what is signed. A suggested `max_fee`, `max_priority_fee` or `gas_price` above 10 000 gwei, or a gas limit from the estimate above 30 000 000, is refused (exit code 4) with a message asking to set the value in the request; values set in the request are not capped.
+- **Max cost**: `--yes-local` never signs a transaction whose max cost (gas limit × max fee, plus the value) is above `[evm] max_cost`, a decimal amount of the chain's native unit (default `"1"`, 1 ETH): `max cost 300 ETH is above [evm] max_cost (1 ETH); --yes-local does not sign above it (confirm on a terminal, or raise [evm] max_cost); nothing was signed or sent` (exit code 4). On a terminal the summary starts with `WARNING: max cost … is above [evm] max_cost (…)` and the user decides.
 - **Nonce**: `nonce`, by default `eth_getTransactionCount(signer, "pending")`. Within one process (one `rustman evm send`, or a whole `rustman run --sign`), later transactions of the same signer on the same chain count up from the last one sent instead of asking again; a transaction whose send failed counts too, since it may be out. A `nonce too low` or `replacement underpriced` answer is reported as the node sent it (exit code 3, see [unknown broadcast](#unknown-broadcast)) and nothing is retried.
 
 ## Confirmation
@@ -143,10 +145,10 @@ Before signing, the decoded summary is printed:
 sign and send this transaction? [y/N]
 ```
 
-The amount of an ERC-20 `transfer`, `approve` or `transferFrom` is shown in token units with the token's `decimals()` and `symbol()` when the token answers them, and the raw integer stays in parentheses (the decimals come from the node). `max cost` is the value plus the gas limit at the max fee (or gas price). Only `y` or `yes` goes on; anything else cancels with `cancelled; nothing was signed or sent` (exit code 4).
+The amount of an ERC-20 `transfer`, `approve` or `transferFrom` is shown in token units with the token's `decimals()` and `symbol()` when the token answers them, and the raw integer stays in parentheses (the decimals come from the node). `max cost` is the value plus the gas limit at the max fee (or gas price). Only `y` or `yes` goes on; anything else cancels with `cancelled; nothing was signed or sent` (exit code 4). Input typed before a question is discarded when it is asked, so an answer typed ahead never confirms a summary not yet shown (on Unix; on Windows the console's pending input is not discarded).
 
 - **Chain 1 and `[evm] protected_chains`**: after `y`, the chain name must be typed exactly (`type the chain name (Ethereum Mainnet) to confirm:`). Anything else cancels with `the chain name did not match 'Ethereum Mainnet'; cancelled; nothing was signed or sent`. Chain 1 and the other built-in chains always use their built-in name; a protected chain configured in `[evm.chains.<id>]` without a name is never confirmed (`protected chain <id> has no name to type; set [evm.chains.<id>] name`).
-- **No terminal** (CI, a pipe): signing is allowed only on chain 31337 and the chain ids of `[evm] headless_signing_chains`, and only with `--yes-local`, which confirms without a prompt (`confirmed by --yes-local on Anvil/Hardhat local (31337)`). Elsewhere:
+- **No terminal** (CI, a pipe): signing is allowed only on chain 31337 and the chain ids of `[evm] headless_signing_chains` (test and private chains only: a built-in mainnet such as Base, OP Mainnet, Arbitrum One or Polygon PoS there is a configuration error), and only with `--yes-local`, which confirms without a prompt (`confirmed by --yes-local on Anvil/Hardhat local (31337)`). Elsewhere:
 
   ```text
   error: signing on Sepolia (11155111) needs an interactive confirmation; without a terminal only chain 31337 and [evm] headless_signing_chains can be signed on, with --yes-local
@@ -160,13 +162,14 @@ The amount of an ERC-20 `transfer`, `approve` or `transferFrom` is shown in toke
 allow_signing = true
 protected_chains = [8453]            # Base: type its name too
 headless_signing_chains = [1337]     # another local devnet CI may sign on
+max_cost = "0.5"                     # --yes-local signs up to 0.5 of the native unit (default 1)
 ```
 
-Every value of the summary, and the chain name in the typed-name question, is kept on one line: newlines, tabs, control, bidi and zero-width characters show as `\u{…}`.
+Every value of the summary, and the chain name in the typed-name question, is kept on one line: newlines, tabs, control, bidi and zero-width characters show as `\u{…}`. The summary is never passed through secret redaction (a short secret would hide part of an address); it holds no secret: no password, and no transaction field from a secret (refused at step 4).
 
 ## Sending and the receipt
 
-The signed transaction is sent with `eth_sendRawTransaction`, the one place that method is allowed (every `jsonrpc` request, `evm-call` and agent call is refused it). The hash is printed (`sent 0x…`), then the receipt is awaited:
+The signed transaction is sent with `eth_sendRawTransaction`, the one place that method is allowed (every `jsonrpc` request, `evm-call`, agent call, and `kind: http` request whose body is a JSON-RPC call or batch is refused it, and every other sending method). The hash is printed (`sent 0x…`), then the receipt is awaited:
 
 - `--confirmations N` (default 1, the block that includes it) blocks must be on top of the head;
 - `--receipt-timeout` (default `120s`): when it passes, the command prints `error: transaction 0x… was sent but not mined within 120s` and the explorer link (when the chain has an explorer), and exits with code 3. The transaction may still be mined later: check it with `rustman evm tx <hash>`.
@@ -216,10 +219,10 @@ The signed bytes, the signature, the password and the key are never stored or sh
 | --- | --- |
 | 0 | Sent, mined, and every assertion passed. |
 | 1 | Mined, but it reverted on chain or an assertion failed. |
-| 2 | A configuration error: an unknown or invalid signer, a missing keystore, a keystore above the key-derivation limits, an unreadable password prompt, no keychain, a hardware-wallet signer. |
+| 2 | A configuration error: an unknown or invalid signer, a missing keystore, a keystore above the key-derivation limits or malformed, a mainnet in `[evm] headless_signing_chains`, an invalid `[evm] max_cost`, an unreadable password prompt, no keychain, a hardware-wallet signer. |
 | 3 | The node could not be reached, or the transaction's send failed and no receipt came for its local hash (`broadcast-unknown`: it may have been sent), or the transaction was sent but its receipt did not come within `--receipt-timeout` or could not be read. |
-| 4 | A gate refusal: signing disabled, key material as a signer, no `--sign`, no `chain_id` pin, a chain mismatch, no way to confirm (no terminal on a non-local chain), a wrong or missing keystore password, a reverting simulation, a declined confirmation or a wrong chain name. |
-| 130 | Ctrl+C before the transaction was sent; nothing was signed or sent. |
+| 4 | A gate refusal: signing disabled, key material as a signer, no `--sign`, no `chain_id` pin, a chain mismatch, no way to confirm (no terminal on a non-local chain), a wrong or missing keystore password, a transaction field from a secret, a max cost above `[evm] max_cost` under `--yes-local`, a reverting simulation, a declined confirmation or a wrong chain name. |
+| 130 | Ctrl+C before the transaction was signed; nothing was signed or sent. Ctrl+C after it exits with code 3, its audit record kept. |
 
 ## In `rustman run`
 
@@ -233,7 +236,7 @@ rustman run . --env anvil --sign --yes-local
 - The preview, the summary and the receipt go to stderr; stdout is the run's report.
 - `--yes-local` (which requires `--sign`) confirms without a prompt on chain 31337 and `[evm] headless_signing_chains` only. Without a terminal, every `evm-tx` file on another chain is refused, and the run exits with code 4. On a terminal, each transaction is confirmed as with `rustman evm send`.
 - Nonces count up across the run: two transactions of one signer use the pending count, then that count + 1, without asking the node again.
-- A refusal is the request's error and makes the run exit with code 4; a receipt timeout, an unreadable receipt or an unknown broadcast is an error (exit code 3), with the audit record kept; Ctrl+C before a transaction is sent skips it as interrupted (exit code 130); a failed receipt assertion or a transaction that reverted on chain fails the request (exit code 1). The receipt timeout is 120 s and one confirmation is awaited.
+- A refusal is the request's error and makes the run exit with code 4; a receipt timeout, an unreadable receipt or an unknown broadcast is an error (exit code 3), with the audit record kept; Ctrl+C before a transaction is signed skips it as interrupted (exit code 130), and Ctrl+C during its receipt wait keeps its audit record (`pending`) and makes the interrupted run exit with code 3; a failed receipt assertion or a transaction that reverted on chain fails the request (exit code 1). The receipt timeout is 120 s and one confirmation is awaited.
 
 ## Agents can never sign
 

@@ -162,6 +162,12 @@ pub fn audit(summary: &Summary, hash: B256, mined: Option<&Mined>) -> Value {
     })
 }
 
+/// Whether `record` (a request's `evm` record) is the audit entry of a
+/// signed transaction: it may be out, whatever ended the request.
+pub fn is_signed(record: &Value) -> bool {
+    record["kind"] == "evm-tx" && record["hash"].is_string()
+}
+
 /// The status of a sent transaction whose receipt could not be read (the
 /// node kept failing, or the receipt could not be decoded).
 pub const RECEIPT_UNKNOWN: &str = "receipt-unknown";

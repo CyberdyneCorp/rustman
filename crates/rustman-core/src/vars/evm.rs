@@ -110,6 +110,10 @@ pub struct ResolvedEvmTx {
     pub nonce: Option<String>,
     /// The signer id, resolved: the gate refuses a raw key here.
     pub signer: Option<String>,
+    /// The transaction fields (`to`, `args`, `value`, gas, fees, `nonce`)
+    /// whose value came from a secret, in file order. The gate refuses
+    /// them: a confirmation must show what is signed.
+    pub secret_fields: Vec<&'static str>,
 }
 
 /// Resolve the `evm-tx` request `request` through `resolver`.
@@ -156,25 +160,45 @@ fn not_a_tx(request: &RequestRef<'_>) -> ResolveError {
 }
 
 fn tx_fields(i: &mut Interpolator<'_, '_>, tx: &EvmTxRequest) -> ResolvedEvmTx {
-    let mut scalar = |s: &Option<Scalar>| s.as_ref().map(|s| i.text(s.as_str()).text);
-    let value = scalar(&tx.value);
-    let gas = scalar(&tx.gas);
-    let max_fee = scalar(&tx.max_fee);
-    let max_priority_fee = scalar(&tx.max_priority_fee);
-    let gas_price = scalar(&tx.gas_price);
-    let nonce = scalar(&tx.nonce);
+    let mut secret_fields = Vec::new();
+    let mut field = |name: &'static str, text: &str, secret_fields: &mut Vec<&'static str>| {
+        let resolved = i.text(text);
+        if !resolved.secret_spans.is_empty() {
+            secret_fields.push(name);
+        }
+        resolved.text
+    };
     let to = tx
         .to
         .as_ref()
-        .map(|t| i.text(t.get()).text)
+        .map(|t| field("to", t.get(), &mut secret_fields))
         .unwrap_or_default();
-    let signer = tx.signer.as_deref().map(|s| i.text(s).text);
+    let mut from_secret = false;
     let args = tx
         .args
         .iter()
         .flatten()
-        .map(|a| string_values(i, a))
+        .map(|a| string_values(i, a, &mut from_secret))
         .collect();
+    if from_secret {
+        secret_fields.push("args");
+    }
+    let mut scalar = |name: &'static str, s: &Option<Scalar>| {
+        s.as_ref().map(|s| {
+            let resolved = i.text(s.as_str());
+            if !resolved.secret_spans.is_empty() {
+                secret_fields.push(name);
+            }
+            resolved.text
+        })
+    };
+    let value = scalar("value", &tx.value);
+    let gas = scalar("gas", &tx.gas);
+    let max_fee = scalar("max_fee", &tx.max_fee);
+    let max_priority_fee = scalar("max_priority_fee", &tx.max_priority_fee);
+    let gas_price = scalar("gas_price", &tx.gas_price);
+    let nonce = scalar("nonce", &tx.nonce);
+    let signer = tx.signer.as_deref().map(|s| i.text(s).text);
     ResolvedEvmTx {
         endpoint: empty_endpoint(),
         to,
@@ -186,6 +210,7 @@ fn tx_fields(i: &mut Interpolator<'_, '_>, tx: &EvmTxRequest) -> ResolvedEvmTx {
         gas_price,
         nonce,
         signer,
+        secret_fields,
     }
 }
 
@@ -237,7 +262,7 @@ fn fields(i: &mut Interpolator<'_, '_>, call: &EvmCallRequest) -> ResolvedEvmCal
         .args
         .iter()
         .flatten()
-        .map(|a| string_values(i, a))
+        .map(|a| string_values(i, a, &mut false))
         .collect();
     let state_overrides = call.state_overrides.as_ref().map(|o| overrides(i, o));
     ResolvedEvmCall {
@@ -294,13 +319,24 @@ fn overrides(
 }
 
 /// `value` with every string interpolated; keys and other scalars are kept.
-fn string_values(i: &mut Interpolator<'_, '_>, value: &Value) -> Value {
+/// `value` with every string interpolated; `from_secret` is set when a
+/// secret went into one.
+fn string_values(i: &mut Interpolator<'_, '_>, value: &Value, from_secret: &mut bool) -> Value {
     match value {
-        Value::String(text) => Value::String(i.text(text).text),
-        Value::Array(items) => Value::Array(items.iter().map(|v| string_values(i, v)).collect()),
+        Value::String(text) => {
+            let resolved = i.text(text);
+            *from_secret |= !resolved.secret_spans.is_empty();
+            Value::String(resolved.text)
+        }
+        Value::Array(items) => Value::Array(
+            items
+                .iter()
+                .map(|v| string_values(i, v, from_secret))
+                .collect(),
+        ),
         Value::Object(map) => Value::Object(
             map.iter()
-                .map(|(k, v)| (k.clone(), string_values(i, v)))
+                .map(|(k, v)| (k.clone(), string_values(i, v, from_secret)))
                 .collect::<Map<String, Value>>(),
         ),
         other => other.clone(),
