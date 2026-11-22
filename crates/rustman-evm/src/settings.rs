@@ -30,6 +30,10 @@ pub struct EvmSettings {
     pub signers: toml::Table,
     pub protected_chains: Vec<u64>,
     pub headless_signing_chains: Vec<u64>,
+    /// The highest max cost (gas limit × max fee + value) `--yes-local`
+    /// signs, as a decimal amount of the chain's native unit (`"1"`, the
+    /// default, is 1 ETH on Ethereum chains).
+    pub max_cost: Option<String>,
 }
 
 /// One `[evm.chains.<id>]` entry. Absent fields keep the built-in value.

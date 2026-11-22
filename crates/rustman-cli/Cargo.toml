@@ -116,6 +116,10 @@ tempfile.workspace = true
 tokio-rustls.workspace = true
 tokio-tungstenite.workspace = true
 
+# Discarding type-ahead before a signing confirmation (`tcflush`).
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true, features = ["termios"] }
+
 [target.'cfg(unix)'.dev-dependencies]
 portable-pty.workspace = true
 

@@ -32,6 +32,8 @@ const NO_TERMINAL: &str = "error: no terminal to confirm on; add --yes-local to 
 enum Simulation {
     Succeeds,
     Reverts,
+    /// Succeeds, `eth_estimateGas` answering after this many milliseconds.
+    Slow(u64),
 }
 
 /// How the stub node answers `eth_sendRawTransaction` and the receipt
@@ -50,6 +52,8 @@ enum Broadcast {
     /// The transaction is accepted (its hash answered), then every
     /// `eth_getTransactionReceipt` fails.
     AcceptsThenReceiptFails,
+    /// The transaction is accepted and never mined (`--no-mining`).
+    Accepts,
 }
 
 /// The hash the `AnswersOtherHash` node answers.
@@ -67,15 +71,24 @@ impl Node {
 
     fn start_with(chain_id: &'static str, simulation: Simulation, broadcast: Broadcast) -> Self {
         let runtime = tokio::runtime::Runtime::new().unwrap();
+        let delay = match simulation {
+            Simulation::Slow(ms) => std::time::Duration::from_millis(ms),
+            _ => std::time::Duration::ZERO,
+        };
+        let simulation = match simulation {
+            Simulation::Slow(_) => Simulation::Succeeds,
+            other => other,
+        };
         let server = runtime.block_on(JsonrpcHttpServer::start(move |req, _| {
             let body = req.json();
             let method = body["method"].as_str().unwrap_or_default();
             let answered = match (method, broadcast) {
                 ("eth_sendRawTransaction", Broadcast::Drops) => return RpcReply::dropped(),
                 ("eth_sendRawTransaction", Broadcast::AnswersOtherHash) => Ok(json!(OTHER_HASH)),
-                ("eth_sendRawTransaction", Broadcast::AcceptsThenReceiptFails) => {
-                    Ok(json!(raw_hash(&body["params"][0])))
-                }
+                (
+                    "eth_sendRawTransaction",
+                    Broadcast::AcceptsThenReceiptFails | Broadcast::Accepts,
+                ) => Ok(json!(raw_hash(&body["params"][0]))),
                 ("eth_getTransactionReceipt", Broadcast::AcceptsThenReceiptFails) => {
                     Err(json!({"code": -32000, "message": "upstream unavailable"}))
                 }
@@ -92,7 +105,10 @@ impl Node {
                 Ok(result) => json!({"jsonrpc": "2.0", "id": body["id"], "result": result}),
                 Err(error) => json!({"jsonrpc": "2.0", "id": body["id"], "error": error}),
             };
-            RpcReply::json(&reply)
+            match method {
+                "eth_estimateGas" => RpcReply::json(&reply).delayed(delay),
+                _ => RpcReply::json(&reply),
+            }
         }));
         Self {
             _runtime: runtime,
@@ -1218,4 +1234,326 @@ fn signing_fits_a_small_main_thread_stack() {
         .filter(|c| c["method"] == "eth_sendRawTransaction")
         .count();
     assert_eq!(sent, 1, "{text}");
+}
+
+/// `rustman <args>` in `dir`, running in the background: its output is
+/// collected as it comes.
+#[cfg(unix)]
+struct Running {
+    child: std::process::Child,
+    stdout: std::sync::Arc<std::sync::Mutex<String>>,
+    stderr: std::sync::Arc<std::sync::Mutex<String>>,
+}
+
+#[cfg(unix)]
+impl Running {
+    fn start(dir: &Path, args: &[&str]) -> Self {
+        use std::process::Stdio;
+        let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_rustman"))
+            .args(args)
+            .current_dir(dir)
+            .env("RUSTMAN_SECRET_STORE", "file")
+            .env("RUSTMAN_DATA_DIR", common::test_data_dir())
+            .env_remove("RUSTMAN_ENV")
+            .env_remove("RUSTMAN_EVM_SIGNER")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let stdout = Self::collect(child.stdout.take().unwrap());
+        let stderr = Self::collect(child.stderr.take().unwrap());
+        Self {
+            child,
+            stdout,
+            stderr,
+        }
+    }
+
+    fn collect(
+        mut pipe: impl std::io::Read + Send + 'static,
+    ) -> std::sync::Arc<std::sync::Mutex<String>> {
+        let text = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+        let sink = std::sync::Arc::clone(&text);
+        std::thread::spawn(move || {
+            let mut buf = [0_u8; 4096];
+            while let Ok(n) = pipe.read(&mut buf) {
+                if n == 0 {
+                    break;
+                }
+                sink.lock()
+                    .unwrap()
+                    .push_str(&String::from_utf8_lossy(&buf[..n]));
+            }
+        });
+        text
+    }
+
+    /// Wait until stdout (or stderr) shows `text`.
+    fn wait_for(&self, text: &str) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        loop {
+            let out = self.stdout.lock().unwrap().clone();
+            let err = self.stderr.lock().unwrap().clone();
+            if out.contains(text) || err.contains(text) {
+                return;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "no '{text}' in {out}{err}"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
+
+    /// Ctrl+C (SIGINT), then the exit code (within 20 s), stdout and stderr.
+    fn interrupt(mut self) -> (Option<i32>, String, String) {
+        let pid = self.child.id().to_string();
+        let sent = std::process::Command::new("kill")
+            .args(["-INT", &pid])
+            .status()
+            .unwrap();
+        assert!(sent.success());
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        let status = loop {
+            if let Some(status) = self.child.try_wait().unwrap() {
+                break status;
+            }
+            if std::time::Instant::now() > deadline {
+                let _ = self.child.kill();
+                panic!("still running 20 s after Ctrl+C");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        };
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        let out = self.stdout.lock().unwrap().clone();
+        let err = self.stderr.lock().unwrap().clone();
+        (status.code(), out, err)
+    }
+}
+
+/// The hash `rustman` printed as `sent <hash>`.
+fn sent_hash(text: &str) -> String {
+    text.lines()
+        .find_map(|line| line.strip_prefix("sent "))
+        .unwrap_or_else(|| panic!("no hash in {text}"))
+        .trim()
+        .to_owned()
+}
+
+/// The one history entry of `root`: a `pending` audit record of `hash`
+/// without the signed bytes the node received.
+fn assert_pending_audit(root: &Path, node: &Node, hash: &str) {
+    let entries = history_entries(root);
+    assert_eq!(entries.len(), 1, "{entries:?}");
+    let audit = &entries[0]["record"]["evm"];
+    assert_eq!(audit["hash"], hash, "{audit}");
+    assert_eq!(audit["status"], "pending", "{audit}");
+    assert_eq!(audit["chain_id"], 31337);
+    assert_eq!(audit["signer"]["address"], ANVIL0);
+    let raw = node
+        .calls()
+        .iter()
+        .find(|c| c["method"] == "eth_sendRawTransaction")
+        .map(|c| c["params"][0].as_str().unwrap().to_owned())
+        .unwrap();
+    assert!(
+        !entries[0].to_string().contains(&raw[2..]),
+        "no signed bytes"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn ctrl_c_during_the_receipt_wait_audits_the_sent_transaction_and_exits_3() {
+    // Regression: the first Ctrl+C during the receipt wait was ignored and
+    // the second quit with exit code 130 and no audit entry, although the
+    // transaction was in the pool.
+    let node = Node::start_with("0x7a69", Simulation::Succeeds, Broadcast::Accepts);
+    let ws = workspace(&node.url(), &enabled(), PINNED);
+    set_password(ws.path());
+    let args = [
+        "evm",
+        "send",
+        "transfer",
+        "--env",
+        "dev",
+        "--sign",
+        "--yes-local",
+        "--receipt-timeout",
+        "120s",
+    ];
+    let running = Running::start(ws.path(), &args);
+    running.wait_for("sent 0x");
+    let (code, stdout, stderr) = running.interrupt();
+    assert_eq!(code, Some(3), "{stdout}{stderr}");
+    let hash = sent_hash(&stdout);
+    assert!(
+        stderr.contains(&format!(
+            "error: interrupted; transaction {hash} was sent and its receipt was not awaited"
+        )),
+        "{stderr}"
+    );
+    assert_pending_audit(ws.path(), &node, &hash);
+}
+
+#[cfg(unix)]
+#[test]
+fn ctrl_c_in_a_run_after_the_send_audits_it_and_exits_3() {
+    // Regression: `run --sign` dropped the signing future on Ctrl+C after
+    // `sent 0x…`: the request was skipped as interrupted, exit code 130,
+    // no audit entry.
+    let node = Node::start_with("0x7a69", Simulation::Succeeds, Broadcast::Accepts);
+    let ws = workspace(&node.url(), &enabled(), PINNED);
+    set_password(ws.path());
+    let running = Running::start(
+        ws.path(),
+        &["run", ".", "--env", "dev", "--sign", "--yes-local"],
+    );
+    running.wait_for("sent 0x");
+    let (code, stdout, stderr) = running.interrupt();
+    assert_eq!(code, Some(3), "{stdout}{stderr}");
+    let hash = sent_hash(&stderr);
+    assert!(
+        !stderr.contains("skipped (interrupted)"),
+        "{stdout}{stderr}"
+    );
+    assert_pending_audit(ws.path(), &node, &hash);
+}
+
+#[cfg(unix)]
+#[test]
+fn ctrl_c_in_a_run_before_the_send_exits_130_with_nothing_sent() {
+    // The gate watches Ctrl+C itself now: before the signature it still
+    // stops at once, nothing signed or sent.
+    let node = Node::start("0x7a69", Simulation::Slow(30_000));
+    let ws = workspace(&node.url(), &enabled(), PINNED);
+    set_password(ws.path());
+    let running = Running::start(
+        ws.path(),
+        &["run", ".", "--env", "dev", "--sign", "--yes-local"],
+    );
+    running.wait_for("evm-tx transfer");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while !node
+        .calls()
+        .iter()
+        .any(|c| c["method"] == "eth_estimateGas")
+    {
+        assert!(std::time::Instant::now() < deadline, "no simulation");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let started = std::time::Instant::now();
+    let (code, stdout, stderr) = running.interrupt();
+    assert_eq!(code, Some(130), "{stdout}{stderr}");
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(10),
+        "the slow simulation was not awaited"
+    );
+    let methods: Vec<_> = node.calls().iter().map(|c| c["method"].clone()).collect();
+    assert!(
+        !methods.contains(&json!("eth_sendRawTransaction")),
+        "{methods:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn an_answer_typed_ahead_never_confirms_an_unseen_summary() {
+    // Regression: the prompt read input already buffered, so `y` typed
+    // before the summary appeared signed the transaction.
+    let node = Node::start("0xaa36a7", Simulation::Slow(1_500));
+    let env = "chain_id: 11155111\nsecrets: [deployer_pw]\n";
+    let ws = workspace(&node.url(), &enabled(), env);
+    set_password(ws.path());
+    let args = ["evm", "send", "transfer", "--env", "dev", "--sign"];
+    let (code, seen) = on_a_terminal(
+        ws.path(),
+        &args,
+        &[
+            // Typed while the simulation runs, before any prompt.
+            ("evm-tx transfer", "y"),
+            ("sign and send this transaction? [y/N] ", "n"),
+        ],
+    );
+    assert_eq!(code, 4, "{seen}");
+    assert!(
+        seen.contains("error: cancelled; nothing was signed or sent"),
+        "{seen}"
+    );
+    let methods: Vec<_> = node.calls().iter().map(|c| c["method"].clone()).collect();
+    assert!(
+        !methods.contains(&json!("eth_sendRawTransaction")),
+        "{methods:?}"
+    );
+}
+
+#[test]
+fn the_confirmation_shows_values_a_short_secret_would_redact() {
+    // Regression: the summary went through the run's substring redactor,
+    // so a secret equal to part of an address mangled the address the
+    // user confirmed (`0x«redacted:…»9979…`).
+    let node = Node::start("0x7a69", Simulation::Succeeds);
+    let ws = workspace(&node.url(), &enabled(), PINNED);
+    let env = "chain_id: 31337\nsecrets: [deployer_pw, node_key]\n";
+    write(
+        ws.path(),
+        "environments/dev.yaml",
+        &format!("{env}variables:\n  rpc: {}\n", node.url()),
+    );
+    let tx = transfer("deployer").replace("rpc: \"{{rpc}}\"", "rpc: \"{{rpc}}?key={{node_key}}\"");
+    write(ws.path(), "transfer.rman.yaml", &tx);
+    set_password(ws.path());
+    rustman(ws.path())
+        .args(["secret", "set", "node_key", "--env", "dev"])
+        .write_stdin("70997970")
+        .assert()
+        .success();
+    let (code, stdout, stderr) = send(
+        ws.path(),
+        &["--sign", "--yes-local", "--receipt-timeout", "1s"],
+    );
+    assert_eq!(code, Some(3), "{stdout}{stderr}");
+    let summary = &stdout[stdout
+        .find("  chain ")
+        .unwrap_or_else(|| panic!("{stdout}"))..];
+    let call = summary.lines().find(|l| l.starts_with("  call ")).unwrap();
+    assert!(call.contains(BOB), "{call}");
+    assert!(!summary.contains("redacted"), "{summary}");
+    assert!(!stdout.contains(PASSWORD) && !stderr.contains(PASSWORD));
+}
+
+#[test]
+fn a_transaction_field_from_a_secret_is_refused() {
+    // Regression: an argument from a secret was shown as
+    // `amount=«redacted:…»` and signed under --yes-local.
+    let node = Node::start("0x7a69", Simulation::Succeeds);
+    let ws = workspace(&node.url(), &enabled(), PINNED);
+    let env = "chain_id: 31337\nsecrets: [deployer_pw, amount]\n";
+    write(
+        ws.path(),
+        "environments/dev.yaml",
+        &format!("{env}variables:\n  rpc: {}\n", node.url()),
+    );
+    let tx = transfer("deployer").replace("\"10\"]", "\"{{amount}}\"]");
+    write(ws.path(), "transfer.rman.yaml", &tx);
+    set_password(ws.path());
+    rustman(ws.path())
+        .args(["secret", "set", "amount", "--env", "dev"])
+        .write_stdin("10")
+        .assert()
+        .success();
+    let (code, stdout, stderr) = send(ws.path(), &["--sign", "--yes-local"]);
+    assert_eq!(code, Some(4), "{stdout}{stderr}");
+    assert!(
+        stderr.contains(
+            "error: evm-tx: 'args' comes from a secret; a transaction field must be shown in the confirmation, so it cannot hold a secret; nothing was signed or sent"
+        ),
+        "{stderr}"
+    );
+    let methods: Vec<_> = node.calls().iter().map(|c| c["method"].clone()).collect();
+    assert!(
+        !methods.contains(&json!("eth_sendRawTransaction")),
+        "{methods:?}"
+    );
 }

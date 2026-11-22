@@ -97,7 +97,10 @@ pub struct EvmTxCall<'a> {
 /// The future an [`EvmTxExecutor`] returns: the request's record.
 pub type EvmTxFuture<'a> = Pin<Box<dyn Future<Output = RequestRecord> + 'a>>;
 
-/// Signs and sends evm-tx requests for a run.
+/// Signs and sends evm-tx requests for a run. The runner never drops its
+/// future on Ctrl+C: the executor watches the run's cancellation itself,
+/// stops (skipped as interrupted) while nothing is signed, and once a
+/// transaction may have been sent, ends with its audit entry.
 pub trait EvmTxExecutor: Sync {
     fn execute<'a>(&'a self, call: EvmTxCall<'a>) -> EvmTxFuture<'a>;
 }
@@ -182,11 +185,10 @@ impl Runner<'_> {
             settings: self.ctx.settings,
             environment: self.ctx.environment,
         };
-        let cancel = &self.options.cancel;
-        match until_cancelled(executor.execute(call), cancel, Duration::ZERO).await {
-            None => Sent::skipped(record, SkipReason::Interrupted),
-            Some(record) => Sent::from_record(record),
-        }
+        // Not raced against the run's cancellation: once a transaction may
+        // have left the process, dropping the executor would lose its
+        // audit entry. The executor watches Ctrl+C itself.
+        Sent::from_record(executor.execute(call).await)
     }
 
     /// Evaluate the assertions and captures of a call, and decide how the

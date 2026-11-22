@@ -253,9 +253,19 @@ fn viz_title(paths: &[PathBuf]) -> String {
 /// The run's exit code; a run whose errors include a call a method guard
 /// refused (like `rustman rpc`), a messaging operation the safety policy
 /// refused, or an evm-call refused for safety (a chain mismatch, like
-/// `rustman evm call`), exits 4.
+/// `rustman evm call`), exits 4. An interrupted run exits 130 only when it
+/// signed nothing: with a signed transaction it exits 3, like
+/// `rustman evm send` interrupted during the receipt wait.
 fn exit_code(record: &RunRecord) -> u8 {
     let code = run_code(&record.summary);
+    let signed = record.requests.iter().any(|r| {
+        r.evm
+            .as_ref()
+            .is_some_and(rustman_evm_signing::receipt::is_signed)
+    });
+    if code == crate::exit::INTERRUPTED && signed {
+        return REQUEST;
+    }
     let guarded = record.requests.iter().any(|r| {
         let rpc = r.jsonrpc.as_ref();
         rpc.is_some_and(|j| j.refusal == Some(RpcRefusal::Guard))
@@ -460,5 +470,22 @@ mod tests {
         assert_eq!(exit_code(&run_of(vec![refused.clone()])), SAFETY);
         refused.messaging.as_mut().unwrap().blocked = false;
         assert_eq!(exit_code(&run_of(vec![refused])), REQUEST);
+    }
+
+    #[test]
+    fn an_interrupted_run_that_signed_a_transaction_exits_3() {
+        // Regression: Ctrl+C after a transaction was sent exited 130,
+        // which means nothing was signed or sent.
+        let sent = RequestRecord::new("t".into(), "t".into(), "t.rman.yaml".into())
+            .errored("interrupted; transaction 0x11 was sent".into());
+        let mut signed = sent.clone();
+        signed.evm =
+            Some(serde_json::json!({"kind": "evm-tx", "hash": "0x11", "status": "pending"}));
+        let mut run = run_of(vec![signed]);
+        run.summary.interrupted = true;
+        assert_eq!(exit_code(&run), REQUEST);
+        let mut run = run_of(vec![sent]);
+        run.summary.interrupted = true;
+        assert_eq!(exit_code(&run), crate::exit::INTERRUPTED);
     }
 }

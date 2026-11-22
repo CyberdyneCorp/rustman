@@ -4,7 +4,8 @@
 //! preview and summary on stdout, prompts on stderr, and the exit code
 //! (a refusal exits with code 4; a receipt timeout or an unreadable
 //! receipt prints the hash and explorer link and exits with code 3; Ctrl+C
-//! before the transaction is sent exits with code 130).
+//! before the transaction is signed exits with code 130, during the
+//! receipt wait with code 3 and the audit record kept).
 
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::sync::mpsc;
@@ -252,8 +253,11 @@ impl Console for TerminalConsole {
 
     /// The line is read on a thread of its own, so Ctrl+C (heard on the
     /// signal thread, which cancels the token) ends the wait at once even
-    /// though the read itself cannot be interrupted.
+    /// though the read itself cannot be interrupted. Input typed before
+    /// the question is discarded, so an answer typed ahead never confirms
+    /// a summary the user has not seen yet.
     fn ask(&self, question: &str) -> Option<String> {
+        discard_type_ahead();
         eprint!("{question}");
         let _ = io::stderr().flush();
         let (tx, rx) = mpsc::channel();
@@ -286,5 +290,18 @@ impl Console for TerminalConsole {
 
     fn cancelled(&self) -> bool {
         self.cancel.is_cancelled()
+    }
+}
+
+/// Drop what was typed on the terminal and not read yet. On Windows the
+/// console input buffer is not flushed (that needs an unsafe call); a
+/// typed-ahead answer can still reach the prompt there.
+fn discard_type_ahead() {
+    #[cfg(unix)]
+    {
+        let stdin = io::stdin();
+        if stdin.is_terminal() {
+            let _ = rustix::termios::tcflush(&stdin, rustix::termios::QueueSelector::IFlush);
+        }
     }
 }

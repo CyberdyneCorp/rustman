@@ -75,6 +75,15 @@ const BUILT_IN: &[(u64, &str, &str, Option<&str>)] = &[
     (LOCAL_CHAIN_ID, "Anvil/Hardhat local", "ETH", None),
 ];
 
+/// The built-in chains that are test or local networks.
+const TEST_CHAINS: [u64; 3] = [11_155_111, 17_000, LOCAL_CHAIN_ID];
+
+/// Whether `chain_id` is a built-in mainnet, where value is real: every
+/// built-in chain but the test and local ones.
+pub fn is_built_in_mainnet(chain_id: u64) -> bool {
+    BUILT_IN.iter().any(|&(id, ..)| id == chain_id) && !TEST_CHAINS.contains(&chain_id)
+}
+
 /// Chain ids to [`ChainInfo`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChainRegistry {
