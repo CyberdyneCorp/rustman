@@ -102,7 +102,12 @@ jobs:
     steps:
       - name: Free runner disk (unused preinstalled SDKs)
         if: runner.os == 'Linux'
-        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL \
+            /usr/share/swift /usr/local/.ghcup /usr/local/share/powershell /usr/local/share/chromium \
+            /usr/local/share/boost
+          docker image prune --all --force > /dev/null
+          df -h /
       - uses: actions/checkout@v5
       - name: Install toolchain from rust-toolchain.toml
         run: rustup toolchain install
@@ -204,6 +209,8 @@ jobs:
       - name: Smoke test README quick start
         shell: bash
         run: |
+          # The release build needs room the test builds have used up.
+          if [ "$RUNNER_OS" = Linux ]; then rm -rf target/debug/incremental target/debug/examples; df -h /; fi
           cargo install --path crates/rustman-cli --locked
           rustman --version
           rustman --help
