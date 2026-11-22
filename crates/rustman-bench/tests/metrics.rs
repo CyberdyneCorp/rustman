@@ -142,7 +142,9 @@ async fn an_interrupted_bench_drains_and_reports() {
         &request("GET", "{{base_url}}/delay/100", ""),
     );
     let mut setup = Setup::new(&server.origin(), constant(2, seconds(60)));
-    setup.interrupt_after = Some(Duration::from_millis(700));
+    // Long enough for two iterations even when a loaded runner makes the
+    // first one take ~700 ms.
+    setup.interrupt_after = Some(Duration::from_millis(2000));
     let (outcome, _) = bench(ws.path(), setup, &[]).await.unwrap();
     assert_eq!(outcome.aborted, Some(Aborted::Interrupted));
     let s = &outcome.summary;
