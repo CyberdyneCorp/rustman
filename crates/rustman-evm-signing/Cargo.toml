@@ -1,0 +1,39 @@
+[package]
+name = "rustman-evm-signing"
+description = "The signing gate of Rustman's EVM toolkit: approved signers and the preconditions every signature passes"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+rustman-core.workspace = true
+rustman-evm.workspace = true
+rustman-http.workspace = true
+rustman-jsonrpc.workspace = true
+alloy-json-abi.workspace = true
+alloy-primitives.workspace = true
+alloy-rlp.workspace = true
+eth-keystore.workspace = true
+k256.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["sync", "time"] }
+toml.workspace = true
+zeroize.workspace = true
+
+[features]
+# Ledger and Trezor signers (add-evm-toolkit design, Risks): their USB
+# drivers need libudev on Linux, so the feature is off by default. The
+# drivers are not linked yet; see docs/evm-signing.md.
+hw-wallet = []
+
+[dev-dependencies]
+rustman-evm = { workspace = true, features = ["test-fixtures"] }
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }

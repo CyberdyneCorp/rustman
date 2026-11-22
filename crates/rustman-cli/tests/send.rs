@@ -390,7 +390,7 @@ fn an_evm_tx_is_never_sent() {
         .assert()
         .code(4)
         .stderr(predicate::str::contains(
-            "evm-tx: signing is not available yet; nothing was signed or sent",
+            "evm-tx: sign and send it with `rustman evm send --sign` or `rustman run --sign`; nothing was signed or sent",
         ));
     // An evm-call file names the commands that do send it.
     let call = "version: 1\nkind: evm-call\nname: supply\nrpc: \"{{base_url}}/rpc\"\nto: \"0x5FbDB2315678afecb367f032d93F642f64180aa3\"\nabi: erc20\nfunction: totalSupply\n";

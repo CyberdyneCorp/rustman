@@ -48,6 +48,7 @@ rustman-secrets.workspace = true
 rustman-plugin = { workspace = true, optional = true }
 rustman-proxy.workspace = true
 rustman-evm.workspace = true
+rustman-evm-signing.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
 anstream.workspace = true
@@ -81,6 +82,9 @@ cloud-secrets = ["secrets-aws", "secrets-gcp", "secrets-azure"]
 # in a build that is shipped or installed: only this crate's own tests turn
 # it on, through the dev-dependency on itself below.
 record-test-hooks = []
+# Ledger and Trezor signers for `rustman evm send` (add-evm-toolkit); off
+# by default: their USB drivers need libudev on Linux.
+hw-wallet = ["rustman-evm-signing/hw-wallet"]
 
 [dev-dependencies]
 # The integration tests run `rustman record --intercept` and the `ca`
@@ -89,6 +93,8 @@ record-test-hooks = []
 # `cargo run`.
 rustman-cli = { path = ".", default-features = false, features = ["record-test-hooks"] }
 assert_cmd.workspace = true
+# Hashes of the raw transactions a stub node accepts (evm signing tests).
+alloy-primitives.workspace = true
 # Test plugins built in-process (add-plugin-system).
 rustman-plugin = { workspace = true, features = ["test-fixtures"] }
 hmac.workspace = true

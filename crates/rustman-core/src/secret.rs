@@ -32,6 +32,12 @@ impl<T> Secret<T> {
     pub fn expose(&self) -> &T {
         &self.value
     }
+
+    /// The real value, moved out (into a zeroizing holder, say) so no
+    /// copy of it is left behind.
+    pub fn into_inner(self) -> T {
+        self.value
+    }
 }
 
 impl<T> fmt::Debug for Secret<T> {

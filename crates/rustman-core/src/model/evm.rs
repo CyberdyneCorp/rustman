@@ -30,9 +30,9 @@ pub const EVM_TX_KIND: &str = "evm-tx";
 pub const DEPLOYMENT_OUT_OF_SCOPE: &str =
     "contract deployment is out of scope; use Foundry or Hardhat";
 
-/// Why an `evm-tx` request cannot run: signing ships in a later release.
-pub const SIGNING_UNAVAILABLE: &str =
-    "evm-tx: signing is not available yet; nothing was signed or sent";
+/// Why an `evm-tx` request does not run where nothing signs (`rustman
+/// send`, a plain `rustman run`): only the signing gate sends one.
+pub const EVM_TX_NEEDS_SIGNING: &str = "evm-tx: sign and send it with `rustman evm send --sign` or `rustman run --sign`; nothing was signed or sent";
 
 /// A loaded `evm-call` or `evm-tx` file.
 #[derive(Clone, Debug, PartialEq)]

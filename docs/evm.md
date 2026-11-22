@@ -2,7 +2,7 @@
 
 Rustman's EVM layer sits on top of the [JSON-RPC client](jsonrpc.md): every node call goes through it, so its transport settings, method guards and redaction apply. The `rustman-evm` crate knows chains, units and ABIs; it never signs or sends a transaction.
 
-This page covers what is available today: the `[evm]` table, chain pinning with `chain_id` in environments, the known-chain registry, node client detection, quantities and units, the `evm-call` and `evm-tx` request files and their load-time checks, ABI sources (built-in token standards, JSON ABIs, Foundry and Hardhat artifacts, opt-in explorer fetch), decoding of calls, outputs, reverts, transactions, receipts and logs, running calls (with state overrides, gas estimates and traces), `evm` assertions and captures, head and log streams, ENS names, local Anvil forks, the send-method guard, the `rustman evm` commands, the TUI pane and the read-only agent tools. Signing (`evm-tx`) is not available yet.
+This page covers what is available today: the `[evm]` table, chain pinning with `chain_id` in environments, the known-chain registry, node client detection, quantities and units, the `evm-call` and `evm-tx` request files and their load-time checks, ABI sources (built-in token standards, JSON ABIs, Foundry and Hardhat artifacts, opt-in explorer fetch), decoding of calls, outputs, reverts, transactions, receipts and logs, running calls (with state overrides, gas estimates and traces), `evm` assertions and captures, head and log streams, ENS names, local Anvil forks, the send-method guard, the `rustman evm` commands, the TUI pane and the read-only agent tools. Signing and sending `evm-tx` requests with `rustman evm send` is covered in [EVM signing](evm-signing.md).
 
 ## `[evm]` in `rustman.toml`
 
@@ -39,7 +39,8 @@ api_key = "{{etherscan_key}}"
 | `[evm.chains.<id>]` | none | `name`, `symbol`, `decimals` and `explorer` for a chain id; absent fields keep the built-in values. |
 | `[evm.explorers.<id>]` | none | `api_url` and `api_key` of an Etherscan-compatible API (the V2 multichain shape, with a `chainid` parameter). |
 | `allow_raw_send_local` | `false` | Reserved: would let `jsonrpc` files send raw transactions to chain 31337. Not honored in this build; see [Send methods](#send-methods). |
-| `allow_signing`, `signers`, `protected_chains`, `headless_signing_chains` | unset | Reserved for the signing gate. Signing is not available in this build: an `evm-tx` request is never executed. |
+| `allow_signing`, `signers` | unset | Read by the signing gate: see [EVM signing](evm-signing.md). |
+| `protected_chains`, `headless_signing_chains` | unset | Reserved for the signing confirmation (not available yet). |
 
 A key Rustman does not know under `[evm]` is a warning when the workspace loads (`rustman.toml: unknown key 'evm.<key>' ignored`); `rustman-evm` rejects misspelled keys inside `[evm.chains.*]` and `[evm.explorers.*]`, and table keys that are not integer chain ids.
 
@@ -148,7 +149,9 @@ state_overrides:
 
 ### `kind: evm-tx`
 
-A transaction to sign and send. Signing is not available in this build: an `evm-tx` file loads (so it can be kept in a collection and checked), `rustman run` reports it as `skipped (signing not requested)` without counting it as a failure, and `rustman send` refuses it with `evm-tx: signing is not available yet; nothing was signed or sent` (exit code 4, like every signing refusal). Loading never calls a node or touches a signer.
+A transaction to sign and send, only through the signing gate ([EVM signing](evm-signing.md)): `rustman evm send --sign` or `rustman run --sign`. A plain `rustman run` reports it as `skipped (signing not requested)` without counting it as a failure, and `rustman send` refuses it with ``evm-tx: sign and send it with `rustman evm send --sign` or `rustman run --sign`; nothing was signed or sent`` (exit code 4, like every signing refusal). Loading never calls a node or touches a signer.
+
+`rustman evm send` checks an `evm-tx` request against the signing gate (workspace opt-in, approved signers, `--sign`, the `chain_id` pin, simulation); see [EVM signing](evm-signing.md).
 
 ```yaml
 version: 1
@@ -290,7 +293,7 @@ captures:
   - {var: owner, from: evm_output, output: 0}
 ```
 
-Captures follow the usual rules: available to every later request of the run, `persist: true` to keep them in `.rustman/state/`, and a capture named in the environment's `secrets` is a secret. `evm_event` reads the events of the simulated call (see `emits` above). `evm_receipt` has nothing to read in a read-only call (there is no receipt); it is for `evm-tx` once signing ships, and reports `no receipt field ...`.
+Captures follow the usual rules: available to every later request of the run, `persist: true` to keep them in `.rustman/state/`, and a capture named in the environment's `secrets` is a secret. `evm_event` reads the events of the simulated call (see `emits` above). `evm_receipt` has nothing to read in a read-only call (there is no receipt); it reports `no receipt field ...` there, and reads the receipt of an `evm-tx` sent with `rustman evm send` (see [EVM signing](evm-signing.md#receipt-assertions-and-captures)).
 
 ## In `rustman run`
 
@@ -372,7 +375,7 @@ The refusal reads:
 signing and sending go through 'evm-tx' (signing gate)
 ```
 
-The guard applies to `rustman rpc`, `rustman run`, the TUI and the MCP server. `[evm] allow_raw_send_local` is not honored in this build: nothing may sign or send until the signing gate lands, so raw sends are refused on every chain, including 31337.
+The guard applies to `rustman rpc`, `rustman run`, the TUI and the MCP server. `[evm] allow_raw_send_local` is not honored in this build: a transaction can only be signed and sent through the signing gate (an `evm-tx` request with `rustman evm send --sign` or `rustman run --sign`, see [EVM signing](evm-signing.md)), so raw sends with these methods are refused on every chain, including 31337.
 
 ## Typed JSON-RPC methods
 
@@ -492,7 +495,7 @@ rustman evm fork --env staging --json
 - **Result**: the status line (`Ethereum Mainnet (1) · geth 1.14.11`), the decoded outputs, the revert, and the gas estimate. `u` cycles the unit form of quantities: native units, wei, gwei and hex for balance-like outputs, token units for ERC-20 amounts, decimal and hex otherwise.
 - **Trace**: the call tree, or why there is none. **Events**: the decoded event timeline (the events each send's simulated call emits, when the file reads events; the latest 1,000 lines), reorged logs marked `REORGED`.
 
-Edits change only the top-level `function`, `args` and `block` lines of the file; comments and the other fields are kept. An `evm-tx` opens read-only with `evm-tx: signing is not available yet; nothing was signed or sent`. After a send, the status bar shows the chain and the node client of the endpoint, such as `Base (8453) · geth 1.14.11`.
+Edits change only the top-level `function`, `args` and `block` lines of the file; comments and the other fields are kept. An `evm-tx` opens read-only with ``evm-tx: sign and send it with `rustman evm send --sign` or `rustman run --sign`; nothing was signed or sent``. After a send, the status bar shows the chain and the node client of the endpoint, such as `Base (8453) · geth 1.14.11`.
 
 ## Blockchain GraphQL presets
 
@@ -593,4 +596,4 @@ Every node call goes through the session's `rpc_call` sender, so the safety poli
 | 1 | An `evm` assertion (or another assertion) failed; not found (an unknown transaction or block, an ENS name without an address). |
 | 2 | A bad file, setting, argument or ABI; explorer fetch disabled; an agent log range over 10,000 blocks; `anvil` not found. |
 | 3 | The node or the explorer could not be reached, or answered with an error; a node without state overrides. |
-| 4 | Refused: a chain mismatch, an `evm-tx` given to `rustman send` (signing is not available), an `ens_rpc` that is not mainnet, a call a method guard refuses (a send method, or catalog params of the wrong type), or a host the safety policy blocks. |
+| 4 | Refused: a chain mismatch, an `evm-tx` given to `rustman send` (only the signing gate sends one), an `ens_rpc` that is not mainnet, a call a method guard refuses (a send method, or catalog params of the wrong type), or a host the safety policy blocks. |

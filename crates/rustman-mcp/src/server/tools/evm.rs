@@ -180,7 +180,7 @@ fn tool_error(error: EvmError) -> ToolError {
         EvmError::Refused(message) => ToolError::blocked(message),
         EvmError::NotFound(message) => ToolError::new(ErrorCode::NotFound, message),
         EvmError::Config(message) => invalid(message),
-        EvmError::Rpc(message) => ToolError::internal(message),
+        EvmError::Rpc(message) | EvmError::Interrupted(message) => ToolError::internal(message),
     }
 }
 

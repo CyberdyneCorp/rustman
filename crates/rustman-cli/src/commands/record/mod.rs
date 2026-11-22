@@ -5,7 +5,7 @@
 
 mod ca;
 mod save;
-mod test_hooks;
+pub(crate) mod test_hooks;
 
 use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};

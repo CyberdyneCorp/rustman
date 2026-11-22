@@ -326,6 +326,16 @@ jobs:
         env:
           RUSTMAN_REQUIRE_ANVIL: "1"
         run: cargo test -p rustman-evm --test anvil --locked -- --nocapture
+      # add-evm-toolkit tasks 5.3-5.5 and 5.7: signing, sending and receipts
+      # with Anvil's dev accounts in test keystores (the fixture contract's
+      # code is installed with anvil_setCode; no solc needed), and the
+      # "CI on Anvil" steps of docs/evm-signing.md.
+      - name: Run the signing tests against Anvil
+        env:
+          RUSTMAN_REQUIRE_ANVIL: "1"
+        run: |
+          cargo test -p rustman-evm-signing --test anvil --locked -- --nocapture
+          cargo test -p rustman-cli --test evm_send_anvil --test docs_evm_signing --locked -- --nocapture
 
   # add-messaging-client tasks 2.1-2.3, 5.1 and 6.1: Kafka produce and
   # consume, a `start: before_next` consume in a run and the CLI, against

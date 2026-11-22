@@ -36,13 +36,16 @@
 
 ## 5. Signing gate
 
-- [ ] 5.1 Implement signer configuration (`keystore`, `keychain` with `rustman evm signer import`, `ledger`/`trezor` behind `hw-wallet`) with `Secret<T>` + `zeroize`, and raw-key rejection everywhere (files, env, vars, flags); verify tests for each signer type with test keystores and rejection tests for a 64-hex value in each location.
-- [ ] 5.2 Implement the gate preconditions (workspace `allow_signing`, `--sign`, pinned and matching chain id, simulation success or `--force-revert`) with exit code 4 and exact messages; verify one test per refusal path.
-- [ ] 5.3 Implement fee suggestion (`eth_feeHistory`, legacy `eth_gasPrice`), gas × 1.2 and nonce management (pending count + in-run counter); verify against Anvil with two sequential transactions and fee-history fixtures.
-- [ ] 5.4 Implement the confirmation (CLI prompt and TUI dialog) with all required fields, typed chain name for chain 1 and `protected_chains`, and `LocalHeadless` for 31337/`headless_signing_chains` with `--yes-local`; verify expectrl-driven CLI tests, TUI snapshots, and non-TTY refusal on a non-local chain.
-- [ ] 5.5 Implement send, receipt wait (`--confirmations`, 120 s timeout → exit 3), receipt assertions/captures and the history audit record without raw bytes or key material; verify an Anvil end-to-end test and a history-file scan asserting no key material.
-- [ ] 5.6 Prove agents can't sign: a dependency test asserting `rustman-mcp` does not depend on `rustman-evm::signing`, and an MCP test where `send_request` on an `evm-tx` file fails with the specified error.
-- [ ] 5.7 Document signing setup, the gate rules and CI-on-Anvil usage in `docs/evm-signing.md`; verify docs examples run against Anvil in CI.
+- [x] 5.1 Implement signer configuration (`keystore`, `keychain` with `rustman evm signer import`, `ledger`/`trezor` behind `hw-wallet`) with `Secret<T>` + `zeroize`, and raw-key rejection everywhere (files, env, vars, flags); verify tests for each signer type with test keystores and rejection tests for a 64-hex value in each location.
+  - Note: hardware-wallet signers are deferred out of this change (the delta spec no longer requires them). `ledger`/`trezor` parse and are refused with a clear exit-2 error in every build (tested in `crates/rustman-evm-signing/tests/signers.rs`); the `hw-wallet` feature (off by default) links no USB driver. The USB HID drivers (libudev on Linux), on-device confirmation and the `confirm on your Ledger…` 120 s wait are follow-up work: https://github.com/CyberdyneCorp/rustman/issues/111.
+- [x] 5.2 Implement the gate preconditions (workspace `allow_signing`, `--sign`, pinned and matching chain id, simulation success or `--force-revert`) with exit code 4 and exact messages; verify one test per refusal path.
+- [x] 5.3 Implement fee suggestion (`eth_feeHistory`, legacy `eth_gasPrice`), gas × 1.2 and nonce management (pending count + in-run counter); verify against Anvil with two sequential transactions and fee-history fixtures.
+- [x] 5.4 Implement the confirmation (CLI prompt and TUI dialog) with all required fields, typed chain name for chain 1 and `protected_chains`, and `LocalHeadless` for 31337/`headless_signing_chains` with `--yes-local`; verify expectrl-driven CLI tests, TUI snapshots, and non-TTY refusal on a non-local chain.
+  - Note: the TUI does not sign in this change (the delta spec makes `--sign` on the CLI the only opt-in); its `evm-tx` pane stays read-only with a notice pointing to the CLI, so there is no TUI dialog or snapshot. The CLI prompt is tested through a pseudo-terminal (`portable-pty`) rather than expectrl, including Ctrl+C at the prompt (exit 130, nothing sent). Signing from the TUI is follow-up work: https://github.com/CyberdyneCorp/rustman/issues/112.
+- [x] 5.5 Implement send, receipt wait (`--confirmations`, 120 s timeout → exit 3), receipt assertions/captures and the history audit record without raw bytes or key material; verify an Anvil end-to-end test and a history-file scan asserting no key material.
+- [x] 5.6 Prove agents can't sign: a dependency test asserting `rustman-mcp` does not depend on `rustman-evm::signing`, and an MCP test where `send_request` on an `evm-tx` file fails with the specified error.
+  - Note: signing lives in its own crate, `rustman-evm-signing` (not a `rustman-evm::signing` module), so the build property is that `rustman-mcp` never reaches that crate: `crates/rustman-mcp/tests/no_signing_dependency.rs` walks `Cargo.lock` (every feature, target and dev-dependency); the refusal is in `crates/rustman-mcp/tests/evm.rs`.
+- [x] 5.7 Document signing setup, the gate rules and CI-on-Anvil usage in `docs/evm-signing.md`; verify docs examples run against Anvil in CI.
 
 ## 6. Chain exploration
 

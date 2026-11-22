@@ -1,0 +1,76 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Sign and send an evm-tx request through the signing gate
+
+Usage: rustman evm send [OPTIONS] <REQUEST>
+
+Arguments:
+  <REQUEST>
+          An evm-tx request (file, id or name)
+
+Options:
+      --sign
+          Sign and send the transaction (without it, only the preview)
+
+      --signer <ID>
+          The signer id from [evm.signers] (default: RUSTMAN_EVM_SIGNER, then the request's `signer`)
+
+      --force-revert
+          Go on when the simulation reverts; the confirmation warns
+
+      --yes-local
+          Confirm without a prompt; only on chain 31337 and [evm] headless_signing_chains
+
+      --confirmations <N>
+          Blocks to wait for, counting the transaction's own
+          
+          [default: 1]
+
+      --receipt-timeout <DURATION>
+          How long to wait for the receipt: 120s, 5m, or milliseconds
+          
+          [default: 120s]
+
+      --env <NAME>
+          Environment (default: RUSTMAN_ENV, then default_environment)
+
+      --workspace <DIR>
+          Workspace directory (default: search from the current directory upwards)
+
+      --var <K=V>
+          Set a variable, above every other source (repeatable): --var k=v
+
+      --timeout <DURATION>
+          Total timeout per node call: 500ms, 5s, 2m, or milliseconds
+
+  -k, --insecure
+          Do not verify TLS certificates
+
+      --no-history
+          Do not record the transaction in history
+
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help
+
+Examples:
+  rustman evm send requests/transfer.rman.yaml --env local
+  rustman evm send transfer --env sepolia --sign --signer deployer
+  rustman evm send transfer --env local --sign --yes-local --confirmations 2
+
+Signing needs [evm] allow_signing = true in rustman.toml, --sign, a signer
+from [evm.signers], an environment that pins chain_id, a simulation that does
+not revert (or --force-revert) and your confirmation. On chain 1 and
+[evm] protected_chains the chain name must be typed. Without a terminal, only
+chain 31337 and [evm] headless_signing_chains can be signed on, with
+--yes-local. Raw private keys are never accepted; import a key with
+`rustman evm signer import`.

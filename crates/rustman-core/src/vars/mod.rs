@@ -17,7 +17,10 @@ pub mod source;
 pub mod template;
 
 pub use dynamic::Dynamic;
-pub use evm::{ResolvedEvmCall, resolve_evm_call, resolve_evm_endpoint};
+pub use evm::{
+    ResolvedEvmCall, ResolvedEvmTx, resolve_evm_call, resolve_evm_endpoint, resolve_evm_secret,
+    resolve_evm_tx,
+};
 pub use graphql::{ResolvedGraphql, resolve_graphql};
 pub use grpc::{GRPC_SENT_METHOD, ResolvedGrpc, ResolvedSchema, resolve_grpc};
 pub use jsonrpc::{ResolvedCall, ResolvedJsonrpc, resolve_jsonrpc};

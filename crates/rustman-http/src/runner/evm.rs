@@ -6,22 +6,31 @@
 //! belong to the `rustman-evm` crate, which depends on this one: front ends
 //! hand the runner an [`EvmExecutor`] through [`super::RunOptions::evm`].
 //! Without one, evm-call requests are skipped as an unsupported kind.
-//! `evm-tx` requests are never sent: a run skips them as `signing not
-//! requested` (signing is not available in this build).
+//! `evm-tx` requests go to the [`EvmTxExecutor`] of
+//! [`super::RunOptions::evm_tx`], which only the signing gate
+//! (`rustman-evm-signing`) implements; without one (no `--sign`) a run
+//! skips them as `signing not requested`.
 
 use std::borrow::Cow;
 use std::path::Path;
 use std::pin::Pin;
 use std::time::Duration;
 
+use rustman_core::Redactor;
+use rustman_core::Secret;
 use rustman_core::assertions::{self, AssertionResult, Context, ResponseView};
 use rustman_core::environment::Environment;
-use rustman_core::model::{Assertion, EvmCallRequest, unlocated};
+use rustman_core::format::Located;
+use rustman_core::history::{Entry, NewEntry};
+use rustman_core::model::{
+    Assertion, Capture, Checked, EvmCallRequest, EvmRequest, Request, unlocated,
+};
 use rustman_core::redact::remember_for_logs;
-use rustman_core::run::{RequestRecord, RequestStatus, SkipReason, redact_value};
+use rustman_core::run::{RequestRecord, RequestStatus, SentRequest, SkipReason, redact_value};
 use rustman_core::settings::Settings;
 use rustman_core::vars::{
-    ResolvedEvmCall, ResolvedRequest, Resolver, resolve_evm_call, resolve_evm_endpoint,
+    ResolvedEvmCall, ResolvedEvmTx, ResolvedRequest, Resolver, resolve_evm_call,
+    resolve_evm_endpoint, resolve_evm_secret, resolve_evm_tx,
 };
 use rustman_core::workspace::RequestRef;
 use serde_json::{Value, json};
@@ -31,6 +40,7 @@ use super::graphql::until_cancelled;
 use super::record::redact_capture_messages;
 use super::{Runner, Sent};
 use crate::engine::{HttpEngine, SendOptions};
+use crate::timing::millis;
 
 /// What an [`EvmExecutor`] gets to run one evm-call request.
 pub struct EvmCall<'a> {
@@ -70,6 +80,28 @@ pub struct EvmOutcome {
     pub elapsed: Duration,
 }
 
+/// What an [`EvmTxExecutor`] gets to sign and send one evm-tx request.
+pub struct EvmTxCall<'a> {
+    /// The run: resolving the request and its secrets, and recording the
+    /// receipt ([`Runner::finish_evm_tx`]).
+    pub runner: &'a Runner<'a>,
+    pub request: &'a RequestRef<'a>,
+    /// The request's record, for a refusal before anything is sent.
+    pub record: RequestRecord,
+    pub root: &'a Path,
+    pub settings: &'a Settings,
+    /// The active environment, whose `chain_id` pins the endpoint.
+    pub environment: Option<&'a Environment>,
+}
+
+/// The future an [`EvmTxExecutor`] returns: the request's record.
+pub type EvmTxFuture<'a> = Pin<Box<dyn Future<Output = RequestRecord> + 'a>>;
+
+/// Signs and sends evm-tx requests for a run.
+pub trait EvmTxExecutor: Sync {
+    fn execute<'a>(&'a self, call: EvmTxCall<'a>) -> EvmTxFuture<'a>;
+}
+
 /// The future an [`EvmExecutor`] returns.
 pub type EvmFuture<'a> = Pin<Box<dyn Future<Output = EvmOutcome> + 'a>>;
 
@@ -88,7 +120,7 @@ impl Runner<'_> {
         iteration: u32,
     ) -> Sent {
         let rustman_core::model::EvmRequest::Call(call) = evm else {
-            return Sent::skipped(record, SkipReason::SigningNotRequested);
+            return self.execute_evm_tx(request, record).await;
         };
         let Some(executor) = self.options.evm else {
             return Sent::skipped(record, SkipReason::UnsupportedKind);
@@ -125,11 +157,33 @@ impl Runner<'_> {
                 let checked = EvmChecked {
                     request,
                     resolver: &resolver,
-                    call,
-                    resolved: &resolved,
+                    assertions: call.assertions.as_deref(),
+                    captures: call.captures.as_deref().unwrap_or_default(),
+                    redactor: resolved.redactor(),
                 };
                 self.check_evm(&checked, outcome, record)
             }
+        }
+    }
+
+    /// Hand the evm-tx `request` to the signing gate, or skip it when the
+    /// run did not ask to sign.
+    async fn execute_evm_tx(&self, request: &RequestRef<'_>, record: RequestRecord) -> Sent {
+        let Some(executor) = self.options.evm_tx else {
+            return Sent::skipped(record, SkipReason::SigningNotRequested);
+        };
+        let call = EvmTxCall {
+            runner: self,
+            request,
+            record: record.clone(),
+            root: self.ctx.root,
+            settings: self.ctx.settings,
+            environment: self.ctx.environment,
+        };
+        let cancel = &self.options.cancel;
+        match until_cancelled(executor.execute(call), cancel, Duration::ZERO).await {
+            None => Sent::skipped(record, SkipReason::Interrupted),
+            Some(record) => Sent::from_record(record),
         }
     }
 
@@ -142,7 +196,7 @@ impl Runner<'_> {
         mut record: RequestRecord,
     ) -> Sent {
         let mut redactor = self.known();
-        redactor.merge(&checked.resolved.redactor());
+        redactor.merge(&checked.redactor);
         if let Some(error) = &outcome.error {
             record = record.errored(redactor.text(error).into_owned());
             record.evm = Some(redact_value(&outcome.record, &redactor));
@@ -154,7 +208,7 @@ impl Runner<'_> {
             body: Cow::Owned(outcome.document.to_string().into_bytes()),
             ..ResponseView::default()
         };
-        let assertions = unlocated(checked.call.assertions.as_deref());
+        let assertions = unlocated(checked.assertions);
         let plugins = self.bare_plugin_calls();
         let ctx = Context {
             resolver: checked.resolver,
@@ -163,7 +217,7 @@ impl Runner<'_> {
             plugins: plugins.as_ref(),
         };
         record.assertions = merge_results(&assertions, &view, &ctx, outcome.evm_assertions);
-        let captures = checked.call.captures.as_deref().unwrap_or_default();
+        let captures = checked.captures;
         let report = self.capture(captures, &view, &mut redactor);
         remember_for_logs(&redactor);
         let passed = record.assertions.iter().all(AssertionResult::passed) && !report.failed();
@@ -207,18 +261,123 @@ impl Runner<'_> {
         Ok((resolved, options))
     }
 
+    /// Resolve the `evm-tx` request `request` with the run's variables and
+    /// secrets, and the transport options to call its node with. Its
+    /// secrets are remembered for redaction. Nothing is sent.
+    pub async fn resolve_evm_tx(
+        &self,
+        request: &RequestRef<'_>,
+    ) -> Result<(ResolvedEvmTx, SendOptions), String> {
+        let captured = self.lock_captures().clone();
+        let mut resolver = self.resolver(request, &captured, 1);
+        let resolve = |r: &Resolver<'_>| resolve_evm_tx(request, r);
+        let resolved = self
+            .with_secrets(&mut resolver, resolve)
+            .await
+            .map_err(|e| e.to_string())?;
+        self.remember(&resolved.endpoint.secrets);
+        remember_for_logs(&self.request_redactor(Some(&resolved.endpoint), None));
+        let options = self
+            .send_options(&resolved.endpoint)
+            .map_err(|e| e.to_string())?;
+        Ok((resolved, options))
+    }
+
+    /// Resolve `text` in the context of `request` as the secret `name`
+    /// (a signer's keystore password); it is remembered for redaction.
+    pub async fn resolve_evm_secret(
+        &self,
+        request: &RequestRef<'_>,
+        name: &str,
+        text: &str,
+    ) -> Result<Secret<String>, String> {
+        let captured = self.lock_captures().clone();
+        let mut resolver = self.resolver(request, &captured, 1);
+        let resolve = |r: &Resolver<'_>| resolve_evm_secret(r, name, text);
+        let (secret, used) = self
+            .with_secrets(&mut resolver, resolve)
+            .await
+            .map_err(|e| e.to_string())?;
+        self.remember(&used);
+        Ok(secret)
+    }
+
+    /// Check the receipt of the sent evm-tx `request` (its node at
+    /// `endpoint`): evaluate its assertions and captures on `outcome`,
+    /// then record the audit entry (`outcome.record`) in history, with no
+    /// replay. The record is redacted with every secret of the run.
+    pub fn finish_evm_tx(
+        &self,
+        request: &RequestRef<'_>,
+        endpoint: &ResolvedRequest,
+        outcome: EvmOutcome,
+    ) -> RequestRecord {
+        let file = request.entry.path.to_string_lossy().replace('\\', "/");
+        let name = request.request().name().to_owned();
+        let mut record = RequestRecord::new(request.entry.id(), name, file.clone());
+        record.duration_ms = millis(outcome.elapsed);
+        let Request::Evm(evm) = request.request() else {
+            return record.errored("not an evm-tx request".to_owned());
+        };
+        let EvmRequest::Tx(tx) = evm.as_ref() else {
+            return record.errored("not an evm-tx request".to_owned());
+        };
+        let captured = self.lock_captures().clone();
+        let resolver = self.resolver(request, &captured, 1);
+        let checked = EvmChecked {
+            request,
+            resolver: &resolver,
+            assertions: tx.assertions.as_deref(),
+            captures: tx.captures.as_deref().unwrap_or_default(),
+            redactor: Redactor::for_request(endpoint),
+        };
+        let mut record = self.check_evm(&checked, outcome, record).record;
+        if let Err(warning) = self.record_evm_tx(&record, endpoint, &file) {
+            record.warnings.push(warning);
+        }
+        record
+    }
+
+    /// Keep `record` in history: the node it went to (redacted) and the
+    /// audit record. Never replayable: a replay would not sign again.
+    fn record_evm_tx(
+        &self,
+        record: &RequestRecord,
+        endpoint: &ResolvedRequest,
+        file: &str,
+    ) -> Result<(), String> {
+        let Some(store) = &self.options.history else {
+            return Ok(());
+        };
+        let mut redactor = self.known();
+        redactor.merge(&Redactor::for_request(endpoint));
+        let entry = Entry::new(NewEntry {
+            record,
+            sent: SentRequest::new(endpoint, &redactor),
+            request: Some(file),
+            environment: self.ctx.environment.map(|e| e.name.as_str()),
+            spill: None,
+            replay: None,
+        });
+        store
+            .record(&entry)
+            .map_err(|e| redactor.text(&format!("history: {e}")).into_owned())
+    }
+
     /// Every secret value resolved so far in this run.
     pub fn known_secrets(&self) -> rustman_core::Redactor {
         self.known()
     }
 }
 
-/// An evm-call whose result is being checked.
+/// An evm-call result or evm-tx receipt being checked.
 struct EvmChecked<'c, 'r> {
     request: &'c RequestRef<'r>,
     resolver: &'c Resolver<'c>,
-    call: &'c EvmCallRequest,
-    resolved: &'c ResolvedEvmCall,
+    assertions: Option<&'c [Located<Assertion>]>,
+    captures: &'c [Checked<Capture>],
+    /// Hides the request's own secrets.
+    redactor: Redactor,
 }
 
 /// The results of `assertions` in file order: `evm` ones from the

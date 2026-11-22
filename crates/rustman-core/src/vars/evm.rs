@@ -1,4 +1,6 @@
-//! Resolving a `kind: evm-call` request before it is sent (add-evm-toolkit).
+//! Resolving a `kind: evm-call` request before it is sent, and the fields
+//! of a `kind: evm-tx` request before the signing gate checks them
+//! (add-evm-toolkit).
 //!
 //! `{{name}}` is interpolated in `rpc` (the endpoint, with the collection's
 //! headers and auth), `to`, `from`, `value`, `block`, the string values of
@@ -16,7 +18,9 @@ use super::request::{
     tls_files,
 };
 use super::resolver::{Interpolator, ResolveError, Resolver, UsedSecret};
-use crate::model::{AbiSpec, EvmCallRequest, EvmRequest, Request, Scalar, StateOverride};
+use crate::model::{
+    AbiSpec, EvmCallRequest, EvmRequest, EvmTxRequest, Request, Scalar, StateOverride,
+};
 use crate::redact::Redactor;
 use crate::secret::Secret;
 use crate::workspace::RequestRef;
@@ -63,7 +67,7 @@ pub fn resolve_evm_call(
         Request::Evm(evm) => match evm.as_ref() {
             EvmRequest::Call(call) => call,
             EvmRequest::Tx(_) => {
-                let message = crate::model::SIGNING_UNAVAILABLE.to_owned();
+                let message = crate::model::EVM_TX_NEEDS_SIGNING.to_owned();
                 return Err(ResolveError::Unsupported(message));
             }
         },
@@ -86,6 +90,103 @@ pub fn resolve_evm_call(
     }
     resolved.endpoint = endpoint;
     Ok(resolved)
+}
+
+/// An `evm-tx` with every placeholder replaced: what the signing gate
+/// checks and the transaction is built from. Nothing here is signed. It
+/// holds secret values: it has no `Debug`; `endpoint.secrets` covers it.
+#[derive(Clone)]
+pub struct ResolvedEvmTx {
+    /// The node: URL, headers and auth. Its `secrets` hold every secret
+    /// used anywhere in the request.
+    pub endpoint: ResolvedRequest,
+    pub to: String,
+    pub args: Vec<Value>,
+    pub value: Option<String>,
+    pub gas: Option<String>,
+    pub max_fee: Option<String>,
+    pub max_priority_fee: Option<String>,
+    pub gas_price: Option<String>,
+    pub nonce: Option<String>,
+    /// The signer id, resolved: the gate refuses a raw key here.
+    pub signer: Option<String>,
+}
+
+/// Resolve the `evm-tx` request `request` through `resolver`.
+pub fn resolve_evm_tx(
+    request: &RequestRef<'_>,
+    resolver: &Resolver<'_>,
+) -> Result<ResolvedEvmTx, ResolveError> {
+    let Request::Evm(evm) = request.request() else {
+        return Err(not_a_tx(request));
+    };
+    let EvmRequest::Tx(tx) = evm.as_ref() else {
+        return Err(not_a_tx(request));
+    };
+    let mut i = resolver.interpolator();
+    let mut endpoint = endpoint(&mut i, request, tx.rpc.get())?;
+    let fields = tx_fields(&mut i, tx);
+    let (mut resolved, secrets) = i.finish(fields)?;
+    endpoint.secrets = secrets;
+    contain_files(request, &mut endpoint)?;
+    resolved.endpoint = endpoint;
+    Ok(resolved)
+}
+
+/// Resolve `text` (such as a signer's keystore `password`, usually a
+/// `{{secret:...}}` reference). The value is returned as a secret named
+/// `name`, so it is redacted wherever it could appear, with the secrets
+/// used to build it.
+pub fn resolve_evm_secret(
+    resolver: &Resolver<'_>,
+    name: &str,
+    text: &str,
+) -> Result<(Secret<String>, Vec<UsedSecret>), ResolveError> {
+    let mut i = resolver.interpolator();
+    let value = i.text(text).text;
+    let ((), mut used) = i.finish(())?;
+    let secret = Secret::new(name, value);
+    used.push(secret.clone());
+    Ok((secret, used))
+}
+
+fn not_a_tx(request: &RequestRef<'_>) -> ResolveError {
+    let kind = request.request().kind();
+    ResolveError::Unsupported(format!("request kind '{kind}' is not an evm-tx request"))
+}
+
+fn tx_fields(i: &mut Interpolator<'_, '_>, tx: &EvmTxRequest) -> ResolvedEvmTx {
+    let mut scalar = |s: &Option<Scalar>| s.as_ref().map(|s| i.text(s.as_str()).text);
+    let value = scalar(&tx.value);
+    let gas = scalar(&tx.gas);
+    let max_fee = scalar(&tx.max_fee);
+    let max_priority_fee = scalar(&tx.max_priority_fee);
+    let gas_price = scalar(&tx.gas_price);
+    let nonce = scalar(&tx.nonce);
+    let to = tx
+        .to
+        .as_ref()
+        .map(|t| i.text(t.get()).text)
+        .unwrap_or_default();
+    let signer = tx.signer.as_deref().map(|s| i.text(s).text);
+    let args = tx
+        .args
+        .iter()
+        .flatten()
+        .map(|a| string_values(i, a))
+        .collect();
+    ResolvedEvmTx {
+        endpoint: empty_endpoint(),
+        to,
+        args,
+        value,
+        gas,
+        max_fee,
+        max_priority_fee,
+        gas_price,
+        nonce,
+        signer,
+    }
 }
 
 /// Resolve `url` (a URL or a `{{variable}}` holding one) as an EVM node

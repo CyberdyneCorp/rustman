@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use rustman_core::environment;
-use rustman_core::model::{DEPLOYMENT_OUT_OF_SCOPE, KindRegistry, Request, SIGNING_UNAVAILABLE};
+use rustman_core::model::{DEPLOYMENT_OUT_OF_SCOPE, EVM_TX_NEEDS_SIGNING, KindRegistry, Request};
 use rustman_core::settings::Settings;
 use rustman_evm::abi::AbiCache;
 use rustman_evm::blocklist::SEND_REFUSED;
@@ -103,7 +103,7 @@ fn quoted_messages_match_the_code() {
     for message in [
         FETCH_DISABLED,
         DEPLOYMENT_OUT_OF_SCOPE,
-        SIGNING_UNAVAILABLE,
+        EVM_TX_NEEDS_SIGNING,
         NO_DECIMALS,
         TX_NOT_FOUND,
         "chain mismatch: environment 'sepolia' expects 11155111 (Sepolia), endpoint reports 1 (Ethereum Mainnet)",
@@ -117,7 +117,7 @@ fn quoted_messages_match_the_code() {
         "polling every 2s (no WebSocket)",
         rustman_evm::query::RANGE_TOO_LARGE,
         "evm output 'balance': expected >= 1 ETH, got 0.5 ETH",
-        "evm-tx: signing is not available yet; nothing was signed or sent",
+        "evm-tx: sign and send it with `rustman evm send --sign` or `rustman run --sign`; nothing was signed or sent",
     ] {
         assert!(
             text.contains(message),

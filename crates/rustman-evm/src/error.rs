@@ -15,6 +15,9 @@ pub enum EvmError {
     /// The thing asked for does not exist, such as a transaction (exit 1).
     #[error("{0}")]
     NotFound(String),
+    /// Stopped by Ctrl+C before anything irreversible (exit code 130).
+    #[error("{0}")]
+    Interrupted(String),
 }
 
 impl EvmError {
@@ -29,6 +32,7 @@ impl EvmError {
             Self::Config(_) => 2,
             Self::Rpc(_) => 3,
             Self::Refused(_) => 4,
+            Self::Interrupted(_) => 130,
         }
     }
 }
@@ -44,11 +48,12 @@ mod tests {
             EvmError::config("x"),
             EvmError::Rpc("x".into()),
             EvmError::Refused("x".into()),
+            EvmError::Interrupted("x".into()),
         ]
         .iter()
         .map(EvmError::exit_code)
         .collect();
-        assert_eq!(codes, [1, 2, 3, 4]);
+        assert_eq!(codes, [1, 2, 3, 4, 130]);
         assert_eq!(EvmError::config("bad").to_string(), "bad");
     }
 }

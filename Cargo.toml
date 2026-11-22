@@ -41,6 +41,7 @@ rustman-plugin-sdk = { path = "crates/rustman-plugin-sdk", version = "1.0.0" }
 rustman-proxy = { path = "crates/rustman-proxy", version = "0.1.0" }
 rustman-messaging = { path = "crates/rustman-messaging", version = "0.1.0" }
 rustman-evm = { path = "crates/rustman-evm", version = "0.1.0" }
+rustman-evm-signing = { path = "crates/rustman-evm-signing", version = "0.1.0" }
 
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
@@ -355,6 +356,16 @@ apache-avro = { version = "0.23.0", default-features = false }
 alloy-primitives = { version = "~1.7.3", default-features = false, features = ["std"] }
 alloy-json-abi = { version = "~1.7.3", default-features = false, features = ["std", "serde_json"] }
 alloy-dyn-abi = { version = "~1.7.3", default-features = false, features = ["std"] }
+# Signing gate (add-evm-toolkit design D2), only in rustman-evm-signing:
+# secp256k1 ECDSA with k256 0.14 (pure Rust; constant-time crypto-bigint
+# 0.7). alloy-signer-local is not used: it pins k256 0.13, whose
+# crypto-bigint 0.5 has timing leaks (RUSTSEC-2026-0387). Web3 Secret
+# Storage keystores are decrypted with eth-keystore (aes-ctr, scrypt,
+# pbkdf2; no k256), and the decrypted key bytes are zeroized.
+k256 = { version = "0.14.0", default-features = false, features = ["ecdsa", "std"] }
+eth-keystore = { version = "0.5.0", default-features = false }
+# RLP of signed transactions (EIP-155 legacy, EIP-1559), signing gate only.
+alloy-rlp = { version = "0.3.17", default-features = false, features = ["std"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -221,7 +221,9 @@ fn an_evm_tx_opens_read_only() {
     assert_eq!(editor.kind(), "evm-tx");
     assert_eq!(
         editor.notice().as_deref(),
-        Some("evm-tx: signing is not available yet; nothing was signed or sent")
+        Some(
+            "evm-tx: sign and send it with `rustman evm send --sign` or `rustman run --sign`; nothing was signed or sent"
+        )
     );
     assert!(!press(editor.as_mut(), Code::Down));
 }

@@ -10,7 +10,7 @@ use serde::Deserialize;
 
 use super::common::Variables;
 use super::docs::DocsMeta;
-use super::evm::{EvmRequest, SIGNING_UNAVAILABLE};
+use super::evm::{EVM_TX_NEEDS_SIGNING, EvmRequest};
 use super::graphql::GraphqlRequest;
 use super::grpc::GrpcRequest;
 use super::http::HttpRequest;
@@ -170,7 +170,7 @@ impl Request {
             Self::Sse(r) => &r.kind,
             Self::Messaging(r) => &r.kind,
             Self::Evm(r) if matches!(**r, EvmRequest::Tx(_)) => {
-                return Some(SIGNING_UNAVAILABLE.to_owned());
+                return Some(EVM_TX_NEEDS_SIGNING.to_owned());
             }
             Self::Evm(r) => r.kind(),
             Self::Opaque(r) => &r.kind,
