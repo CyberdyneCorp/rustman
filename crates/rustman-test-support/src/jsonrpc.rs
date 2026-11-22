@@ -9,7 +9,6 @@
 //! so a subscription can emit events over time while the client's next
 //! messages are still read and recorded).
 
-use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
@@ -45,6 +44,8 @@ pub struct RpcReply {
     pub body: String,
     /// How long the server waits before answering.
     pub delay: Duration,
+    /// Close the connection without answering (a connection reset).
+    pub dropped: bool,
 }
 
 impl RpcReply {
@@ -59,6 +60,7 @@ impl RpcReply {
             headers: vec![("content-type".to_owned(), content_type.to_owned())],
             body: body.to_owned(),
             delay: Duration::ZERO,
+            dropped: false,
         }
     }
 
@@ -69,6 +71,15 @@ impl RpcReply {
             headers: Vec::new(),
             body: String::new(),
             delay: Duration::ZERO,
+            dropped: false,
+        }
+    }
+
+    /// No answer: the connection is closed (the client sees a reset).
+    pub fn dropped() -> Self {
+        Self {
+            dropped: true,
+            ..Self::empty(200)
         }
     }
 
@@ -140,7 +151,7 @@ async fn handle(
     hits: Arc<Mutex<Vec<RecordedRequest>>>,
     respond: Arc<HttpResponder>,
     req: Request<Incoming>,
-) -> Result<Response<Full<Bytes>>, Infallible> {
+) -> Result<Response<Full<Bytes>>, std::io::Error> {
     let (parts, body) = req.into_parts();
     let body = body
         .collect()
@@ -168,6 +179,12 @@ async fn handle(
     let reply = respond(&recorded, index);
     if !reply.delay.is_zero() {
         tokio::time::sleep(reply.delay).await;
+    }
+    if reply.dropped {
+        // A service error makes hyper close the connection unanswered.
+        return Err(std::io::Error::other(
+            "connection dropped by the test server",
+        ));
     }
     let mut response = Response::builder().status(StatusCode::from_u16(reply.status).unwrap());
     for (name, value) in &reply.headers {

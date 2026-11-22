@@ -7,7 +7,10 @@
 //! send-method guard for every other path; [`Broadcast`] for
 //! [`JsonrpcTransport`] sends it through `rustman-jsonrpc` without asking
 //! the guards, which only this crate can do. The send is never retried:
-//! an RPC error such as `nonce too low` is reported verbatim. The receipt
+//! an RPC error such as `nonce too low` is reported verbatim. A failed
+//! send may still have reached the network, so it ends as
+//! [`Broadcasted::Unknown`] with the hash computed from the signed bytes,
+//! and the receipt is still awaited for that hash. The receipt
 //! polls are (the transaction is out by then): a failing poll is tried
 //! again until the receipt timeout.
 
@@ -70,32 +73,55 @@ impl Broadcast for JsonrpcTransport {
     }
 }
 
+/// What the node made of a signed transaction.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Broadcasted {
+    /// The node answered the transaction's hash.
+    Accepted(B256),
+    /// The send failed (transport error, RPC error, or an answer that is
+    /// not the transaction's hash): the transaction may or may not be out.
+    /// `hash` is computed locally from the signed bytes; `reason` is the
+    /// failure, already redacted.
+    Unknown { hash: B256, reason: String },
+}
+
+impl Broadcasted {
+    /// The transaction hash, computed locally from the signed bytes.
+    pub fn hash(&self) -> B256 {
+        match self {
+            Self::Accepted(hash) | Self::Unknown { hash, .. } => *hash,
+        }
+    }
+}
+
 /// Sign `tx` with `signer` and send it. The confirmation must be of this
-/// very transaction. Returns the transaction hash.
+/// very transaction; a mismatch is a refusal and nothing is signed. Once
+/// signed, the outcome is [`Broadcasted`]: a failed send is not an error,
+/// since the transaction may have been broadcast all the same.
 pub async fn sign_and_send(
     tx: &UnsignedTx,
     signer: &UnlockedSigner,
     confirmation: Confirmation,
     node: &dyn Broadcast,
-) -> Result<B256, EvmError> {
+) -> Result<Broadcasted, EvmError> {
     if !confirmation.covers(tx) {
         return Err(EvmError::Refused(
             "the confirmation is for another transaction; nothing was signed or sent".to_owned(),
         ));
     }
     let signed = tx.sign(signer);
-    let answer = node
-        .send_raw(signed.raw_hex())
-        .await
-        .map_err(|failure| failure.into_error(SEND_RAW))?;
-    match answer.as_str().and_then(|text| text.parse::<B256>().ok()) {
-        Some(hash) if hash == signed.hash => Ok(hash),
-        Some(hash) => Err(EvmError::Rpc(format!(
-            "{SEND_RAW}: the node answered hash {hash}, expected {}",
-            signed.hash
-        ))),
-        None => Err(EvmError::Rpc(format!("{SEND_RAW}: not a transaction hash"))),
-    }
+    let hash = signed.hash;
+    let reason = match node.send_raw(signed.raw_hex()).await {
+        Err(failure) => failure.into_error(SEND_RAW).to_string(),
+        Ok(answer) => match answer.as_str().and_then(|text| text.parse::<B256>().ok()) {
+            Some(answered) if answered == hash => return Ok(Broadcasted::Accepted(hash)),
+            Some(answered) => {
+                format!("{SEND_RAW}: the node answered hash {answered}, expected {hash}")
+            }
+            None => format!("{SEND_RAW}: the node answered no transaction hash"),
+        },
+    };
+    Ok(Broadcasted::Unknown { hash, reason })
 }
 
 /// How to wait for a receipt.

@@ -23,7 +23,7 @@ const RAW_KEY_REFUSED: &str =
     "error: raw private keys are not accepted; import the key with 'rustman evm signer import'";
 /// Every precondition passed and the transaction was signed: the stub
 /// node refuses it, and nothing is retried.
-const NODE_REFUSED: &str = "error: eth_sendRawTransaction: rpc error -32000: nonce too low";
+const NODE_REFUSED: &str = "eth_sendRawTransaction: rpc error -32000: nonce too low";
 /// Without a terminal, a local chain needs `--yes-local`.
 const NO_TERMINAL: &str = "error: no terminal to confirm on; add --yes-local to sign on Anvil/Hardhat local (31337) without a prompt";
 
@@ -38,12 +38,22 @@ enum Simulation {
 /// polls.
 #[derive(Clone, Copy)]
 enum Broadcast {
-    /// `nonce too low`: nothing is sent.
+    /// `nonce too low`, and no receipt ever comes.
     Refuses,
+    /// `nonce too low`, yet the transaction is mined (its receipt comes,
+    /// but the transaction cannot be fetched).
+    RefusesButMined,
+    /// The connection is closed without an answer; no receipt comes.
+    Drops,
+    /// Another hash is answered; no receipt comes.
+    AnswersOtherHash,
     /// The transaction is accepted (its hash answered), then every
     /// `eth_getTransactionReceipt` fails.
     AcceptsThenReceiptFails,
 }
+
+/// The hash the `AnswersOtherHash` node answers.
+const OTHER_HASH: &str = "0x1111111111111111111111111111111111111111111111111111111111111111";
 
 struct Node {
     _runtime: tokio::runtime::Runtime,
@@ -61,11 +71,16 @@ impl Node {
             let body = req.json();
             let method = body["method"].as_str().unwrap_or_default();
             let answered = match (method, broadcast) {
+                ("eth_sendRawTransaction", Broadcast::Drops) => return RpcReply::dropped(),
+                ("eth_sendRawTransaction", Broadcast::AnswersOtherHash) => Ok(json!(OTHER_HASH)),
                 ("eth_sendRawTransaction", Broadcast::AcceptsThenReceiptFails) => {
                     Ok(json!(raw_hash(&body["params"][0])))
                 }
                 ("eth_getTransactionReceipt", Broadcast::AcceptsThenReceiptFails) => {
                     Err(json!({"code": -32000, "message": "upstream unavailable"}))
+                }
+                ("eth_getTransactionReceipt", Broadcast::RefusesButMined) => {
+                    Ok(json!({"blockNumber": "0x1", "status": "0x1"}))
                 }
                 ("eth_call", _) if matches!(simulation, Simulation::Succeeds) => {
                     token_answer(&body["params"][0]["data"])
@@ -126,6 +141,7 @@ fn answer(chain_id: &str, simulation: Simulation, method: &str) -> Result<Value,
         })),
         ("eth_getTransactionCount", _) => Ok(json!("0x4")),
         ("eth_sendRawTransaction", _) => Err(json!({"code": -32000, "message": "nonce too low"})),
+        ("eth_getTransactionReceipt", _) => Ok(Value::Null),
         ("eth_call", Simulation::Succeeds) => Ok(json!(format!("0x{:0>64}", "1"))),
         ("eth_estimateGas", Simulation::Succeeds) => Ok(json!("0xb411")),
         (_, Simulation::Reverts) => {
@@ -193,6 +209,17 @@ fn set_password(dir: &Path) {
         .write_stdin(PASSWORD)
         .assert()
         .success();
+}
+
+/// The node refused the signed transaction: it may have been sent all the
+/// same, so the receipt was awaited (1 s) and the broadcast is unknown.
+fn assert_refused_send(stderr: &str) {
+    assert!(
+        stderr.contains(&format!(
+            "may have been sent ({NODE_REFUSED}) but no receipt came within 1s"
+        )),
+        "{stderr}"
+    );
 }
 
 fn send(dir: &Path, extra: &[&str]) -> (Option<i32>, String, String) {
@@ -284,6 +311,7 @@ fn a_reverting_simulation_is_refused_unless_forced() {
     );
     let with_gas = format!("{}gas: 100000\n", transfer("deployer"));
     write(ws.path(), "transfer.rman.yaml", &with_gas);
+    let forced = [&forced[..], &["--receipt-timeout", "1s"]].concat();
     let (code, stdout, stderr) = send(ws.path(), &forced);
     assert_eq!(code, Some(3), "{stderr}");
     assert!(
@@ -294,7 +322,7 @@ fn a_reverting_simulation_is_refused_unless_forced() {
         stdout.contains("WARNING: SIMULATION REVERTED: reverted: transfer amount exceeds balance"),
         "{stdout}"
     );
-    assert!(stderr.ends_with(&format!("{NODE_REFUSED}\n")), "{stderr}");
+    assert_refused_send(&stderr);
 }
 
 #[test]
@@ -303,9 +331,12 @@ fn a_keystore_signer_passes_the_gate_and_its_password_never_shows() {
     let node = Node::start("0x7a69", Simulation::Succeeds);
     let ws = workspace(&node.url(), &enabled(), PINNED);
     set_password(ws.path());
-    let (code, stdout, stderr) = send(ws.path(), &["--sign", "--yes-local"]);
+    let (code, stdout, stderr) = send(
+        ws.path(),
+        &["--sign", "--yes-local", "--receipt-timeout", "1s"],
+    );
     assert_eq!(code, Some(3), "{stdout}{stderr}");
-    assert!(stderr.ends_with(&format!("{NODE_REFUSED}\n")), "{stderr}");
+    assert_refused_send(&stderr);
     let calls = node.calls();
     let simulated = calls.iter().find(|c| c["method"] == "eth_call").unwrap();
     assert_eq!(simulated["params"][0]["from"], ANVIL0, "from the signer");
@@ -504,11 +535,13 @@ fn an_imported_keychain_signer_passes_the_gate() {
                 "--yes-local",
                 "--signer",
                 "ci",
+                "--receipt-timeout",
+                "1s",
             ])
             .env("RUSTMAN_RECORD_TEST_KEYCHAIN", keychain.path()),
     );
     assert_eq!(code, Some(3), "{stderr}");
-    assert!(stderr.ends_with(&format!("{NODE_REFUSED}\n")), "{stderr}");
+    assert_refused_send(&stderr);
     let calls = node.calls();
     let simulated = calls.iter().find(|c| c["method"] == "eth_call").unwrap();
     assert_eq!(simulated["params"][0]["from"], BOB);
@@ -994,6 +1027,109 @@ fn a_sent_transaction_whose_receipt_cannot_be_read_is_still_audited() {
     assert_no_secret_material(ws.path());
 }
 
+/// The history entries under `root`.
+fn history_entries(root: &Path) -> Vec<Value> {
+    std::fs::read_dir(root.join(".rustman/history"))
+        .unwrap()
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
+        .map(|e| serde_json::from_str(&std::fs::read_to_string(e.path()).unwrap()).unwrap())
+        .collect()
+}
+
+/// Send through a node that answers the signed transaction with
+/// `broadcast`: the broadcast is unknown, so the receipt of the locally
+/// computed hash is awaited and history keeps a `broadcast-unknown` audit
+/// entry with that hash and no signed bytes. Returns the local hash and
+/// stderr.
+fn broadcast_unknown(broadcast: Broadcast) -> (String, String) {
+    let node = Node::start_with("0x7a69", Simulation::Succeeds, broadcast);
+    let ws = workspace(&node.url(), &enabled(), PINNED);
+    set_password(ws.path());
+    let (code, stdout, stderr) = send(
+        ws.path(),
+        &["--sign", "--yes-local", "--receipt-timeout", "1s"],
+    );
+    assert_eq!(code, Some(3), "{stdout}{stderr}");
+    let calls = node.calls();
+    let sent: Vec<&Value> = calls
+        .iter()
+        .filter(|c| c["method"] == "eth_sendRawTransaction")
+        .collect();
+    assert_eq!(sent.len(), 1, "the send is not retried");
+    let raw = sent[0]["params"][0].as_str().unwrap().to_owned();
+    let hash = raw_hash(&json!(raw));
+    assert!(!stdout.contains("sent 0x"), "{stdout}");
+    assert!(
+        stderr.contains(&format!("error: transaction {hash} may have been sent (")),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains(&format!(
+            "but no receipt came within 1s; check the explorer for {hash} before sending it again"
+        )),
+        "{stderr}"
+    );
+    let polled = calls
+        .iter()
+        .filter(|c| c["method"] == "eth_getTransactionReceipt")
+        .all(|c| c["params"][0] == hash);
+    assert!(polled, "the receipt of the local hash is awaited");
+    let entries = history_entries(ws.path());
+    assert_eq!(entries.len(), 1, "{entries:?}");
+    let audit = &entries[0]["record"]["evm"];
+    assert_eq!(audit["hash"], hash, "{audit}");
+    assert_eq!(audit["status"], "broadcast-unknown", "{audit}");
+    assert_eq!(audit["chain_id"], 31337);
+    assert_eq!(audit["signer"]["address"], ANVIL0);
+    assert_eq!(audit["to"], TOKEN);
+    assert_eq!(audit["nonce"], 4);
+    let text = entries[0].to_string();
+    assert!(!text.contains(&raw[2..]), "the signed bytes are not stored");
+    assert_no_secret_material(ws.path());
+    (hash, stderr)
+}
+
+#[test]
+fn a_dropped_connection_on_send_is_audited_as_broadcast_unknown() {
+    // Regression: a transport failure of eth_sendRawTransaction ended the
+    // send with an RPC error and no audit entry, though the transaction
+    // may have been broadcast.
+    let (_, stderr) = broadcast_unknown(Broadcast::Drops);
+    assert!(
+        stderr.contains("warning: eth_sendRawTransaction"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn an_rpc_error_on_send_is_audited_as_broadcast_unknown() {
+    // Regression: an RPC error answered to eth_sendRawTransaction left no
+    // audit entry.
+    let (hash, stderr) = broadcast_unknown(Broadcast::Refuses);
+    assert!(
+        stderr.contains(&format!(
+            "warning: {NODE_REFUSED}; transaction {hash} may have been sent; waiting for its receipt"
+        )),
+        "{stderr}"
+    );
+    assert_refused_send(&stderr);
+}
+
+#[test]
+fn another_hash_answered_on_send_is_audited_with_the_local_hash() {
+    // Regression: a node answering another hash ended the send with an
+    // RPC error and no audit entry.
+    let (hash, stderr) = broadcast_unknown(Broadcast::AnswersOtherHash);
+    let mismatch =
+        format!("eth_sendRawTransaction: the node answered hash {OTHER_HASH}, expected {hash}");
+    assert!(
+        stderr.contains(&format!("warning: {mismatch}; ")),
+        "{stderr}"
+    );
+    assert!(stderr.contains(&format!("({mismatch})")), "{stderr}");
+}
+
 #[cfg(unix)]
 #[test]
 fn ctrl_c_at_the_confirmation_aborts_with_nothing_sent() {
@@ -1070,7 +1206,7 @@ fn signing_fits_a_small_main_thread_stack() {
     assert_eq!(code, Some(3), "{text}");
     assert!(text.contains("its receipt could not be read"), "{text}");
 
-    let node = Node::start("0x7a69", Simulation::Succeeds);
+    let node = Node::start_with("0x7a69", Simulation::Succeeds, Broadcast::RefusesButMined);
     let ws = workspace(&node.url(), &enabled(), PINNED);
     set_password(ws.path());
     let (code, text) = on_a_small_stack(ws.path(), "run . --env dev --sign --yes-local");

@@ -20,7 +20,8 @@
 //! sent, and the receipt is awaited. Its assertions and captures run on the
 //! receipt, and history keeps an audit entry without the signed bytes or
 //! any key material, also when the receipt never came or could not be
-//! read. Ctrl+C before the transaction is sent stops with exit code 130
+//! read, and when the send itself failed (`broadcast-unknown`, with the
+//! hash computed from the signed bytes). Ctrl+C before the transaction is sent stops with exit code 130
 //! and nothing signed or sent: the console's prompt is interrupted, and
 //! the flow checks again after the confirmation and right before sending.
 //!
@@ -64,7 +65,7 @@ use crate::gate::{
 use crate::nonce::Nonces;
 use crate::rawkey::refuse_raw_key;
 use crate::receipt::{self, Mined};
-use crate::send::{Wait, Waited, explorer_url, sign_and_send, wait_for_receipt};
+use crate::send::{Broadcasted, Wait, Waited, explorer_url, sign_and_send, wait_for_receipt};
 
 /// The error when Ctrl+C stops the gate before anything is sent.
 pub const INTERRUPTED: &str = "interrupted; nothing was signed or sent";
@@ -178,12 +179,31 @@ impl<'c> Signing<'c> {
         // The chain is asked once more, right before signing.
         check_chain(&ctx.rpc, &ctx.registry, ctx.pin).await?;
         self.check_interrupted()?;
-        let hash = sign_and_send(&summary.tx, &signer, confirmation, &ctx.rpc).await?;
+        let broadcasted = sign_and_send(&summary.tx, &signer, confirmation, &ctx.rpc).await?;
+        // The nonce counts as used even when the send failed: the
+        // transaction may be out, and reusing its nonce could replace it.
         self.nonces
             .sent(summary.tx.chain_id, signer.address(), summary.tx.nonce);
         drop(signer);
-        self.console.show(&format!("sent {hash}"));
-        Ok(self.receipt(call, &ctx, &summary, hash).await)
+        let hash = broadcasted.hash();
+        let failure = match broadcasted {
+            Broadcasted::Accepted(_) => {
+                self.console.show(&format!("sent {hash}"));
+                None
+            }
+            Broadcasted::Unknown { reason, .. } => {
+                self.console.note(&shown(
+                    call,
+                    &format!(
+                        "warning: {reason}; transaction {hash} may have been sent; waiting for its receipt"
+                    ),
+                ));
+                Some(reason)
+            }
+        };
+        Ok(self
+            .receipt(call, &ctx, &summary, hash, failure.as_deref())
+            .await)
     }
 
     /// Ctrl+C was pressed: stop before anything is sent.
@@ -394,35 +414,28 @@ impl<'c> Signing<'c> {
     }
 
     /// Wait for the receipt, check it and keep the audit entry. The
-    /// transaction is sent: however the wait ends, the audit entry is
-    /// written.
+    /// transaction is signed and its send attempted (`failure` when the
+    /// send failed): however the wait ends, the audit entry is written.
     async fn receipt(
         &self,
         call: &EvmTxCall<'_>,
         ctx: &Context<'_>,
         summary: &Summary,
         hash: B256,
+        failure: Option<&str>,
     ) -> Ending {
         let sent = Sent {
             call,
             ctx,
             summary,
             hash,
+            failure,
             started: Instant::now(),
         };
         let timeout = seconds(self.options.wait.timeout);
         let receipt = match wait_for_receipt(&ctx.rpc, hash, &self.options.wait).await {
             Waited::Mined(receipt) => receipt,
-            Waited::TimedOut => {
-                let message = format!("transaction {hash} was sent but not mined within {timeout}");
-                return sent.unconfirmed(message, receipt::audit(summary, hash, None));
-            }
-            Waited::Unknown(error) => {
-                let message = format!(
-                    "transaction {hash} was sent but its receipt could not be read within {timeout}: {error}"
-                );
-                return sent.unconfirmed(message, receipt::audit_receipt_unknown(summary, hash));
-            }
+            waited => return sent.not_mined(waited, &timeout),
         };
         let (mined, outcome) = match sent.checked(&receipt).await {
             Ok(checked) => checked,
@@ -454,6 +467,8 @@ struct Sent<'s, 'c, 'a> {
     ctx: &'s Context<'a>,
     summary: &'s Summary,
     hash: B256,
+    /// Why the send failed, when it did (the broadcast is unknown).
+    failure: Option<&'s str>,
     started: Instant,
 }
 
@@ -463,8 +478,42 @@ impl Sent<'_, '_, '_> {
     async fn checked(&self, receipt: &Value) -> Result<(Mined, EvmOutcome), EvmError> {
         let ctx = self.ctx;
         let mined = receipt::decode(&ctx.rpc, self.summary, self.hash, &ctx.abi, receipt).await?;
-        let outcome = outcome(self.call, self.summary, self.hash, &mined, self.started)?;
+        let mut outcome = outcome(self.call, self.summary, self.hash, &mined, self.started)?;
+        if let Some(failure) = self.failure {
+            outcome
+                .warnings
+                .push(format!("{failure}; the transaction was mined all the same"));
+        }
         Ok((mined, outcome))
+    }
+
+    /// No receipt within `timeout`: the error and the audit entry,
+    /// `broadcast-unknown` when the send itself failed.
+    fn not_mined(&self, waited: Waited, timeout: &str) -> Ending {
+        let (hash, summary) = (self.hash, self.summary);
+        let polled = match waited {
+            Waited::Unknown(error) => Some(error),
+            _ => None,
+        };
+        if let Some(failure) = self.failure {
+            let last = polled.map_or_else(String::new, |e| format!("; last receipt poll: {e}"));
+            let message = format!(
+                "transaction {hash} may have been sent ({failure}) but no receipt came within {timeout}{last}; check the explorer for {hash} before sending it again"
+            );
+            return self.unconfirmed(message, receipt::audit_broadcast_unknown(summary, hash));
+        }
+        match polled {
+            Some(error) => {
+                let message = format!(
+                    "transaction {hash} was sent but its receipt could not be read within {timeout}: {error}"
+                );
+                self.unconfirmed(message, receipt::audit_receipt_unknown(summary, hash))
+            }
+            None => {
+                let message = format!("transaction {hash} was sent but not mined within {timeout}");
+                self.unconfirmed(message, receipt::audit(summary, hash, None))
+            }
+        }
     }
 
     /// No receipt to check (timed out, or unreadable): the error
