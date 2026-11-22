@@ -388,6 +388,11 @@ async fn send_here(call: &Call) -> Result<ToolOutput, ToolError> {
             ));
         }
     };
+    // A JSON-RPC body a method guard refused (eth_sendTransaction posted
+    // as a plain http request): blocked, like `rpc_call`.
+    if let Some(error) = guard_refusal(&sent.record) {
+        return Err(ToolError::new(ErrorCode::Blocked, error));
+    }
     let result = send_result(&call.ctx, &sent);
     let line = match (result.status, &result.error) {
         (Some(status), _) => format!("{} {status} ({})", result.request, result.outcome),
@@ -395,6 +400,16 @@ async fn send_here(call: &Call) -> Result<ToolOutput, ToolError> {
         (None, None) => format!("{} {}", result.request, result.outcome),
     };
     output(&result, line)
+}
+
+/// The guard's message when a method guard refused the JSON-RPC body of
+/// the request.
+fn guard_refusal(record: &RequestRecord) -> Option<String> {
+    let refusal = record.jsonrpc.as_ref()?.refusal?;
+    match refusal {
+        rustman_core::run::RpcRefusal::Guard => record.error.clone(),
+        rustman_core::run::RpcRefusal::Validation => None,
+    }
 }
 
 /// The refusal of a saved `evm-tx` request (evm-signing "Agents can never

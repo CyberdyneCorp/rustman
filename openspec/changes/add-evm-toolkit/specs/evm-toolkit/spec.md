@@ -249,3 +249,8 @@ Any `jsonrpc` or `evm-call` request whose method is `eth_sendRawTransaction`, `e
 - **GIVEN** a `kind: jsonrpc` file calling `eth_sendRawTransaction` on mainnet
 - **WHEN** it is sent
 - **THEN** it SHALL be refused with exit code 4 and no request SHALL leave the machine
+
+#### Scenario: Send method in an http body
+- **GIVEN** a `kind: http` request whose JSON body (single call or batch) calls `eth_sendTransaction`
+- **WHEN** it is sent by `rustman send`, `rustman run` or the agent's `send_request`
+- **THEN** it SHALL be refused with the same message (exit code 4, or a `blocked` tool error) and nothing SHALL be sent
