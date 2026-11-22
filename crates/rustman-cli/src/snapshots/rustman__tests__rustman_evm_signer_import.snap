@@ -1,0 +1,23 @@
+---
+source: crates/rustman-cli/src/tests.rs
+expression: help
+---
+Store a private key in the OS keychain as signer <ID>
+
+Usage: rustman evm signer import [OPTIONS] <ID>
+
+Arguments:
+  <ID>
+          The signer id, as used in [evm.signers.<ID>] and `signer:`
+
+Options:
+      --color <WHEN>
+          Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
+          
+          [default: auto]
+
+  -v, --verbose...
+          Log more on stderr: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)
+
+  -h, --help
+          Print help

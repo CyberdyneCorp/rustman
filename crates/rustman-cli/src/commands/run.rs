@@ -107,6 +107,14 @@ pub struct RunArgs {
     viz: bool,
     #[command(flatten)]
     plugins: PluginFlags,
+    /// Sign and send the run's evm-tx requests through the signing gate
+    /// (without it they are skipped)
+    #[arg(long)]
+    sign: bool,
+    /// Confirm evm-tx requests without a prompt; only on chain 31337 and
+    /// [evm] headless_signing_chains
+    #[arg(long, requires = "sign")]
+    yes_local: bool,
 }
 
 pub fn run(args: &RunArgs) -> Result<u8, CliError> {
@@ -189,6 +197,16 @@ pub fn run(args: &RunArgs) -> Result<u8, CliError> {
     let evm =
         rustman_evm::exec::EvmRunner::new(std::sync::Arc::new(rustman_http::HttpEngine::new()));
     options.evm = Some(&evm);
+    let console = super::evm::send::TerminalConsole {
+        stdout: false,
+        cancel: options.cancel.clone(),
+    };
+    let signing = args
+        .sign
+        .then(|| super::evm::send::run_signing(args.yes_local, &console));
+    options.evm_tx = signing
+        .as_ref()
+        .map(|s| s as &dyn rustman_http::runner::EvmTxExecutor);
     if viz.is_some() {
         options.observer = Some(&observe);
     }

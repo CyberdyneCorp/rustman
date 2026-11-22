@@ -84,6 +84,12 @@ Options:
       --viz
           Show the run live in the graphical viz companion (rustman-viz); the run continues without it when it is not installed
 
+      --sign
+          Sign and send the run's evm-tx requests through the signing gate (without it they are skipped)
+
+      --yes-local
+          Confirm evm-tx requests without a prompt; only on chain 31337 and [evm] headless_signing_chains
+
       --color <WHEN>
           Color: auto (a terminal without NO_COLOR or TERM=dumb), always or never
           

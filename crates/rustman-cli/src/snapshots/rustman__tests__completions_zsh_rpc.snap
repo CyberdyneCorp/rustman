@@ -355,6 +355,90 @@ never\:"Never color"))' \
 '*::providers -- Providers\: URLs (http, https, ws, wss), {{variables}}, or names of environments whose {{rpc}} is probed:_default' \
 && ret=0
 ;;
+(send)
+_arguments "${_arguments_options[@]}" : \
+'--signer=[The signer id from \[evm.signers\] (default\: RUSTMAN_EVM_SIGNER, then the request'\''s \`signer\`)]:ID:_default' \
+'--confirmations=[Blocks to wait for, counting the transaction'\''s own]:N:_default' \
+'--receipt-timeout=[How long to wait for the receipt\: 120s, 5m, or milliseconds]:DURATION:_default' \
+'--env=[Environment (default\: RUSTMAN_ENV, then default_environment)]:NAME:_default' \
+'--workspace=[Workspace directory (default\: search from the current directory upwards)]:DIR:_files' \
+'*--var=[Set a variable, above every other source (repeatable)\: --var k=v]:K=V:_default' \
+'--timeout=[Total timeout per node call\: 500ms, 5s, 2m, or milliseconds]:DURATION:_default' \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'--sign[Sign and send the transaction (without it, only the preview)]' \
+'--force-revert[Go on when the simulation reverts; the confirmation warns]' \
+'--yes-local[Confirm without a prompt; only on chain 31337 and \[evm\] headless_signing_chains]' \
+'-k[Do not verify TLS certificates]' \
+'--insecure[Do not verify TLS certificates]' \
+'--no-history[Do not record the transaction in history]' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':request -- An evm-tx request (file, id or name):_default' \
+&& ret=0
+;;
+(signer)
+_arguments "${_arguments_options[@]}" : \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_rustman__subcmd__evm__subcmd__signer_commands" \
+"*::: :->signer" \
+&& ret=0
+
+    case $state in
+    (signer)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rustman-evm-signer-command-$line[1]:"
+        case $line[1] in
+            (import)
+_arguments "${_arguments_options[@]}" : \
+'--color=[Color\: auto (a terminal without NO_COLOR or TERM=dumb), always or never]:WHEN:((auto\:"Color a terminal, unless NO_COLOR is set or TERM=dumb"
+always\:"Color even when piped"
+never\:"Never color"))' \
+'*-v[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'*--verbose[Log more on stderr\: -v requests, -vv headers, -vvv everything (RUST_LOG, when set, replaces these levels)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':id -- The signer id, as used in \[evm.signers.<ID>\] and `signer\:`:_default' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_rustman__subcmd__evm__subcmd__signer__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rustman-evm-signer-help-command-$line[1]:"
+        case $line[1] in
+            (import)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
 (help)
 _arguments "${_arguments_options[@]}" : \
 ":: :_rustman__subcmd__evm__subcmd__help_commands" \
@@ -398,6 +482,30 @@ _arguments "${_arguments_options[@]}" : \
 (probe)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
+;;
+(send)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(signer)
+_arguments "${_arguments_options[@]}" : \
+":: :_rustman__subcmd__evm__subcmd__help__subcmd__signer_commands" \
+"*::: :->signer" \
+&& ret=0
+
+    case $state in
+    (signer)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rustman-evm-help-signer-command-$line[1]:"
+        case $line[1] in
+            (import)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
 ;;
 (help)
 _arguments "${_arguments_options[@]}" : \

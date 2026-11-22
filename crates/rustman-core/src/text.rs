@@ -24,6 +24,24 @@ pub fn printable(text: &str) -> Cow<'_, str> {
     Cow::Owned(out)
 }
 
+/// [`printable`] for a value shown on one line (a field of a
+/// confirmation): newlines and tabs are escaped too, so the value cannot
+/// draw lines that look like other fields.
+pub fn printable_line(text: &str) -> Cow<'_, str> {
+    if !text.chars().any(|c| is_unsafe(c) || c.is_control()) {
+        return Cow::Borrowed(text);
+    }
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        if is_unsafe(c) || c.is_control() {
+            out.extend(c.escape_unicode());
+        } else {
+            out.push(c);
+        }
+    }
+    Cow::Owned(out)
+}
+
 fn is_unsafe(c: char) -> bool {
     (c.is_control() && c != '\n' && c != '\t') || is_invisible_format(c)
 }
@@ -55,6 +73,19 @@ mod tests {
             printable("Geth\u{1b}]0;PWNED\u{7}\u{1b}[2J\u{9b}x"),
             "Geth\\u{1b}]0;PWNED\\u{7}\\u{1b}[2J\\u{9b}x"
         );
+    }
+
+    #[test]
+    fn one_line_values_escape_newlines_and_tabs() {
+        // Regression: a chain name with a newline drew a fake field line.
+        assert_eq!(
+            printable_line("x\n  value        0 ETH\t\u{1b}"),
+            "x\\u{a}  value        0 ETH\\u{9}\\u{1b}"
+        );
+        assert!(matches!(
+            printable_line("Sepolia (11155111)"),
+            Cow::Borrowed(_)
+        ));
     }
 
     #[test]

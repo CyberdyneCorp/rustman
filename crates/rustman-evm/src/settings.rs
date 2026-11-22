@@ -24,8 +24,8 @@ pub struct EvmSettings {
     pub ens_rpc: Option<String>,
     /// Lets `jsonrpc` files send raw transactions to chain 31337.
     pub allow_raw_send_local: bool,
-    /// Read by the signing gate (evm-signing); signing is not available in
-    /// this build, so these are accepted and not acted on.
+    /// Read by the signing gate (evm-signing, the `rustman-evm-signing`
+    /// crate); this crate only parses them.
     pub allow_signing: bool,
     pub signers: toml::Table,
     pub protected_chains: Vec<u64>,

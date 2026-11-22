@@ -70,6 +70,8 @@ This page covers sending and running requests, reporters, terminal behavior, log
 | `rustman evm ens <name\|address>` | Resolve an ENS name, or an address to its verified primary name; `--json` | [EVM toolkit](evm.md#rustman-evm-ens) |
 | `rustman evm fork --chain <chain>` | Fork a chain (an environment, chain name or id; or `--env`/`--rpc`) with a local Anvil and a temporary `fork-<chain>` environment until Ctrl+C; `--block`, `--port`, `--json` | [EVM toolkit](evm.md#rustman-evm-fork) |
 | `rustman evm probe <rpc-or-env>...` | Probe EVM RPC providers: method support matrix, archive detection, latency per method, subscriptions, multi-provider consistency (exit 2 for providers on different chains) and, with `--rate-discovery`, rate limits; `--methods`, `--block`, `--budget`, `--call`, `--address`, `--max-drift`, `--drift-interval`, `--max-rate`, `--fail-on`, `--report <format>=<path>`, `--viz` | [Probing EVM providers](evm-probe.md) |
+| `rustman evm send <request>` | Check an `evm-tx` request against the signing gate: `[evm] allow_signing`, a signer (never a raw key), `--sign` (without it only the decoded preview), the environment's `chain_id` against the node, a simulation from the signer (`--force-revert` to go on after a revert), then the decoded confirmation (typed chain name on chain 1 and `protected_chains`; `--yes-local` without a terminal on local chains only), the send and the receipt (`--confirmations`, `--receipt-timeout`, exit 3 on timeout) with its assertions, captures and a history audit entry (`--no-history`); `--signer` (or `RUSTMAN_EVM_SIGNER`), `--env`, `--var`; refusals exit 4 | [EVM signing](evm-signing.md) |
+| `rustman evm signer` / `rustman evm signer import <id>` | Store a private key (no-echo prompt, or stdin) in the OS keychain as signer `<id>`, used with `[evm.signers.<id>] keychain = true`; the key is never printed | [EVM signing](evm-signing.md#keychain-signers) |
 | `rustman grpc call <request>` / `--target <t> --method <m> --data <json>` | Send one gRPC call and print the response messages and status; `--metadata`, `--deadline-ms`, `--json` (one line per message, then a status line) | [gRPC](grpc.md#rustman-grpc-call) |
 | `rustman grpc health <target>` | Call `grpc.health.v1.Health/Check` and print the serving status; `--service`, `--timeout`, `--json` | [gRPC](grpc.md#rustman-grpc-health) |
 | `rustman ws connect <url\|request>` | Open a WebSocket session (a `ws://` / `wss://` URL or a `kind: ws` request), send the lines of a piped stdin as text frames and print the received messages; `--json`, `--max-messages`, `--duration`, `--header`, `--subprotocol`, `--trace` | [WebSocket and SSE](realtime.md#rustman-ws-connect-and-rustman-sse-listen) |
@@ -192,7 +194,7 @@ rustman run [<PATH>...] [--env <name>] [--var k=v]... [--timeout <duration>] [--
             [--data <file> | --no-data] [--data-label <column>] [--secret-columns <a,b>]
             [--reporter <format>[:<path>]]... [--report <format>[=<path>]]...
             [--max-events <n>] [--duration <duration>] [-u | --update-snapshots] [--ci]
-            [--trust] [--trust-plugins] [--viz]
+            [--trust] [--trust-plugins] [--viz] [--sign [--yes-local]]
 ```
 
 Runs every request file (`kind: http`, [`kind: graphql`](graphql.md#in-rustman-run) and [`kind: mcp`](mcp-client.md#request-files)) under the given files and folders (default: the current folder), in collection order: file-name order, or the folder's `_collection.yaml` `order:` (see [collections](request-files.md)). Paths must exist and lie inside the workspace. Values captured by one request are available to every later request of the run.
@@ -221,6 +223,8 @@ Runs every request file (`kind: http`, [`kind: graphql`](graphql.md#in-rustman-r
 | `--trust` | Spawn the workspace's [stdio MCP servers](mcp-client.md#workspace-trust) that are not trusted yet, and record the approvals; without it, `kind: mcp` requests to an untrusted server error. |
 | `--trust-plugins` | Load the workspace [plugins](plugins.md#trust) even when this machine has not trusted their set yet, and record the approval. Without it, an untrusted set stops the run with exit code 2 before any request is sent. Also on `send`, `bench`, `history replay`, `import <format>` and `report render`. |
 | `--viz` | Show the run live in the [viz companion](#viz-companion). Without one, the run continues without visuals and its exit code is unchanged. |
+| `--sign` | Sign and send the run's `kind: evm-tx` requests through the [signing gate](evm-signing.md#in-rustman-run), one at a time with in-run nonces; without it they are reported as `skipped (signing not requested)`. A gate refusal makes the run exit with code 4. |
+| `--yes-local` | With `--sign`: confirm `evm-tx` requests without a prompt on chain 31337 and `[evm] headless_signing_chains` only. |
 
 A filter or path that selects no request fails with `error: no requests to run (check the paths and --filter)` (exit code 2).
 

@@ -31,8 +31,8 @@ pub use capture::{Capture, CaptureSource, EVM_RECEIPT_FIELDS};
 pub use common::{Checked, NameValue, Validate, VarValue, Variables};
 pub use docs::DocsMeta;
 pub use evm::{
-    AbiSpec, DEPLOYMENT_OUT_OF_SCOPE, EVM_CALL_KIND, EVM_TX_KIND, EvmCallRequest, EvmCommon,
-    EvmRequest, EvmTxRequest, SIGNING_UNAVAILABLE, Scalar, StateOverride, TxType,
+    AbiSpec, DEPLOYMENT_OUT_OF_SCOPE, EVM_CALL_KIND, EVM_TX_KIND, EVM_TX_NEEDS_SIGNING,
+    EvmCallRequest, EvmCommon, EvmRequest, EvmTxRequest, Scalar, StateOverride, TxType,
 };
 pub use evm_check::{EVM_OUTPUT_OPS, EvmAssertion, OutputRef};
 pub use graphql::{

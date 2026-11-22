@@ -155,7 +155,7 @@ fn evm_kinds_are_registered_and_evm_tx_never_runs() {
     let request = KindRegistry::default().load(Path::new("t"), &tx).unwrap();
     assert_eq!(
         request.unsupported_reason().as_deref(),
-        Some(rustman_core::model::SIGNING_UNAVAILABLE)
+        Some(rustman_core::model::EVM_TX_NEEDS_SIGNING)
     );
 }
 

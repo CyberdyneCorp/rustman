@@ -368,3 +368,34 @@ async fn the_evm_read_preset_allows_reads_and_the_guard_refuses_sends() {
         "the send never left the machine"
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn send_request_on_a_saved_evm_tx_is_refused_before_anything_is_sent() {
+    // evm-signing scenario "Agent sends saved evm-tx".
+    let stub = JsonrpcHttpServer::start(node).await;
+    let ws = workspace(&stub.url("/"));
+    write(
+        ws.path(),
+        "rustman.toml",
+        "[workspace]\nname = \"t\"\nversion = 1\n\n[evm]\nallow_signing = true\n\n[evm.signers.deployer]\nkeychain = true\n",
+    );
+    let tx = format!(
+        "version: 1\nkind: evm-tx\nname: Pay\nrpc: \"{{{{rpc}}}}\"\nto: \"{USDC}\"\nabi: erc20\nfunction: transfer\nargs: [\"{VITALIK}\", \"1\"]\nsigner: deployer\n"
+    );
+    write(ws.path(), "token/pay.rman.yaml", &tx);
+    let client = connect(ws.path()).await;
+    for path in ["token/pay", "token/pay.rman.yaml"] {
+        let refused = call(&client, "send_request", json!({"path": path})).await;
+        assert_eq!(
+            error(&refused),
+            (
+                "blocked".to_owned(),
+                "evm-tx requests cannot be sent through the agent interface".to_owned()
+            ),
+            "{path}"
+        );
+    }
+    assert!(stub.hits().is_empty(), "the node was never called");
+    let history = ws.path().join(".rustman/history");
+    assert!(!history.exists(), "nothing was recorded");
+}

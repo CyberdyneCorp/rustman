@@ -412,6 +412,7 @@ pub fn error_kind(error: &EvmError) -> &'static str {
         EvmError::Rpc(_) => "rpc",
         EvmError::Refused(_) => "refused",
         EvmError::NotFound(_) => "not_found",
+        EvmError::Interrupted(_) => "interrupted",
     }
 }
 
@@ -421,6 +422,7 @@ pub fn exit_code_of_kind(kind: &str) -> u8 {
         "not_found" => 1,
         "config" => 2,
         "refused" => 4,
+        "interrupted" => 130,
         _ => 3,
     }
 }

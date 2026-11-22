@@ -517,7 +517,7 @@ impl PaneEditor for EvmEditor {
 
     fn notice(&self) -> Option<String> {
         if self.is_tx() {
-            return Some(rustman_core::model::SIGNING_UNAVAILABLE.to_owned());
+            return Some(rustman_core::model::EVM_TX_NEEDS_SIGNING.to_owned());
         }
         self.abi_note.clone()
     }

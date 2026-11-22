@@ -14,7 +14,7 @@ A `kind: evm-tx` request file SHALL contain `rpc`, `to` (address or ENS, require
 - **THEN** loading SHALL fail with `contract deployment is out of scope; use Foundry or Hardhat`
 
 ### Requirement: Signing disabled by default
-Signing SHALL require both `[evm] allow_signing = true` in `rustman.toml` and an explicit per-invocation opt-in (`--sign` on the CLI, or the TUI's sign action followed by confirmation). If either is missing, the system SHALL refuse with exit code 4 and a message naming what is missing. `rustman run` SHALL skip `evm-tx` files unless `--sign` is passed.
+Signing SHALL require both `[evm] allow_signing = true` in `rustman.toml` and an explicit per-invocation opt-in, `--sign` on the CLI (`rustman evm send`, `rustman run`). If either is missing, the system SHALL refuse with exit code 4 and a message naming what is missing. `rustman run` SHALL skip `evm-tx` files unless `--sign` is passed. Signing from the TUI is out of scope for this change: the TUI SHALL open `evm-tx` files read-only, with a notice pointing to the CLI, and SHALL NOT sign or send.
 
 #### Scenario: Workspace not opted in
 - **GIVEN** `rustman.toml` has no `[evm] allow_signing`
@@ -30,8 +30,12 @@ Signing SHALL require both `[evm] allow_signing = true` in `rustman.toml` and an
 - **WHEN** `rustman run .` includes an `evm-tx` file and `--sign` is absent
 - **THEN** that file SHALL be reported as `skipped (signing not requested)` and SHALL NOT count as a failure
 
+#### Scenario: TUI does not sign
+- **WHEN** an `evm-tx` file is opened in the TUI
+- **THEN** it SHALL be shown read-only with a notice naming `rustman evm send --sign` and `rustman run --sign`, and nothing SHALL be signed or sent
+
 ### Requirement: Approved signers only
-Signers SHALL be configured in `[evm.signers.<id>]` as one of: `keystore` (path to a Web3 Secret Storage JSON file, password prompted or from a secret), `keychain` (key stored in the OS keychain by `rustman evm signer import`), or `ledger`/`trezor` (derivation path). Raw private keys SHALL be rejected wherever they appear: request files, environments, variables, CLI flags or environment variables.
+Signers SHALL be configured in `[evm.signers.<id>]` as one of: `keystore` (path to a Web3 Secret Storage JSON file, password prompted or from a secret) or `keychain` (key stored in the OS keychain by `rustman evm signer import`). Raw private keys SHALL be rejected wherever they appear: request files, environments, variables, CLI flags or environment variables.
 
 #### Scenario: Raw key in variable rejected
 - **GIVEN** an environment variable `pk` whose value is 64 hex characters, used as a signer value
@@ -43,10 +47,26 @@ Signers SHALL be configured in `[evm.signers.<id>]` as one of: `keystore` (path 
 - **WHEN** a transaction is signed
 - **THEN** the keystore SHALL be decrypted in memory and the password SHALL never appear in output, history or logs
 
-#### Scenario: Hardware wallet confirmation
+### Requirement: Hardware wallet signers deferred
+Hardware-wallet signers (`ledger`/`trezor`) are out of scope for this change. A configured one SHALL be refused when used, with a configuration error (exit code 2) saying it is not available, and nothing SHALL be signed or sent.
+
+#### Scenario: Hardware wallet not available
 - **GIVEN** a `ledger` signer
-- **WHEN** a transaction is signed
-- **THEN** the device SHALL be asked to sign and the CLI SHALL show `confirm on your Ledger…` until it responds or 120 s pass
+- **WHEN** a transaction is to be signed with it
+- **THEN** it SHALL fail with a configuration error (exit code 2) saying Ledger signing is not available, and nothing SHALL be signed or sent
+
+### Requirement: Signer values never echoed
+Signer ids SHALL be 1 to 64 of `[A-Za-z0-9_-]` and not hex-like. Likely key material (hex runs of 60 or more digits, seed phrases of 12 to 24 lowercase words) SHALL be refused as a raw key wherever a signer value can come from. A signer value that is not a configured id SHALL never be echoed in the preview, errors or reports.
+
+#### Scenario: Near-key refused
+- **GIVEN** `--signer` set to 63 hex digits, or to a 12-word seed phrase
+- **WHEN** the user runs `rustman evm send transfer.rman.yaml --sign`
+- **THEN** it SHALL be refused as a raw private key with exit code 4, without the value in any output
+
+#### Scenario: Unknown signer not echoed
+- **GIVEN** `--signer` set to a value that is not a configured signer id
+- **WHEN** the user runs `rustman evm send transfer.rman.yaml --sign`
+- **THEN** it SHALL fail with `unknown signer (configured: <ids>)` and exit code 2, and the value SHALL appear neither in the preview nor in the error
 
 ### Requirement: Mandatory decoded confirmation
 Before signing, the system SHALL show a confirmation containing: chain name and id, signer address, `to` (with ENS name if any), decoded function and arguments, value in native units, gas limit, max fee and priority fee (or gas price), nonce, and the maximum total cost. The user SHALL confirm interactively. There SHALL be no flag that skips this confirmation on non-local chains.
@@ -58,6 +78,10 @@ Before signing, the system SHALL show a confirmation containing: chain name and 
 #### Scenario: Declined
 - **WHEN** the user answers no
 - **THEN** nothing SHALL be signed or sent and the exit code SHALL be 4
+
+#### Scenario: Interrupted
+- **WHEN** the user presses Ctrl+C at the confirmation, or at any point before the transaction is sent
+- **THEN** nothing SHALL be signed or sent, the error SHALL be `interrupted; nothing was signed or sent` and the exit code SHALL be 130
 
 ### Requirement: Chain id must match
 Signing SHALL require the environment to pin `chain_id`, and the endpoint's `eth_chainId` SHALL equal it immediately before signing. The signed transaction SHALL embed that chain id (EIP-155). Any mismatch or missing pin SHALL refuse with exit code 4.
@@ -84,7 +108,7 @@ For chain id 1, and for any chain listed in `[evm] protected_chains`, the confir
 - **THEN** signing SHALL be cancelled with exit code 4
 
 ### Requirement: Headless signing restricted to local chains
-Without an interactive terminal, signing SHALL be allowed only on chain id 31337, or on chain ids listed in `[evm] headless_signing_chains`, and only with `--sign` and `--yes-local`. On any other chain, non-interactive signing SHALL be refused with exit code 4.
+Without an interactive terminal, signing SHALL be allowed only on chain id 31337, or on chain ids listed in `[evm] headless_signing_chains`, and only with `--sign` and `--yes-local`. On any other chain, non-interactive signing SHALL be refused with exit code 4, right after the chain id check and before any signer is unlocked or the transaction simulated.
 
 #### Scenario: CI against Anvil
 - **GIVEN** a CI job (no TTY) targeting an Anvil node with chain id 31337
@@ -94,7 +118,7 @@ Without an interactive terminal, signing SHALL be allowed only on chain id 31337
 #### Scenario: CI against Sepolia refused
 - **GIVEN** no TTY and chain 11155111 not in `headless_signing_chains`
 - **WHEN** `rustman run . --sign --yes-local` runs
-- **THEN** each `evm-tx` file SHALL be refused with exit code 4
+- **THEN** each `evm-tx` file SHALL be refused with exit code 4 and no signer SHALL be unlocked
 
 ### Requirement: Agents can never sign
 `agent-mcp-interface` SHALL NOT expose any tool that signs, sends a transaction, imports a key or changes signing configuration. Requests made through the agent interface SHALL never reach a signer, even if a request file of kind `evm-tx` is referenced.
@@ -129,3 +153,11 @@ After sending, the system SHALL wait for the receipt (default timeout 120 s, `--
 #### Scenario: Receipt timeout
 - **GIVEN** the transaction is not mined within 120 s
 - **THEN** the command SHALL print the hash and explorer URL and exit with code 3
+
+### Requirement: Unreadable receipt still audited
+Failing receipt polls SHALL be retried with backoff within the receipt timeout. If the receipt still cannot be read, the system SHALL record the audit entry (hash, chain, signer, `to`, nonce; no signed bytes or key material) with status `receipt-unknown`, print the hash and explorer URL and exit with code 3.
+
+#### Scenario: Receipt unreadable
+- **GIVEN** the node accepts the transaction, then fails every `eth_getTransactionReceipt` poll
+- **WHEN** the receipt timeout passes
+- **THEN** history SHALL contain an audit entry with the hash, chain, signer, `to` and nonce and status `receipt-unknown`, and the command SHALL exit with code 3

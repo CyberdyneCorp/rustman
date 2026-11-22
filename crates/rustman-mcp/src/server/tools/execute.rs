@@ -12,7 +12,7 @@ use std::time::Duration;
 use futures_util::future::BoxFuture;
 use rustman_core::collection::RequestEntry;
 use rustman_core::history::HistoryStore;
-use rustman_core::model::{REQUEST_FILE_SUFFIX, Request, Variables};
+use rustman_core::model::{EvmRequest, REQUEST_FILE_SUFFIX, Request, Variables};
 use rustman_core::run::{Filter, RequestRecord, RequestStatus, plan};
 use rustman_core::snapshot::SnapshotMode;
 use rustman_core::vars::{ResolvedRequest, parse_overrides};
@@ -366,6 +366,7 @@ async fn send_here(call: &Call) -> Result<ToolOutput, ToolError> {
     let sent = match (&args.path, &args.url) {
         (Some(path), None) => {
             let saved = super::workspace::find(&call.ctx, path)?;
+            refuse_signing(&saved.entry.request)?;
             send_one(call, &saved, options).await?
         }
         (None, Some(url)) => {
@@ -394,6 +395,20 @@ async fn send_here(call: &Call) -> Result<ToolOutput, ToolError> {
         (None, None) => format!("{} {}", result.request, result.outcome),
     };
     output(&result, line)
+}
+
+/// The refusal of a saved `evm-tx` request (evm-signing "Agents can never
+/// sign"): this crate does not link the signing gate, and the refusal comes
+/// before anything is resolved or sent.
+const EVM_TX_REFUSED: &str = "evm-tx requests cannot be sent through the agent interface";
+
+fn refuse_signing(request: &Request) -> Result<(), ToolError> {
+    match request {
+        Request::Evm(evm) if matches!(**evm, EvmRequest::Tx(_)) => {
+            Err(ToolError::new(ErrorCode::Blocked, EVM_TX_REFUSED))
+        }
+        _ => Ok(()),
+    }
 }
 
 pub(super) fn outcome(status: RequestStatus) -> &'static str {

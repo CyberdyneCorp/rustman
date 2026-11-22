@@ -64,7 +64,10 @@ use crate::error::RequestError;
 use crate::exchange::Exchange;
 use crate::timing::millis;
 
-pub use evm::{EvmCall, EvmExecutor, EvmFuture, EvmOutcome, evm_error_record};
+pub use evm::{
+    EvmCall, EvmExecutor, EvmFuture, EvmOutcome, EvmTxCall, EvmTxExecutor, EvmTxFuture,
+    evm_error_record,
+};
 pub use graphql::{
     CHAIN_RPC_VARIABLE, GraphqlCall, GraphqlExecutor, GraphqlFuture, GraphqlOutcome,
 };
@@ -143,6 +146,10 @@ pub struct RunOptions<'a> {
     /// Runs `kind: evm-call` requests; without one they are skipped as an
     /// unsupported kind.
     pub evm: Option<&'a dyn EvmExecutor>,
+    /// Signs and sends `kind: evm-tx` requests (`rustman run --sign`);
+    /// without one they are skipped as `signing not requested`. Only the
+    /// signing gate implements it.
+    pub evm_tx: Option<&'a dyn EvmTxExecutor>,
     /// How `snapshot` assertions treat their files: record, update
     /// (`--update-snapshots`) or CI (`--ci`, `CI=true`).
     pub snapshots: SnapshotMode,
@@ -218,6 +225,7 @@ impl Default for RunOptions<'_> {
             mcp: None,
             grpc: None,
             evm: None,
+            evm_tx: None,
             realtime: None,
             messaging: None,
             gate: None,
