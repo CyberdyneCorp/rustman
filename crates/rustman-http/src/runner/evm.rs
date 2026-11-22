@@ -111,17 +111,14 @@ pub trait EvmExecutor: Sync {
 }
 
 impl Runner<'_> {
-    /// Resolve, run, check and capture the evm request `request`.
+    /// Resolve, run, check and capture the evm-call request `request`.
     pub(super) async fn execute_evm(
         &self,
         request: &RequestRef<'_>,
-        evm: &rustman_core::model::EvmRequest,
+        call: &EvmCallRequest,
         record: RequestRecord,
         iteration: u32,
     ) -> Sent {
-        let rustman_core::model::EvmRequest::Call(call) = evm else {
-            return self.execute_evm_tx(request, record).await;
-        };
         let Some(executor) = self.options.evm else {
             return Sent::skipped(record, SkipReason::UnsupportedKind);
         };
@@ -167,8 +164,13 @@ impl Runner<'_> {
     }
 
     /// Hand the evm-tx `request` to the signing gate, or skip it when the
-    /// run did not ask to sign.
-    async fn execute_evm_tx(&self, request: &RequestRef<'_>, record: RequestRecord) -> Sent {
+    /// run did not ask to sign. Its own boxed future (see
+    /// `Runner::execute`), apart from the evm-call one.
+    pub(super) async fn execute_evm_tx(
+        &self,
+        request: &RequestRef<'_>,
+        record: RequestRecord,
+    ) -> Sent {
         let Some(executor) = self.options.evm_tx else {
             return Sent::skipped(record, SkipReason::SigningNotRequested);
         };

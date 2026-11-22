@@ -311,10 +311,7 @@ fn a_run_with_sign_and_yes_local_signs_every_evm_tx_with_increasing_nonces() {
     let node = Node::start(&program, COUNTER);
     let ws = workspace(&node.url());
     write(ws.path(), "add2.rman.yaml", &add_request(3, 100_000));
-    let out = rustman(ws.path())
-        .args(["run", ".", "--env", "dev", "--sign", "--yes-local"])
-        .output()
-        .unwrap();
+    let out = run_signing_on_a_small_stack(ws.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status.code(), Some(0), "{stdout}{stderr}");
@@ -336,4 +333,29 @@ fn a_run_with_sign_and_yes_local_signs_every_evm_tx_with_increasing_nonces() {
         .map(|a| a["record"]["evm"]["nonce"].clone())
         .collect();
     assert_eq!(nonces, [json!(0), json!(1)], "{audits:?}");
+}
+
+/// `rustman run . --env dev --sign --yes-local` in `dir`. On Unix the main
+/// thread's stack is limited to 896 KiB, below Windows' 1 MiB: the whole
+/// gate, the send and the receipt (decoded, checked, audited) run on it.
+fn run_signing_on_a_small_stack(dir: &Path) -> std::process::Output {
+    let args = ["run", ".", "--env", "dev", "--sign", "--yes-local"];
+    if cfg!(not(unix)) {
+        return rustman(dir).args(args).output().unwrap();
+    }
+    let bin = assert_cmd::cargo::cargo_bin("rustman");
+    let script = format!(
+        "ulimit -s 896 && exec '{}' {}",
+        bin.display(),
+        args.join(" ")
+    );
+    std::process::Command::new("sh")
+        .args(["-c", &script])
+        .current_dir(dir)
+        .env("RUSTMAN_SECRET_STORE", "file")
+        .env("RUSTMAN_DATA_DIR", common::test_data_dir())
+        .env_remove("RUSTMAN_ENV")
+        .env_remove("RUSTMAN_EVM_SIGNER")
+        .output()
+        .unwrap()
 }
