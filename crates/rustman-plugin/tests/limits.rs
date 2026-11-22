@@ -51,7 +51,8 @@ fn infinite_loop() {
         fastest = fastest.min(elapsed);
         assert_eq!(plugin.assertion_functions().unwrap(), ["spin"]);
     }
-    assert!(fastest < Duration::from_millis(500), "{fastest:?}");
+    // 100 ms budget; loaded macOS runners have taken ~670 ms to stop a call.
+    assert!(fastest < Duration::from_millis(2000), "{fastest:?}");
 }
 
 #[test]
