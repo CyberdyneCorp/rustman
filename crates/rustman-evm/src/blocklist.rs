@@ -4,7 +4,8 @@
 //!
 //! [`install`] registers a `rustman-jsonrpc` method guard that refuses
 //! every method able to sign or send a transaction, for every `jsonrpc`
-//! and `evm-call` request and every agent call, before anything is sent.
+//! and `evm-call` request and every agent call, and for every `kind: http`
+//! request whose body is a JSON-RPC call or batch, before anything is sent.
 //! Signing is not available in this build, so the local-chain opt-in
 //! (`[evm] allow_raw_send_local`) is not honored yet: the guard always
 //! refuses.
@@ -79,13 +80,22 @@ impl MethodGuard for SendBlocklist {
     }
 }
 
+/// The method guards' refusal of a JSON-RPC call found in a plain http
+/// request body.
+fn guarded_body_method(method: &str, params: Option<&Value>) -> Option<String> {
+    rustman_jsonrpc::guard::check_method(method, params).map(|refusal| refusal.message)
+}
+
 /// Register the send-method guard and the `@evm-read` preset, once per
-/// process. Front ends call it at startup, before any request is sent.
+/// process, and have plain http requests whose body is JSON-RPC checked
+/// by the guards too. Front ends call it at startup, before any request is
+/// sent.
 pub fn install() {
     static INSTALL: Once = Once::new();
     INSTALL.call_once(|| {
         register_guard(Arc::new(SendBlocklist));
         register_preset(EVM_READ_PRESET, &EVM_READ_METHODS);
+        rustman_http::runner::set_jsonrpc_body_check(guarded_body_method);
     });
 }
 

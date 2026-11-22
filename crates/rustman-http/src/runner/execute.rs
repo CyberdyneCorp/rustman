@@ -186,6 +186,9 @@ impl Runner<'_> {
         };
         self.remember(&resolved.secrets);
         remember_for_logs(&self.request_redactor(Some(&resolved), None));
+        if let Some(refusal) = super::rpc_body::check_body(&resolved.body) {
+            return Sent::from_record(super::rpc_body::refused(record, &refusal));
+        }
         let target = AuthTarget {
             request: request.entry.id(),
             cache_key: cache_key(request),

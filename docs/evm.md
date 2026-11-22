@@ -364,7 +364,7 @@ The toolkit's tests against a real Anvil are opt-in, so a plain `cargo test` nev
 
 ## Send methods
 
-Signing and sending belong to the signing gate (`evm-tx`), which is not available in this build. Methods are refused by family, not by exact name, so new sending methods stay out. Every `jsonrpc` request, `evm-call` and agent call is refused before anything is sent, with exit code 4, when its method (in any case):
+Signing and sending belong to the signing gate (`evm-tx`), which is not available in this build. Methods are refused by family, not by exact name, so new sending methods stay out. Every `jsonrpc` request, `evm-call` and agent call, and every `kind: http` request whose body is a JSON-RPC call or batch (an object with a `method`, or an array of them; `rustman send`, `rustman run` and the agent's `send_request`), is refused before anything is sent, with exit code 4, when its method (in any case):
 
 - is in the `personal_*`, `wallet_*` (EIP-5792 and wallet RPCs), `account_*` (Clef) or `signer_*` namespace;
 - or has a name that, after its namespace, starts with `send`, `sign`, `submitTransaction` or `postTransaction`: `eth_sendRawTransaction`, `eth_sendTransaction`, `eth_sendTransactionSync` and `eth_sendRawTransactionSync` (EIP-7966), `eth_sendRawTransactionConditional`, `eth_sendBundle`, `eth_sendPrivateTransaction`, `flashbots_sendBundle`, `eth_sign`, `eth_signTransaction`, `eth_signTypedData*`.

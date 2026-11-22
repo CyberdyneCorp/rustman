@@ -248,6 +248,11 @@ pub fn finish(args: &OutputFlags, sent: &Sent) -> Result<u8, CliError> {
     for reason in failures(record) {
         eprintln!("{reason}");
     }
+    // A JSON-RPC body a method guard refused, like `rustman rpc`.
+    let guarded = record.jsonrpc.as_ref().and_then(|j| j.refusal);
+    if guarded == Some(rustman_core::run::RpcRefusal::Guard) {
+        return Ok(crate::exit::SAFETY);
+    }
     let summary = Summary::of(
         std::slice::from_ref(record),
         record.duration_ms,

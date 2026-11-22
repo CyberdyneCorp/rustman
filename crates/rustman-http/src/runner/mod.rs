@@ -30,6 +30,7 @@ mod messaging;
 mod plugins;
 mod realtime;
 mod record;
+mod rpc_body;
 mod seed;
 mod snapshots;
 
@@ -80,6 +81,7 @@ pub use mcp::{McpCall, McpExecutor, McpFuture, McpOutcome};
 pub use messaging::{MessagingCall, MessagingExecutor, MessagingFuture, MessagingOutcome};
 pub use realtime::{RealtimeCall, RealtimeExecutor, RealtimeFuture, RealtimeOutcome};
 pub use record::{exchange_record, timings_record};
+pub use rpc_body::{BodyRefusal, MethodCheck, check_body, set_jsonrpc_body_check};
 
 /// Where requests run: the workspace (or, for an ad-hoc request outside
 /// one, the current folder with default settings).

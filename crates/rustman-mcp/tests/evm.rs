@@ -399,3 +399,32 @@ async fn send_request_on_a_saved_evm_tx_is_refused_before_anything_is_sent() {
     let history = ws.path().join(".rustman/history");
     assert!(!history.exists(), "nothing was recorded");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn send_request_with_a_json_rpc_send_in_an_http_body_is_blocked() {
+    // Regression: a plain `kind: http` request posting
+    // {"method": "eth_sendTransaction"} sent through a node with unlocked
+    // accounts, bypassing the send-method guard.
+    rustman_evm::install();
+    let stub = JsonrpcHttpServer::start(node).await;
+    let ws = workspace(&stub.url("/"));
+    let single = format!(
+        "version: 1\nkind: http\nname: Send\nmethod: POST\nurl: \"{{{{rpc}}}}\"\nbody:\n  type: json\n  content: {{jsonrpc: \"2.0\", id: 1, method: eth_sendTransaction, params: [{{from: \"{VITALIK}\", to: \"{USDC}\"}}]}}\n"
+    );
+    write(ws.path(), "raw/send.rman.yaml", &single);
+    let batch = "version: 1\nkind: http\nname: Batch\nmethod: POST\nurl: \"{{rpc}}\"\nbody:\n  type: text\n  content: '[{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_chainId\"},{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"eth_sendRawTransaction\",\"params\":[\"0x02f8\"]}]'\n";
+    write(ws.path(), "raw/batch.rman.yaml", batch);
+    let client = connect(ws.path()).await;
+    for path in ["raw/send", "raw/batch"] {
+        let refused = call(&client, "send_request", json!({"path": path})).await;
+        assert_eq!(
+            error(&refused),
+            (
+                "blocked".to_owned(),
+                rustman_evm::blocklist::SEND_REFUSED.to_owned()
+            ),
+            "{path}"
+        );
+    }
+    assert!(stub.hits().is_empty(), "the node was never called");
+}
