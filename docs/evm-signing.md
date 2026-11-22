@@ -123,7 +123,7 @@ Values set in the request win; the rest are suggested by the node and labelled `
 - **Legacy** (`type: legacy`): `gas_price`, by default `eth_gasPrice`; EIP-155 replay protection embeds the chain id. `max_fee` and `max_priority_fee` are refused.
 - **Gas limit**: `gas`, by default the simulation's `eth_estimateGas` × 1.2, rounded up.
 - **Ceilings**: a node cannot inflate what is signed. A suggested `max_fee`, `max_priority_fee` or `gas_price` above 10 000 gwei, or a gas limit from the estimate above 30 000 000, is refused (exit code 4) with a message asking to set the value in the request; values set in the request are not capped.
-- **Nonce**: `nonce`, by default `eth_getTransactionCount(signer, "pending")`. Within one process (one `rustman evm send`, or a whole `rustman run --sign`), later transactions of the same signer on the same chain count up from the last one sent instead of asking again. A `nonce too low` or `replacement underpriced` answer is reported as the node sent it (exit code 3) and nothing is retried.
+- **Nonce**: `nonce`, by default `eth_getTransactionCount(signer, "pending")`. Within one process (one `rustman evm send`, or a whole `rustman run --sign`), later transactions of the same signer on the same chain count up from the last one sent instead of asking again; a transaction whose send failed counts too, since it may be out. A `nonce too low` or `replacement underpriced` answer is reported as the node sent it (exit code 3, see [unknown broadcast](#unknown-broadcast)) and nothing is retried.
 
 ## Confirmation
 
@@ -172,6 +172,10 @@ The signed transaction is sent with `eth_sendRawTransaction`, the one place that
 - `--receipt-timeout` (default `120s`): when it passes, the command prints `error: transaction 0x… was sent but not mined within 120s` and the explorer link (when the chain has an explorer), and exits with code 3. The transaction may still be mined later: check it with `rustman evm tx <hash>`.
 - A receipt poll that fails (the node is down, rate-limited, ...) is tried again, waiting twice as long after each failure in a row (up to 5 s), until the receipt timeout. When the last poll still failed, the command prints `error: transaction 0x… was sent but its receipt could not be read within 120s: <the node's error>` and the explorer link, and exits with code 3; the same happens when the mined transaction cannot be decoded. The audit record is written either way, with `"status": "receipt-unknown"`.
 
+### Unknown broadcast
+
+When `eth_sendRawTransaction` itself fails (the connection drops or times out, the node answers a 5xx or an RPC error such as `nonce too low`, or it answers something other than the transaction's hash), the transaction may have been broadcast all the same. The hash is computed locally from the signed bytes (keccak-256 of the EIP-2718 encoding), the failure is printed as a warning (`warning: eth_sendRawTransaction: …; transaction 0x… may have been sent; waiting for its receipt`; a mismatch names both hashes: `the node answered hash 0x…, expected 0x…`), and the receipt of the local hash is awaited as usual. If it comes, the transaction is checked like any other, with the failure kept as a warning. If it does not, the command prints `error: transaction 0x… may have been sent (<the failure>) but no receipt came within 120s; check the explorer for 0x… before sending it again`, the explorer link (when the chain has one), and exits with code 3; the audit record keeps the local hash with `"status": "broadcast-unknown"`. Check the hash (explorer or `rustman evm tx <hash>`) before signing the transaction again.
+
 The mined transaction is printed decoded, as `rustman evm tx` shows it, with `explorer: https://…/tx/0x…`. A transaction that reverted on chain exits with code 1.
 
 ### Receipt assertions and captures
@@ -192,7 +196,7 @@ captures:
 
 ### Audit record
 
-Every sent transaction is recorded in `request-history` (unless `--no-history` or `[history] enabled = false`), also when the receipt timed out (`"status": "pending"`) or could not be read (`"status": "receipt-unknown"`). The entry's `record.evm` holds:
+Every sent transaction is recorded in `request-history` (unless `--no-history` or `[history] enabled = false`), also when the receipt timed out (`"status": "pending"`), could not be read (`"status": "receipt-unknown"`), or the send itself failed (`"status": "broadcast-unknown"`, with the locally computed hash). The entry's `record.evm` holds:
 
 ```json
 {
@@ -213,7 +217,7 @@ The signed bytes, the signature, the password and the key are never stored or sh
 | 0 | Sent, mined, and every assertion passed. |
 | 1 | Mined, but it reverted on chain or an assertion failed. |
 | 2 | A configuration error: an unknown or invalid signer, a missing keystore, a keystore above the key-derivation limits, an unreadable password prompt, no keychain, a hardware-wallet signer. |
-| 3 | The node could not be reached or refused the transaction (`nonce too low`, ...), or the transaction was sent but its receipt did not come within `--receipt-timeout` or could not be read. |
+| 3 | The node could not be reached, or the transaction's send failed and no receipt came for its local hash (`broadcast-unknown`: it may have been sent), or the transaction was sent but its receipt did not come within `--receipt-timeout` or could not be read. |
 | 4 | A gate refusal: signing disabled, key material as a signer, no `--sign`, no `chain_id` pin, a chain mismatch, no way to confirm (no terminal on a non-local chain), a wrong or missing keystore password, a reverting simulation, a declined confirmation or a wrong chain name. |
 | 130 | Ctrl+C before the transaction was sent; nothing was signed or sent. |
 
@@ -229,7 +233,7 @@ rustman run . --env anvil --sign --yes-local
 - The preview, the summary and the receipt go to stderr; stdout is the run's report.
 - `--yes-local` (which requires `--sign`) confirms without a prompt on chain 31337 and `[evm] headless_signing_chains` only. Without a terminal, every `evm-tx` file on another chain is refused, and the run exits with code 4. On a terminal, each transaction is confirmed as with `rustman evm send`.
 - Nonces count up across the run: two transactions of one signer use the pending count, then that count + 1, without asking the node again.
-- A refusal is the request's error and makes the run exit with code 4; a receipt timeout or an unreadable receipt is an error (exit code 3), with the audit record kept; Ctrl+C before a transaction is sent skips it as interrupted (exit code 130); a failed receipt assertion or a transaction that reverted on chain fails the request (exit code 1). The receipt timeout is 120 s and one confirmation is awaited.
+- A refusal is the request's error and makes the run exit with code 4; a receipt timeout, an unreadable receipt or an unknown broadcast is an error (exit code 3), with the audit record kept; Ctrl+C before a transaction is sent skips it as interrupted (exit code 130); a failed receipt assertion or a transaction that reverted on chain fails the request (exit code 1). The receipt timeout is 120 s and one confirmation is awaited.
 
 ## Agents can never sign
 

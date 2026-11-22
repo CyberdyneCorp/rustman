@@ -161,3 +161,11 @@ Failing receipt polls SHALL be retried with backoff within the receipt timeout. 
 - **GIVEN** the node accepts the transaction, then fails every `eth_getTransactionReceipt` poll
 - **WHEN** the receipt timeout passes
 - **THEN** history SHALL contain an audit entry with the hash, chain, signer, `to` and nonce and status `receipt-unknown`, and the command SHALL exit with code 3
+
+### Requirement: Unknown broadcast still audited
+If `eth_sendRawTransaction` fails (transport error, RPC error, or an answer other than the hash computed locally from the signed bytes), the system SHALL warn with the failure (naming both hashes on a mismatch), still wait for the receipt of the local hash, and, if none comes, record the audit entry with the local hash and status `broadcast-unknown`, say the transaction may have been sent, and exit with code 3.
+
+#### Scenario: Broadcast outcome unknown
+- **GIVEN** the node drops the connection, answers an RPC error, or answers another hash for `eth_sendRawTransaction`
+- **WHEN** no receipt comes within the receipt timeout
+- **THEN** history SHALL contain an audit entry with the local hash, chain, signer, `to` and nonce and status `broadcast-unknown`, without the signed bytes, and the command SHALL exit with code 3

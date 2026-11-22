@@ -166,11 +166,27 @@ pub fn audit(summary: &Summary, hash: B256, mined: Option<&Mined>) -> Value {
 /// node kept failing, or the receipt could not be decoded).
 pub const RECEIPT_UNKNOWN: &str = "receipt-unknown";
 
+/// The status of a signed transaction whose send failed (transport error,
+/// RPC error, or another hash answered) and whose receipt never came: it
+/// may or may not have been broadcast.
+pub const BROADCAST_UNKNOWN: &str = "broadcast-unknown";
+
 /// The audit record of a sent transaction whose receipt is unknown: the
 /// hash, chain, signer, `to`, nonce and fees, with `status`
 /// `receipt-unknown`.
 pub fn audit_receipt_unknown(summary: &Summary, hash: B256) -> Value {
+    audit_with_status(summary, hash, RECEIPT_UNKNOWN)
+}
+
+/// The audit record of a transaction that may have been broadcast: like
+/// [`audit_receipt_unknown`], with `status` `broadcast-unknown` and the
+/// locally computed `hash`.
+pub fn audit_broadcast_unknown(summary: &Summary, hash: B256) -> Value {
+    audit_with_status(summary, hash, BROADCAST_UNKNOWN)
+}
+
+fn audit_with_status(summary: &Summary, hash: B256, status: &str) -> Value {
     let mut record = audit(summary, hash, None);
-    record["status"] = json!(RECEIPT_UNKNOWN);
+    record["status"] = json!(status);
     record
 }

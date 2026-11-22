@@ -28,7 +28,7 @@ use rustman_evm_signing::fees::{FeeInputs, fees, gas_limit};
 use rustman_evm_signing::gate::simulate;
 use rustman_evm_signing::nonce::Nonces;
 use rustman_evm_signing::receipt::{self, Mined};
-use rustman_evm_signing::send::{Wait, Waited, sign_and_send, wait_for_receipt};
+use rustman_evm_signing::send::{Broadcasted, Wait, Waited, sign_and_send, wait_for_receipt};
 use rustman_evm_signing::transaction::UnsignedTx;
 use rustman_evm_signing::{
     Confirmation, Signers, Summary, UnlockContext, UnlockedSigner, Zeroizing, unlock,
@@ -174,6 +174,9 @@ async fn add(
     let hash = sign_and_send(&summary.tx, signer, confirmation, rpc)
         .await
         .unwrap();
+    let Broadcasted::Accepted(hash) = hash else {
+        panic!("{hash:?}");
+    };
     nonces.sent(31_337, signer.address(), nonce);
     let wait = Wait {
         poll: Duration::from_millis(50),
@@ -300,6 +303,9 @@ async fn a_transaction_that_is_never_mined_times_out() {
     let hash = sign_and_send(&summary.tx, &signer, confirmation, &rpc)
         .await
         .unwrap();
+    let Broadcasted::Accepted(hash) = hash else {
+        panic!("{hash:?}");
+    };
     let wait = Wait {
         confirmations: 1,
         timeout: Duration::from_millis(600),

@@ -6,13 +6,13 @@
 use std::path::Path;
 use std::sync::Mutex;
 
-use alloy_primitives::{Address, U256};
+use alloy_primitives::{Address, U256, keccak256};
 use rustman_core::Secret;
 use rustman_evm::rpc::RpcFuture;
 use rustman_evm::{ChainRegistry, EvmSettings};
 use rustman_evm_signing::confirm::{DECLINED, Mode, mode};
 use rustman_evm_signing::fees::{Fee, Fees};
-use rustman_evm_signing::send::{Broadcast, sign_and_send};
+use rustman_evm_signing::send::{Broadcast, Broadcasted, sign_and_send};
 use rustman_evm_signing::transaction::UnsignedTx;
 use rustman_evm_signing::{
     Confirmation, Signers, Summary, UnlockContext, UnlockedSigner, Zeroizing, unlock,
@@ -282,14 +282,22 @@ async fn a_confirmation_signs_only_the_transaction_it_confirmed() {
         .unwrap_err();
     assert_eq!(err.exit_code(), 4);
     assert!(node.sent.lock().unwrap().is_empty(), "nothing was sent");
-    // The right one is signed and sent; a node answering another hash is
-    // an RPC error.
+    // The right one is signed and sent; a node answering no hash leaves
+    // the broadcast unknown, with the hash computed from the signed bytes.
     let confirmation = Confirmation::local_headless(&confirmed, &settings("")).unwrap();
-    let err = sign_and_send(&confirmed.tx, &anvil0(), confirmation, &node)
+    let broadcasted = sign_and_send(&confirmed.tx, &anvil0(), confirmation, &node)
         .await
-        .unwrap_err();
-    assert_eq!(err.exit_code(), 3);
-    assert_eq!(node.sent.lock().unwrap().len(), 1);
+        .unwrap();
+    let sent = node.sent.lock().unwrap().clone();
+    assert_eq!(sent.len(), 1);
+    let local = keccak256(alloy_primitives::hex::decode(&sent[0]).unwrap());
+    assert_eq!(
+        broadcasted,
+        Broadcasted::Unknown {
+            hash: local,
+            reason: "eth_sendRawTransaction: the node answered no transaction hash".to_owned(),
+        }
+    );
 }
 
 #[test]
