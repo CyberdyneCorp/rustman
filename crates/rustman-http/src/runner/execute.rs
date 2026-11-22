@@ -1,5 +1,7 @@
 //! Executing one request: resolve, send, assert, capture.
 
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::PoisonError;
 use std::sync::atomic::Ordering;
 use std::time::Instant;
@@ -8,7 +10,7 @@ use rustman_core::Redactor;
 use rustman_core::assertions::{self, Context, PluginCalls, needs_body};
 use rustman_core::captures::{self, CaptureReport, Persistence, RunCaptures};
 use rustman_core::data_rows::RowSource;
-use rustman_core::model::{Assertion, Auth, Capture, Request};
+use rustman_core::model::{Assertion, Auth, Capture, HttpRequest, Request};
 use rustman_core::plugins::PluginExchange;
 use rustman_core::redact::remember_for_logs;
 use rustman_core::run::redact_value;
@@ -120,49 +122,56 @@ impl Runner<'_> {
         sent
     }
 
-    async fn execute(
+    /// The future of `request`, boxed. Each kind's future is built in
+    /// this frame and returns with it: in a debug build a future is built
+    /// on the stack before it is boxed, one slot per kind, and the CLI
+    /// polls a run on its main thread, whose stack is 1 MiB on Windows.
+    /// Built in an async caller, those slots stayed on the stack for as
+    /// long as the request ran.
+    fn execute<'a>(
+        &'a self,
+        request: &'a RequestRef<'_>,
+        record: RequestRecord,
+        iteration: u32,
+    ) -> Pin<Box<dyn Future<Output = Sent> + 'a>> {
+        if self.options.cancel.is_cancelled() {
+            return Box::pin(std::future::ready(Sent::skipped(
+                record,
+                SkipReason::Interrupted,
+            )));
+        }
+        if self.bailed.load(Ordering::SeqCst) {
+            return Box::pin(std::future::ready(Sent::skipped(record, SkipReason::Bail)));
+        }
+        match request.request() {
+            Request::Http(http) => Box::pin(self.execute_http(request, http, record, iteration)),
+            Request::Graphql(graphql) => {
+                Box::pin(self.execute_graphql(request, graphql, record, iteration))
+            }
+            Request::Jsonrpc(jsonrpc) => {
+                Box::pin(self.execute_jsonrpc(request, jsonrpc, record, iteration))
+            }
+            Request::Mcp(mcp) => Box::pin(self.execute_mcp(request, mcp, record, iteration)),
+            Request::Grpc(grpc) => Box::pin(self.execute_grpc(request, grpc, record, iteration)),
+            Request::Ws(_) | Request::Sse(_) => {
+                Box::pin(self.execute_realtime(request, record, iteration))
+            }
+            Request::Messaging(_) => Box::pin(self.execute_messaging(request, record, iteration)),
+            Request::Evm(evm) => Box::pin(self.execute_evm(request, evm, record, iteration)),
+            Request::Opaque(opaque) => {
+                Box::pin(self.execute_plugin_kind(request, opaque, record, iteration))
+            }
+        }
+    }
+
+    /// Resolve, send, check and capture the HTTP request `request`.
+    async fn execute_http(
         &self,
         request: &RequestRef<'_>,
+        http: &HttpRequest,
         record: RequestRecord,
         iteration: u32,
     ) -> Sent {
-        if self.options.cancel.is_cancelled() {
-            return Sent::skipped(record, SkipReason::Interrupted);
-        }
-        if self.bailed.load(Ordering::SeqCst) {
-            return Sent::skipped(record, SkipReason::Bail);
-        }
-        // Every kind's future is boxed: inline, they make this one and its
-        // poll frames, which the CLI drives on its main thread, too large
-        // for the 1 MiB stack of Windows in debug builds.
-        let http = match request.request() {
-            Request::Http(http) => http,
-            Request::Graphql(graphql) => {
-                return Box::pin(self.execute_graphql(request, graphql, record, iteration)).await;
-            }
-            Request::Jsonrpc(jsonrpc) => {
-                return Box::pin(self.execute_jsonrpc(request, jsonrpc, record, iteration)).await;
-            }
-            Request::Mcp(mcp) => {
-                return Box::pin(self.execute_mcp(request, mcp, record, iteration)).await;
-            }
-            Request::Grpc(grpc) => {
-                return Box::pin(self.execute_grpc(request, grpc, record, iteration)).await;
-            }
-            Request::Ws(_) | Request::Sse(_) => {
-                return Box::pin(self.execute_realtime(request, record, iteration)).await;
-            }
-            Request::Messaging(_) => {
-                return Box::pin(self.execute_messaging(request, record, iteration)).await;
-            }
-            Request::Evm(evm) => {
-                return Box::pin(self.execute_evm(request, evm, record, iteration)).await;
-            }
-            Request::Opaque(opaque) => {
-                return Box::pin(self.execute_plugin_kind(request, opaque, record, iteration))
-                    .await;
-            }
-        };
         let captured = self.lock_captures().clone();
         let mut resolver = self.resolver(request, &captured, iteration);
         let resolve = |r: &Resolver<'_>| resolve_request(request, r);
