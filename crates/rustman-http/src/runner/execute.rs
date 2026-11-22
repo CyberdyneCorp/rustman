@@ -10,7 +10,7 @@ use rustman_core::Redactor;
 use rustman_core::assertions::{self, Context, PluginCalls, needs_body};
 use rustman_core::captures::{self, CaptureReport, Persistence, RunCaptures};
 use rustman_core::data_rows::RowSource;
-use rustman_core::model::{Assertion, Auth, Capture, HttpRequest, Request};
+use rustman_core::model::{Assertion, Auth, Capture, EvmRequest, HttpRequest, Request};
 use rustman_core::plugins::PluginExchange;
 use rustman_core::redact::remember_for_logs;
 use rustman_core::run::redact_value;
@@ -157,7 +157,12 @@ impl Runner<'_> {
                 Box::pin(self.execute_realtime(request, record, iteration))
             }
             Request::Messaging(_) => Box::pin(self.execute_messaging(request, record, iteration)),
-            Request::Evm(evm) => Box::pin(self.execute_evm(request, evm, record, iteration)),
+            Request::Evm(evm) => match evm.as_ref() {
+                EvmRequest::Call(call) => {
+                    Box::pin(self.execute_evm(request, call, record, iteration))
+                }
+                EvmRequest::Tx(_) => Box::pin(self.execute_evm_tx(request, record)),
+            },
             Request::Opaque(opaque) => {
                 Box::pin(self.execute_plugin_kind(request, opaque, record, iteration))
             }

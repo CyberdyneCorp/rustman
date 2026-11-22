@@ -1025,3 +1025,61 @@ fn ctrl_c_at_the_confirmation_aborts_with_nothing_sent() {
         "{methods:?}"
     );
 }
+
+/// `rustman <args>` in `dir` with the main thread's stack limited to
+/// 896 KiB, below Windows' 1 MiB: its exit code and output.
+#[cfg(unix)]
+fn on_a_small_stack(dir: &Path, args: &str) -> (Option<i32>, String) {
+    let bin = assert_cmd::cargo::cargo_bin("rustman");
+    let script = format!("ulimit -s 896 && exec '{}' {args}", bin.display());
+    let output = std::process::Command::new("sh")
+        .args(["-c", &script])
+        .current_dir(dir)
+        .env("RUSTMAN_SECRET_STORE", "file")
+        .env("RUSTMAN_DATA_DIR", common::test_data_dir())
+        .env_remove("RUSTMAN_ENV")
+        .env_remove("RUSTMAN_EVM_SIGNER")
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    (output.status.code(), text)
+}
+
+#[cfg(unix)]
+#[test]
+fn signing_fits_a_small_main_thread_stack() {
+    // The gate runs on the CLI's main thread, whose stack is 1 MiB on
+    // Windows: `run --sign` (its own boxed future per kind) and
+    // `evm send` must get through unlock, simulation, the summary, the
+    // signature, the send and the receipt wait within it.
+    let node = Node::start_with(
+        "0x7a69",
+        Simulation::Succeeds,
+        Broadcast::AcceptsThenReceiptFails,
+    );
+    let ws = workspace(&node.url(), &enabled(), PINNED);
+    set_password(ws.path());
+    let (code, text) = on_a_small_stack(
+        ws.path(),
+        "evm send transfer --env dev --sign --yes-local --receipt-timeout 1s",
+    );
+    assert_eq!(code, Some(3), "{text}");
+    assert!(text.contains("its receipt could not be read"), "{text}");
+
+    let node = Node::start("0x7a69", Simulation::Succeeds);
+    let ws = workspace(&node.url(), &enabled(), PINNED);
+    set_password(ws.path());
+    let (code, text) = on_a_small_stack(ws.path(), "run . --env dev --sign --yes-local");
+    assert_eq!(code, Some(3), "{text}");
+    assert!(text.contains("nonce too low"), "{text}");
+    let sent = node
+        .calls()
+        .iter()
+        .filter(|c| c["method"] == "eth_sendRawTransaction")
+        .count();
+    assert_eq!(sent, 1, "{text}");
+}
