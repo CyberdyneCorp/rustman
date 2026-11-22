@@ -385,10 +385,14 @@ mod tests {
             ..MockConfig::default()
         };
         let server = MockServer::bind(&config, Arc::new(state)).await.unwrap();
-        let addr = server.local_addr();
+        let handle = server.spawn();
+        let mut events = handle.subscribe();
         let cancel = CancellationToken::new();
         cancel.cancel();
-        assert_eq!(stop_on(&cancel, server.spawn()).await, INTERRUPTED);
-        assert!(std::net::TcpStream::connect(addr).is_err());
+        assert_eq!(stop_on(&cancel, handle).await, INTERRUPTED);
+        // The event channel closes only once the server, its listener and
+        // every connection are dropped. Connecting to the freed port would
+        // race other tests that bind an ephemeral port.
+        assert!(matches!(events.recv().await, Err(RecvError::Closed)));
     }
 }
