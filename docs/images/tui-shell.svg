@@ -357,8 +357,8 @@
 <text x="810.0" y="331.3" fill="#9ece6a" textLength="310.8" lengthAdjust="spacingAndGlyphs">&quot;https://cdn.petstore.test/rex-1.jpg&quot;</text>
 <path d="M1150.2 326.5L1150.2 318.0M1150.2 326.5L1150.2 335.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 343.5L16.2 335.0M16.2 343.5L16.2 352.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="28.8" y="348.3" fill="#737aa2" textLength="16.8" lengthAdjust="spacingAndGlyphs">▾ </text>
-<text x="45.6" y="348.3" fill="#c0caf5" font-weight="bold" textLength="42.0" lengthAdjust="spacingAndGlyphs">store</text>
+<text x="45.6" y="348.3" fill="#7dcfff" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">EVM    </text>
+<text x="104.4" y="348.3" fill="#c0caf5" textLength="100.8" lengthAdjust="spacingAndGlyphs">usdc-balance</text>
 <path d="M243.0 343.5L243.0 335.0M243.0 343.5L243.0 352.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 343.5L251.4 335.0M251.4 343.5L251.4 352.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M696.6 343.5L696.6 335.0M696.6 343.5L696.6 352.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
@@ -368,8 +368,8 @@
 <text x="810.0" y="348.3" fill="#9ece6a" textLength="310.8" lengthAdjust="spacingAndGlyphs">&quot;https://cdn.petstore.test/rex-2.jpg&quot;</text>
 <path d="M1150.2 343.5L1150.2 335.0M1150.2 343.5L1150.2 352.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 360.5L16.2 352.0M16.2 360.5L16.2 369.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="45.6" y="365.3" fill="#9ece6a" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">GET    </text>
-<text x="104.4" y="365.3" fill="#c0caf5" textLength="75.6" lengthAdjust="spacingAndGlyphs">inventory</text>
+<text x="28.8" y="365.3" fill="#737aa2" textLength="16.8" lengthAdjust="spacingAndGlyphs">▾ </text>
+<text x="45.6" y="365.3" fill="#c0caf5" font-weight="bold" textLength="42.0" lengthAdjust="spacingAndGlyphs">store</text>
 <path d="M243.0 360.5L243.0 352.0M243.0 360.5L243.0 369.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 360.5L251.4 352.0M251.4 360.5L251.4 369.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M696.6 360.5L696.6 352.0M696.6 360.5L696.6 369.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
@@ -379,8 +379,8 @@
 <text x="793.2" y="365.3" fill="#737aa2" textLength="84.0" lengthAdjust="spacingAndGlyphs">: {3 keys}</text>
 <path d="M1150.2 360.5L1150.2 352.0M1150.2 360.5L1150.2 369.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 377.5L16.2 369.0M16.2 377.5L16.2 386.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="45.6" y="382.3" fill="#7aa2f7" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">POST   </text>
-<text x="104.4" y="382.3" fill="#c0caf5" textLength="92.4" lengthAdjust="spacingAndGlyphs">place-order</text>
+<text x="45.6" y="382.3" fill="#9ece6a" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">GET    </text>
+<text x="104.4" y="382.3" fill="#c0caf5" textLength="75.6" lengthAdjust="spacingAndGlyphs">inventory</text>
 <path d="M243.0 377.5L243.0 369.0M243.0 377.5L243.0 386.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 377.5L251.4 369.0M251.4 377.5L251.4 386.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M696.6 377.5L696.6 369.0M696.6 377.5L696.6 386.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
@@ -390,8 +390,8 @@
 <text x="801.6" y="382.3" fill="#7dcfff" textLength="33.6" lengthAdjust="spacingAndGlyphs">1001</text>
 <path d="M1150.2 377.5L1150.2 369.0M1150.2 377.5L1150.2 386.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 394.5L16.2 386.0M16.2 394.5L16.2 403.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="28.8" y="399.3" fill="#737aa2" textLength="16.8" lengthAdjust="spacingAndGlyphs">▾ </text>
-<text x="45.6" y="399.3" fill="#c0caf5" font-weight="bold" textLength="42.0" lengthAdjust="spacingAndGlyphs">users</text>
+<text x="45.6" y="399.3" fill="#7aa2f7" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">POST   </text>
+<text x="104.4" y="399.3" fill="#c0caf5" textLength="92.4" lengthAdjust="spacingAndGlyphs">place-order</text>
 <path d="M243.0 394.5L243.0 386.0M243.0 394.5L243.0 403.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 394.5L251.4 386.0M251.4 394.5L251.4 403.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M696.6 394.5L696.6 386.0M696.6 394.5L696.6 403.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
@@ -401,8 +401,8 @@
 <text x="818.4" y="399.3" fill="#9ece6a" textLength="42.0" lengthAdjust="spacingAndGlyphs">&quot;Ana&quot;</text>
 <path d="M1150.2 394.5L1150.2 386.0M1150.2 394.5L1150.2 403.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 411.5L16.2 403.0M16.2 411.5L16.2 420.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
-<text x="45.6" y="416.3" fill="#9ece6a" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">GET    </text>
-<text x="104.4" y="416.3" fill="#c0caf5" textLength="16.8" lengthAdjust="spacingAndGlyphs">me</text>
+<text x="28.8" y="416.3" fill="#737aa2" textLength="16.8" lengthAdjust="spacingAndGlyphs">▾ </text>
+<text x="45.6" y="416.3" fill="#c0caf5" font-weight="bold" textLength="42.0" lengthAdjust="spacingAndGlyphs">users</text>
 <path d="M243.0 411.5L243.0 403.0M243.0 411.5L243.0 420.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 411.5L251.4 403.0M251.4 411.5L251.4 420.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M696.6 411.5L696.6 403.0M696.6 411.5L696.6 420.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
@@ -412,6 +412,8 @@
 <text x="826.8" y="416.3" fill="#9ece6a" textLength="142.8" lengthAdjust="spacingAndGlyphs">&quot;ana@example.com&quot;</text>
 <path d="M1150.2 411.5L1150.2 403.0M1150.2 411.5L1150.2 420.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M16.2 428.5L16.2 420.0M16.2 428.5L16.2 437.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
+<text x="45.6" y="433.3" fill="#9ece6a" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs">GET    </text>
+<text x="104.4" y="433.3" fill="#c0caf5" textLength="16.8" lengthAdjust="spacingAndGlyphs">me</text>
 <path d="M243.0 428.5L243.0 420.0M243.0 428.5L243.0 437.0" stroke="#3b4261" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M251.4 428.5L251.4 420.0M251.4 428.5L251.4 437.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
 <path d="M696.6 428.5L696.6 420.0M696.6 428.5L696.6 437.0" stroke="#7dcfff" stroke-width="1.2" fill="none" stroke-linecap="butt"/>
