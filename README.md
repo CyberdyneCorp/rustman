@@ -3,7 +3,7 @@
 > A fast, local-first API workbench for the terminal. It speaks **REST, GraphQL, MCP, gRPC, WebSocket/SSE, JSON-RPC, Kafka/MQTT/AMQP and Ethereum**, it can **test a backend on its own from an OpenAPI spec**, and **AI agents can drive it over MCP**. Written entirely in Rust.
 
 > [!NOTE]
-> **Status: pre-1.0, under active development.** Releases v0.1 to v0.7 of the [roadmap](#roadmap) are implemented: the HTTP engine and CLI runner, the terminal UI, importers, the OpenAPI explorer, the agent MCP server, GraphQL, the MCP client, the webhook inspector, snapshot tests, the mock server, the JSON-RPC, gRPC and WebSocket/SSE clients, contract testing, trace propagation, load and stress testing, and generated API docs. v0.7 added scheduled monitors (`rustman monitor`), secret providers (`{{secret:...}}`), WASM plugins (`rustman plugin`), the traffic recorder (`rustman record`) and Kafka, MQTT and AMQP messaging. The Ethereum toolkit is in progress on a side track. Sections marked _Planned_ or _In progress_ below describe behavior that is specified in the [OpenSpec](https://github.com/Fission-AI/OpenSpec) changes in [`openspec/`](openspec/) but not merged yet. Commands and file formats may still change before v1.
+> **Status: pre-1.0, under active development.** Releases v0.1 to v0.7 of the [roadmap](#roadmap) are implemented: the HTTP engine and CLI runner, the terminal UI, importers, the OpenAPI explorer, the agent MCP server, GraphQL, the MCP client, the webhook inspector, snapshot tests, the mock server, the JSON-RPC, gRPC and WebSocket/SSE clients, contract testing, trace propagation, load and stress testing, and generated API docs. v0.7 added scheduled monitors (`rustman monitor`), secret providers (`{{secret:...}}`), WASM plugins (`rustman plugin`), the traffic recorder (`rustman record`) and Kafka, MQTT and AMQP messaging. Both side tracks are done: the optional Raven companion and the EVM toolkit (`rustman evm`: ABI-aware calls and decoding, provider probing, blockchain GraphQL presets and a signing gate). v1.0 (Stabilize) is next. Every feature is specified first in the [OpenSpec](https://github.com/Fission-AI/OpenSpec) changes in [`openspec/`](openspec/), and the [feature map](#feature-map) lists the follow-ups still planned. Commands and file formats may still change before v1.
 
 <p align="center"><img src="docs/images/demo.gif" alt="Rustman's terminal UI sending requests to a local todo API: the environment switcher with the token masked, a JSON response tree, a 201 with a captured id, the timing waterfall and passed assertions, then rustman run passing every request" width="100%"></p>
 <p align="center"><sub>The TUI and <code>rustman run</code> against a small local todo API. Regenerate it with <a href="examples/demo/"><code>examples/demo/render.sh</code></a>.</sub></p>
@@ -52,13 +52,13 @@ rustman                                # open the terminal UI (or: rustman tui)
 | AI agents can't use your API client | **Built-in MCP server.** Agents use the same engine you do, under the same safety rules. |
 | Great GUI or great automation, rarely both | **Three front-ends, one engine:** a TUI for humans, a CLI for CI, MCP for agents. An optional GUI shows charts. |
 
-The Ethereum console is still in progress; the [feature map](#feature-map) shows what is available today.
+The [feature map](#feature-map) shows what is available today.
 
 ---
 
 ## Feature map
 
-**Available today** (v0.1 to v0.7):
+**Available today** (v0.1 to v0.7 and the side tracks):
 
 ```mermaid
 mindmap
@@ -87,6 +87,13 @@ mindmap
       Message brokers
         Kafka, MQTT, AMQP
         AsyncAPI import
+      Ethereum
+        ABI aware calls and decoding
+        Simulation and call traces
+        ENS and Anvil forks
+        Provider probing
+        Subgraph and geth GraphQL
+        Gated signing
     Workspace
       Plain YAML files in Git
       Environments and variables
@@ -137,21 +144,16 @@ mindmap
       Audit log
 ```
 
-**In progress and planned** (the side tracks):
+**Planned** (follow-ups):
 
 ```mermaid
 mindmap
   root((Rustman next))
     Ethereum
-      ABI aware contract calls
-      Tx, receipt, log decoding
-      Simulation and call traces
-      ENS and Anvil forks
-      Gated signing
-      Multi provider probing
-      Subgraph and geth GraphQL
+      Ledger and Trezor signers
+      Signing in the TUI
     Faces
-      Raven bench, stress and monitor dashboards
+      Raven bench, stress, monitor and chain probe dashboards
 ```
 
 ---
@@ -388,26 +390,84 @@ rustman rpc discover {{rpc_url}}                     # cache the node's OpenRPC 
   <img src="docs/images/tui-jsonrpc.svg" alt="Rustman TUI JSON-RPC editor: typing eth_get in the method field opens completions from the OpenRPC catalog, each with its parameter names" width="49%">
 </p>
 
-**EVM console** — _In progress (side track)._ The read-only part (calls, decoding, simulation, streams, ENS, Anvil forks) is in review in [#107](https://github.com/CyberdyneCorp/rustman/pull/107); signing, provider probing and blockchain GraphQL come later. For EVM chains, Rustman adds a console that understands ABIs, built on `alloy`:
+**EVM toolkit.** For EVM chains, Rustman adds a console that understands ABIs, built on `alloy`. Every node call goes through the JSON-RPC client, so its transport settings, method guards and redaction apply. See [`docs/evm.md`](docs/evm.md).
 
-```bash
-rustman evm call usdc.rman.yaml                      # ABI-encoded call, decoded result
-rustman evm tx 0x…                                   # decoded tx, receipt, logs and revert reason
-rustman evm logs --address 0xA0b8… --event "Transfer(address,address,uint256)"
-rustman evm call transfer.rman.yaml --trace          # simulated call tree, when the node supports it
-rustman evm ens vitalik.eth
-rustman evm fork --chain mainnet --block 20000000    # local Anvil fork for safe experiments
-rustman evm probe https://rpc-a.example https://rpc-b.example   # compare providers
+```yaml
+# rpc/usdc-balance.rman.yaml
+version: 1
+kind: evm-call
+name: USDC balance
+rpc: "{{rpc}}"
+to: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+abi: erc20
+function: balanceOf
+args: ["0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"]
+assertions:
+  - evm: {output: balance, gte: "250 USDC"}
 ```
 
-- **Detects the chain and client.** The environment pins a chain id, and Rustman refuses to send if the node reports a different one.
-- **Decodes everything:** ERC-20/721/1155 built in, token amounts in units, custom errors and revert reasons. Verified ABIs can be fetched from explorers (opt-in).
-- **Assertions on decoded values,** e.g. `balanceOf >= 1 ether`, "event emitted", "reverts with reason".
-- **Blockchain GraphQL:** presets for geth's `/graphql` and The Graph subgraphs, with BigInt, bytes and checksummed-address display, pagination helpers, and a check that the subgraph is caught up with the chain.
-- **Probing providers:** which methods each node supports, archive vs full node, rate limits, drift between providers, and latency per method. Viz dashboards show block time, gas and call-trace graphs.
+```bash
+rustman evm call rpc/usdc-balance.rman.yaml --env mainnet   # balance = 250.00 USDC (250000000)
+rustman evm call --to 0xA0b8… --abi erc20 --function balanceOf vitalik.eth
+rustman evm call vault.rman.yaml --estimate --trace   # gas estimate and simulated call tree, when the node supports it
+rustman evm decode --abi erc20 0xa9059cbb…             # offline: transfer(to=0xd8dA…, amount=10)
+rustman evm tx 0xdeed… --env mainnet                   # decoded transaction, receipt and logs
+rustman evm logs --address 0xA0b8… --event "Transfer(address,address,uint256)" --max-events 5
+rustman evm ens vitalik.eth --env mainnet
+rustman evm fork --chain mainnet --block 20000000      # local Anvil fork with a temporary fork-<chain> environment
+```
+
+- **Chain pinning.** An environment pins `chain_id`, and Rustman refuses to call a node that reports a different chain (exit code 4). The node client (geth, reth, erigon, Anvil...) is detected and shown.
+- **Decodes everything:** calls, outputs, logs, transactions and receipts, `Error(string)`, `Panic` codes and custom errors. ERC-20/721/1155 ABIs are built in; Foundry and Hardhat artifacts and JSON ABIs load from the workspace, and verified ABIs can be fetched from an explorer (off by default). Token amounts are shown in token units with the raw integer.
+- **Simulation:** `eth_call` at any block with state overrides, gas estimates, and call traces (`debug_traceCall` or `trace_call`).
+- **Assertions and captures on decoded values**, in the output's own units: `gte: "250 USDC"`, "event emitted", "reverts with".
+- **Streams:** new heads and logs over WebSocket, with HTTP polling as a fallback and reorged logs marked.
+- **TUI and agents:** `evm-call` files open in an EVM pane (function picker, typed arguments, block, decoded result, trace and events). `rustman mcp serve` adds six read-only EVM tools, with log queries capped at 10,000 blocks.
+
+<p align="center">
+  <img src="docs/images/tui-evm.svg" alt="Rustman TUI EVM pane: an evm-call request's Function tab listing the view functions of the built-in ERC-20 ABI, with balanceOf(address) chosen, next to the sidebar's EVM entry" width="49%">
+</p>
+
+**Probing providers.** `rustman evm probe` checks one or more RPC providers, read-only and under the safety policy (host allowlist, rate, concurrency and a request budget per provider): which methods each one supports, archive or full node, latency per method, `newHeads` and log subscriptions, and, with two or more, head drift and whether they agree on a block hash and state at a fixed block. The result is an exploration report in every report format, with `--fail-on`. API keys typed into a URL are redacted. See [`docs/evm-probe.md`](docs/evm-probe.md).
+
+```bash
+rustman evm probe https://rpc-a.example https://rpc-b.example --report html=probe.html
+rustman evm probe mainnet-a --methods all --rate-discovery --max-rate 20
+```
+
+**Blockchain GraphQL.** GraphQL requests get presets for geth's EIP-1767 endpoint and The Graph subgraphs, detected from the schema or set with `preset:`. Values are formatted only for display (exact `BigInt` decimals, hex, token units, checksummed addresses), while assertions compare the raw values. Subgraph lists can be paged, and a subgraph's lag behind the chain head is checked. See [`docs/evm.md`](docs/evm.md#blockchain-graphql-presets).
+
+```yaml
+# subgraph/transfers.rman.yaml
+version: 1
+kind: graphql
+name: Transfers
+endpoint: "{{subgraph}}"
+preset: subgraph
+document: |
+  query Transfers($last: ID) {
+    transfers(first: 1000, where: {id_gt: $last}) { id from to value transactionHash }
+  }
+assertions:
+  - subgraph: {max_lag_blocks: 50}
+```
+
+```bash
+rustman graphql query subgraph/transfers.rman.yaml --paginate --max-pages 50   # follows id_gt and joins the pages
+rustman graphql query subgraph/transfers.rman.yaml --raw                       # values as the server sent them
+```
+
+**Signing.** `kind: evm-tx` requests are the only way Rustman signs or sends a transaction, from the command line. See [`docs/evm-signing.md`](docs/evm-signing.md).
+
+```bash
+rustman evm signer import ci                            # a key into the OS keychain (no-echo prompt)
+rustman evm send transfer.rman.yaml --env sepolia       # decoded preview only: refuses without --sign
+rustman evm send transfer.rman.yaml --env sepolia --sign
+rustman run . --env anvil --sign --yes-local            # CI on a local Anvil chain, no prompt
+```
 
 > [!IMPORTANT]
-> **Signing is locked by default.** `rustman evm send <file> --sign` works only if the workspace sets `[evm] allow_signing = true` and the environment's chain id matches the node. Signers are encrypted keystores, the OS keychain, or Ledger/Trezor; raw private keys are rejected. Every transaction is simulated first and shown decoded for you to confirm, and mainnet requires typing the chain name. **AI agents can never sign**: there's no code path for it. Raw `eth_sendRawTransaction` calls are blocked as well.
+> **Signing is locked by default.** It needs `[evm] allow_signing = true` in `rustman.toml`, `--sign`, a keystore or OS-keychain signer (raw private keys and seed phrases are refused everywhere), and an environment whose `chain_id` matches the node. Every transaction is simulated, then shown decoded for you to confirm; mainnet and `protected_chains` also need the chain name typed, and `--yes-local` works only on local chains (31337 or `headless_signing_chains`) up to `[evm] max_cost`. Every sent transaction gets an audit record. **AI agents can never sign:** the agent server doesn't link the signing crate, and send methods are refused in `jsonrpc` files, EVM calls and JSON-RPC bodies of `http` requests. Ledger and Trezor signers ([#111](https://github.com/CyberdyneCorp/rustman/issues/111)) and signing from the TUI ([#112](https://github.com/CyberdyneCorp/rustman/issues/112)) come later.
 
 ### 11. Migrate from other tools in one command
 
@@ -651,7 +711,7 @@ rustman secret list-providers
 - snapshot, contract, load and stress testing
 - generated API docs and trace propagation
 - traffic recording, monitors, message brokers and WASM plugins
-- an Ethereum console (in progress)
+- an Ethereum console with provider probing, subgraph helpers and a signing gate
 - a single native binary
 
 ---
@@ -708,7 +768,8 @@ graph TD
 | `rustman-import` | Postman, Insomnia, Bruno, HAR and `.http` import and export |
 | `rustman-mock` | OpenAPI mock server |
 | `rustman-viz` | Optional Raven GUI companion: a separate binary in its own workspace (`crates/rustman-viz`) |
-| `rustman-evm` | _In progress:_ Ethereum toolkit on `alloy`: ABI, decoding, simulation, ENS, signing gate |
+| `rustman-evm` | Ethereum toolkit on `alloy`: chain identity, units, ABIs, decoding, simulation, traces, streams, ENS, Anvil forks, provider probing, blockchain GraphQL presets. Never signs. |
+| `rustman-evm-signing` | The signing gate: keystore and keychain signers, preconditions, confirmation, send, receipt wait and audit. The agent server does not link it. |
 | `rustman-realtime` | WebSocket and SSE sessions |
 | `rustman-messaging` | Kafka, MQTT and AMQP clients (pure Rust: `rskafka`, `rumqttc`, `lapin`) and AsyncAPI import |
 | `rustman-proxy` | Traffic recorder: forward and reverse proxy, local CA, HTTPS interception |
@@ -730,7 +791,7 @@ graph TD
 
 ## Roadmap
 
-All 26 changes are specified in OpenSpec. v0.1 (headless core), v0.2 (usable), v0.3 (autonomous), v0.4 (multi-protocol), v0.5 (protocols), v0.6 (pro testing) and v0.7 (operate & extend) are done, and the EVM toolkit side track is in progress before v1.0; open work is tracked in the [roadmap tracking issue](https://github.com/CyberdyneCorp/rustman/issues/46). Releases are ordered by dependency, user value and risk. The full delivery plan, with exit criteria, shared enablers and risks, is in [`ROADMAP.md`](ROADMAP.md).
+All 26 changes are specified in OpenSpec. v0.1 (headless core), v0.2 (usable), v0.3 (autonomous), v0.4 (multi-protocol), v0.5 (protocols), v0.6 (pro testing) and v0.7 (operate & extend) are done, as are both side tracks (the Raven companion and the EVM toolkit). v1.0 (stabilize) is next; open work is tracked in the [roadmap tracking issue](https://github.com/CyberdyneCorp/rustman/issues/46). Releases are ordered by dependency, user value and risk. The full delivery plan, with exit criteria, shared enablers and risks, is in [`ROADMAP.md`](ROADMAP.md).
 
 | Release | Changes | You get | Status |
 |---|---|---|---|
@@ -742,8 +803,8 @@ All 26 changes are specified in OpenSpec. v0.1 (headless core), v0.2 (usable), v
 | **v0.5 - Protocols** | `add-jsonrpc-client`, `add-grpc-client`, `add-realtime-client` | JSON-RPC, gRPC, WebSocket and SSE | ✅ done |
 | **v0.6 - Pro testing** | `add-contract-testing`, `add-trace-propagation`, `add-load-testing`, `add-docs-generator`, `add-stress-testing` | Breaking-change checks, tracing, load and stress tests, generated docs | ✅ done |
 | **v0.7 - Operate & extend** | `add-secret-providers`, `add-scheduled-monitors`, `add-plugin-system`, `add-traffic-recorder`, `add-messaging-client` | Secret providers, monitors, plugins, traffic recorder, message brokers | ✅ done |
-| **Side tracks** | `add-raven-visualizer`, `add-evm-toolkit` | Raven dashboards, Ethereum console (never block a release) | 🚧 Raven companion shipped; EVM toolkit in progress (read-only part in review) |
-| **v1.0 - Stable** | — | Frozen request-file, report, viz and plugin formats; signed release artifacts | — |
+| **Side tracks** | `add-raven-visualizer`, `add-evm-toolkit` | Raven dashboards, Ethereum console (never block a release) | ✅ done |
+| **v1.0 - Stable** | — | Frozen request-file, report, viz and plugin formats; signed release artifacts; a migration guide | next |
 
 The glossary, capability map and cross-cutting contracts are in [`openspec/ROADMAP.md`](openspec/ROADMAP.md).
 

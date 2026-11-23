@@ -41,6 +41,7 @@ frame graphql-schema "${gql[@]}" --keys "Tab 3 Tab Down Down Enter"
 frame jsonrpc --open rpc/get-balance.rman.yaml \
     --keys "Ctrl+B Tab Tab End Backspace Backspace Backspace Backspace Backspace Backspace Backspace"
 grpc=(--open grpc/list-products.rman.yaml --response "$here/grpc-list-products.json")
+frame evm --open rpc/usdc-balance.rman.yaml --keys "Tab Tab Down"
 frame grpc "${grpc[@]}" --keys "Ctrl+B"
 frame grpc-timeline "${grpc[@]}" --keys "Ctrl+B Tab 2 Tab Tab ] ]"
 frame mcp --keys "Alt+I Down Enter"
