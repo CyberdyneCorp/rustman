@@ -9,7 +9,9 @@
 use rustman_core::secrets::provider::neutralize_references;
 use serde_json::Value;
 
-use crate::ir::{Check, Folder, ImportedCollection, Item, Location, Note, NoteKind, VisitStrings};
+use crate::ir::{
+    Check, Folder, ImportedBody, ImportedCollection, Item, Location, Note, NoteKind, VisitStrings,
+};
 
 /// Neutralize every secret reference in the strings of `collection` that
 /// become request or environment fields, noting each one.
@@ -60,7 +62,20 @@ fn neutralize_folder(folder: &mut Folder, notes: &mut Vec<Note>) {
             Item::Folder(child) => neutralize_folder(child, notes),
             Item::Request(request) => {
                 let mut found = Vec::new();
+                // GraphQL variables are JSON text rendered as structured
+                // `variables:`: escape inside their strings so they stay
+                // valid JSON, not in the raw text.
+                let variables = match &mut request.body {
+                    Some(ImportedBody::Graphql { variables, .. }) => variables.take(),
+                    _ => None,
+                };
                 request.visit_strings(&mut |s| found.extend(neutralize_references(s)));
+                if let Some(mut text) = variables {
+                    found.extend(neutralize_json_text(&mut text));
+                    if let Some(ImportedBody::Graphql { variables, .. }) = &mut request.body {
+                        *variables = Some(text);
+                    }
+                }
                 push_notes(notes, found, &request.location);
             }
         }
@@ -116,7 +131,7 @@ fn push_notes(notes: &mut Vec<Note>, mut found: Vec<String>, at: &Location) {
 mod tests {
     use super::*;
     use crate::ir::{
-        ImportedAuth, ImportedBody, ImportedEnvironment, ImportedRequest, Pair, Variable,
+        Grant, ImportedAuth, ImportedEnvironment, ImportedOAuth2, ImportedRequest, Pair, Variable,
     };
 
     const REF: &str = "{{secret:vault/kv/prod/db#password}}";
@@ -192,6 +207,45 @@ mod tests {
         assert_eq!(review.len(), 3, "{review:?}");
         assert!(review[0].message.contains(REF), "{}", review[0].message);
         assert_eq!(review[0].location.item.as_deref(), Some("Leak"));
+    }
+
+    #[test]
+    fn oauth2_scopes_are_neutralized() {
+        let mut c = collection();
+        let request = c.root.requests_mut().pop().unwrap();
+        request.auth = Some(ImportedAuth::Oauth2(ImportedOAuth2 {
+            grant: Grant::ClientCredentials,
+            token_url: "https://evil.test/token".into(),
+            auth_url: None,
+            client_id: "x".into(),
+            client_secret: None,
+            scopes: vec!["read".into(), REF.into()],
+        }));
+        neutralize(&mut c);
+        let request = c.root.requests_mut().pop().unwrap();
+        let Some(ImportedAuth::Oauth2(o)) = &request.auth else {
+            panic!("oauth2 auth");
+        };
+        assert_eq!(o.scopes, ["read", "\\{{secret:vault/kv/prod/db#password}}"]);
+    }
+
+    #[test]
+    fn graphql_variables_stay_valid_json() {
+        let mut c = collection();
+        let request = c.root.requests_mut().pop().unwrap();
+        request.body = Some(ImportedBody::Graphql {
+            query: "query { me }".into(),
+            variables: Some(format!(r#"{{"id": "42", "pw": "{REF}"}}"#)),
+        });
+        neutralize(&mut c);
+        let request = c.root.requests_mut().pop().unwrap();
+        let Some(ImportedBody::Graphql { variables, .. }) = &request.body else {
+            panic!("graphql body");
+        };
+        let value: Value = serde_json::from_str(variables.as_deref().unwrap()).unwrap();
+        assert_eq!(value["id"], "42");
+        assert_eq!(value["pw"], "\\{{secret:vault/kv/prod/db#password}}");
+        assert!(c.notes.iter().any(|n| n.message.contains(REF)));
     }
 
     #[test]

