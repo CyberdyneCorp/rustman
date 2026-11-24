@@ -1,10 +1,13 @@
 # Rustman documentation
 
-User and developer documentation for Rustman. Pages are added as the features they describe are implemented; the behavior itself is specified in [`openspec/`](../openspec/).
+User and developer documentation for Rustman. Pages are added as the features they describe are implemented; the behavior itself is specified in [`openspec/`](https://github.com/CyberdyneCorp/rustman/tree/main/openspec/).
+
+The same pages are published as a book at <https://cyberdynecorp.github.io/rustman/>, built with [mdBook](https://rust-lang.github.io/mdBook/) from this folder: `docs/SUMMARY.md` is its table of contents, and `python3 scripts/check_docs.py` checks that every page is listed there and every relative link and anchor resolves.
 
 ## Available
 
-- [Install and quick start](../README.md#install-and-quick-start-current-state)
+- [Install and quick start](getting-started.md): building from source, a first workspace and a short tour of the commands
+- [Migrating from Postman](migrate-from-postman.md): Postman and Newman concepts mapped to Rustman, a step-by-step migration (export, `rustman import`, review the converted scripts, run in CI) and the known gaps
 - [Request files](request-files.md): the workspace layout, `rustman.toml`, the `*.rman.yaml` format with one example per body type, collections and `rustman init`
 - [Environments, variables and secrets](environments.md): environment files, the active environment, variable precedence, dynamic variables, `rustman secret`, secret storage and redaction, and the CI pattern
 - [Secret providers](secrets.md): `{{secret:<provider>/<path>#field}}` references and provider-backed environment variables, resolution at send time only, `[secret_providers.*]` in `rustman.toml` and the user config (no credentials, no commands in the workspace), the `keychain`, `env`, `sops` (age, PGP via `gpg`), `onepassword` (`op` CLI, Connect), `vault` (KV v1/v2, token, AppRole, OIDC), `cmd` and cloud provider types, timeouts, the in-memory cache and Refresh secrets, failures and exit codes, redaction, `rustman secret get|test|list-providers`, and agents
@@ -48,4 +51,4 @@ User and developer documentation for Rustman. Pages are added as the features th
 - [Contract testing](contract.md): `rustman contract diff` for two OpenAPI documents or `--base <git-ref>`, exit codes and strictness (`--fail-on-unknown`, `--fail-on non-breaking`), the `contracts/allowlist.yaml` allowlist (justification, `expires`, expired and unused entries), a GitHub Actions pull request workflow, Pact contracts (`rustman contract pact generate` from a collection, `rustman contract pact verify` against a provider with provider states and the safety policy), passive conformance of recorded traffic (`rustman contract verify`), `kind: contract` reports, and redaction
 - [Contract rule catalog](contract-rules.md): `rustman contract diff` and `rustman contract rules`, how two OpenAPI documents are matched and compared (request and response directions, `$ref`s, recursive schemas, compositions), the JSON pointers of each difference, and every rule with its classification, description and example (generated from the catalog, with its version)
 - [Import report schema](schemas/import-report.schema.json): the JSON Schema of `rustman.import-report/v1`
-
+- [JSON schemas](json-schemas.md): the machine-readable output formats and where their schemas live

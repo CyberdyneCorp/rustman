@@ -2,7 +2,7 @@
 
 A monitor runs some of a workspace's requests on a schedule and keeps the results locally, so "is this still working right now?" has an answer without a SaaS. Monitors are plain files in the workspace; their results stay on the machine in `.rustman/monitors/`, which Git must ignore.
 
-The behavior is specified in [`openspec/specs/monitors`](../openspec/specs/monitors/spec.md). This page covers monitor files, schedules, one-shot runs and their safety policy, alerts and notification channels, the daemon and external scheduler recipes, the status and history views (CLI and TUI), and the result store with its retention.
+The behavior is specified in [`openspec/specs/monitors`](https://github.com/CyberdyneCorp/rustman/blob/main/openspec/specs/monitors/spec.md). This page covers monitor files, schedules, one-shot runs and their safety policy, alerts and notification channels, the daemon and external scheduler recipes, the status and history views (CLI and TUI), and the result store with its retention.
 
 ## Monitor files
 

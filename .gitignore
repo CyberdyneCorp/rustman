@@ -6,3 +6,6 @@
 
 # insta writes pending snapshots next to the accepted ones
 *.snap.new
+
+# mdBook output (book.toml)
+/book/

@@ -7,7 +7,7 @@ $ rustman docs build
 wrote 12 files to site/
 ```
 
-The behavior is specified in [`openspec/specs/api-docs-generation`](../openspec/specs/api-docs-generation/spec.md).
+The behavior is specified in [`openspec/specs/api-docs-generation`](https://github.com/CyberdyneCorp/rustman/blob/main/openspec/specs/api-docs-generation/spec.md).
 
 ## The generated site
 

@@ -1,6 +1,6 @@
 # GraphQL
 
-Rustman treats GraphQL as more than an HTTP POST: requests are `kind: graphql` files, and a schema (introspected and cached, or read from a file) drives validation, completion and the explorer. The behavior is specified in [`openspec/specs/graphql-requests`](../openspec/specs/graphql-requests/spec.md).
+Rustman treats GraphQL as more than an HTTP POST: requests are `kind: graphql` files, and a schema (introspected and cached, or read from a file) drives validation, completion and the explorer. The behavior is specified in [`openspec/specs/graphql-requests`](https://github.com/CyberdyneCorp/rustman/blob/main/openspec/specs/graphql-requests/spec.md).
 
 ## Request files
 

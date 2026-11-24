@@ -173,7 +173,7 @@ auth:
     - profile
 ```
 
-The authorization-code grant needs a person at a terminal. When `rustman send` or `rustman run` has no terminal on stdin (as in CI) and no cached token, the request fails with `oauth2: interactive login required (run 'rustman auth login <request>')`. Run `rustman auth login http/oauth-login --env prod` once on a workstation; later runs reuse and refresh the cached token. When the token goes to `.rustman/secrets.yaml` rather than the OS keychain (no keychain, or `RUSTMAN_SECRET_STORE=file`), `rustman auth login` says so once: `warning: OAuth2 tokens are stored in .rustman/secrets.yaml (git-ignored, readable by you only), not in the OS keychain`. See [secret storage](environments.md#secret-storage).
+The authorization-code grant needs a person at a terminal. When `rustman send` or `rustman run` has no terminal on stdin (as in CI) and no cached token, the request fails with `oauth2: interactive login required (run 'rustman auth login <request>')`. Run `rustman auth login http/oauth-login --env prod` once on a workstation; later runs reuse and refresh the cached token. When the token goes to `.rustman/secrets.yaml` rather than the OS keychain (no keychain, or `RUSTMAN_SECRET_STORE=file`), `rustman auth login` says so once: `warning: OAuth2 tokens are stored in .rustman/secrets.yaml (git-ignored, readable by you only), not in the OS keychain`. See [secret storage](environments.md#where-secrets-are-stored).
 
 ## Timing breakdown
 

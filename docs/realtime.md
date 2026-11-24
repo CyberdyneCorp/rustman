@@ -1,6 +1,6 @@
 # WebSocket and Server-Sent Events
 
-Rustman opens WebSocket sessions and listens to Server-Sent Events (SSE) streams from saved request files: chat and trading feeds, notifications, dashboards and LLM token streams. Each session records a message timeline, ends on its own under `rustman run`, and takes assertions and captures over the messages it received. The file format is in [request-files.md](request-files.md#websocket-and-sse-requests); the behavior is specified in [`openspec/specs/realtime-sessions`](../openspec/specs/realtime-sessions/spec.md). GraphQL subscriptions are covered by [GraphQL](graphql.md) and JSON-RPC subscriptions by [JSON-RPC](jsonrpc.md).
+Rustman opens WebSocket sessions and listens to Server-Sent Events (SSE) streams from saved request files: chat and trading feeds, notifications, dashboards and LLM token streams. Each session records a message timeline, ends on its own under `rustman run`, and takes assertions and captures over the messages it received. The file format is in [request-files.md](request-files.md#websocket-and-sse-requests); the behavior is specified in [`openspec/specs/realtime-sessions`](https://github.com/CyberdyneCorp/rustman/blob/main/openspec/specs/realtime-sessions/spec.md). GraphQL subscriptions are covered by [GraphQL](graphql.md) and JSON-RPC subscriptions by [JSON-RPC](jsonrpc.md).
 
 ## WebSocket sessions
 

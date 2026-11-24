@@ -6,7 +6,7 @@ The mock is a development tool, not a security boundary. It binds to loopback by
 
 The [TUI](tui.md#mock-server-pane) runs the same server in its mock server pane (`Alt+O`).
 
-The behavior is specified in [`openspec/specs/mock-server`](../openspec/specs/mock-server/spec.md).
+The behavior is specified in [`openspec/specs/mock-server`](https://github.com/CyberdyneCorp/rustman/blob/main/openspec/specs/mock-server/spec.md).
 
 ## Starting the mock
 
@@ -410,7 +410,7 @@ Each saved file is reported on stderr (`mock: recorded recorded/get-legacy-repor
 
 ## Self-check against the explorer
 
-A mock of a valid document is a consistent [exploration](exploration.md) target: the explorer's conformance probes find nothing against it. CI checks this for [`fixtures/petstore.yaml`](../fixtures/petstore.yaml):
+A mock of a valid document is a consistent [exploration](exploration.md) target: the explorer's conformance probes find nothing against it. CI checks this for [`fixtures/petstore.yaml`](https://github.com/CyberdyneCorp/rustman/blob/main/fixtures/petstore.yaml):
 
 ```bash
 rustman mock serve fixtures/petstore.yaml --port 4010 &
