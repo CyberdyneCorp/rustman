@@ -62,11 +62,13 @@ pub fn run(args: &IntrospectArgs) -> Result<u8, CliError> {
     }
     let engine = HttpEngine::new();
     let resolved = &target.resolved;
+    let max_schema_bytes = target.settings.graphql.max_schema_bytes;
     let fetched = runtime()?.block_on(async {
         match &target.root {
             Some(root) => {
                 let cache = SchemaCache::for_workspace(root);
-                let cached = refresh_schema(&engine, &options, resolved, &cache).await?;
+                let cached =
+                    refresh_schema(&engine, &options, resolved, &cache, max_schema_bytes).await?;
                 Ok::<_, GraphqlError>(Fetched {
                     endpoint: cached.endpoint,
                     fetched_at: cached.fetched_at,
@@ -75,7 +77,8 @@ pub fn run(args: &IntrospectArgs) -> Result<u8, CliError> {
                 })
             }
             None => {
-                let introspected = introspect(&engine, &options, resolved).await?;
+                let introspected =
+                    introspect(&engine, &options, resolved, max_schema_bytes).await?;
                 let endpoint = normalize_endpoint(&resolved.http.url.text)?;
                 Ok(Fetched {
                     endpoint: resolved.redactor().text(&endpoint).into_owned(),

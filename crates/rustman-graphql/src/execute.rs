@@ -300,8 +300,14 @@ async fn send(
 /// (`[http] max_body_bytes`): a result is parsed whole and recorded, so it
 /// is never spilled to disk, read back or stored past that cap.
 fn capped(options: &SendOptions) -> SendOptions {
+    capped_at(options, options.body.max_in_memory)
+}
+
+/// `options` with the body kept in memory and its download stopped at
+/// `limit` bytes (as received and decompressed), so it is never spilled.
+pub(crate) fn capped_at(options: &SendOptions, limit: u64) -> SendOptions {
     let mut capped = options.clone();
-    let limit = options.body.max_in_memory;
+    capped.body.max_in_memory = limit;
     capped.body.max_download = limit;
     capped.body.max_decoded = limit;
     capped
@@ -309,7 +315,7 @@ fn capped(options: &SendOptions) -> SendOptions {
 
 /// Whether `error` is the body reader stopping at `limit` bytes (as
 /// received or decompressed).
-fn over_limit(error: &RequestError, limit: u64) -> bool {
+pub(crate) fn over_limit(error: &RequestError, limit: u64) -> bool {
     let RequestError::Network(message) = error else {
         return false;
     };

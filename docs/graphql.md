@@ -91,6 +91,22 @@ graphql: introspection failed: HTTP 502: response is not a GraphQL result; set s
 
 The result is converted to SDL and parsed. A schema that parses but breaks a validation rule is kept, with warnings: it is what the server executes.
 
+The response is parsed whole, so it is held in memory and may be at most `rustman.toml [graphql] max_schema_bytes` (64 MiB by default). This limit replaces `[http] max_body_bytes` and `max_download_bytes` for introspection: real schemas can come close to the 10 MiB `max_body_bytes` default, so a schema between the two is kept in memory rather than spilled to disk. A larger response stops downloading as soon as the limit is passed and is refused, without being parsed, spilled to disk, read back or cached (exit code 3):
+
+```text
+graphql: introspection failed: the response is larger than the 67108864 byte limit ([graphql] max_schema_bytes); set schema_file to validate offline
+```
+
+```toml
+# rustman.toml
+[workspace]
+name = "shop"
+version = 1
+
+[graphql]
+max_schema_bytes = 134217728   # allow schemas up to 128 MiB
+```
+
 ### Schema cache
 
 Introspection results are cached in `.rustman/graphql/schemas/<hash>.json`, under the workspace root (`rustman init` adds `.rustman/` to `.gitignore`). `<hash>` is the SHA-256 of the normalized endpoint: scheme, host, port and path, with user info, query and fragment removed. Endpoints that differ only in their query share a cache entry; each environment's host gets its own.

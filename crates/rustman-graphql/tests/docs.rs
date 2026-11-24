@@ -47,10 +47,18 @@ fn the_request_examples_load() {
 }
 
 #[test]
-fn the_settings_example_parses_without_warnings() {
-    for toml in blocks("toml") {
-        let (settings, warnings) = Settings::parse(Path::new("rustman.toml"), &toml).unwrap();
-        assert!(warnings.is_empty(), "{warnings:?}");
-        assert_eq!(settings.graphql.endpoints.len(), 1);
-    }
+fn the_settings_examples_parse_without_warnings() {
+    let parsed: Vec<Settings> = blocks("toml")
+        .iter()
+        .map(|toml| {
+            let (settings, warnings) = Settings::parse(Path::new("rustman.toml"), toml).unwrap();
+            assert!(warnings.is_empty(), "{warnings:?}");
+            settings
+        })
+        .collect();
+    let [limit, endpoints] = parsed.as_slice() else {
+        panic!("two rustman.toml examples, not {}", parsed.len());
+    };
+    assert_eq!(limit.graphql.max_schema_bytes, 128 * 1024 * 1024);
+    assert_eq!(endpoints.graphql.endpoints.len(), 1);
 }
