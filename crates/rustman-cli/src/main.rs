@@ -96,7 +96,7 @@ enum Command {
     Contract(commands::contract::ContractArgs),
     /// Open the trace link of a past exchange in the browser
     Trace(commands::trace::TraceArgs),
-    /// Open a run or exploration report in the graphical viz companion (rustman-viz)
+    /// Open a run, exploration or bench report in the graphical viz companion (rustman-viz)
     Viz(commands::viz::VizArgs),
     /// Generate static API documentation from the workspace, or preview it
     Docs(commands::docs::DocsArgs),

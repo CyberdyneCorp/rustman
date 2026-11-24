@@ -2,13 +2,13 @@
 source: crates/rustman-cli/src/tests.rs
 expression: help
 ---
-Open a run or exploration report in the graphical viz companion (rustman-viz)
+Open a run, exploration or bench report in the graphical viz companion (rustman-viz)
 
 Usage: rustman viz [OPTIONS] <REPORT>
 
 Arguments:
   <REPORT>
-          A JSON report from `rustman run --reporter json` or `rustman explore run`
+          A JSON report from `rustman run --reporter json`, `rustman explore run` or `rustman bench --report json=<file>`
 
 Options:
       --view <VIEW>

@@ -36,7 +36,7 @@ Commands:
   sse          Listen to Server-Sent Events streams and print their events
   contract     Contract testing: classify OpenAPI changes as breaking or not, Pact contracts and passive conformance
   trace        Open the trace link of a past exchange in the browser
-  viz          Open a run or exploration report in the graphical viz companion (rustman-viz)
+  viz          Open a run, exploration or bench report in the graphical viz companion (rustman-viz)
   docs         Generate static API documentation from the workspace, or preview it
   monitor      Scheduled monitors: run collections on a schedule, store the results locally and alert
   record       Record HTTP(S) traffic through a local proxy; manage its local CA
