@@ -7,7 +7,7 @@ rustman import openapi petstore.yaml
 rustman import openapi https://api.example.com/openapi.json --into apis/shop
 ```
 
-It prints `imported <n> operations into <dir>` and one `created environment '<name>'` line per new environment on stdout, and every warning on stderr. `--sync` updates a collection imported earlier (see [Sync](#sync)). The behavior is specified in [`openspec/changes/add-openapi-explorer/specs/openapi-import`](../openspec/changes/add-openapi-explorer/specs/openapi-import/spec.md).
+It prints `imported <n> operations into <dir>` and one `created environment '<name>'` line per new environment on stdout, and every warning on stderr. `--sync` updates a collection imported earlier (see [Sync](#sync)). The behavior is specified in [`openspec/specs/openapi-import`](../openspec/specs/openapi-import/spec.md).
 
 ## Supported documents
 

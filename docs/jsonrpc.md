@@ -1,6 +1,6 @@
 # JSON-RPC
 
-Rustman sends JSON-RPC 2.0 calls, batches, notifications and subscriptions over HTTP and WebSocket to any JSON-RPC service: EVM nodes, Bitcoin Core, Solana, Starknet and LSP-style services. It is chain-agnostic: method names are never interpreted and values are never decoded, so `"0x10"` stays `0x10`. The request file format is in [request-files.md](request-files.md#json-rpc-requests); the behavior is specified in [`openspec/changes/add-jsonrpc-client`](../openspec/changes/add-jsonrpc-client/).
+Rustman sends JSON-RPC 2.0 calls, batches, notifications and subscriptions over HTTP and WebSocket to any JSON-RPC service: EVM nodes, Bitcoin Core, Solana, Starknet and LSP-style services. It is chain-agnostic: method names are never interpreted and values are never decoded, so `"0x10"` stays `0x10`. The request file format is in [request-files.md](request-files.md#json-rpc-requests); the behavior is specified in [`openspec/specs/jsonrpc-requests`](../openspec/specs/jsonrpc-requests/spec.md).
 
 ## Envelopes and ids
 

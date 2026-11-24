@@ -1,6 +1,6 @@
 # Terminal UI
 
-`rustman` with no subcommand, or `rustman tui [PATH]`, opens the full-screen terminal UI. The TUI is being built in stages ([tasks](../openspec/changes/add-terminal-ui/tasks.md)); this page describes what works today.
+`rustman` with no subcommand, or `rustman tui [PATH]`, opens the full-screen terminal UI. The behavior is specified in [`openspec/specs/tui`](../openspec/specs/tui/spec.md).
 
 ## Starting
 

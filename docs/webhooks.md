@@ -2,7 +2,7 @@
 
 `rustman webhook listen` runs a local HTTP listener that captures every inbound request (any method, any path), answers it with a default acknowledgement or a mock you configure, and prints an event log. It is meant for testing webhook producers (GitHub, Stripe, your own services) without a third-party service; pair it with your own tunnel if the producer is on the internet.
 
-The behavior is specified in [`openspec/changes/add-webhook-inspector`](../openspec/changes/add-webhook-inspector/).
+The behavior is specified in [`openspec/specs/webhook-inspector`](../openspec/specs/webhook-inspector/spec.md).
 
 ## Starting the listener
 

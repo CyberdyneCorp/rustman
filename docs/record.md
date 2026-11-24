@@ -2,7 +2,7 @@
 
 `rustman record` runs a local recording proxy. Point an app or a CLI at it and every request it sends is relayed to the real server and recorded, so you can see what the app actually sends. HTTPS stays opaque unless you explicitly include its host and trust a local certificate authority (CA) that Rustman creates for the workspace.
 
-The behavior is specified in [`openspec/changes/add-traffic-recorder`](../openspec/changes/add-traffic-recorder/).
+The behavior is specified in [`openspec/specs/traffic-recorder`](../openspec/specs/traffic-recorder/spec.md).
 
 ## Starting the proxy
 
