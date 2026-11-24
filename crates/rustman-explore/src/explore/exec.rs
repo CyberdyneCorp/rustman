@@ -22,6 +22,7 @@ use rustman_core::vars::{
     VariablesSource, resolve_request,
 };
 use rustman_core::{Environment, Redactor, RequestRef, Secret};
+use rustman_http::runner::SpanExport;
 use rustman_http::{Exchange, GovernedError, GovernedSender, SendOptions, export_curl};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -92,22 +93,15 @@ pub fn exploration_send_options(
     })
 }
 
-/// The warning shown when `[trace.export]` is on for an exploration:
-/// probes carry trace context, but their client spans are not exported.
-pub const EXPORT_NOT_SUPPORTED: &str =
-    "trace.export: explorations do not export client spans yet; probes still carry trace headers";
-
-/// [`EXPORT_NOT_SUPPORTED`] when the active environment's trace
-/// configuration over `settings` enables export.
-pub fn exploration_export_warning(
-    settings: &Settings,
-    environment: Option<&Environment>,
-) -> Option<&'static str> {
+/// The span export of an exploration: `[trace.export]` of `environment`
+/// over `settings`, as a run of that environment exports. Give it to
+/// [`Executor::exporting`]; without export it does nothing.
+pub fn exploration_export(settings: &Settings, environment: Option<&Environment>) -> SpanExport {
     let config = match environment {
         Some(env) => env.trace.over(&settings.trace),
         None => settings.trace.clone(),
     };
-    config.is_exporting().then_some(EXPORT_NOT_SUPPORTED)
+    SpanExport::new(&config)
 }
 
 /// How a probe ended.
@@ -204,6 +198,8 @@ pub struct Executor<'a> {
     known: Redactor,
     /// What each probe in flight has created so far.
     in_flight: Mutex<BTreeMap<String, Vec<Resource>>>,
+    /// `[trace.export]`: the client span of each probe exchange.
+    export: SpanExport,
 }
 
 /// One step's response, with what it was sent as.
@@ -237,7 +233,28 @@ impl<'a> Executor<'a> {
             creators,
             known,
             in_flight: Mutex::default(),
+            export: SpanExport::default(),
         }
+    }
+
+    /// Export the client span of every exchange (probe steps and cleanup
+    /// deletes) through `export`: see [`exploration_export`].
+    #[must_use]
+    pub fn exporting(mut self, export: SpanExport) -> Self {
+        self.export = export;
+        self
+    }
+
+    /// Send the spans queued so far, waiting at most `wait`; a no-op
+    /// without export.
+    pub fn flush_spans(&self, wait: std::time::Duration) {
+        self.export.flush(wait);
+    }
+
+    /// Warnings about span export since the last call: a collector that
+    /// failed (at most one a minute), or a build without the `otlp` feature.
+    pub fn export_warnings(&self) -> Vec<String> {
+        self.export.take_warnings()
     }
 
     /// The sender every request goes through.
@@ -303,6 +320,9 @@ impl<'a> Executor<'a> {
         let mut redactor = exchange.redactor(&resolved);
         redactor.merge(&self.known);
         add_credentials(&mut redactor, &resolved);
+        let id = format!("{}/{}", probe.id, step.name);
+        self.export
+            .record_exchange(&id, &resolved, &exchange, &redactor);
         outcome.sent.push(Sent {
             step: step.name.clone(),
             operation: step.operation.clone(),
@@ -372,7 +392,13 @@ impl<'a> Executor<'a> {
             .sender
             .send_cleanup(&resolved, &self.context.send)
             .await;
-        Ok(sent.map_err(status_of)?.status)
+        let exchange = sent.map_err(status_of)?;
+        let mut redactor = exchange.redactor(&resolved);
+        redactor.merge(&self.known);
+        add_credentials(&mut redactor, &resolved);
+        self.export
+            .record_exchange("cleanup", &resolved, &exchange, &redactor);
+        Ok(exchange.status)
     }
 
     /// Record the findings of a step's response, each with its evidence
@@ -856,9 +882,13 @@ mod tests {
     }
 
     #[test]
-    fn an_exporting_exploration_is_warned_about() {
+    fn an_exploration_exports_with_its_environment() {
         let settings = Settings::ad_hoc();
-        assert_eq!(exploration_export_warning(&settings, None), None);
+        assert!(
+            exploration_export(&settings, None)
+                .take_warnings()
+                .is_empty()
+        );
         let env = Environment {
             name: "staging".into(),
             trace: rustman_core::trace::TraceConfig {
@@ -871,9 +901,13 @@ mod tests {
             },
             ..Environment::default()
         };
-        assert_eq!(
-            exploration_export_warning(&settings, Some(&env)),
-            Some(EXPORT_NOT_SUPPORTED)
-        );
+        let warnings = exploration_export(&settings, Some(&env)).take_warnings();
+        if rustman_http::runner::OTLP_BUILT {
+            // The exporter is created; nothing failed yet.
+            assert!(warnings.is_empty(), "{warnings:?}");
+        } else {
+            assert_eq!(warnings.len(), 1, "{warnings:?}");
+            assert!(warnings[0].contains("cannot export spans"), "{warnings:?}");
+        }
     }
 }

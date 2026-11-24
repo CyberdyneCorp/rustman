@@ -158,6 +158,90 @@ fn otel_variables_are_ignored_without_use_env() {
     assert_eq!(collector.collector.hits().len(), 1);
 }
 
+/// The probe exchanges an exploration's journal lists: each probe step
+/// sent, and each cleanup delete that got an answer.
+fn probe_exchanges(dir: &Path) -> usize {
+    let root = dir.join(".rustman").join("explorations");
+    let exploration = std::fs::read_dir(root)
+        .unwrap()
+        .next()
+        .expect("an exploration directory")
+        .unwrap()
+        .path();
+    let journal = std::fs::read_to_string(exploration.join("journal.ndjson")).unwrap();
+    journal
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+        .map(|entry| match entry["event"].as_str() {
+            Some("outcome") => entry["sent"].as_array().map_or(0, Vec::len),
+            _ => usize::from(entry["status"].is_u64()),
+        })
+        .sum()
+}
+
+/// Issue #120: `rustman explore run` exports one CLIENT span per probe
+/// exchange, in the exploration's run trace, and no longer warns.
+#[test]
+fn an_exploration_exports_a_client_span_per_probe_exchange() {
+    use rustman_test_support::bad_api::{BadApi, OPENAPI, TOKEN_A};
+
+    let api = {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap();
+        let server = runtime.block_on(BadApi::start());
+        (server, runtime)
+    };
+    let collector = Collector::start();
+    let ws = tempfile::tempdir().unwrap();
+    settings(ws.path(), &export(&collector.collector.endpoint()));
+    write(ws.path(), "api.yaml", OPENAPI);
+    write(
+        ws.path(),
+        "environments/dev.yaml",
+        "secrets: [bearerAuth_token]\n",
+    );
+    rustman(ws.path())
+        .args(["secret", "set", "bearerAuth_token", "--env", "dev"])
+        .write_stdin(TOKEN_A)
+        .assert()
+        .success();
+    let target = api.0.url("");
+    let output = rustman(ws.path())
+        .args(["explore", "run", "--spec", "api.yaml", "--target", &target])
+        .args(["--seed", "7", "--fuzz-cases", "2", "--rate", "1000"])
+        .args(["--env", "dev", "--probes", "conformance,fuzz"])
+        .args(["--operations", "getUser"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    assert!(
+        matches!(output.status.code(), Some(0 | 1)),
+        "{output:?}\n{stderr}"
+    );
+    assert!(!stderr.contains("warning"), "{stderr}");
+    let exchanges = probe_exchanges(ws.path());
+    assert!(exchanges > 1, "{exchanges} probe exchanges");
+    // The run flushed its spans before exiting: they are all here.
+    let spans = collector.spans(exchanges);
+    assert_eq!(spans.len(), exchanges, "{spans:?}");
+    let trace_id = &spans[0].trace_id;
+    for span in &spans {
+        assert_eq!(span.kind, CollectedSpan::CLIENT, "{span:?}");
+        assert_eq!(&span.trace_id, trace_id, "scope: run");
+        assert!(span.attribute("rustman.request.id").is_some(), "{span:?}");
+        let url = span.attribute("url.full").unwrap();
+        assert!(url.starts_with(&target), "{url}");
+        assert!(!url.contains(TOKEN_A), "{url}");
+    }
+    let mut span_ids: Vec<&str> = spans.iter().map(|s| s.span_id.as_str()).collect();
+    span_ids.sort_unstable();
+    span_ids.dedup();
+    assert_eq!(span_ids.len(), exchanges, "one span per exchange");
+}
+
 /// Ten requests with the collector down: every request completes, the exit
 /// code follows the assertions alone, and one warning is printed.
 #[test]
