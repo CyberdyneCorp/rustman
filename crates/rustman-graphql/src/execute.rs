@@ -11,13 +11,14 @@ use rustman_core::vars::{
     Resolved, ResolvedBody, ResolvedFile, ResolvedGraphql, ResolvedPair, ResolvedPart,
     ResolvedPartSource, ResolvedRequest,
 };
-use rustman_http::{Exchange, HttpEngine, RequestError, SendOptions};
+use rustman_http::{Exchange, RequestError, SendOptions};
 use serde_json::{Map, Value, json};
 
 use crate::error::GraphqlError;
 use crate::operation::{SelectedOperation, check_http_method, select_operation};
 use crate::response::GraphqlResponse;
 use crate::schema::sha256_hex;
+use crate::sender::HttpSender;
 use crate::upload::{Upload, extract_uploads, upload_map};
 
 /// An operation ready to go over HTTP: selected, checked against its
@@ -228,22 +229,23 @@ pub struct HttpResult {
     pub requests: usize,
 }
 
-/// Send `operation` to the endpoint of `target`. With APQ, the hash goes
+/// Send `operation` to the endpoint of `target` through `sender` (the
+/// run's engine, or a sender that admits each request). With APQ, the hash goes
 /// first and the full document follows once on `PersistedQueryNotFound`,
 /// or on `PersistedQueryNotSupported`, which registers nothing.
 /// A first answer that is not a GraphQL result tells neither hit nor miss:
 /// its `apq` is `None`. A response body larger than `[http] max_body_bytes`
 /// fails with [`GraphqlError::BodyTooLarge`] as soon as the limit is passed.
 pub async fn execute_http(
-    engine: &HttpEngine,
+    sender: &dyn HttpSender,
     options: &SendOptions,
     target: &ResolvedGraphql,
     operation: &HttpOperation,
 ) -> Result<HttpResult, GraphqlError> {
     if !operation.apq {
-        return send(engine, options, target, operation, true, 1).await;
+        return send(sender, options, target, operation, true, 1).await;
     }
-    let first = send(engine, options, target, operation, false, 1).await?;
+    let first = send(sender, options, target, operation, false, 1).await?;
     let Some(response) = &first.response else {
         return Ok(first);
     };
@@ -254,7 +256,7 @@ pub async fn execute_http(
             ..first
         });
     }
-    let second = send(engine, options, target, operation, true, 2).await?;
+    let second = send(sender, options, target, operation, true, 2).await?;
     let outcome = if unsupported {
         ApqOutcome::MissNotRegistered
     } else {
@@ -267,7 +269,7 @@ pub async fn execute_http(
 }
 
 async fn send(
-    engine: &HttpEngine,
+    sender: &dyn HttpSender,
     options: &SendOptions,
     target: &ResolvedGraphql,
     operation: &HttpOperation,
@@ -276,7 +278,7 @@ async fn send(
 ) -> Result<HttpResult, GraphqlError> {
     let request = operation.http_request(target, with_query);
     let limit = options.body.max_in_memory;
-    let exchange = match engine.send(&request, &capped(options)).await {
+    let exchange = match sender.send(&request, &capped(options)).await {
         Ok(exchange) => exchange,
         Err(e) if over_limit(&e, limit) => return Err(GraphqlError::BodyTooLarge(limit)),
         Err(e) => return Err(e.into()),

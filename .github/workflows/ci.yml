@@ -47,6 +47,13 @@ jobs:
       - run: cargo clippy -p rustman-monitor --all-targets --locked --features smtp -- -D warnings
       # add-secret-providers section 4: the cloud secret providers.
       - run: cargo clippy --workspace --all-targets --locked --features rustman-cli/cloud-secrets -- -D warnings
+      # agent-mcp-interface "Conditional protocol tools": each optional
+      # agent tool feature of rustman-mcp builds on its own.
+      - name: Each agent tool feature set
+        run: |
+          for f in "" graphql webhook graphql,webhook; do
+            cargo clippy -p rustman-mcp --all-targets --no-default-features --features "$f" --locked -- -D warnings
+          done
       # docs/secrets.md: each cloud feature can be built on its own.
       - name: Each cloud secret feature on its own
         run: |
@@ -190,6 +197,16 @@ jobs:
       # registers none of the gRPC tools.
       - name: Agent tools without gRPC
         run: cargo test -p rustman-mcp --no-default-features --locked --lib tools::tests
+      # agent-mcp-interface "Conditional protocol tools" (#117): tools/list
+      # of each feature set matches its snapshot (the default set,
+      # grpc+graphql+webhook, runs with the workspace tests above).
+      - name: Agent tools per feature set
+        shell: bash
+        run: |
+          for f in "" graphql webhook graphql,webhook; do
+            cargo test -p rustman-mcp --no-default-features --features "$f" --locked --lib tools::tests
+            cargo test -p rustman-mcp --no-default-features --features "$f" --locked --test tools_list
+          done
       # add-terminal-ui task 9.1 (also part of the run above; repeated here
       # so the job shows the TUI smoke result per OS). The real TUI runs in
       # a pty (ConPTY on Windows); the same flow also runs through the real

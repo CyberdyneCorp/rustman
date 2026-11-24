@@ -84,12 +84,33 @@ The server SHALL provide `import_openapi` (supports `dry_run`), `explore_plan` (
 - **THEN** at most 10 redacted exchanges with 5xx statuses SHALL be returned, newest first
 
 ### Requirement: Conditional protocol tools
-`graphql_introspect` and `graphql_query` SHALL be registered only when the build includes the `graphql-requests` capability, and `list_webhook_captures` only when it includes `webhook-inspector`. Absent tools SHALL NOT appear in `tools/list`.
+`graphql_introspect` and `graphql_query` SHALL be registered only when the build includes the `graphql-requests` capability (the `graphql` cargo feature of `rustman-mcp`), and `list_webhook_captures` only when it includes `webhook-inspector` (the `webhook` feature). Both features SHALL be on by default. Absent tools SHALL NOT appear in `tools/list`.
 
 #### Scenario: Build without webhook inspector
 - **GIVEN** a build without the `webhook-inspector` capability
 - **WHEN** an agent calls `tools/list`
 - **THEN** `list_webhook_captures` SHALL NOT be listed
+
+#### Scenario: Build without GraphQL
+- **GIVEN** `rustman-mcp` built without its `graphql` feature
+- **WHEN** an agent calls `tools/list`
+- **THEN** neither `graphql_introspect` nor `graphql_query` SHALL be listed
+
+### Requirement: GraphQL tools
+`graphql_introspect` SHALL return a schema's types or one type, from its `schema_file` or cache, introspecting only without one or on `refresh`. `graphql_query` SHALL validate and send a query or mutation over HTTP. Both SHALL pass the allowlist, production check and rate limit. A query SHALL be a read; a mutation SHALL need `allow_mutations` and the human's confirmation; subscriptions SHALL be refused with `blocked`.
+
+#### Scenario: Mutation without permission
+- **GIVEN** `[agent] allow_mutations` is false
+- **WHEN** an agent calls `graphql_query` with a mutation
+- **THEN** the result SHALL have `code: "blocked"` and nothing SHALL be sent
+
+### Requirement: Webhook captures tool
+`list_webhook_captures` SHALL list the webhook captures saved to request history (inbound entries), newest first, filtered by path text, method, signature verdict and time, paginated and redacted. It SHALL NOT start a listener or replay a capture.
+
+#### Scenario: Only saved captures
+- **GIVEN** a history with two saved captures and one outbound exchange
+- **WHEN** an agent calls `list_webhook_captures`
+- **THEN** the result SHALL list the two captures and `total` SHALL be 2
 
 ### Requirement: Resources
 The server SHALL expose request files as `rustman://requests/<path>`, reports as `rustman://reports/<run-or-exploration-id>` and cached schemas as `rustman://schemas/<name>`, with `resources/list` and `resources/read`. Contents SHALL be redacted. Paths escaping the workspace SHALL be refused.

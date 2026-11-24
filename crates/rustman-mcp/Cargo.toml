@@ -23,6 +23,8 @@ rustman-explore.workspace = true
 rustman-report.workspace = true
 rustman-jsonrpc.workspace = true
 rustman-grpc = { workspace = true, optional = true }
+rustman-graphql = { workspace = true, optional = true }
+rustman-webhook = { workspace = true, optional = true }
 rustman-realtime.workspace = true
 rustman-messaging.workspace = true
 rustman-evm.workspace = true
@@ -51,15 +53,22 @@ url.workspace = true
 rustix.workspace = true
 
 [features]
-default = ["grpc"]
+default = ["grpc", "graphql", "webhook"]
 # The gRPC agent tools (add-grpc-client "Agent tools").
 grpc = ["dep:rustman-grpc"]
+# `graphql_introspect` and `graphql_query` (agent-mcp-interface
+# "Conditional protocol tools": the graphql-requests capability).
+graphql = ["dep:rustman-graphql"]
+# `list_webhook_captures` (the webhook-inspector capability).
+webhook = ["dep:rustman-webhook"]
 
 [dev-dependencies]
 rustman-test-support = { workspace = true, features = ["grpc"] }
 # The plugin network of agent sessions, under the agent's guard.
 rustman-plugin.workspace = true
 tempfile.workspace = true
+insta.workspace = true
+time.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "io-util", "time", "test-util"] }
 hyper = { workspace = true, features = ["client", "http1"] }
 hyper-util = { workspace = true, features = ["client-legacy", "http1", "tokio"] }

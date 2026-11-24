@@ -208,7 +208,7 @@ fn snapshot_files(root: &Path) -> BTreeMap<String, String> {
     files
 }
 
-const TOOLS: [&str; 25] = [
+const TOOLS: [&str; 28] = [
     "list_requests",
     "get_request",
     "list_environments",
@@ -227,6 +227,11 @@ const TOOLS: [&str; 25] = [
     "rpc_call",
     // realtime-sessions: registered with the protocol tools.
     "realtime_listen",
+    // graphql-requests: registered with the `graphql` feature (default).
+    "graphql_introspect",
+    "graphql_query",
+    // webhook-inspector: registered with the `webhook` feature (default).
+    "list_webhook_captures",
     // grpc-requests: registered with the `grpc` feature (the default).
     "grpc_list",
     "grpc_describe",
@@ -253,14 +258,7 @@ async fn tools_list_names_the_catalog_with_schemas() {
         assert_eq!(output["type"], "object", "{}", tool.name);
         assert!(tool.description.is_some(), "{}", tool.name);
     }
-    // This build has neither graphql-requests nor webhook-inspector.
-    for absent in [
-        "graphql_introspect",
-        "graphql_query",
-        "list_webhook_captures",
-    ] {
-        assert!(!names.contains(&absent), "{absent}");
-    }
+    // Builds without a capability: tests/tools_list.rs, per feature set.
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -958,6 +956,17 @@ async fn every_tool_error_uses_a_catalogued_code() {
             "realtime_listen",
             json!({"url": "ws://127.0.0.1:9/feed", "frames": ["hi"]}),
         ),
+        ("graphql_introspect", json!({})),
+        (
+            "graphql_introspect",
+            json!({"endpoint": "http://blocked.example:1/graphql"}),
+        ),
+        ("graphql_query", json!({"path": "missing"})),
+        (
+            "graphql_query",
+            json!({"endpoint": "http://127.0.0.1:9/graphql", "query": "subscription { t }"}),
+        ),
+        ("list_webhook_captures", json!({"verdict": "forged"})),
         ("grpc_list", json!({})),
         ("grpc_list", json!({"target": "grpc://blocked.example:1"})),
         ("grpc_describe", json!({"path": "missing", "symbol": "a.B"})),

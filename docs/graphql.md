@@ -440,3 +440,14 @@ errors:
 | 2 | Usage or configuration error (no workspace, unknown request, not a graphql request). |
 | 3 | No response (network, TLS, timeout, unresolved variable, `connection_ack` timeout, a body over `max_body_bytes`) or the document failed validation. |
 | 130 | Interrupted by Ctrl+C. |
+
+## Agent tools
+
+The [agent MCP server](agent.md) registers two GraphQL tools when it is built with GraphQL support (the default `graphql` feature of `rustman-mcp`; a build without it lists neither):
+
+| Tool | What it does |
+|------|--------------|
+| `graphql_introspect` | The schema of an `endpoint` or saved graphql request (`path`): the root types and every named type, or one type in full with `type_name`. It reads the `schema_file` or the [schema cache](#schema-cache), and introspects the endpoint (caching the result) only when there is neither, or with `refresh: true`. |
+| `graphql_query` | Validates and sends a saved graphql request, or an ad-hoc operation (`endpoint`, `query`, `operation_name`, `variables`, `headers`), over HTTP, and returns the redacted `data`, `errors` and `extensions` with the assertions. |
+
+Both send through the session's allowlist, production check and rate limit. A query is a read; a mutation needs `[agent] allow_mutations = true` and the human's confirmation, as an HTTP `POST` does; subscriptions (and requests with `transport: ws` or `sse`) are refused with `code: "blocked"`. An operation that fails [validation](#validation-before-send) comes back `errored` and is not sent. Operations are recorded in history like every request. See [Agent interface](agent.md#tools).
