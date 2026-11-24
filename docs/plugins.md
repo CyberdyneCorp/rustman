@@ -2,7 +2,7 @@
 
 Plugins extend Rustman with WebAssembly components: in-house auth schemes, domain-specific assertions, value generators, body transformers, importers, request kinds and report formats. Workspaces travel through Git, so a plugin is treated as untrusted code. It runs in a sandbox, gets nothing the workspace does not grant it in `rustman.toml`, and is pinned by the sha256 of its bytes.
 
-The behavior is specified in [`openspec/specs/plugins`](../openspec/specs/plugins/spec.md). This page covers the plugin package and manifest, the `rustman plugin` commands, declaring and pinning plugins, URL sources, the grant vocabulary, the sandbox and its limits, trust, the extension points wired so far, the plugin API, and writing and testing plugins with the SDK, its templates and the test harness.
+The behavior is specified in [`openspec/specs/plugins`](https://github.com/CyberdyneCorp/rustman/blob/main/openspec/specs/plugins/spec.md). This page covers the plugin package and manifest, the `rustman plugin` commands, declaring and pinning plugins, URL sources, the grant vocabulary, the sandbox and its limits, trust, the extension points wired so far, the plugin API, and writing and testing plugins with the SDK, its templates and the test harness.
 
 Plugin support is the default cargo feature `plugins` of `rustman-cli`; `cargo build --no-default-features` builds Rustman without wasmtime.
 
@@ -37,7 +37,7 @@ The manifest can also be embedded in the component, as a custom section named `r
 
 Plugin files are read before the set is trusted (by `plugin list`, the trust prompt and the pin check of every headless command), so they are read defensively: a component, a `rustman-plugin.toml`, a cached download or `rustman.lock` must be a regular file, and a symbolic link is followed only when it resolves to a regular file inside the workspace. A FIFO, a device (such as a committed `plugins/evil.wasm -> /dev/zero`), a socket or a link out of the workspace is refused at once with exit code 2, for example `plugin evil: <path>: resolves outside the workspace` or `plugin evil: <path>: not a regular file`. A component or cached download may be at most 20 MiB and a `rustman-plugin.toml` at most 256 KiB (`plugin <name>: <path>: larger than 262144 bytes`); `rustman.lock` at most 1 MiB.
 
-Each extension point is a world of the WIT package (`auth`, `assertion`, `generator`, `transformer`, `importer`, `kind`, `report`), and the component must export the interface of every extension point its manifest declares (`rustman:plugin/auth-scheme` for `auth`, and so on). The WIT source ships with the `rustman-plugin-sdk` crate in [`crates/rustman-plugin-sdk/wit/plugin.wit`](../crates/rustman-plugin-sdk/wit/plugin.wit).
+Each extension point is a world of the WIT package (`auth`, `assertion`, `generator`, `transformer`, `importer`, `kind`, `report`), and the component must export the interface of every extension point its manifest declares (`rustman:plugin/auth-scheme` for `auth`, and so on). The WIT source ships with the `rustman-plugin-sdk` crate in [`crates/rustman-plugin-sdk/wit/plugin.wit`](https://github.com/CyberdyneCorp/rustman/blob/main/crates/rustman-plugin-sdk/wit/plugin.wit).
 
 ## Declaring plugins in `rustman.toml`
 

@@ -1,0 +1,18 @@
+# The documentation site: `mdbook build` renders docs/ into book/ (git-ignored).
+# docs/SUMMARY.md is the table of contents; scripts/check_docs.py checks it.
+# CI (.github/workflows/docs.yml) pins the mdBook version and deploys to GitHub Pages.
+[book]
+title = "Rustman"
+description = "A fast, local-first API workbench for the terminal"
+authors = ["CyberdyneCorp"]
+language = "en"
+src = "docs"
+
+[build]
+build-dir = "book"
+create-missing = false
+
+[output.html]
+site-url = "/rustman/"
+git-repository-url = "https://github.com/CyberdyneCorp/rustman"
+edit-url-template = "https://github.com/CyberdyneCorp/rustman/edit/main/{path}"

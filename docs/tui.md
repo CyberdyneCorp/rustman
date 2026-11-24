@@ -1,6 +1,6 @@
 # Terminal UI
 
-`rustman` with no subcommand, or `rustman tui [PATH]`, opens the full-screen terminal UI. The behavior is specified in [`openspec/specs/tui`](../openspec/specs/tui/spec.md).
+`rustman` with no subcommand, or `rustman tui [PATH]`, opens the full-screen terminal UI. The behavior is specified in [`openspec/specs/tui`](https://github.com/CyberdyneCorp/rustman/blob/main/openspec/specs/tui/spec.md).
 
 ## Starting
 
@@ -479,7 +479,7 @@ cargo run -p rustman-tui --example screenshot -- [--ansi] [--size WxH] [--theme 
 
 It opens PATH as `rustman tui` would, runs the start-up work synchronously, and prints a 120x36 frame (or `--size`) as plain text, or with ANSI colours with `--ansi` (view it with `cat` or `less -R`). It ignores `tui.toml` and renders in 24-bit colour unless `--no-color` is given, so the output depends only on the flags and the workspace.
 
-The README images in `docs/images/tui-*.svg` are real frames rendered off-screen by the `screenshot` example. [`crates/rustman-tui/examples/screenshots/`](../crates/rustman-tui/examples/screenshots/) holds the sample workspace (HTTP, GraphQL, JSON-RPC, `evm-call`, gRPC and Kafka requests, a `.proto` file, an OpenRPC catalog, MCP server definitions and two monitors) and the sample responses, and its `render.sh` renders every frame and converts it to SVG with `ansi2svg.py` next to it. The Monitors view reads its results relative to the current time, so `monitor-store.py` writes 24 hours of sample results into the copied workspace's store just before that frame (a fixed seed keeps their shape; only the timestamps change between renders):
+The README images in `docs/images/tui-*.svg` are real frames rendered off-screen by the `screenshot` example. [`crates/rustman-tui/examples/screenshots/`](https://github.com/CyberdyneCorp/rustman/tree/main/crates/rustman-tui/examples/screenshots) holds the sample workspace (HTTP, GraphQL, JSON-RPC, `evm-call`, gRPC and Kafka requests, a `.proto` file, an OpenRPC catalog, MCP server definitions and two monitors) and the sample responses, and its `render.sh` renders every frame and converts it to SVG with `ansi2svg.py` next to it. The Monitors view reads its results relative to the current time, so `monitor-store.py` writes 24 hours of sample results into the copied workspace's store just before that frame (a fixed seed keeps their shape; only the timestamps change between renders):
 
 ```bash
 crates/rustman-tui/examples/screenshots/render.sh
@@ -503,7 +503,7 @@ crates/rustman-tui/examples/screenshots/render.sh
 | `tui-messaging` | the messaging editor's Compose tab for a Kafka produce request |
 | `tui-monitors` | the Monitors view: two monitors' last outcome, uptime and latency sparkline, a firing rule and the recent runs |
 
-The animated GIF at the top of the README (`docs/images/demo.gif`) is a real session recorded with [VHS](https://github.com/charmbracelet/vhs): [`examples/demo/`](../examples/demo/) holds the todo backend it talks to, its workspace, the `demo.tape` script and a `render.sh` that builds Rustman, starts the backend and records the tape.
+The animated GIF at the top of the README (`docs/images/demo.gif`) is a real session recorded with [VHS](https://github.com/charmbracelet/vhs): [`examples/demo/`](https://github.com/CyberdyneCorp/rustman/tree/main/examples/demo) holds the todo backend it talks to, its workspace, the `demo.tape` script and a `render.sh` that builds Rustman, starts the backend and records the tape.
 
 To render a single frame:
 

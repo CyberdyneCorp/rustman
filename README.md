@@ -33,7 +33,7 @@ rustman export snippet --lang python examples/ping       # the request as Python
 rustman                                # open the terminal UI (or: rustman tui)
 ```
 
-`rustman --help` lists every command, and each one has its own `--help`. The request-file format is documented in [`docs/request-files.md`](docs/request-files.md), the rest of the documentation lives in [`docs/`](docs/), and [`docs/stability.md`](docs/stability.md) lists the formats and exit codes that stay stable within a major version. CI builds and tests on Linux, macOS and Windows for every pull request.
+`rustman --help` lists every command, and each one has its own `--help`. The request-file format is documented in [`docs/request-files.md`](docs/request-files.md), and the rest of the documentation lives in [`docs/`](docs/), also published as a book at <https://cyberdynecorp.github.io/rustman/>. [`docs/stability.md`](docs/stability.md) lists the formats and exit codes that stay stable within a major version. Coming from Postman? Start with the [migration guide](docs/migrate-from-postman.md). CI builds and tests on Linux, macOS and Windows for every pull request.
 
 ---
 
@@ -486,7 +486,7 @@ Variables are translated to `{{var}}`. **Secrets found in the source go to the s
 rustman import postman collection.json --into api/ --migration-report migration.md
 ```
 
-The migration report lists every statement it couldn't convert, with a suggested equivalent (a schema assertion, collection ordering, or a plugin).
+The migration report lists every statement it couldn't convert, with a suggested equivalent (a schema assertion, collection ordering, or a plugin). See the [Postman migration guide](docs/migrate-from-postman.md) for the whole process.
 
 ### 12. Mock an API before it exists
 
@@ -684,6 +684,8 @@ rustman secret list-providers
 ---
 
 ## Coming from Postman?
+
+The [migration guide](docs/migrate-from-postman.md) walks through a full move: exporting, `rustman import`, reviewing converted scripts, replacing Newman in CI, and what doesn't carry over.
 
 | Postman / Newman | Rustman |
 |---|---|

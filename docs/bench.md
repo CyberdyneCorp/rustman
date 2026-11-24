@@ -6,7 +6,7 @@
 rustman bench checkout/ --target https://staging.example.com --env staging --vus 5 --duration 30s
 ```
 
-The behavior is specified in [`openspec/specs/load-testing`](../openspec/specs/load-testing/spec.md). On a terminal a bench draws a live dashboard (see [Live progress](#live-progress)), prints a summary at the end and can write JSON and HTML reports. With `--viz` the [viz companion](viz.md#bench-dashboard) shows it as a live dashboard.
+The behavior is specified in [`openspec/specs/load-testing`](https://github.com/CyberdyneCorp/rustman/blob/main/openspec/specs/load-testing/spec.md). On a terminal a bench draws a live dashboard (see [Live progress](#live-progress)), prints a summary at the end and can write JSON and HTML reports. With `--viz` the [viz companion](viz.md#bench-dashboard) shows it as a live dashboard.
 
 ## Iterations and virtual users
 

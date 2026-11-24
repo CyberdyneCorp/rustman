@@ -1,6 +1,6 @@
 # Messaging: Kafka, MQTT and AMQP
 
-Rustman produces and consumes broker messages from request files of kind `kafka`, `mqtt` and `amqp`. Each file is one operation: `produce` (publish) or `consume` (subscribe). The behavior is specified in [`openspec/specs/messaging-requests`](../openspec/specs/messaging-requests/spec.md). All clients are pure Rust over rustls; the build needs no librdkafka, OpenSSL or CMake.
+Rustman produces and consumes broker messages from request files of kind `kafka`, `mqtt` and `amqp`. Each file is one operation: `produce` (publish) or `consume` (subscribe). The behavior is specified in [`openspec/specs/messaging-requests`](https://github.com/CyberdyneCorp/rustman/blob/main/openspec/specs/messaging-requests/spec.md). All clients are pure Rust over rustls; the build needs no librdkafka, OpenSSL or CMake.
 
 This page covers the request file format, the Kafka, MQTT and AMQP clients, AsyncAPI import, payload validation, running messaging requests in collections (assertions, captures, `start: before_next`, history), the safety rules for agents, the CLI commands and the TUI pane.
 

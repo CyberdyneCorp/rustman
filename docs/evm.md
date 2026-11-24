@@ -576,7 +576,7 @@ Lookups read the environment's `rpc`, check its `chain_id` pin first, use read-o
 
 ## Agent tools
 
-`rustman mcp serve` registers six read-only tools (see the [tool reference](agent.md#tool-reference)):
+`rustman mcp serve` registers six read-only tools (see the [tool reference](agent.md#tools)):
 
 | Tool | Does |
 |---|---|
