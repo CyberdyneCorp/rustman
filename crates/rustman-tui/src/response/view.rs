@@ -232,7 +232,7 @@ fn outcome_line(received: &Received, ui: &UiOptions) -> Line<'static> {
             }
             Line::from(spans)
         }
-        None => failure_line(record, ui),
+        None => super::outcome::line(record, ui).unwrap_or_else(|| failure_line(record, ui)),
     }
 }
 
@@ -284,7 +284,7 @@ fn status_spans(status: u16, ui: &UiOptions) -> Vec<Span<'static>> {
 }
 
 /// `3/3 passed`; `None` without assertions.
-fn tally(record: &RequestRecord) -> Option<String> {
+pub(super) fn tally(record: &RequestRecord) -> Option<String> {
     let total = record.assertions.len();
     let passed = record.assertions.iter().filter(|a| a.passed()).count();
     (total > 0).then(|| format!("{passed}/{total} passed"))

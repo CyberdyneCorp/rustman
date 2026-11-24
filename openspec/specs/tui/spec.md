@@ -162,6 +162,13 @@ After an exchange completes, the response viewer SHALL show a summary line with 
 - **GIVEN** the host does not resolve
 - **THEN** the summary SHALL show `DNS error` and the resolver message, with no status code
 
+### Requirement: Outcome without an HTTP exchange
+A request whose kind answers without an HTTP exchange (`evm-call`, messaging, MCP, JSON-RPC over WebSocket or IPC, WebSocket/SSE, plugin kinds) SHALL show `OK` or `Failed` from the request's status, with the kind's own summary, the duration and the assertion tally. Only an errored or skipped request SHALL show a failure.
+
+#### Scenario: Successful request without an HTTP exchange
+- **GIVEN** an `evm-call` to `balanceOf(address)` answered by `Ethereum (1) · geth 1.14.11` in 42 ms, with 1 of 1 assertions passing
+- **THEN** the summary SHALL read `OK · balanceOf(address) · Ethereum (1) · geth 1.14.11 · 42 ms · 1/1 passed`, in the ok colour, and SHALL NOT show an error
+
 ### Requirement: Response viewer tabs
 The response viewer SHALL offer the tabs Body, Headers, Timing and Assertions. Headers SHALL list all response headers in received order, including duplicates. Assertions SHALL list each assertion with pass/fail, expected and actual values. Captured variables SHALL be listed with their new values, masked when secret.
 

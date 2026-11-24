@@ -14,6 +14,7 @@ pub mod grpc;
 pub mod html;
 pub mod json_tree;
 pub mod jsonrpc;
+mod outcome;
 pub mod picker;
 pub mod received;
 pub mod text;

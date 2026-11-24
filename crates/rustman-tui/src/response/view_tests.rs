@@ -759,3 +759,103 @@ fn ctrl_o_without_a_link_explains_why() {
     assert!(press(&mut state, "Ctrl+O").is_empty());
     assert!(shown(&state, "This exchange carries no trace context"));
 }
+
+/// A record of a kind that answers without an HTTP exchange.
+fn bare(status: RequestStatus) -> RequestRecord {
+    let mut record = RequestRecord::new("b".into(), "Balance".into(), "b.rman.yaml".into());
+    record.status = status;
+    record.duration_ms = 42.0;
+    record
+}
+
+fn evm_result(reverted: Option<&str>) -> serde_json::Value {
+    serde_json::json!({
+        "status": "Ethereum (1) · geth 1.14.11",
+        "result": {
+            "function": "balanceOf(address)",
+            "outputs": {"0": "1000"},
+            "reverted": reverted.map(|m| serde_json::json!({"message": m, "name": "Error"})),
+        },
+    })
+}
+
+#[test]
+fn a_successful_evm_call_shows_its_decoded_outcome_not_an_error() {
+    // Regression: a sent evm-call has no HTTP exchange, and its summary
+    // read "✖ Error · no response" next to the decoded result.
+    let mut state = state(ColorMode::TrueColor, 320, 30);
+    let mut record = bare(RequestStatus::Passed);
+    record.evm = Some(evm_result(None));
+    record.assertions = vec![assertion("outputs[0] == 1000", true, "1000", "1000")];
+    show(&mut state, Received::without_body(record));
+    let line = summary(&state);
+    assert_eq!(
+        line, "✔ OK · balanceOf(address) · Ethereum (1) · geth 1.14.11 · 42 ms · 1/1 passed",
+        "{line}"
+    );
+    let buffer = render(&state, 320, 30);
+    let ok = style_of(&buffer, "✔ OK").unwrap();
+    assert_eq!(ok.fg, state.ui.theme.fg(Token::Ok).fg);
+}
+
+#[test]
+fn a_failed_evm_call_still_shows_its_error() {
+    let mut state = state(ColorMode::TrueColor, 320, 30);
+    let mut errored = RequestRecord::new("b".into(), "Balance".into(), "b.rman.yaml".into())
+        .errored("execution reverted: ERC20: insufficient allowance".into());
+    errored.evm = Some(serde_json::json!({
+        "error": {"kind": "revert", "message": "execution reverted"}
+    }));
+    show(&mut state, Received::without_body(errored));
+    let line = summary(&state);
+    assert_eq!(
+        line, "✖ Error · execution reverted: ERC20: insufficient allowance",
+        "{line}"
+    );
+    let mut failed = bare(RequestStatus::Failed);
+    failed.evm = Some(evm_result(Some("ERC20: paused")));
+    failed.assertions = vec![assertion("not reverted", false, "no revert", "revert")];
+    show(&mut state, Received::without_body(failed));
+    let line = summary(&state);
+    assert!(
+        line.starts_with("✖ Failed · balanceOf(address) · reverted: ERC20: paused"),
+        "{line}"
+    );
+    assert!(line.ends_with("· 42 ms · 0/1 passed"), "{line}");
+    let buffer = render(&state, 320, 30);
+    let fail = style_of(&buffer, "✖ Failed").unwrap();
+    assert_eq!(fail.fg, state.ui.theme.fg(Token::Error).fg);
+}
+
+#[test]
+fn other_kinds_without_an_http_exchange_show_a_success_outcome() {
+    use rustman_core::run::{McpRecord, MessagingRecord, PluginKindRecord};
+    let mut state = state(ColorMode::TrueColor, 320, 30);
+    let mut lines = Vec::new();
+    let mut kafka = bare(RequestStatus::Passed);
+    kafka.messaging = Some(MessagingRecord {
+        protocol: "kafka".into(),
+        operation: "produce".into(),
+        blocked: false,
+        exchange: None,
+    });
+    let mut mcp = bare(RequestStatus::Passed);
+    mcp.mcp = Some(McpRecord {
+        server: "files".into(),
+        method: "tools/call".into(),
+        outcome: "ok".into(),
+        ..McpRecord::default()
+    });
+    let mut plugin = bare(RequestStatus::Passed);
+    plugin.plugin_kind = Some(PluginKindRecord {
+        kind: "redis".into(),
+        summary: "GET user:1".into(),
+        ..PluginKindRecord::default()
+    });
+    for record in [kafka, mcp, plugin] {
+        show(&mut state, Received::without_body(record));
+        lines.push(summary(&state));
+    }
+    assert!(lines.iter().all(|l| l.starts_with("✔ OK · ")), "{lines:?}");
+    insta::assert_snapshot!("summary_lines_without_exchange", lines.join("\n"));
+}
