@@ -160,6 +160,8 @@ fn outcome(target: &ResolvedJsonrpc, exchange: &RpcExchange) -> JsonrpcOutcome {
         error: exchange.error.as_ref().map(ToString::to_string),
         record: exchange_record(exchange),
         elapsed: exchange.elapsed,
+        trace: exchange.trace.clone(),
+        traceresponse: exchange.traceresponse.clone(),
     }
 }
 
@@ -205,5 +207,7 @@ fn refused(target: &ResolvedJsonrpc, refusal: RpcRefusal, why: &str) -> JsonrpcO
             elapsed_ms: rustman_http::millis(started.elapsed()),
         },
         elapsed: started.elapsed(),
+        trace: None,
+        traceresponse: None,
     }
 }

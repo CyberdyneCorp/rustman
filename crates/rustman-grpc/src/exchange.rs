@@ -9,6 +9,7 @@ use std::borrow::Cow;
 use rustman_core::Redactor;
 use rustman_core::assertions::{GrpcView, ResponseView};
 use rustman_core::run::redact_value;
+use rustman_core::trace::SentTrace;
 use serde::{Serialize, Serializer};
 use serde_json::{Value, json};
 
@@ -109,6 +110,10 @@ pub struct GrpcExchange {
     /// Set when a headless stream bound stopped the call.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stopped: Option<StreamStop>,
+    /// The trace context the call carried; the run report records it as
+    /// the request.s `trace`, not inside the exchange.
+    #[serde(skip)]
+    pub trace: Option<SentTrace>,
 }
 
 impl GrpcExchange {
@@ -242,6 +247,7 @@ mod tests {
             timeline: Vec::new(),
             timings: GrpcTimings::default(),
             stopped: None,
+            trace: None,
         }
     }
 

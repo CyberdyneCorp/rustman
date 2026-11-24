@@ -371,6 +371,45 @@ assertions:
     );
 }
 
+/// Issue #119: calls over the run's WebSocket record the trace ids of the
+/// handshake that opened the connection they share.
+#[tokio::test]
+async fn websocket_calls_record_the_handshake_trace() {
+    let call = |name: &str| {
+        format!(
+            "version: 1\nkind: jsonrpc\nname: {name}\nendpoint: '{{{{rpc_url}}}}'\nmethod: eth_blockNumber\n"
+        )
+    };
+    let server = JsonrpcWsServer::start(|message| {
+        let id = message["id"].clone();
+        vec![WsFrame::Json(
+            json!({"jsonrpc":"2.0","id":id,"result":"0x1"}),
+        )]
+    })
+    .await;
+    let (a, b) = (call("A"), call("B"));
+    let dir = workspace(
+        &server.url("/"),
+        &[("a.rman.yaml", &a), ("b.rman.yaml", &b)],
+    );
+    let config = dir.path().join("rustman.toml");
+    let text = fs::read_to_string(&config).unwrap();
+    fs::write(&config, format!("{text}[trace]\nenabled = true\n")).unwrap();
+    let records = run(dir.path()).await;
+    assert_eq!(server.sessions().len(), 1, "one connection for the run");
+    let sent = server.sessions()[0]
+        .header("traceparent")
+        .map(str::to_owned);
+    for record in &records {
+        assert_eq!(record.status, RequestStatus::Passed, "{record:?}");
+        let trace = record.trace.as_ref().expect("the handshake's trace");
+        assert_eq!(
+            sent.as_deref(),
+            Some(format!("00-{}-{}-01", trace.trace_id, trace.span_id).as_str())
+        );
+    }
+}
+
 #[tokio::test]
 async fn the_catalog_refuses_unknown_methods_before_sending() {
     let typo = "\

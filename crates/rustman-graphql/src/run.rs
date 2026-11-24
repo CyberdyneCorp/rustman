@@ -646,6 +646,6 @@ pub fn subscription_exchange(sub: &Subscription) -> Exchange {
         insecure: sub.insecure,
         warnings: Vec::new(),
         credentials: rustman_core::Redactor::new(),
-        trace: None,
+        trace: sub.trace.clone(),
     }
 }

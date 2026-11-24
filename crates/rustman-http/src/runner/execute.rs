@@ -493,10 +493,11 @@ impl Runner<'_> {
 
     /// Record the trace context `sent` carried, with its link.
     pub(super) fn record_trace(&self, sent: &mut Sent, redactor: &Redactor) {
-        sent.record.trace = sent
-            .exchange
-            .as_ref()
-            .and_then(|e| trace_record(e, self.link.as_ref(), redactor));
+        // A kind without an HTTP exchange (realtime sessions) recorded the
+        // trace of its handshake already.
+        if let Some(exchange) = &sent.exchange {
+            sent.record.trace = trace_record(exchange, self.link.as_ref(), redactor);
+        }
     }
 
     /// The redactor for everything recorded about `sent`: the run's secrets,

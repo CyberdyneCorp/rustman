@@ -16,6 +16,7 @@ use prost_reflect::{DynamicMessage, MethodDescriptor};
 use rustman_core::Redactor;
 use rustman_core::model::{GrpcTransport, StreamLimits};
 use rustman_core::run::redact_value;
+use rustman_core::trace::SentTrace;
 use rustman_core::vars::{ResolvedGrpc, ResolvedRequest};
 use rustman_http::SendOptions;
 use serde_json::Value;
@@ -225,7 +226,7 @@ impl PreparedCall {
         let mut request = tonic::Request::new(stream);
         *request.metadata_mut() = request_metadata(&self.metadata)?;
         if let Some(propagation) = &options.http.trace {
-            inject_trace(request.metadata_mut(), propagation);
+            state.trace = inject_trace(request.metadata_mut(), propagation);
         }
         request.set_timeout(options.deadline);
         let path = PathAndQuery::try_from(format!("/{}", self.path()))
@@ -300,6 +301,7 @@ impl PreparedCall {
                 total: recorder.elapsed(),
             },
             stopped: state.stopped,
+            trace: state.trace,
         }
     }
 }
@@ -322,6 +324,8 @@ pub(crate) struct Collected {
     pub trailers: Vec<MetadataEntry>,
     pub first_byte: Option<Duration>,
     pub stopped: Option<StreamStop>,
+    /// The trace context the call carried (metadata, or gRPC-Web headers).
+    pub trace: Option<SentTrace>,
 }
 
 /// The status of an expired deadline.

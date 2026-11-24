@@ -31,6 +31,7 @@ pub fn outcome(exchange: &RealtimeExchange) -> RealtimeOutcome {
         },
         elapsed: exchange.elapsed,
         credentials: exchange.credentials.clone(),
+        trace: exchange.trace.clone(),
     }
 }
 

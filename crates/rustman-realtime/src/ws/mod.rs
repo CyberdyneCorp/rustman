@@ -54,6 +54,7 @@ pub async fn run_ws(
     exchange.request = opened.request;
     exchange.handshake = Some(handshake_of(&opened.response));
     exchange.credentials = opened.credentials;
+    exchange.trace = opened.trace;
     let max = target.limits.effective_max_message_bytes();
     let mut live = Live::new(opened.socket, exchange, target.http.clone(), max, session);
     live.connected();

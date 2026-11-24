@@ -486,9 +486,28 @@ limits: {max_messages: 1}
     for record in &records {
         assert_eq!(record.status, RequestStatus::Passed, "{:?}", record.error);
     }
-    let ws_trace = traceparent_trace_id(ws_server.sessions()[0].header("traceparent"));
-    let sse_trace = traceparent_trace_id(sse_server.hits()[0].header("traceparent"));
+    let ws_sent = ws_server.sessions()[0]
+        .header("traceparent")
+        .map(str::to_owned);
+    let sse_sent = sse_server.hits()[0]
+        .header("traceparent")
+        .map(str::to_owned);
+    let ws_trace = traceparent_trace_id(ws_sent.as_deref());
+    let sse_trace = traceparent_trace_id(sse_sent.as_deref());
     assert_eq!(ws_trace, sse_trace, "scope = run shares one trace id");
+    // Issue #119: each session's record carries its handshake's ids.
+    for (record, sent) in records.iter().zip([ws_sent, sse_sent]) {
+        let trace = record.trace.as_ref().expect("the handshake's trace");
+        let sent = sent.unwrap();
+        assert_eq!(
+            sent,
+            format!("00-{}-{}-01", trace.trace_id, trace.span_id),
+            "{}",
+            record.name
+        );
+        assert!(trace.sampled);
+        assert!(trace.end_ms >= trace.start_ms);
+    }
 }
 
 /// Without `[trace]`, realtime requests carry no trace context.
@@ -504,4 +523,5 @@ async fn realtime_requests_carry_no_trace_context_by_default() {
         records[0].error
     );
     assert_eq!(server.sessions()[0].header("traceparent"), None);
+    assert_eq!(records[0].trace, None);
 }

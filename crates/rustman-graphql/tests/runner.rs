@@ -302,6 +302,42 @@ assertions:
     assert!(!text.contains(SECRET), "{text}");
 }
 
+/// Issue #119: a subscription over WebSocket records the trace ids its
+/// handshake carried.
+#[tokio::test]
+async fn a_websocket_subscription_records_the_handshake_trace() {
+    let server = GraphqlWsServer::start(WsScript::Modern {
+        events: 1,
+        complete: true,
+    })
+    .await;
+    let subscription = "\
+version: 1
+kind: graphql
+name: On message
+endpoint: '{{base}}/graphql'
+transport: ws
+document: 'subscription OnMessage { onMessage { n } }'
+";
+    let dir = workspace(
+        &server.url("ws", ""),
+        &[("on-message.rman.yaml", subscription)],
+    );
+    let config = dir.path().join("rustman.toml");
+    let text = fs::read_to_string(&config).unwrap();
+    fs::write(&config, format!("{text}[trace]\nenabled = true\n")).unwrap();
+    let records = run(dir.path()).await;
+    assert_eq!(records[0].status, RequestStatus::Passed, "{:?}", records[0]);
+    let trace = records[0].trace.as_ref().expect("the handshake's trace");
+    let sent = server.sessions()[0]
+        .header("traceparent")
+        .map(str::to_owned);
+    assert_eq!(
+        sent,
+        Some(format!("00-{}-{}-01", trace.trace_id, trace.span_id))
+    );
+}
+
 #[tokio::test]
 async fn an_interactive_subscription_feeds_redacted_events_until_stopped() {
     let server = GraphqlWsServer::start(WsScript::Modern {

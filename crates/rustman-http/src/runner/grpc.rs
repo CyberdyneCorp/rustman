@@ -20,13 +20,14 @@ use rustman_core::model::{Assertion, GrpcRequest, GrpcStatusExpectation};
 use rustman_core::redact::remember_for_logs;
 use rustman_core::run::{RequestRecord, RequestStatus, SkipReason, redact_value};
 use rustman_core::settings::Settings;
+use rustman_core::trace::{SentTrace, TRACERESPONSE};
 use rustman_core::vars::{ResolvedGrpc, Resolver, resolve_grpc};
 use rustman_core::workspace::RequestRef;
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 
 use super::graphql::until_cancelled;
-use super::record::redact_capture_messages;
+use super::record::{redact_capture_messages, sent_trace_record};
 use super::{Runner, Sent};
 use crate::engine::SendOptions;
 
@@ -72,6 +73,8 @@ pub struct GrpcOutcome {
     /// The exchange as recorded (`protocol: grpc`), not yet redacted: the
     /// runner redacts it with every secret of the run.
     pub record: Value,
+    /// The trace context the call carried (metadata, or gRPC-Web headers).
+    pub trace: Option<SentTrace>,
 }
 
 /// Why a grpc request ended without a status.
@@ -186,6 +189,16 @@ impl Runner<'_> {
         record.warnings = warnings.map(|w| redactor.text(w).into_owned()).collect();
         record.captures = report.results;
         redact_capture_messages(&mut record.captures, &redactor);
+        record.trace = outcome.trace.as_ref().map(|sent| {
+            let view = &outcome.view;
+            let traceresponse = view
+                .headers
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case(TRACERESPONSE))
+                .map(|(_, value)| value.as_str());
+            let link = self.link.as_ref();
+            sent_trace_record(sent, traceresponse, view.total, link, &redactor)
+        });
         record.grpc = Some(redact_value(&outcome.record, &redactor));
         Sent {
             redactor: outcome.credentials,

@@ -17,12 +17,14 @@ use rustman_core::assertions::{self, AssertionResult, Context, RealtimeFacts, Re
 use rustman_core::model::{Request, unlocated};
 use rustman_core::redact::remember_for_logs;
 use rustman_core::run::{RealtimeRecord, RequestRecord, RequestStatus, SkipReason};
+use rustman_core::trace::{SentTrace, TRACERESPONSE};
 use rustman_core::vars::{ResolvedRealtime, ResolvedRequest, Resolver, resolve_realtime};
 use rustman_core::workspace::RequestRef;
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 
 use super::graphql::{STOP_GRACE, until_cancelled};
+use super::record::sent_trace_record;
 use super::{Runner, Sent};
 use crate::engine::{HttpEngine, SendOptions};
 
@@ -63,6 +65,8 @@ pub struct RealtimeOutcome {
     /// helpers, cookies from the jar) and the credentials their responses
     /// set: redacted, with the run's secrets, wherever the run reports.
     pub credentials: Redactor,
+    /// The trace context the session.s opening request carried.
+    pub trace: Option<SentTrace>,
 }
 
 impl RealtimeOutcome {
@@ -147,6 +151,15 @@ impl Runner<'_> {
             Some(error) => record = record.errored(redactor.text(error).into_owned()),
             None => self.check_session(request, resolver, &outcome, &mut record, &mut redactor),
         }
+        record.trace = outcome.trace.as_ref().map(|sent| {
+            let traceresponse = outcome
+                .headers
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case(TRACERESPONSE))
+                .map(|(_, value)| value.as_str());
+            let link = self.link.as_ref();
+            sent_trace_record(sent, traceresponse, outcome.elapsed, link, &redactor)
+        });
         record.realtime = Some(outcome.record.redacted(&redactor));
         let sent = Sent {
             record,

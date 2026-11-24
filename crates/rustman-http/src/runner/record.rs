@@ -10,7 +10,9 @@ use rustman_core::captures::CaptureResult;
 use rustman_core::run::{
     ExchangeRecord, HeaderRecord, RedirectRecord, ResponseRecord, SentRequest, TimingsRecord,
 };
-use rustman_core::trace::{ServerTiming, TRACERESPONSE, TraceLink, TraceRecord, server_timing};
+use rustman_core::trace::{
+    SentTrace, ServerTiming, TRACERESPONSE, TraceLink, TraceRecord, server_timing,
+};
 use rustman_core::vars::ResolvedRequest;
 
 use crate::exchange::Exchange;
@@ -73,14 +75,34 @@ pub fn trace_record(
         .headers
         .get(TRACERESPONSE)
         .and_then(|v| v.to_str().ok());
+    Some(sent_trace_record(
+        sent,
+        traceresponse,
+        exchange.timings.total,
+        link,
+        redactor,
+    ))
+}
+
+/// The trace record of a session or call without an HTTP [`Exchange`]
+/// (a WebSocket or SSE session, a call over a pooled WebSocket), which
+/// carries the context `sent` on its handshake and just ended after
+/// `elapsed`; `traceresponse` is the handshake response's header.
+pub fn sent_trace_record(
+    sent: &SentTrace,
+    traceresponse: Option<&str>,
+    elapsed: Duration,
+    link: Option<&TraceLink>,
+    redactor: &Redactor,
+) -> TraceRecord {
     let end = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::ZERO);
-    let start = end.saturating_sub(exchange.timings.total);
+    let start = end.saturating_sub(elapsed);
     let window = (unix_millis(start), unix_millis(end));
     let mut record = TraceRecord::new(sent, traceresponse, window, redactor);
     record.link = link.map(|link| redactor.text(&record.render(link)).into_owned());
-    Some(record)
+    record
 }
 
 fn unix_millis(since_epoch: Duration) -> u64 {

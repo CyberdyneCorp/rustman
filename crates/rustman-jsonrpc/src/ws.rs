@@ -13,6 +13,7 @@ use std::time::{Duration, Instant};
 
 use futures_util::{SinkExt, StreamExt};
 use http::HeaderMap;
+use rustman_core::trace::{SentTrace, TRACERESPONSE, b3, baggage::BAGGAGE, w3c};
 use rustman_core::vars::{ResolvedCall, ResolvedJsonrpc, ResolvedRequest};
 use rustman_http::{
     Phase, ProxySettings, RequestError, SendOptions, TlsSettings, UrlScheme, WebSocket,
@@ -44,6 +45,11 @@ pub struct WsConnection {
     pub handshake: ResolvedRequest,
     /// The handshake response status (101).
     pub status: u16,
+    /// The trace context the handshake carried: every call on this
+    /// connection shares it.
+    pub trace: Option<SentTrace>,
+    /// The handshake response.s `traceresponse` header.
+    pub traceresponse: Option<String>,
 }
 
 impl WsConnection {
@@ -66,6 +72,13 @@ impl WsConnection {
             ids: IdSequence::default(),
             handshake: opened.request,
             status: opened.response.status().as_u16(),
+            trace: opened.trace,
+            traceresponse: opened
+                .response
+                .headers()
+                .get(TRACERESPONSE)
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_owned),
         })
     }
 
@@ -287,13 +300,24 @@ async fn pool_key(http: &ResolvedRequest, options: &SendOptions) -> Result<PoolK
     })
 }
 
+/// The handshake headers as a pool key. Trace headers are left out: each
+/// handshake head gets fresh span ids, and calls that share a connection
+/// share the context of the handshake that opened it.
 fn header_list(headers: &HeaderMap) -> Vec<(String, Vec<u8>)> {
     let mut list: Vec<(String, Vec<u8>)> = headers
         .iter()
+        .filter(|(n, _)| !is_trace_header(n.as_str()))
         .map(|(n, v)| (n.as_str().to_owned(), v.as_bytes().to_vec()))
         .collect();
     list.sort();
     list
+}
+
+fn is_trace_header(name: &str) -> bool {
+    [w3c::TRACEPARENT, w3c::TRACESTATE, BAGGAGE, b3::B3]
+        .into_iter()
+        .chain(b3::MULTI)
+        .any(|trace| trace.eq_ignore_ascii_case(name))
 }
 
 /// Send `target` over WebSocket: a call, a batch or a subscription, on a
@@ -366,6 +390,8 @@ async fn attempt(
         Err(e) => return Some(e),
     };
     let mut connection = connection.lock().await;
+    exchange.trace.clone_from(&connection.trace);
+    exchange.traceresponse.clone_from(&connection.traceresponse);
     let error = converse(&mut connection, options, target, subscribe, exchange).await;
     match (pool, &error) {
         (None, _) => connection.close().await,

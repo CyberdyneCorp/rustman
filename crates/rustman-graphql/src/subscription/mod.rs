@@ -24,6 +24,7 @@ use std::time::{Duration, Instant};
 use http::HeaderMap;
 use rustman_core::model::GraphqlRequest;
 use rustman_core::run::now_rfc3339;
+use rustman_core::trace::SentTrace;
 use rustman_core::vars::ResolvedRequest;
 use serde_json::{Value, json};
 use tokio::sync::mpsc::UnboundedSender;
@@ -199,6 +200,9 @@ pub struct Subscription {
     /// Over TLS with certificate verification off.
     pub insecure: bool,
     pub warnings: Vec<String>,
+    /// The trace context the opening request carried (the WebSocket
+    /// handshake or the SSE request): every event shares it.
+    pub trace: Option<SentTrace>,
 }
 
 impl Subscription {
@@ -350,6 +354,7 @@ mod tests {
             elapsed: Duration::ZERO,
             insecure: false,
             warnings: Vec::new(),
+            trace: None,
         }
     }
 

@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use rustman_core::model::WsProtocol;
+use rustman_core::trace::SentTrace;
 use rustman_core::vars::{ResolvedGraphql, ResolvedRequest};
 use rustman_http::{SendOptions, WebSocket, WebSocketError, open_websocket};
 use tokio_tungstenite::tungstenite::error::CapacityError;
@@ -47,13 +48,15 @@ pub async fn subscribe_ws(
 ) -> Result<Subscription, GraphqlError> {
     let started = Instant::now();
     let opened = open(target, preferred, send_options, options, started).await;
-    let (mut socket, response, request) = opened.map_err(|e| e.redacted(&target.redactor()))?;
+    let (mut socket, response, request, trace) =
+        opened.map_err(|e| e.redacted(&target.redactor()))?;
     let protocol = negotiated(&response, preferred).map_err(|e| e.redacted(&target.redactor()))?;
     let connected = started.elapsed();
     let collected = converse(&mut socket, protocol, target, operation, options, started).await;
     let (collected, ended) = collected.map_err(|e| e.redacted(&target.redactor()))?;
     Ok(Subscription {
         protocol: SubscriptionProtocol::Ws(protocol),
+        trace,
         insecure: request.url.text.starts_with("wss:") && !send_options.tls.verify,
         request,
         status: response.status().as_u16(),
@@ -69,14 +72,15 @@ pub async fn subscribe_ws(
 }
 
 /// Connect and shake hands. Returns the socket, the server's handshake
-/// response and the handshake request as recorded.
+/// response, the handshake request as recorded and the trace context it
+/// carried.
 async fn open(
     target: &ResolvedGraphql,
     preferred: WsProtocol,
     send_options: &SendOptions,
     options: &SubscribeOptions,
     started: Instant,
-) -> Result<(WebSocket, Response, ResolvedRequest), GraphqlError> {
+) -> Result<(WebSocket, Response, ResolvedRequest, Option<SentTrace>), GraphqlError> {
     let limit = options.within(started, send_options.connect_timeout);
     let offer = Some(offered(preferred));
     let max = send_options.body.max_in_memory;
@@ -90,7 +94,7 @@ async fn open(
                 limit.as_millis()
             )),
         })?;
-    Ok((opened.socket, opened.response, opened.request))
+    Ok((opened.socket, opened.response, opened.request, opened.trace))
 }
 
 /// The `Sec-WebSocket-Protocol` offer for `preferred`.

@@ -132,6 +132,7 @@ fn outcome(exchange: &GrpcExchange, notice: Option<String>) -> GrpcOutcome {
         credentials: exchange.credentials(),
         stopped: exchange.stopped.is_some(),
         record: serde_json::to_value(exchange).unwrap_or_default(),
+        trace: exchange.trace.clone(),
     }
 }
 
@@ -163,6 +164,7 @@ mod tests {
                 ..GrpcTimings::default()
             },
             stopped: None,
+            trace: None,
         }
     }
 

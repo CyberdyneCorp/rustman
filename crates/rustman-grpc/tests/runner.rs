@@ -350,3 +350,26 @@ async fn without_an_executor_grpc_requests_are_skipped() {
     let records = runner.run(&plan(&ws, &[], &[])).await.requests;
     assert_eq!(records[0].status, RequestStatus::Skipped);
 }
+
+/// Issue #119: a native gRPC call records the trace ids its metadata
+/// carried, in the report and history, not inside the `grpc` record.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_traced_call_records_the_metadata_trace() {
+    let grpc = GrpcServer::start(Reflection::V1).await;
+    let get = grpc_file("get", "GetProduct", "message: {id: p-1}\n");
+    let dir = workspace(&grpc, "http://unused", &[("get.rman.yaml", &get)]);
+    let config = dir.path().join("rustman.toml");
+    let text = fs::read_to_string(&config).unwrap();
+    fs::write(&config, format!("{text}[trace]\nenabled = true\n")).unwrap();
+    let records = run(dir.path()).await;
+    assert_eq!(records[0].status, RequestStatus::Passed, "{:?}", records[0]);
+    let trace = records[0].trace.as_ref().expect("the call's trace");
+    let sent = grpc.calls()[0].text("traceparent");
+    assert_eq!(
+        sent,
+        Some(format!("00-{}-{}-01", trace.trace_id, trace.span_id))
+    );
+    let entries = history(dir.path());
+    assert_eq!(entries[0]["record"]["trace"]["trace_id"], trace.trace_id);
+    assert!(entries[0]["record"]["grpc"].get("trace").is_none());
+}

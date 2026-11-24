@@ -56,6 +56,7 @@ pub async fn subscribe_sse(
         failure: collected.failure,
         connected,
         elapsed: started.elapsed(),
+        trace: response.trace.clone(),
         insecure: response.insecure,
         warnings,
     })

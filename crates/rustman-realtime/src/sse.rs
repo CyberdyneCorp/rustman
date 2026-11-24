@@ -167,6 +167,7 @@ impl<'t> Stream<'t> {
         if self.exchange.handshake.is_none() {
             self.exchange.request = request;
             self.exchange.handshake = Some(handshake_of(&response));
+            self.exchange.trace.clone_from(&response.trace);
         }
         if response.status == 204 {
             let note = "server asked to stop: 204 No Content";
