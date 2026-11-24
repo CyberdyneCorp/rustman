@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 
 use crate::cache::{CachedSchema, SchemaCache, normalize_endpoint};
 use crate::error::GraphqlError;
-use crate::execute::with_graphql_accept;
+use crate::execute::{capped_at, over_limit, with_graphql_accept};
 use crate::introspection::{
     self, INTROSPECTION_QUERY, LEGACY_INTROSPECTION_QUERY, OPERATION_NAME, needs_legacy_query,
 };
@@ -37,11 +37,18 @@ enum Attempt {
 /// newer than the June 2018 specification is asked again with the legacy
 /// query. Every failure is a [`GraphqlError::IntrospectionFailed`] with a
 /// redacted reason.
+///
+/// The response is parsed whole, so it is kept in memory and may be at
+/// most `max_schema_bytes` (`[graphql] max_schema_bytes`): a larger one
+/// stops downloading as soon as the limit is passed and is refused,
+/// never spilled to disk or read back.
 pub async fn introspect(
     engine: &HttpEngine,
     options: &SendOptions,
     target: &ResolvedGraphql,
+    max_schema_bytes: u64,
 ) -> Result<Introspected, GraphqlError> {
+    let options = &capped_at(options, max_schema_bytes);
     let (result, legacy) = match attempt(engine, options, target, INTROSPECTION_QUERY).await? {
         Attempt::Schema(result) => (result, false),
         Attempt::Rejected(errors) if needs_legacy_query(&errors) => {
@@ -64,14 +71,16 @@ pub async fn introspect(
     })
 }
 
-/// Introspect the endpoint of `target` and replace its cached schema.
+/// Introspect the endpoint of `target` and replace its cached schema. The
+/// response may be at most `max_schema_bytes` (see [`introspect`]).
 pub async fn refresh_schema(
     engine: &HttpEngine,
     options: &SendOptions,
     target: &ResolvedGraphql,
     cache: &SchemaCache,
+    max_schema_bytes: u64,
 ) -> Result<CachedSchema, GraphqlError> {
-    let fetched = introspect(engine, options, target).await?;
+    let fetched = introspect(engine, options, target, max_schema_bytes).await?;
     cache.store(
         &target.http.url.text,
         &fetched.result,
@@ -84,6 +93,12 @@ fn rejected(errors: &[String]) -> GraphqlError {
     GraphqlError::IntrospectionFailed(errors.join("; "))
 }
 
+fn too_large(limit: u64) -> GraphqlError {
+    GraphqlError::IntrospectionFailed(format!(
+        "the response is larger than the {limit} byte limit ([graphql] max_schema_bytes)"
+    ))
+}
+
 async fn attempt(
     engine: &HttpEngine,
     options: &SendOptions,
@@ -91,18 +106,23 @@ async fn attempt(
     query: &str,
 ) -> Result<Attempt, GraphqlError> {
     let request = introspection_request(target, query);
-    let exchange = engine
-        .send(&request, options)
-        .await
-        .map_err(|e| GraphqlError::IntrospectionFailed(e.to_string()))?;
+    // `options` comes from `introspect`, capped at the schema limit.
+    let limit = options.body.max_in_memory;
+    let exchange = match engine.send(&request, options).await {
+        Ok(exchange) => exchange,
+        Err(e) if over_limit(&e, limit) => return Err(too_large(limit)),
+        Err(e) => return Err(GraphqlError::IntrospectionFailed(e.to_string())),
+    };
+    if let Some(spill) = &exchange.spill {
+        // Not expected under the cap; never read it back.
+        let _ = std::fs::remove_file(spill);
+        return Err(too_large(limit));
+    }
     let redactor = exchange.redactor(&request);
     let failed =
         |reason: String| GraphqlError::IntrospectionFailed(redactor.text(&reason).into_owned());
-    let view = exchange
-        .view(true)
-        .map_err(|e| failed(format!("cannot read the response body: {e}")))?;
     let status = exchange.status;
-    let body: Value = match serde_json::from_slice(&view.body) {
+    let body: Value = match serde_json::from_slice(&exchange.body) {
         Ok(body @ Value::Object(_)) => body,
         _ => {
             return Err(failed(format!(

@@ -154,7 +154,8 @@ async fn fetch(
 ) -> Result<(), GraphqlError> {
     let options = SendOptions::for_request(&ws.settings, &ws.root, &resolved.http)
         .map_err(|e| GraphqlError::IntrospectionFailed(e.to_string()))?;
-    refresh_schema(&HttpEngine::new(), &options, resolved, cache).await?;
+    let limit = ws.settings.graphql.max_schema_bytes;
+    refresh_schema(&HttpEngine::new(), &options, resolved, cache, limit).await?;
     Ok(())
 }
 

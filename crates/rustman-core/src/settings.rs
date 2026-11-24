@@ -91,7 +91,7 @@ const KNOWN_KEYS: &[(&str, &[&str])] = &[
             "security",
         ],
     ),
-    ("graphql", &["endpoints"]),
+    ("graphql", &["endpoints", "max_schema_bytes"]),
     // Read by rustman-jsonrpc (add-jsonrpc-client).
     ("jsonrpc", &["catalogs", "agent_read_only_methods"]),
     // Read by rustman-evm (add-evm-toolkit), which checks the values.
@@ -241,12 +241,29 @@ pub struct RpcSettings {
     pub agent_read_only_methods: Vec<String>,
 }
 
+/// The default `[graphql] max_schema_bytes`: 64 MiB.
+pub const DEFAULT_MAX_SCHEMA_BYTES: u64 = 64 * 1024 * 1024;
+
 /// `[graphql]`: settings of the GraphQL client.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct GraphqlSettings {
     /// `[[graphql.endpoints]]`: per-endpoint settings.
     pub endpoints: Vec<GraphqlEndpoint>,
+    /// The largest introspection response read, in bytes. It is parsed
+    /// whole, so it is held in memory; a larger one is refused unread.
+    /// Separate from `[http] max_body_bytes` because real schemas can come
+    /// close to that limit.
+    pub max_schema_bytes: u64,
+}
+
+impl Default for GraphqlSettings {
+    fn default() -> Self {
+        Self {
+            endpoints: Vec::new(),
+            max_schema_bytes: DEFAULT_MAX_SCHEMA_BYTES,
+        }
+    }
 }
 
 /// One `[[graphql.endpoints]]` entry.
@@ -593,8 +610,20 @@ mod tests {
                 schema_file: Some("schemas/api.graphql".into()),
             }]
         );
+        assert_eq!(settings.graphql.max_schema_bytes, DEFAULT_MAX_SCHEMA_BYTES);
         let unknown = "[workspace]\nname = \"a\"\nversion = 1\n[[graphql.endpoints]]\nurl = \"x\"\nschema = \"y\"\n";
         assert!(parse(unknown).is_err());
+    }
+
+    #[test]
+    fn the_schema_limit_is_read() {
+        let text = "[workspace]\nname = \"a\"\nversion = 1\n[graphql]\nmax_schema_bytes = 4096\n";
+        let (settings, warnings) = parse(text).unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(settings.graphql.max_schema_bytes, 4096);
+        assert!(settings.graphql.endpoints.is_empty());
+        let (defaults, _) = parse("[workspace]\nname = \"a\"\nversion = 1\n").unwrap();
+        assert_eq!(defaults.graphql.max_schema_bytes, 64 * 1024 * 1024);
     }
 
     #[test]

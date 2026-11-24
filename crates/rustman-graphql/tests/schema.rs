@@ -7,6 +7,7 @@ use std::path::Path;
 
 use apollo_compiler::Schema;
 use rustman_core::model::Request;
+use rustman_core::settings::DEFAULT_MAX_SCHEMA_BYTES;
 use rustman_core::vars::{ResolvedGraphql, Resolver, SecretLookup, resolve_graphql};
 use rustman_core::{RequestRef, Workspace};
 use rustman_graphql::{
@@ -15,11 +16,13 @@ use rustman_graphql::{
 };
 use rustman_http::{HttpEngine, SendOptions};
 use rustman_test_support::graphql::INTROSPECTION_DISABLED;
-use rustman_test_support::{GraphqlServer, Introspection, TestServer};
+use rustman_test_support::{GraphqlHttpServer, GraphqlServer, Introspection, Reply, TestServer};
 
 const GITHUB: &str = include_str!("fixtures/github.graphql");
 const LEGACY_JSON: &str = include_str!("fixtures/legacy.introspection.json");
 const SECRET: &str = "s3cr3t-schema-canary";
+/// The default `[graphql] max_schema_bytes`.
+const LIMIT: u64 = DEFAULT_MAX_SCHEMA_BYTES;
 
 struct Fixture {
     dir: tempfile::TempDir,
@@ -100,7 +103,14 @@ async fn refresh(f: &Fixture) -> Result<rustman_graphql::CachedSchema, GraphqlEr
     let ws = f.workspace();
     let (_, resolved) = resolve(&ws);
     let engine = HttpEngine::new();
-    refresh_schema(&engine, &SendOptions::default(), &resolved, &f.cache()).await
+    refresh_schema(
+        &engine,
+        &SendOptions::default(),
+        &resolved,
+        &f.cache(),
+        ws.settings.graphql.max_schema_bytes,
+    )
+    .await
 }
 
 /// `schema` with no built-in definitions, as SDL: equal maps compare
@@ -126,9 +136,14 @@ async fn a_github_schema_round_trips_through_introspection() {
     f.request("");
     let ws = f.workspace();
     let (_, resolved) = resolve(&ws);
-    let fetched = introspect(&HttpEngine::new(), &SendOptions::default(), &resolved)
-        .await
-        .unwrap();
+    let fetched = introspect(
+        &HttpEngine::new(),
+        &SendOptions::default(),
+        &resolved,
+        LIMIT,
+    )
+    .await
+    .unwrap();
     assert!(!fetched.legacy);
     assert!(
         fetched.schema.warnings().is_empty(),
@@ -186,7 +201,7 @@ async fn a_schema_with_thousands_of_types_converts() {
         timeout: std::time::Duration::from_secs(300),
         ..SendOptions::default()
     };
-    let fetched = introspect(&HttpEngine::new(), &options, &resolved)
+    let fetched = introspect(&HttpEngine::new(), &options, &resolved, LIMIT)
         .await
         .unwrap();
     let expected = Schema::parse_and_validate(sdl, "large.graphql").unwrap();
@@ -209,9 +224,14 @@ async fn servers_without_newer_fields_get_the_legacy_query() {
     f.request("");
     let ws = f.workspace();
     let (_, resolved) = resolve(&ws);
-    let fetched = introspect(&HttpEngine::new(), &SendOptions::default(), &resolved)
-        .await
-        .unwrap();
+    let fetched = introspect(
+        &HttpEngine::new(),
+        &SendOptions::default(),
+        &resolved,
+        LIMIT,
+    )
+    .await
+    .unwrap();
     assert!(fetched.legacy);
     assert_eq!(server.introspection_hits(), 2);
     assert!(fetched.schema.schema().types.contains_key("Repository"));
@@ -387,4 +407,66 @@ fn the_document_is_sent_byte_for_byte() {
         load_document(&request, graphql).unwrap(),
         "{ a(x: \"{{x}}\") }"
     );
+}
+
+/// Regression (#70): an introspection response larger than `[http]
+/// max_body_bytes` was spilled to disk and read back whole, bounded only by
+/// `max_download_bytes`. It is now held in memory up to `[graphql]
+/// max_schema_bytes`, whatever `max_body_bytes` is, and a larger one is
+/// refused as soon as the limit is passed, never spilled or read back.
+#[tokio::test]
+async fn introspection_is_bounded_by_max_schema_bytes() {
+    let size = LEGACY_JSON.len() as u64;
+    let server =
+        GraphqlHttpServer::start(|_| Reply::raw(200, "application/json", LEGACY_JSON)).await;
+    let f = Fixture::new(&server.url(""));
+    f.request("");
+    let ws = f.workspace();
+    let (_, resolved) = resolve(&ws);
+    let mut options = SendOptions::default();
+    // Below the schema: without the schema limit, the body would spill.
+    options.body.max_in_memory = 1024;
+    let engine = HttpEngine::new();
+
+    let fetched = introspect(&engine, &options, &resolved, size)
+        .await
+        .unwrap();
+    assert!(fetched.schema.schema().types.contains_key("Query"));
+
+    let err = introspect(&engine, &options, &resolved, size - 1)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        format!(
+            "graphql: introspection failed: the response is larger than the {} byte limit \
+             ([graphql] max_schema_bytes); set schema_file to validate offline",
+            size - 1
+        )
+    );
+    assert_eq!(server.hits().len(), 2, "an oversized answer is not resent");
+}
+
+/// A refused schema leaves the cache as it was.
+#[tokio::test]
+async fn an_oversized_schema_is_not_cached() {
+    let server =
+        GraphqlHttpServer::start(|_| Reply::raw(200, "application/json", LEGACY_JSON)).await;
+    let f = Fixture::new(&server.url(""));
+    f.write(
+        "rustman.toml",
+        &format!(
+            "[workspace]\nname = \"t\"\nversion = 1\n[variables]\nbase = \"{}\"\n\
+             [graphql]\nmax_schema_bytes = 1024\n",
+            server.url("")
+        ),
+    );
+    f.request("");
+    let err = refresh(&f).await.unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("larger than the 1024 byte limit ([graphql] max_schema_bytes)"),
+        "{err}"
+    );
+    assert!(!f.root().join(SCHEMA_CACHE_DIR).exists());
 }
