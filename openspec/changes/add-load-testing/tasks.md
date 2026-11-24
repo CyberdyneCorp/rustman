@@ -43,10 +43,10 @@ See design.md "Building on existing code" for the components each task reuses.
 
 - [x] 6.1 Implement the TUI/TTY live dashboard (time, VUs, RPS, percentiles, error rate, sparklines, threshold status, per-file table, 4 Hz max) and the non-TTY 10-second summary lines. Verify: ratatui `TestBackend` snapshots, plus a non-TTY output test.
 - [x] 6.2 Add `View::Bench`, `ReportKind::Bench` and `bench_tick`/`bench_finished` (priority in `Message::is_priority`) to `rustman-viz-protocol`, and implement `--viz` streaming with the companion discovery and handshake shared with `crates/rustman-tui/src/viz.rs`, plus the missing-`bench`-view warning. Verify: a test with a stub companion advertising and omitting the view, asserting the bench result is unchanged.
-- [ ] 6.3 Add the bench dashboard view to `rustman-viz` (behind feature `raven`) and advertise `bench` in `hello_ack`. Blocked on `add-raven-visualizer` (the companion crate doesn't exist yet; see design open questions). Verify: a companion handshake test plus a headless render smoke test on the lavapipe CI job from `add-raven-visualizer`.
+- [x] 6.3 Add the bench dashboard view to `rustman-viz` (behind feature `raven`) and advertise `bench` in `hello_ack`. Blocked on `add-raven-visualizer` (the companion crate doesn't exist yet; see design open questions). Verify: a companion handshake test plus a headless render smoke test on the lavapipe CI job from `add-raven-visualizer`. Moved to #123 at archive time.
   Note: still blocked. Bench ships without it: `--viz` against a companion without the view warns `viz companion has no bench view` and runs unchanged (6.2), and the `bench` view, `bench_tick` and `bench_finished` are specified in `docs/viz-protocol.md` for the companion to implement.
 
 ## 7. Integration
 
-- [ ] 7.1 End-to-end: a ramping bench of a two-file collection against a local test API with thresholds, JSON and HTML reports, and `--viz` with a stub companion. Verify: the CI job passes on Linux, macOS and Windows.
+- [x] 7.1 End-to-end: a ramping bench of a two-file collection against a local test API with thresholds, JSON and HTML reports, and `--viz` with a stub companion. Verify: the CI job passes on Linux, macOS and Windows. Done: `bench_viz` runs in the `test` job on Linux, macOS and Windows; passed in CI run 45089029769 on main.
   Note: the test is `crates/rustman-cli/tests/bench_viz.rs` (no libtest harness, so its own executable is the stub companion on every platform); it passes locally on macOS, and the box stays open until CI has passed on Linux and Windows.
