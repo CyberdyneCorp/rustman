@@ -708,9 +708,6 @@ jobs:
     defaults:
       run:
         working-directory: crates/rustman-viz
-    env:
-      RAVEN_VERSION: v0.3.0
-      RAVEN_STATIC: "1"
     steps:
       - uses: actions/checkout@v5
       - name: Install toolchain from rust-toolchain.toml
@@ -719,19 +716,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: crates/rustman-viz
-      - name: X11 development files (the static Raven library links libX11)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libx11-dev
-      - name: Download and verify the Raven library
-        run: |
-          base="https://github.com/oscar-soirey/Raven/releases/download/$RAVEN_VERSION"
-          cd "$RUNNER_TEMP"
-          curl -fsSLO "$base/raven-linux-x64-static.tar.gz"
-          curl -fsSLO "$base/SHA256SUMS.txt"
-          grep ' raven-linux-x64-static.tar.gz$' SHA256SUMS.txt | sha256sum -c -
-          tar -xzf raven-linux-x64-static.tar.gz
-          echo "RAVEN_LIB_DIR=$RUNNER_TEMP/raven-linux-x64-static/lib" >> "$GITHUB_ENV"
+      - uses: ./.github/actions/raven
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --features raven --locked -- -D warnings
       - name: Tests (models without Raven, then the executable, headless)
@@ -749,6 +734,50 @@ jobs:
           manifest-path: crates/rustman-viz/Cargo.toml
           command: check
           arguments: --all-features
+
+  # Issue #121: `rustman run --viz` end to end with the real companion,
+  # drawing a real window (not Raven's headless backend) on Xvfb with
+  # Mesa's software Vulkan driver (lavapipe). scripts/check_viz_e2e.py runs
+  # the demo collection against the demo API and asserts the handshake,
+  # the full event stream and the companion's clean exit after it drew
+  # and captured the run dashboard.
+  viz-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            crates/rustman-viz
+      - uses: ./.github/actions/raven
+      - name: Xvfb and Mesa's software Vulkan driver (lavapipe)
+        run: sudo apt-get install -y xvfb mesa-vulkan-drivers libvulkan1 vulkan-tools
+      - name: Build rustman
+        run: cargo build -p rustman-cli --locked
+      - name: Build the companion
+        working-directory: crates/rustman-viz
+        run: cargo build --features raven --locked
+      - name: Lavapipe is the Vulkan device
+        run: |
+          icd=$(ls /usr/share/vulkan/icd.d/lvp_icd*.json | head -1)
+          echo "VK_ICD_FILENAMES=$icd" >> "$GITHUB_ENV"
+          VK_ICD_FILENAMES="$icd" xvfb-run -a vulkaninfo --summary
+      - name: rustman run --viz with the real companion
+        run: |
+          xvfb-run -a -s "-screen 0 1920x1080x24" \
+            python3 scripts/check_viz_e2e.py target/debug/rustman \
+              crates/rustman-viz/target/debug/rustman-viz "$RUNNER_TEMP/viz-e2e"
+      - name: Keep the stream, the companion log and the capture
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: viz-e2e
+          path: ${{ runner.temp }}/viz-e2e
+          if-no-files-found: ignore
+
   # add-contract-testing task 6.3: the official Pact verifier verifies the
   # Pact files we generate against the same fixture provider as ours, and
   # the verdicts must match. pact_verifier_cli is a pinned release whose

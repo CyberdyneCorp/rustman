@@ -94,5 +94,6 @@ Exit codes of `rustman-viz`: `0` when its windows are closed or `--protocol-chec
 
 - `RUSTMAN_VIZ_DEV_LAYOUTS=<dir>` makes the companion read the window layouts from `<dir>` instead of the copies built into the binary. The originals are in `crates/rustman-viz/layouts/`.
 - `RUSTMAN_VIZ_HEADLESS=1` runs it with no window system and no GPU (Raven's null backend). The integration tests use it.
+- `scripts/check_viz_e2e.py <rustman> <rustman-viz>` checks `rustman run --viz` end to end with the real companion drawing a real window: it runs the demo collection (`examples/demo`) against the demo API, records what crosses the pipe, and asserts the handshake, the full event stream (with the API token never sent) and the companion's clean exit after it captured the run dashboard. CI runs it on Linux under Xvfb with Mesa's software Vulkan driver (lavapipe), in the `viz-e2e` job.
 - `rustman-viz --capture <dir>` waits for its input to end, then saves every window as a PNG and exits. The screenshots on this page were made with `--capture` from `crates/rustman-viz/tests/fixtures`, which hold sample data rather than a real API.
 - All `unsafe` code is in `src/raven_adapter/`. The rest of the crate denies `unsafe_code`, and the view models in `src/model/` are tested without Raven.
