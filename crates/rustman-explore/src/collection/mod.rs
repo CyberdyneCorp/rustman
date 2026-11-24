@@ -2,10 +2,13 @@
 //! per first tag (`untagged` when none) and one `kind: http` request file per
 //! operation, named from its `operationId` in kebab-case (otherwise
 //! `<method>-<path-slug>`), with `-2`, `-3`, ... on collisions. Servers
-//! become environments and security schemes become auth config.
+//! become environments and security schemes become auth config. A
+//! `{{secret:...}}` reference taken from the document is written escaped,
+//! with a warning, so it never resolves a local secret.
 
 pub mod auth;
 pub mod environments;
+mod inert;
 pub mod names;
 mod request;
 mod write;
@@ -89,7 +92,7 @@ pub fn generate_with(model: &ApiModel, options: &GenerateOptions<'_>) -> Generat
     let security = Security::of(model, &mut warnings);
     let environments =
         environments::environments(model, &security.secrets, options.location, &mut warnings);
-    let root = CollectionMeta {
+    let mut root = CollectionMeta {
         name: Some(model.title.clone()),
         description: model.description.clone(),
         order: Some(folders.iter().map(|f| f.dir.clone()).collect()),
@@ -97,6 +100,9 @@ pub fn generate_with(model: &ApiModel, options: &GenerateOptions<'_>) -> Generat
         source: options.source.clone().map(Box::new),
         ..CollectionMeta::default()
     };
+    if let Some(auth) = &mut root.auth {
+        inert::warn(inert::auth(auth), "/security", &mut warnings);
+    }
     let mut generated = Generated {
         files: Vec::new(),
         warnings,
@@ -128,7 +134,8 @@ impl Generated {
                 components: &model.components,
                 auth: auth.as_ref(),
             };
-            let request = request_for(op, &context, &mut self.warnings);
+            let mut request = request_for(op, &context, &mut self.warnings);
+            inert::request(&mut request, &op.pointer, &mut self.warnings);
             let path = format!("{}/{stem}{REQUEST_FILE_SUFFIX}", folder.dir);
             let yaml = request_to_yaml(&Request::Http(Box::new(request.clone())));
             self.operations.push(GeneratedRequest {

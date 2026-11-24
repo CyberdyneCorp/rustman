@@ -142,6 +142,14 @@ Credentials are always `{{variables}}` declared as secrets: no credential value 
 warning: /components/securitySchemes/oidc: security scheme 'oidc' (openIdConnect) is not configured; set up its auth by hand
 ```
 
+## Secret references in the document
+
+The document cannot name your secrets. A [secret reference](secrets.md) (`{{secret:...}}`) in a path or parameter name, an example body, a server URL or variable default, or a security scheme is written escaped, as `\{{secret:...}}`: literal text that is sent as written and never reads a provider secret. Each one gets a warning at its JSON pointer, in `rustman import openapi` (also with `--sync`) and in the `import_openapi` agent tool:
+
+```text
+warning: /paths/~1leak/post: secret reference {{secret:vault/kv/prod/db#password}} from the document neutralized: it is kept as literal text and never resolved
+```
+
 ## Import snapshot
 
 Every import stores the bundled, normalized document at `.rustman/openapi/<collection>.json` (`<collection>` is the collection folder's path in kebab-case) and records where it came from in the collection's `_collection.yaml`:

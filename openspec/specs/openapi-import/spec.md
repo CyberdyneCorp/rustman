@@ -100,6 +100,14 @@ Each `servers` entry SHALL become an environment that defines `baseUrl`. Its nam
 - **WHEN** imported
 - **THEN** generated requests SHALL use bearer auth with token `{{bearerAuth_token}}`, declared as a secret with no value
 
+### Requirement: Document secret references are neutralized
+A `{{secret:...}}` reference taken from the document (a path or parameter name, an example body, a server URL or variable default, a security scheme field) SHALL be written escaped as `\{{secret:...}}`, literal text that never resolves a provider secret, with one warning per reference at its JSON pointer. This SHALL hold for `rustman import openapi`, `--sync` and the `import_openapi` tool.
+
+#### Scenario: Planted reference in an example body
+- **GIVEN** an operation whose JSON example is `{"pw": "{{secret:vault/kv/prod/db#password}}"}`
+- **WHEN** it is imported
+- **THEN** the request body SHALL hold `\{{secret:vault/kv/prod/db#password}}` and the import SHALL warn that the reference was neutralized
+
 ### Requirement: Import snapshot
 Every successful import SHALL store the normalized document at `.rustman/openapi/<collection>.json` and record the source and its hash in the collection metadata, so later syncs can compute three-way merges.
 

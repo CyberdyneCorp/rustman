@@ -1,5 +1,5 @@
-//! The conversion pipeline (design D1): translate variables, extract
-//! secrets, suggest assertions, then lay the tree out as files with
+//! The conversion pipeline (design D1): translate variables, neutralize
+//! `{{secret:...}}` references from the source, extract secrets, suggest assertions, then lay the tree out as files with
 //! deterministic names and the conflict policy (task 1.5). Planning only
 //! reads the workspace; [`crate::apply`] writes.
 
@@ -23,7 +23,7 @@ use crate::report::{
 };
 use crate::secrets::{Existing, MovedSecret, environment_name, extract, redact_tokens};
 use crate::slug::{Slugs, path_limit_error, slug};
-use crate::{scripts, translate};
+use crate::{inert, scripts, translate};
 
 /// What to do with a file that already exists.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -109,12 +109,14 @@ pub fn plan(mut collection: ImportedCollection, o: &PlanOptions<'_>) -> Result<P
     crate::pathvars::separate(&mut collection);
     collection.name = redact_tokens(&collection.name);
     distinct_environment_names(&mut collection);
+    inert::neutralize(&mut collection);
     let target = o
         .environment
         .clone()
         .unwrap_or_else(|| environment_name(&collection.name));
     let mut moved = extract(&mut collection, &target, &o.existing);
     scripts::suggest(&mut collection);
+    inert::neutralize_checks(&mut collection);
     let redactor = moved.iter().fold(Redactor::new(), |r, m| r.with(&m.secret));
     let mut layout = Layout {
         root: o.root,

@@ -126,3 +126,65 @@ async fn an_empty_target_is_used() {
     write(&generate(&model), &target).unwrap();
     assert!(Path::new(&target.join("_collection.yaml")).is_file());
 }
+
+/// Issue #95: `{{secret:...}}` text in the document (a parameter name, an
+/// example, a server URL, a security scheme) is written escaped, with a
+/// warning, so no generated file resolves a local secret.
+#[tokio::test]
+async fn secret_references_from_the_document_are_neutralized() {
+    const REF: &str = "{{secret:vault/kv/prod/db#password}}";
+    let spec = format!(
+        r#"openapi: 3.0.3
+info: {{title: Evil, version: "1"}}
+servers:
+  - url: "https://evil.test/{REF}"
+paths:
+  /leak:
+    post:
+      operationId: leak
+      parameters:
+        - {{name: "{REF}", in: query, required: true, schema: {{type: string}}}}
+      requestBody:
+        content:
+          application/json:
+            example: {{pw: "{REF}", "{REF}": 1}}
+      responses:
+        "200": {{description: ok}}
+security:
+  - key: []
+components:
+  securitySchemes:
+    key: {{type: apiKey, in: header, name: "{REF}"}}
+"#
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("evil.yaml");
+    std::fs::write(&path, spec).unwrap();
+    let imported = rustman_explore::import(
+        &path.to_string_lossy(),
+        &rustman_explore::ImportOptions::default(),
+    )
+    .await
+    .unwrap();
+    let generated = generate(&imported.model);
+    let all = tree(&generated);
+    assert!(
+        all.contains("\\{{secret:vault/kv/prod/db#password}}"),
+        "{all}"
+    );
+    for (at, _) in all.match_indices("{{secret:") {
+        assert!(all[..at].ends_with('\\'), "{all}");
+    }
+    let warnings: Vec<String> = generated.warnings.iter().map(ToString::to_string).collect();
+    let neutralized: Vec<&String> = warnings
+        .iter()
+        .filter(|w| w.contains(REF) && w.contains("neutralized"))
+        .collect();
+    // The operation, the server and the collection auth.
+    for pointer in ["/paths/~1leak/post", "/servers/0", "/security"] {
+        assert!(
+            neutralized.iter().any(|w| w.starts_with(pointer)),
+            "{pointer}: {warnings:?}"
+        );
+    }
+}

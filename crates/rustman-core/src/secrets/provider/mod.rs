@@ -24,7 +24,9 @@ use std::pin::Pin;
 pub use cache::{DEFAULT_TTL, SecretCache};
 pub use config::{DEFAULT_TIMEOUT, Origin, ProviderConfig};
 pub use error::{EXIT_CONFIG, EXIT_REQUEST, ProviderError, UnresolvedSecret};
-pub use reference::{PREFIX, SecretRef, invalid_reference, malformed_in, mentions_reference};
+pub use reference::{
+    PREFIX, SecretRef, invalid_reference, malformed_in, mentions_reference, neutralize_references,
+};
 pub use registry::{MAX_CONCURRENT_FETCHES, ProviderInfo, SecretProviders};
 
 use crate::secret::Secret;

@@ -4,7 +4,8 @@
 //! The pipeline (design D1) is a library so every front-end, and other
 //! producers of the neutral IR (a traffic recorder, script migration), share
 //! one implementation: a source parser builds an [`ir::ImportedCollection`];
-//! [`plan::plan`] translates variables, extracts secrets, suggests
+//! [`plan::plan`] translates variables, neutralizes `{{secret:...}}`
+//! references planted by the source, extracts secrets, suggests
 //! assertions and lays out files; [`apply::apply`] stores the secrets and
 //! writes the files. Secret values never reach a planned file or the report.
 
@@ -32,6 +33,7 @@ pub mod translate;
 
 mod common;
 mod envs;
+mod inert;
 
 use std::io::Read;
 use std::path::Path;
