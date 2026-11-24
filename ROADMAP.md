@@ -2,7 +2,7 @@
 
 This file is the **delivery plan**: what ships in which release, in what order, and why.
 The **capability map, glossary and cross-cutting contracts** stay in [`openspec/ROADMAP.md`](openspec/ROADMAP.md),
-and the requirements stay in `openspec/changes/<id>/`. Change ids below are the OpenSpec change ids.
+and the requirements are the living specs in `openspec/specs/<capability>/` (each change, archived, is in `openspec/changes/archive/`). Change ids below are the OpenSpec change ids.
 
 ## Where we are
 
@@ -15,7 +15,7 @@ and the requirements stay in `openspec/changes/<id>/`. Change ids below are the 
 - **Done:** **v0.6 — Pro testing**: contract testing (#86, OpenAPI breaking-change diff, Pact generate/verify, passive conformance), trace propagation (#88, W3C/B3 context, trace links, OTLP export), load testing (#91, `rustman bench`), the docs generator (#92, `rustman docs build/serve`) and stress testing (#94, `rustman stress` breakpoint/spike/soak/fuzz with wire faults, kill switch, recovery and minimization). On the side track, the viz producer (#85, `--viz`, `rustman viz`) and the `rustman-viz` companion on Raven (#89) landed, plus the README demo GIF (#90). Follow-ups: trace ids for WebSocket, MCP-session and native gRPC exchanges, client-span export for explorations, and the Jaeger end-to-end CI job (trace-propagation 3.7, 4.5, 5.1); a bench dashboard in the companion and the bench end-to-end job (load-testing 6.3, 7.1); the companion has no stress view either, so `--viz` on `bench` and `stress` only warns.
 - **Done:** **v0.7 — Operate & extend**: scheduled monitors (#97, `rustman monitor` with alert rules, desktop/webhook/email notifiers, a local result store and a TUI view), secret providers (#98, `{{secret:...}}` from the keychain, env, SOPS, 1Password, Vault, a command, and AWS/GCP/Azure behind cargo features), the plugin system (#101, WASM component plugins on wasmtime with a frozen WIT API, a capability sandbox, sha256 pins, workspace trust and seven extension points), the traffic recorder (#105, `rustman record` forward/reverse proxy with a per-workspace local CA, scoped HTTPS interception, HAR export and saved request files) and the messaging client (#106, Kafka, MQTT and AMQP request files, AsyncAPI import, CLI, TUI pane and agent tools). Flaky stress tests were fixed in #100 and #103. Follow-ups: plugin sandbox hardening (#102: Windows reparse points, a listing race, `plugin verify` and private literal IPs, URL userinfo in history); recorder secret detection in URL path segments and nested JSON fields (#104); the viz companion has no `monitor_trend` view yet, so `monitor status --viz` falls back to text.
 - **Done:** the **EVM toolkit** side track (`add-evm-toolkit`), in three PRs. #107, read-only: `evm-call` and `evm-tx` request files with `chain_id` pinning, ABI decoding (built-in ERC-20/721/1155, Foundry and Hardhat artifacts, opt-in explorer fetch), `eth_call` simulation with state overrides and call traces, head and log streams, ENS, Anvil forks, `rustman evm call|decode|logs|tx|block|ens|fork`, a TUI pane and read-only agent tools. #110: chain exploration (`rustman evm probe`: method matrix, archive detection, latency, subscriptions, provider consistency and rate-limit discovery, as a `rustman.report/v1` exploration report) and blockchain GraphQL presets for geth EIP-1767 and The Graph subgraphs (scalar display, `--paginate`, subgraph freshness and a `max_lag_blocks` assertion). #114, the signing gate: `rustman evm send --sign` and `rustman run --sign` with keystore and OS-keychain signers, a workspace opt-in, raw keys refused, simulation, typed confirmation, receipt wait and an audit record; agents can't sign (`rustman-mcp` doesn't link the signing crate). Flaky tests were fixed in #109 and #113. Follow-ups: hardware-wallet signers, Ledger and Trezor (#111); signing from the TUI (#112). The OpenSpec change is archived with v1.0.
-- **In progress / Next:** **v1.0 — Stabilize**: freeze the public contracts, archive the remaining OpenSpec changes, build the release pipeline (signed artifacts per OS) and write the migration guide from Postman. Open work is tracked in the [roadmap tracking issue](https://github.com/CyberdyneCorp/rustman/issues/46).
+- **In progress:** **v1.0 — Stabilize**. Done: every OpenSpec change is archived and `openspec/specs/` holds 35 living specs (open tasks moved to #35 and #116–#123); the public contracts are frozen and documented in [`docs/stability.md`](docs/stability.md), each with a guard test in CI. Next: the release pipeline (signed artifacts per OS, #35), the manual terminal matrix (#116) and the migration guide from Postman (#36). Open work is tracked in the [roadmap tracking issue](https://github.com/CyberdyneCorp/rustman/issues/46).
 - **CI:** fmt, clippy, tests on Linux/macOS/Windows, `cargo deny`, and `openspec validate --all --strict`. v0.7 added jobs against real services: `messaging-kafka` (Redpanda) and `messaging-mqtt-amqp` (Mosquitto, RabbitMQ), `secrets-vault` (Vault dev server), `secrets-localstack` (AWS), `release-secrets` (every provider type in the release binary), and `plugin-templates` (scaffolds, builds and tests every plugin template). Default debug and release builds are checked for the absence of the recorder's test hooks. The EVM toolkit runs in the `jsonrpc-anvil` job with `RUSTMAN_REQUIRE_ANVIL=1`, so a missing Anvil fails instead of skipping: the `rustman-evm` Anvil tests (with solc 0.8.26 for the fixture token), and the signing tests of `rustman-evm-signing` and `rustman evm send`, plus the "CI on Anvil" example of `docs/evm-signing.md`.
 
 The order in `openspec/ROADMAP.md` follows the order the specs were written in. This roadmap reorders the work by
@@ -149,11 +149,11 @@ These five changes are independent of each other and can run in parallel.
 
 ### v1.0 — Stabilize
 
-- Freeze public contracts: request-file `version: 1`, `rustman.report/v1`, `rustman-viz/1`, the plugin WIT API and
-  the CLI exit codes.
-- Make sure every change is archived and `openspec/specs/` holds the living specs.
+- ✅ Freeze public contracts: request-file `version: 1`, `rustman.report/v1`, `rustman-viz/1`, the plugin WIT API and
+  the CLI exit codes ([`docs/stability.md`](docs/stability.md), with frozen-surface tests in CI).
+- ✅ Make sure every change is archived and `openspec/specs/` holds the living specs.
 - Release pipeline: signed artifacts per OS, with `hw-wallet` and cloud secret providers enabled in official builds.
-- Full manual terminal matrix (TUI 9.2), a docs site, and a migration guide from Postman.
+- Full manual terminal matrix (TUI 9.2, #116), a docs site, and a migration guide from Postman.
 
 ### Side tracks (never on the critical path)
 

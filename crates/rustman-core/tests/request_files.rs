@@ -318,3 +318,30 @@ fn invalid_snapshot_regex_names_pattern_and_reason() {
         "snapshot-invalid-regex.rman.yaml:8: invalid regex '(': unclosed group",
     );
 }
+
+/// Request-file `version: 1` is a frozen public contract (docs/stability.md):
+/// every built-in kind reads exactly version 1 and refuses any other one,
+/// or none, before looking at its own fields.
+#[test]
+fn request_file_version_1_is_frozen_for_every_kind() {
+    use rustman_core::model::{BUILTIN_KINDS, REQUEST_VERSION};
+    assert_eq!(REQUEST_VERSION, 1);
+    let registry = KindRegistry::default();
+    for kind in BUILTIN_KINDS {
+        for (version, message) in [
+            (
+                "version: 0\n",
+                "unsupported request file version 0 (expected 1)",
+            ),
+            (
+                "version: 2\n",
+                "unsupported request file version 2 (expected 1)",
+            ),
+            ("", "missing 'version' (expected 1)"),
+        ] {
+            let text = format!("{version}kind: {kind}\nname: x\n");
+            let err = registry.load(Path::new("x.rman.yaml"), &text).unwrap_err();
+            assert_eq!(err.message, message, "kind {kind}, {version:?}");
+        }
+    }
+}

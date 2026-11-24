@@ -1,0 +1,211 @@
+# The frozen surface of rustman-viz/1 (see tests/frozen.rs). Never remove lines.
+error-code vulkan_unavailable
+major 1
+max-line-bytes 16777216
+message bench_finished
+message bench_finished field aborted: string
+message bench_finished field duration_ms: integer
+message bench_finished field errors: integer
+message bench_finished field iterations: integer
+message bench_finished field p50_ms: number
+message bench_finished field p95_ms: number
+message bench_finished field p99_ms: number
+message bench_finished field requests: integer
+message bench_finished field rps: number
+message bench_finished field state: string
+message bench_finished field thresholds: array
+message bench_finished requires duration_ms
+message bench_finished requires errors
+message bench_finished requires iterations
+message bench_finished requires p50_ms
+message bench_finished requires p95_ms
+message bench_finished requires p99_ms
+message bench_finished requires requests
+message bench_finished requires rps
+message bench_finished requires state
+message bench_tick
+message bench_tick field active_vus: integer
+message bench_tick field elapsed_ms: integer
+message bench_tick field errors: integer
+message bench_tick field p50_ms: number
+message bench_tick field p95_ms: number
+message bench_tick field p99_ms: number
+message bench_tick field remaining_ms: integer
+message bench_tick field requests: integer
+message bench_tick field rps: number
+message bench_tick field second: integer
+message bench_tick requires active_vus
+message bench_tick requires elapsed_ms
+message bench_tick requires errors
+message bench_tick requires p50_ms
+message bench_tick requires p95_ms
+message bench_tick requires p99_ms
+message bench_tick requires requests
+message bench_tick requires rps
+message bench_tick requires second
+message blob_ref
+message blob_ref field bytes: integer
+message blob_ref field media_type: string
+message blob_ref field path: string
+message blob_ref requires bytes
+message blob_ref requires path
+message call_trace
+message call_trace field nodes: array
+message call_trace field provider: string
+message call_trace requires nodes
+message call_trace requires provider
+message chain_block
+message chain_block field gas_limit: integer
+message chain_block field gas_used: integer
+message chain_block field number: integer
+message chain_block field provider: string
+message chain_block field timestamp: integer
+message chain_block requires gas_limit
+message chain_block requires gas_used
+message chain_block requires number
+message chain_block requires provider
+message chain_block requires timestamp
+message close
+message error
+message error field code: string
+message error field message: string
+message error requires code
+message error requires message
+message exchange_completed
+message exchange_completed field assertions: object
+message exchange_completed field duration_ms: integer
+message exchange_completed field error: string
+message exchange_completed field iteration: integer
+message exchange_completed field method: string
+message exchange_completed field outcome: string
+message exchange_completed field request: string
+message exchange_completed field status: integer
+message exchange_completed field url: string
+message exchange_completed requires duration_ms
+message exchange_completed requires method
+message exchange_completed requires outcome
+message exchange_completed requires request
+message exchange_completed requires url
+message exploration_finished
+message exploration_finished field operations_exercised: integer
+message exploration_finished field operations_total: integer
+message exploration_finished field state: string
+message exploration_finished field status_codes_documented: integer
+message exploration_finished field status_codes_seen: integer
+message exploration_finished requires operations_exercised
+message exploration_finished requires operations_total
+message exploration_finished requires state
+message exploration_started
+message exploration_started field base_url: string
+message exploration_started field operations: integer
+message exploration_started field started_at: string
+message exploration_started requires operations
+message exploration_started requires started_at
+message finding
+message finding field detail: string
+message finding field operation: string
+message finding field severity: string
+message finding field title: string
+message finding requires operation
+message finding requires severity
+message finding requires title
+message hello
+message hello field producer: string
+message hello field protocol: string
+message hello requires producer
+message hello requires protocol
+message hello_ack
+message hello_ack field protocol: string
+message hello_ack field viewer: string
+message hello_ack field views: array
+message hello_ack requires protocol
+message hello_ack requires viewer
+message hello_reject
+message hello_reject field supported: array
+message hello_reject requires supported
+message inspect_response
+message inspect_response field body: any
+message inspect_response field content_type: string
+message inspect_response field headers: array
+message inspect_response field request: string
+message inspect_response field selector: string
+message inspect_response field status: integer
+message inspect_response requires body
+message load_report
+message load_report field kind: string
+message load_report field path: string
+message load_report field view: string
+message load_report requires kind
+message load_report requires path
+message monitor_trend
+message monitor_trend field environment: string
+message monitor_trend field hour_of_day: array
+message monitor_trend field latency: array
+message monitor_trend field monitor: string
+message monitor_trend field schedule: string
+message monitor_trend field uptime_24h: number
+message monitor_trend field uptime_30d: number
+message monitor_trend field uptime_7d: number
+message monitor_trend requires environment
+message monitor_trend requires monitor
+message monitor_trend requires schedule
+message open_view
+message open_view field title: string
+message open_view field view: string
+message open_view requires view
+message probe_completed
+message probe_completed field duration_ms: integer
+message probe_completed field operation: string
+message probe_completed field outcome: string
+message probe_completed field status: integer
+message probe_completed requires duration_ms
+message probe_completed requires operation
+message probe_completed requires outcome
+message probe_latency
+message probe_latency field max_ms: number
+message probe_latency field method: string
+message probe_latency field p50_ms: number
+message probe_latency field p95_ms: number
+message probe_latency field provider: string
+message probe_latency field samples: integer
+message probe_latency requires max_ms
+message probe_latency requires method
+message probe_latency requires p50_ms
+message probe_latency requires p95_ms
+message probe_latency requires provider
+message probe_latency requires samples
+message run_finished
+message run_finished field state: string
+message run_finished field summary: object
+message run_finished requires state
+message run_finished requires summary
+message run_started
+message run_started field environment: string
+message run_started field started_at: string
+message run_started field total: integer
+message run_started requires started_at
+outcome cancelled
+outcome errored
+outcome failed
+outcome passed
+outcome skipped
+protocol rustman-viz/1
+report-kind bench
+report-kind exploration
+report-kind run
+report-kind stress
+run-state aborted
+run-state completed
+severity critical
+severity high
+severity info
+severity low
+severity medium
+view api_graph
+view bench
+view chain_probe
+view exploration_dashboard
+view monitor_trend
+view response_inspector
+view run_dashboard
+view stress
