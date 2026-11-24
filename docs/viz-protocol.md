@@ -1,6 +1,6 @@
 # Viz protocol (`rustman-viz/1`)
 
-The viz protocol connects `rustman` (the producer: the CLI or the TUI) to the optional graphical companion `rustman-viz`. It is specified by the `visual-dashboards` capability in [`openspec/changes/add-raven-visualizer`](../openspec/changes/add-raven-visualizer/). The message types live in the `rustman-viz-protocol` crate (serde types only, no I/O), and the JSON Schema of every message is [`crates/rustman-viz-protocol/schema/rustman-viz-1.schema.json`](../crates/rustman-viz-protocol/schema/rustman-viz-1.schema.json).
+The viz protocol connects `rustman` (the producer: the CLI or the TUI) to the optional graphical companion `rustman-viz`. It is specified by the [`visual-dashboards`](../openspec/specs/visual-dashboards/spec.md) capability. The message types live in the `rustman-viz-protocol` crate (serde types only, no I/O), and the JSON Schema of every message is [`crates/rustman-viz-protocol/schema/rustman-viz-1.schema.json`](../crates/rustman-viz-protocol/schema/rustman-viz-1.schema.json).
 
 ## Transport
 

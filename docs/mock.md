@@ -6,7 +6,7 @@ The mock is a development tool, not a security boundary. It binds to loopback by
 
 The [TUI](tui.md#mock-server-pane) runs the same server in its mock server pane (`Alt+O`).
 
-The behavior is specified in [`openspec/changes/add-openapi-mock-server`](../openspec/changes/add-openapi-mock-server/).
+The behavior is specified in [`openspec/specs/mock-server`](../openspec/specs/mock-server/spec.md).
 
 ## Starting the mock
 

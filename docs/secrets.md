@@ -2,7 +2,7 @@
 
 Rustman can read secrets from where your team already keeps them: the OS keychain, environment variables, SOPS files, 1Password, HashiCorp Vault, a command you trust, and (in release builds) AWS, Google Cloud and Azure secret managers. A request names a secret with a **secret reference**. The value is fetched when the request is sent, used on the wire, and never written anywhere.
 
-The behavior is specified in [`openspec/changes/add-secret-providers`](../openspec/changes/add-secret-providers/specs/secret-providers/spec.md).
+The behavior is specified in [`openspec/specs/secret-providers`](../openspec/specs/secret-providers/spec.md).
 
 ## Secret references
 

@@ -2,7 +2,7 @@
 
 Plugins extend Rustman with WebAssembly components: in-house auth schemes, domain-specific assertions, value generators, body transformers, importers, request kinds and report formats. Workspaces travel through Git, so a plugin is treated as untrusted code. It runs in a sandbox, gets nothing the workspace does not grant it in `rustman.toml`, and is pinned by the sha256 of its bytes.
 
-The behavior is specified in [`openspec/changes/add-plugin-system`](../openspec/changes/add-plugin-system/). This page covers the plugin package and manifest, the `rustman plugin` commands, declaring and pinning plugins, URL sources, the grant vocabulary, the sandbox and its limits, trust, the extension points wired so far, the plugin API, and writing and testing plugins with the SDK, its templates and the test harness.
+The behavior is specified in [`openspec/specs/plugins`](../openspec/specs/plugins/spec.md). This page covers the plugin package and manifest, the `rustman plugin` commands, declaring and pinning plugins, URL sources, the grant vocabulary, the sandbox and its limits, trust, the extension points wired so far, the plugin API, and writing and testing plugins with the SDK, its templates and the test harness.
 
 Plugin support is the default cargo feature `plugins` of `rustman-cli`; `cargo build --no-default-features` builds Rustman without wasmtime.
 

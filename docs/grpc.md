@@ -2,7 +2,7 @@
 
 Rustman calls gRPC services from `kind: grpc` request files, with no generated code: message types come from the server (reflection), from local `.proto` files compiled in-process, or from a binary descriptor set. No `protoc` is needed.
 
-This page covers the request file, where schemas come from, the descriptor cache, the method browser with its message templates, how calls are sent (message encoding, call types and the message timeline, stream bounds, deadlines, metadata, TLS and gRPC-Web, and status details), assertions and captures, `kind: grpc` in `rustman run` and history, and the `rustman grpc` commands. The behavior is specified in [`openspec/changes/add-grpc-client`](../openspec/changes/add-grpc-client/).
+This page covers the request file, where schemas come from, the descriptor cache, the method browser with its message templates, how calls are sent (message encoding, call types and the message timeline, stream bounds, deadlines, metadata, TLS and gRPC-Web, and status details), assertions and captures, `kind: grpc` in `rustman run` and history, and the `rustman grpc` commands. The behavior is specified in [`openspec/specs/grpc-requests`](../openspec/specs/grpc-requests/spec.md).
 
 ## Request files
 
