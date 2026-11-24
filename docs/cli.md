@@ -104,7 +104,7 @@ This page covers sending and running requests, reporters, terminal behavior, log
 | `rustman record ca uninstall` | Remove the CA from every trust store Rustman installed it in | [Traffic recorder](record.md#trusting-the-ca) |
 | `rustman record ca rotate` | Uninstall and delete the CA, create a new one and print both fingerprints; `--yes` | [Traffic recorder](record.md#the-local-ca) |
 | `rustman record ca remove` | Uninstall the CA, then delete its key from the keychain and its certificate, after a typed `yes` (or `--yes`); declining exits 1 | [Traffic recorder](record.md#the-local-ca) |
-| `rustman viz <report.json>` | Open a run or exploration report in the graphical viz companion `rustman-viz`; `--view graph` opens the API graph of an exploration | [below](#viz-companion) |
+| `rustman viz <report.json>` | Open a run, exploration or bench report in the graphical viz companion `rustman-viz`; `--view graph` opens the API graph of an exploration | [below](#viz-companion) |
 | `rustman mock serve <openapi>` | Serve an OpenAPI document as a local mock server until Ctrl+C; `--host`, `--port`, `--allow-remote`, `--allow-remote-refs`, `--seed`, `--no-prefer`, `--no-validate`, `--enforce-security`, `--stateful`, `--env`, `--workspace`, `--cors`, `--no-cors`, `--jsonl`, `--history`, `--proxy-unmatched`, `--record` | [Mock server](mock.md) |
 | `rustman contract diff <old> <new>` | Compare two OpenAPI 3.0/3.1 documents (files or URLs) and classify every difference as `breaking`, `non-breaking` or `unknown` with a rule id and JSON pointers into both documents; exits 1 on an unallowlisted breaking difference, 2 on an invalid document or allowlist; `--base <ref>` (old document from Git), `--fail-on-unknown`, `--fail-on`, `--allowlist`, `--report`, `--env`, `--workspace` | [Contract testing](contract.md), [Contract rules](contract-rules.md) |
 | `rustman contract rules` | List the rule catalog with its version; `--json` prints a JSON array (`id`, `classification`, `description`, `example`, `catalog_version`) | [Contract rules](contract-rules.md) |
@@ -304,7 +304,7 @@ rustman explore run --spec <file|url> --target <url> --viz
 rustman explore resume <id> --viz
 ```
 
-- `rustman viz <REPORT>` opens a saved JSON report (from `rustman run --reporter json:<file>` or `rustman explore run`) in the run or exploration dashboard, chosen from the report's `kind`. `--view graph` opens the API graph of an exploration report instead. A file that is not a Rustman report exits with 2: `error: notes.txt is not a Rustman report`.
+- `rustman viz <REPORT>` opens a saved JSON report (from `rustman run --reporter json:<file>`, `rustman explore run` or `rustman bench --report json=<file>`) in the run, exploration or bench dashboard, chosen from the report's `kind`. `--view graph` opens the API graph of an exploration report instead. A file that is not a Rustman report exits with 2: `error: notes.txt is not a Rustman report`. Contract and stress reports have no view in the companion and also exit with 2, with a hint to render them as HTML; so does a bench report when the companion is too old to have the bench view.
 - `--viz` opens the matching dashboard and streams progress to it as requests or probes finish. The data is redacted before it is sent: secrets appear as `«redacted:name»`, and the companion has no way to reveal them.
 
 `rustman` finds the companion in this order:

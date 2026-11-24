@@ -116,14 +116,53 @@ fn a_recorded_run_session_is_answered_and_shown() {
 }
 
 #[test]
+fn a_recorded_bench_session_is_answered_and_shown() {
+    let mut input = format!("{HELLO}\n");
+    input.push_str(
+        r#"{"type":"open_view","view":"bench","title":"rustman bench https://staging.example.com"}"#,
+    );
+    input.push('\n');
+    for second in 1..=30u32 {
+        input.push_str(&format!(
+            r#"{{"type":"bench_tick","second":{second},"elapsed_ms":{},"remaining_ms":{},"active_vus":10,"requests":412,"errors":{},"rps":412.0,"p50_ms":18.2,"p95_ms":{},"p99_ms":120.4}}"#,
+            second * 1000,
+            (30 - second) * 1000,
+            second % 3,
+            60 + second,
+        ));
+        input.push('\n');
+    }
+    input.push_str(r#"{"type":"bench_finished","state":"completed","duration_ms":30000,"iterations":4100,"requests":12360,"errors":30,"rps":412.0,"p50_ms":18.0,"p95_ms":64.3,"p99_ms":130.1,"thresholds":[{"expression":"p95<300ms","passed":true,"actual":"64.3ms"}]}"#);
+    input.push('\n');
+    input.push_str(r#"{"type":"close"}"#);
+    input.push('\n');
+    let out = session(&input);
+    let stderr = text(&out.stderr);
+    assert!(out.status.success(), "{stderr}");
+    let stdout = text(&out.stdout);
+    assert!(
+        stdout.starts_with(r#"{"type":"hello_ack","protocol":"rustman-viz/1""#),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains(r#""bench""#),
+        "bench is advertised: {stdout}"
+    );
+    assert!(!stderr.contains("cannot open"), "{stderr}");
+    assert!(!stderr.contains("lacks"), "{stderr}");
+}
+
+#[test]
 fn every_view_opens_with_all_its_slots() {
     let run = fixture("run-report.json");
     let exploration = fixture("exploration-report.json");
+    let bench = fixture("bench-report.json");
     let input = format!(
         "{HELLO}\n\
          {{\"type\":\"load_report\",\"path\":{run:?},\"kind\":\"run\",\"view\":\"run_dashboard\"}}\n\
          {{\"type\":\"load_report\",\"path\":{exploration:?},\"kind\":\"exploration\",\"view\":\"exploration_dashboard\"}}\n\
          {{\"type\":\"load_report\",\"path\":{exploration:?},\"kind\":\"exploration\",\"view\":\"api_graph\"}}\n\
+         {{\"type\":\"load_report\",\"path\":{bench:?},\"kind\":\"bench\",\"view\":\"bench\"}}\n\
          {{\"type\":\"inspect_response\",\"status\":200,\"body\":{{\"type\":\"inline\",\"text\":\"[{{\\\"id\\\":1}}]\"}}}}\n"
     );
     let out = session(&input);

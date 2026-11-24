@@ -12,11 +12,12 @@ use rustman_viz_protocol::{
 use crate::inbox::Inbox;
 
 /// The views this companion opens.
-pub const VIEWS: [View; 4] = [
+pub const VIEWS: [View; 5] = [
     View::RunDashboard,
     View::ExplorationDashboard,
     View::ApiGraph,
     View::ResponseInspector,
+    View::Bench,
 ];
 
 /// `rustman-viz <version>`.
@@ -108,7 +109,7 @@ mod tests {
             out.starts_with(r#"{"type":"hello_ack","protocol":"rustman-viz/1""#),
             "{out}"
         );
-        assert!(out.contains(r#""views":["run_dashboard","exploration_dashboard","api_graph","response_inspector"]"#), "{out}");
+        assert!(out.contains(r#""views":["run_dashboard","exploration_dashboard","api_graph","response_inspector","bench"]"#), "{out}");
         let kinds: Vec<_> = messages.iter().map(|m| m.kind().unwrap()).collect();
         // The unknown field and the unknown type are ignored.
         assert_eq!(kinds, ["open_view", "run_finished"]);

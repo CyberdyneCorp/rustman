@@ -1,6 +1,7 @@
 //! Routes protocol messages to views and views to the window (design D2,
 //! D6; spec "Live updates"): `open_view` and `load_report` open windows,
-//! run and exploration events update the latest live view of their kind,
+//! run, exploration and bench events update the latest live view of their
+//! kind,
 //! and the windows are redrawn at most 10 times a second. Clicks come back
 //! as [`UiEvent`]s. Nothing here talks to the producer: the companion is
 //! read-only.
@@ -10,8 +11,9 @@ use std::time::{Duration, Instant};
 
 use rustman_viz_protocol::{InspectResponse, Message, View};
 
-use crate::layout::{RUN_TILES, ViewKind};
+use crate::layout::{BENCH_TILES, RUN_TILES, ViewKind};
 use crate::model::Phase;
+use crate::model::bench::BenchModel;
 use crate::model::exploration::ExplorationModel;
 use crate::model::graph::GraphModel;
 use crate::model::inspector::{InspectorModel, JsonTable};
@@ -42,6 +44,7 @@ enum Content {
         /// Opened by `open_view`, still waiting for its response.
         empty: bool,
     },
+    Bench(BenchModel),
 }
 
 struct ViewState {
@@ -137,6 +140,25 @@ impl App {
         }
     }
 
+    fn live_bench(&mut self, surface: &mut dyn Surface) -> Option<&mut BenchModel> {
+        let pick = |c: &Content| matches!(c, Content::Bench(m) if m.phase == Phase::Running);
+        let index = match self.latest(surface, pick) {
+            Some(index) => index,
+            None => self.open(
+                surface,
+                ViewKind::Bench,
+                "Bench",
+                Content::Bench(BenchModel::new("Bench")),
+            )?,
+        };
+        let view = &mut self.views[index];
+        view.dirty = true;
+        match &mut view.content {
+            Content::Bench(model) => Some(model),
+            _ => None,
+        }
+    }
+
     /// Apply one message from the producer.
     pub fn handle(&mut self, surface: &mut dyn Surface, message: Message) {
         match message {
@@ -159,6 +181,7 @@ impl App {
                         table: None,
                         empty: true,
                     },
+                    ViewKind::Bench => Content::Bench(BenchModel::new(&title)),
                 };
                 self.open(surface, kind, &title, content);
             }
@@ -197,6 +220,16 @@ impl App {
                     model.finished(&finished);
                 }
             }
+            Message::BenchTick(tick) => {
+                if let Some(model) = self.live_bench(surface) {
+                    model.tick(&tick);
+                }
+            }
+            Message::BenchFinished(finished) => {
+                if let Some(model) = self.live_bench(surface) {
+                    model.finished(&finished);
+                }
+            }
             Message::LoadReport(load) => self.load_report(surface, &load.path, load.view),
             Message::BlobRef(blob) => self.load_report(surface, &blob.path, None),
             Message::InspectResponse(response) => self.inspect(surface, &response),
@@ -230,6 +263,10 @@ impl App {
                         Content::Exploration(dashboard),
                     );
                 }
+            }
+            Ok(Loaded::Bench(mut model)) => {
+                model.title = title.clone();
+                self.open(surface, ViewKind::Bench, &title, Content::Bench(model));
             }
             Err(e) => self.errors.push(e),
         }
@@ -271,6 +308,7 @@ impl App {
             let phase = match &mut view.content {
                 Content::Run(m) => &mut m.phase,
                 Content::Exploration(m) => &mut m.phase,
+                Content::Bench(m) => &mut m.phase,
                 _ => continue,
             };
             if *phase == Phase::Running {
@@ -359,6 +397,7 @@ impl App {
                         draw_inspector(surface, view.window, model, table.as_ref());
                     }
                 }
+                Content::Bench(model) => draw_bench(surface, view.window, model),
             }
         }
         true
@@ -529,6 +568,42 @@ fn draw_inspector(
     s.text(w, "json", &model.text, "JSON");
 }
 
+fn draw_bench(s: &mut dyn Surface, w: WindowId, model: &BenchModel) {
+    s.label(w, "title", &model.title);
+    s.label(w, "subtitle", &model.subtitle());
+    s.label(w, "state", &model.state_text());
+    let texts = model.tile_texts();
+    let history = model.tile_history();
+    for (i, (label, spark)) in BENCH_TILES.iter().enumerate() {
+        s.label(w, label, &texts[i]);
+        s.sparkline(w, spark, &history[i]);
+    }
+    let series = |named: &[(&str, Vec<(f64, f64)>)]| -> Vec<Series> {
+        named
+            .iter()
+            .map(|(name, points)| Series {
+                name: (*name).to_owned(),
+                points: points.clone(),
+                step: false,
+            })
+            .collect()
+    };
+    s.plot(
+        w,
+        "throughput",
+        "second",
+        "per second",
+        &series(&model.throughput()),
+    );
+    s.plot(w, "latency", "second", "ms", &series(&model.latency()));
+    s.plot(w, "vus", "second", "VUs", &series(&[("VUs", model.vus())]));
+    let (columns, rows) = model.summary_table();
+    s.table(w, "summary", &columns, Rows::Cells(rows), false);
+    s.label(w, "thresholds_heading", &model.thresholds_heading());
+    let (columns, rows) = model.threshold_table();
+    s.table(w, "thresholds", &columns, Rows::Cells(rows), false);
+}
+
 #[cfg(test)]
 pub mod recorder {
     //! A [`Surface`] that records the last value of every slot.
@@ -646,9 +721,9 @@ pub mod recorder {
 #[cfg(test)]
 mod tests {
     use rustman_viz_protocol::{
-        Assertions, Body, ExchangeCompleted, ExplorationFinished, ExplorationStarted, Finding,
-        LoadReport, OpenView, Outcome, ProbeCompleted, ReportKind, RunFinished, RunStarted,
-        RunState, RunSummary, Severity,
+        Assertions, BenchFinished, BenchThreshold, BenchTick, Body, ExchangeCompleted,
+        ExplorationFinished, ExplorationStarted, Finding, LoadReport, OpenView, Outcome,
+        ProbeCompleted, ReportKind, RunFinished, RunStarted, RunState, RunSummary, Severity,
     };
 
     use super::recorder::{Drawn, Recorder};
@@ -988,6 +1063,118 @@ mod tests {
             panic!()
         };
         assert!(text.contains("\"email\": \"a@x\""));
+    }
+
+    fn bench_tick(second: u32) -> Message {
+        Message::BenchTick(BenchTick {
+            second,
+            elapsed_ms: u64::from(second) * 1000,
+            remaining_ms: Some(u64::from(30 - second) * 1000),
+            active_vus: 10,
+            requests: 400,
+            errors: u64::from(second % 2),
+            rps: 400.0,
+            p50_ms: 18.0,
+            p95_ms: 60.0 + f64::from(second),
+            p99_ms: 120.0,
+        })
+    }
+
+    #[test]
+    fn a_streaming_bench_updates_its_dashboard_then_shows_the_totals() {
+        let (mut app, mut s) = (App::new(), Recorder::default());
+        app.handle(
+            &mut s,
+            Message::OpenView(OpenView {
+                view: View::Bench,
+                title: Some("rustman bench https://staging.example.com".into()),
+            }),
+        );
+        for second in 1..=3 {
+            app.handle(&mut s, bench_tick(second));
+        }
+        flush(&mut app, &mut s);
+        assert_eq!(s.windows.len(), 1);
+        assert_eq!(s.windows[0].0, ViewKind::Bench);
+        assert_eq!(s.label(0, "state"), "Running");
+        assert_eq!(s.label(0, "kpi_requests"), "1200");
+        assert_eq!(s.label(0, "kpi_p95"), "63 ms");
+        assert_eq!(s.label(0, "kpi_vus"), "10");
+        assert_eq!(s.label(0, "subtitle"), "3 s elapsed · 27 s left");
+        let Some(Drawn::Plot(series)) = s.get(0, "latency") else {
+            panic!()
+        };
+        assert_eq!(series.len(), 3);
+        assert_eq!(series[1].points, [(1.0, 61.0), (2.0, 62.0), (3.0, 63.0)]);
+        let Some(Drawn::Sparkline(rps)) = s.get(0, "spark_rps") else {
+            panic!()
+        };
+        assert_eq!(rps.len(), 3);
+        app.handle(
+            &mut s,
+            Message::BenchFinished(BenchFinished {
+                state: RunState::Completed,
+                duration_ms: 3000,
+                iterations: 600,
+                requests: 1200,
+                errors: 2,
+                rps: 400.0,
+                p50_ms: 18.0,
+                p95_ms: 62.0,
+                p99_ms: 120.0,
+                thresholds: vec![BenchThreshold {
+                    expression: "p95<300ms".into(),
+                    passed: true,
+                    actual: "62ms".into(),
+                }],
+                aborted: None,
+            }),
+        );
+        app.producer_gone();
+        flush(&mut app, &mut s);
+        assert_eq!(s.windows.len(), 1, "the same window");
+        assert_eq!(s.label(0, "state"), "Completed");
+        assert_eq!(s.label(0, "thresholds_heading"), "Thresholds: all 1 passed");
+        let Some(Drawn::Table(_, rows, _)) = s.get(0, "thresholds") else {
+            panic!()
+        };
+        assert_eq!(rows, &[["p95<300ms", "✓ passed", "62ms"]]);
+    }
+
+    #[test]
+    fn a_bench_cut_short_is_marked_disconnected() {
+        let (mut app, mut s) = (App::new(), Recorder::default());
+        app.handle(&mut s, bench_tick(1));
+        assert_eq!(s.windows[0].0, ViewKind::Bench, "ticks open a bench view");
+        app.producer_gone();
+        flush(&mut app, &mut s);
+        assert_eq!(s.label(0, "state"), "Producer disconnected");
+        assert_eq!(s.label(0, "kpi_requests"), "400");
+    }
+
+    #[test]
+    fn a_saved_bench_report_opens_the_bench_view() {
+        let (mut app, mut s) = (App::new(), Recorder::default());
+        app.handle(
+            &mut s,
+            Message::LoadReport(LoadReport {
+                path: fixture("bench-report.json"),
+                kind: ReportKind::Bench,
+                view: Some(View::Bench),
+            }),
+        );
+        flush(&mut app, &mut s);
+        assert_eq!(s.windows[0].0, ViewKind::Bench);
+        assert_eq!(s.label(0, "title"), "bench-report.json");
+        assert_eq!(s.label(0, "kpi_requests"), "120");
+        assert_eq!(
+            s.label(0, "thresholds_heading"),
+            "Thresholds: 1 of 2 failed"
+        );
+        let Some(Drawn::Plot(series)) = s.get(0, "throughput") else {
+            panic!()
+        };
+        assert_eq!(series[0].points.len(), 3);
     }
 
     #[test]

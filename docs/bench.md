@@ -6,7 +6,7 @@
 rustman bench checkout/ --target https://staging.example.com --env staging --vus 5 --duration 30s
 ```
 
-The behavior is specified in [`openspec/changes/add-load-testing`](../openspec/changes/add-load-testing/). On a terminal a bench draws a live dashboard (see [Live progress](#live-progress)), prints a summary at the end and can write JSON and HTML reports. The viz companion has no bench view yet.
+The behavior is specified in [`openspec/changes/add-load-testing`](../openspec/changes/add-load-testing/). On a terminal a bench draws a live dashboard (see [Live progress](#live-progress)), prints a summary at the end and can write JSON and HTML reports. With `--viz` the [viz companion](viz.md#bench-dashboard) shows it as a live dashboard.
 
 ## Iterations and virtual users
 
@@ -238,9 +238,9 @@ A report written to stdout (`--report json`) never gets the dashboard; the progr
 
 ### Viz companion
 
-`--viz` also streams the bench to the viz companion (`rustman-viz`, found as `RUSTMAN_VIZ`, then on `PATH`, then next to `rustman`) over the [viz protocol](viz-protocol.md): it opens the `bench` view, sends a `bench_tick` per second and a final `bench_finished` with the totals and thresholds. These events hold counts, timings and threshold expressions only, never request or response content.
+`--viz` also streams the bench to the viz companion (`rustman-viz`, found as `RUSTMAN_VIZ`, then on `PATH`, then next to `rustman`) over the [viz protocol](viz-protocol.md): it opens the `bench` view, sends a `bench_tick` per second and a final `bench_finished` with the totals and thresholds. The companion draws them as the [bench dashboard](viz.md#bench-dashboard), and `rustman viz <report.json>` opens a saved bench report in the same view. These events hold counts, timings and threshold expressions only, never request or response content.
 
-Viz never changes a bench: a companion that is missing, refuses the handshake or stops reading gets one warning (`warning: --viz: Viz companion not found: ...`), and the bench runs, reports and exits as without `--viz`. A companion without a `bench` view gets:
+Viz never changes a bench: a companion that is missing, refuses the handshake or stops reading gets one warning (`warning: --viz: Viz companion not found: ...`), and the bench runs, reports and exits as without `--viz`. A companion built before the `bench` view gets:
 
 ```text
 warning: viz companion has no bench view

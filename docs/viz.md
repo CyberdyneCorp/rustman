@@ -1,6 +1,6 @@
 # Viz companion (`rustman-viz`)
 
-`rustman-viz` is an optional graphical companion that shows runs, explorations and large responses as native dashboards. It is a separate program built on the [Raven](https://github.com/oscar-soirey/Raven) GUI library (Apache-2.0). `rustman` works the same without it: nothing in `rustman` links Raven or needs a GPU, and when the companion is missing every command still runs. How `rustman` finds and starts it is described in [Viz companion](cli.md#viz-companion), and the messages they exchange in [the viz protocol](viz-protocol.md).
+`rustman-viz` is an optional graphical companion that shows runs, explorations, load tests and large responses as native dashboards. It is a separate program built on the [Raven](https://github.com/oscar-soirey/Raven) GUI library (Apache-2.0). `rustman` works the same without it: nothing in `rustman` links Raven or needs a GPU, and when the companion is missing every command still runs. How `rustman` finds and starts it is described in [Viz companion](cli.md#viz-companion), and the messages they exchange in [the viz protocol](viz-protocol.md).
 
 The companion is **read-only**. It sends no request, runs no request file and writes no workspace file. What it shows was redacted by `rustman` before it was sent: secrets appear as `«redacted:name»`, and the companion has no way to reveal them.
 
@@ -12,6 +12,8 @@ rustman explore run --spec api.yaml --target https://staging.example.com --viz
 rustman viz out/run.json                     # a saved run report
 rustman viz .rustman/explorations/<id>/report.json              # exploration dashboard
 rustman viz .rustman/explorations/<id>/report.json --view graph # API graph
+rustman bench checkout/ --target https://staging.example.com --viz   # live bench dashboard
+rustman viz out/bench.json                   # a saved bench report (--report json=out/bench.json)
 ```
 
 In the TUI, `v` in the response viewer opens the current response in the inspector.
@@ -42,6 +44,19 @@ The state badge reads `Running`, `Completed`, `Aborted` or, if `rustman` went aw
 ![API graph](images/viz-api-graph.png)
 
 There is one node per operation and one link per data dependency, meaning a value from one operation's response used as a parameter of another (for example, the `id` that `POST /users` returns feeds `GET /users/{id}`). Producers sit on the left. Each node is coloured by its worst finding: red for critical, orange for high, yellow for medium, blue for low, and grey for none. Select a node to list its findings. The links come from the `dependencies` field of exploration reports, which `rustman explore run` writes from version 0.1.
+
+### Bench dashboard
+
+![Bench dashboard](images/viz-bench-dashboard.png)
+
+`rustman bench --viz` opens it and sends one update per second; `rustman viz <report.json>` opens a saved bench report in it.
+
+- **KPI tiles:** requests, requests per second, p95 latency, error rate and active VUs, each with a sparkline of its last 120 seconds. While the bench runs, requests per second and p95 are those of the last second; once it ends, those of the whole bench.
+- **Throughput per second** (requests per second and errors), **latency percentiles per second** (p50, p95 and p99) and **active VUs**, one point per second.
+- **Totals:** duration, iterations, requests, errors, requests per second and the p50, p95 and p99 latency of the whole bench. While it runs, the duration, requests and errors so far.
+- **Thresholds:** each threshold as written, whether it passed, and the measured value. They are known when the bench ends.
+
+The subtitle shows the target, environment and load profile (for a saved report), the time elapsed and, while a bench with a fixed duration runs, the time left. The state badge reads `Running`, `Completed`, `Aborted (threshold)` or `Aborted (interrupted)`, or `Producer disconnected` when `rustman` went away before the end. A slow companion misses some seconds rather than slowing the bench, so a live plot may have gaps; the totals come from the end of the bench and are exact.
 
 ### Response inspector
 
