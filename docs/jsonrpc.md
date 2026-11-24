@@ -103,6 +103,28 @@ captures:
 
 Its failures read `rpc_error: expected code -32602, got result` and `rpc_error: expected code -32602, got code -32601`. A call that fails with an error object fails the request unless it has an `rpc_error: {code: …}` assertion; with one, the assertion decides.
 
+### Snapshots
+
+A [`snapshot` assertion](snapshots.md) records how a call answered and compares later runs against it. The snapshot body is the call's response envelope, the same document other assertions read: `jsonrpc`, `id` and either `result` or the `error` object. Over HTTP, the status is compared too. For a subscription, the body is the list of events collected instead. In a batch, each call's snapshot holds that call's own envelope, matched by id. Each snapshot is a file named after the request file and the snapshot name, so names must be unique across all calls of a batch. A repeated name fails to load with `duplicate snapshot name 'default' (give each call's snapshot its own name)`.
+
+```yaml
+# chain/head-block.rman.yaml
+version: 1
+kind: jsonrpc
+name: Head block
+endpoint: '{{rpc_url}}'
+batch:
+  - method: eth_chainId
+    assertions:
+      - snapshot: {name: chain}
+  - method: eth_getBlockByNumber
+    params: ['0x1', false]
+    assertions:
+      - snapshot: {name: block, ignore: [$.result.timestamp]}
+```
+
+`rustman run`, `rustman rpc call` and `rustman rpc batch` record, compare and update these snapshots like any other: `--update-snapshots` (`-u`) rewrites one that differs, and `--ci` (or `CI=true`) never writes one. Agents compare in CI mode. `rustman snapshot list` and `prune` include them.
+
 ## History
 
 Every call, batch and subscription is recorded in [history](history.md) as one exchange. Next to the usual `exchange` (the HTTP request and response, for HTTP endpoints), the record's `jsonrpc` part holds the transport, each call's envelope sent and received with its outcome (`result`, `error`, `notification`, `failed`), every retry attempt (status, error, wait), a subscription's id, event count and first 1000 events, and the note `server rejected the batch` when it applies. Secrets are redacted everywhere, including inside params: a param `{{api_key}}` is stored as `«redacted:api_key»`. HTTP exchanges can be replayed; WebSocket ones cannot.

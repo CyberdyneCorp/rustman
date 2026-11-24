@@ -22,7 +22,9 @@ use rustman_http::runner::{RunContext, Runner, Sent};
 use rustman_jsonrpc::JsonrpcRunner;
 use serde_json::{Map, Value, json};
 
-use crate::commands::exec::{SendFlags, cancel_on_ctrl_c, history_store, runtime, secret_store};
+use crate::commands::exec::{
+    SendFlags, cancel_on_ctrl_c, history_store, print_snapshot_notes, runtime, secret_store,
+};
 use crate::commands::session::{Kind, Session};
 use crate::commands::{EnvSelection, print_warnings};
 use crate::exit::{CONFIG, CliError, INTERRUPTED, REQUEST, SAFETY};
@@ -157,6 +159,7 @@ impl Session {
         print_warnings(&store.take_warnings());
         for one in &sent {
             print_warnings(&one.record.warnings);
+            print_snapshot_notes(&one.record);
         }
         Ok(sent)
     }

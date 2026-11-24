@@ -135,10 +135,23 @@ pub fn snapshot_names(request: &Request) -> Option<Vec<String>> {
     let assertions = match request {
         Request::Http(http) => http.assertions.as_deref(),
         Request::Graphql(graphql) => graphql.assertions.as_deref(),
-        // JSON-RPC and gRPC calls, realtime sessions, messaging requests
-        // and EVM requests have no snapshot assertions: nothing is declared.
-        Request::Jsonrpc(_)
-        | Request::Grpc(_)
+        // Each call of a batch has its own assertions; names are unique
+        // across the file.
+        Request::Jsonrpc(jsonrpc) => {
+            let names = jsonrpc
+                .calls()
+                .iter()
+                .flat_map(|call| call.assertions)
+                .filter_map(|a| match a.get() {
+                    Assertion::Snapshot(spec) => Some(spec.name().to_owned()),
+                    _ => None,
+                })
+                .collect();
+            return Some(names);
+        }
+        // gRPC calls, realtime sessions, messaging requests and EVM
+        // requests have no snapshot assertions: nothing is declared.
+        Request::Grpc(_)
         | Request::Ws(_)
         | Request::Sse(_)
         | Request::Messaging(_)

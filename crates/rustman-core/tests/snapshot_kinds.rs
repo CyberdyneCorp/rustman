@@ -1,9 +1,9 @@
 //! Snapshot testing over every request kind (snapshot-testing task 7.1):
 //! record, a mutated response fails in CI mode, update fixes it, and CI
-//! mode then matches. Snapshots only see the shared exchange model, so the
-//! kinds without a client yet (`jsonrpc`, `mcp`) are driven with stub
-//! exchanges: a JSON-RPC response body and an MCP event list. `http` and
-//! `graphql` also run end to end through `rustman run` in
+//! mode then matches. Snapshots only see the shared exchange model, so
+//! `jsonrpc` and `mcp` are driven here with stub exchanges: a JSON-RPC
+//! response body and an MCP event list. `http`, `graphql` and `jsonrpc`
+//! also run end to end through `rustman run` in
 //! `crates/rustman-cli/tests/snapshot_e2e.rs`.
 
 use std::fs;
