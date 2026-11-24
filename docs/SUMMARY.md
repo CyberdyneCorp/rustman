@@ -5,6 +5,7 @@
 # Getting started
 
 - [Install and quick start](getting-started.md)
+- [Installing](install.md)
 - [Migrating from Postman](migrate-from-postman.md)
 - [Terminal UI](tui.md)
 - [CLI reference](cli.md)

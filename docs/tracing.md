@@ -169,7 +169,7 @@ The browser is opened with `open` (macOS), `rundll32 url.dll,FileProtocolHandler
 
 Rustman can also send its own side of each exchange to an OpenTelemetry collector, so a trace shows the client span next to the backend's server spans. Export is a build feature and an explicit setting:
 
-- **Build**: the default `rustman` binary has no exporter and no OpenTelemetry crate. Build with `cargo install --path crates/rustman-cli --features otlp` (or `cargo build -p rustman-cli --features otlp`). A build without it that finds export enabled prints `warning: trace.export: this build cannot export spans (build rustman with the `otlp` feature)` and sends requests as usual.
+- **Build**: [release binaries](install.md#what-the-release-binaries-include) include the exporter. A plain source build has no exporter and no OpenTelemetry crate; build with `cargo install --path crates/rustman-cli --features otlp` (or `cargo build -p rustman-cli --features otlp`). A build without it that finds export enabled prints `warning: trace.export: this build cannot export spans (build rustman with the `otlp` feature)` and sends requests as usual.
 - **Setting**: `[trace.export]` in `rustman.toml` (or `export:` in an environment's `trace:` block, which replaces the whole table):
 
 ```toml

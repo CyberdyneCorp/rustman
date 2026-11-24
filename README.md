@@ -10,7 +10,9 @@
 
 ## Install and quick start
 
-There are no release binaries yet. Build from source with [rustup](https://rustup.rs); the pinned toolchain (Rust 1.97, see `rust-toolchain.toml`) is installed automatically. No system libraries are needed.
+From the first tagged release on, archives for Linux (x86_64, ARM64), macOS (Intel, Apple silicon) and Windows are on the [releases page](https://github.com/CyberdyneCorp/rustman/releases), each with a Sigstore build provenance attestation you can check with `gh attestation verify <file> --repo CyberdyneCorp/rustman`, and a `SHA256SUMS` file. See [`docs/install.md`](docs/install.md) for verifying and installing them.
+
+Or build from source with [rustup](https://rustup.rs); the pinned toolchain (Rust 1.97, see `rust-toolchain.toml`) is installed automatically. No system libraries are needed.
 
 ```bash
 git clone https://github.com/CyberdyneCorp/rustman

@@ -1,0 +1,226 @@
+name: Release
+
+# Official `rustman` binaries (docs/install.md).
+#
+# - A pushed `vX.Y.Z` tag builds every target, attests the archives and
+#   SHA256SUMS with Sigstore keyless build provenance (GitHub OIDC, no key to
+#   keep), and opens a *draft* GitHub release for a maintainer to review and
+#   publish.
+# - `workflow_dispatch` is a dry run: it builds, smoke tests and attests, and
+#   never creates a release.
+# - A pull request that changes this file is a dry run too, without the
+#   attestation (pull requests get no OIDC token).
+#
+# Official builds enable the cloud secret providers (`cloud-secrets`), OTLP
+# span export (`otlp`) and email alerts (`smtp`): all three are pure Rust,
+# need no system library and do nothing until configured. `hw-wallet` stays
+# off (USB drivers need libudev on Linux; see issue #111).
+
+on:
+  push:
+    tags: [ 'v*.*.*' ]
+  workflow_dispatch:
+  pull_request:
+    branches: [ main ]
+    paths: [ .github/workflows/release.yml ]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  FEATURES: cloud-secrets,otlp,smtp
+  CARGO_PROFILE_RELEASE_STRIP: symbols
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Read the workspace version and check it against the tag
+        id: version
+        run: |
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')
+          echo "workspace version: $version"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+              echo "::error::tag $GITHUB_REF_NAME does not match the workspace version $version (expected v$version)"
+              exit 1
+            fi
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: version
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # musl: static binaries that run on any Linux distribution.
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-24.04
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
+          - target: aarch64-apple-darwin
+            os: macos-15
+          - target: x86_64-pc-windows-msvc
+            os: windows-2025
+    env:
+      TARGET: ${{ matrix.target }}
+      VERSION: ${{ needs.version.outputs.version }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install toolchain from rust-toolchain.toml
+        run: |
+          rustup toolchain install
+          rustup target add "$TARGET"
+      - name: Install musl tools
+        if: contains(matrix.target, 'musl')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends musl-tools
+          # C code (ring, zstd) is compiled for musl too.
+          echo "CC_${TARGET//-/_}=musl-gcc" >> "$GITHUB_ENV"
+      - name: Link the C runtime statically on Windows
+        if: contains(matrix.target, 'windows-msvc')
+        # No Visual C++ redistributable needed on the user's machine.
+        run: echo "RUSTFLAGS=-C target-feature=+crt-static" >> "$GITHUB_ENV"
+      # No build cache: a release binary is built from a clean tree.
+      - name: Build
+        run: cargo build --release --locked -p rustman-cli --features "$FEATURES" --target "$TARGET"
+      - name: Smoke test
+        run: |
+          exe=target/$TARGET/release/rustman
+          [ -f "$exe.exe" ] && exe=$exe.exe
+          out=$("$exe" --version)
+          echo "$out"
+          if [ "$out" != "rustman $VERSION" ]; then
+            echo "::error::expected 'rustman $VERSION', got '$out'"
+            exit 1
+          fi
+          "$exe" --help > /dev/null
+          # Every cloud provider type is compiled in.
+          types=" $("$exe" secret list-providers --types | tr -d '\r' | tr '\n' ' ')"
+          for t in aws-secrets-manager aws-ssm gcp-secret-manager azure-key-vault; do
+            case "$types" in
+              *" $t "*) ;;
+              *) echo "::error::provider type $t missing from the release binary"; exit 1 ;;
+            esac
+          done
+      - name: Package
+        run: |
+          name="rustman-$VERSION-$TARGET"
+          stage="$RUNNER_TEMP/$name"
+          mkdir -p "$stage/completions" dist
+          exe=target/$TARGET/release/rustman
+          bin=rustman
+          if [ -f "$exe.exe" ]; then exe=$exe.exe; bin=rustman.exe; fi
+          cp "$exe" "$stage/$bin"
+          cp LICENSE-APACHE LICENSE-MIT README.md "$stage/"
+          "$exe" completions bash       > "$stage/completions/rustman.bash"
+          "$exe" completions zsh        > "$stage/completions/_rustman"
+          "$exe" completions fish       > "$stage/completions/rustman.fish"
+          "$exe" completions powershell > "$stage/completions/_rustman.ps1"
+          "$exe" completions elvish     > "$stage/completions/rustman.elv"
+          if [[ "$TARGET" == *windows* ]]; then
+            (cd "$RUNNER_TEMP" && 7z a -tzip -bso0 "$GITHUB_WORKSPACE/dist/$name.zip" "$name")
+          else
+            tar -C "$RUNNER_TEMP" -czf "dist/$name.tar.gz" "$name"
+          fi
+          ls -l dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  checksums:
+    name: Checksums
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - name: Write SHA256SUMS
+        working-directory: dist
+        run: |
+          sha256sum rustman-* > SHA256SUMS
+          cat SHA256SUMS
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/*
+          if-no-files-found: error
+
+  attest:
+    name: Attest build provenance
+    needs: checksums
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+      # Sigstore keyless: signed with a short-lived certificate bound to this
+      # workflow run; verify with `gh attestation verify`.
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/rustman-*
+            dist/SHA256SUMS
+
+  publish:
+    name: Draft GitHub release
+    needs: [ version, attest ]
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          prerelease=()
+          case "$VERSION" in *-*) prerelease=(--prerelease) ;; esac
+          gh release create "$TAG" dist/* \
+            --draft --verify-tag --generate-notes "${prerelease[@]}" \
+            --title "rustman $VERSION"
