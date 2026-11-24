@@ -35,6 +35,20 @@ pub const SAFETY: u8 = 4;
 /// Interrupted by SIGINT (Ctrl+C).
 pub const INTERRUPTED: u8 = 130;
 
+/// Every general exit code and its meaning: the frozen v1 table of
+/// `docs/cli.md` "Exit codes" and `docs/stability.md`. Codes are never
+/// reused for another meaning within a major version. Only the tests read
+/// it: commands return the constants above.
+#[cfg_attr(not(test), allow(dead_code))]
+pub const CODES: [(u8, &str); 6] = [
+    (SUCCESS, "success"),
+    (ASSERTION, "assertion failed"),
+    (CONFIG, "usage or configuration error"),
+    (REQUEST, "request error"),
+    (SAFETY, "refused by the safety policy"),
+    (INTERRUPTED, "interrupted"),
+];
+
 /// Any error a command can end with.
 #[derive(Debug, thiserror::Error)]
 pub enum CliError {
@@ -228,6 +242,32 @@ mod tests {
     use std::path::Path;
 
     use rustman_core::settings::Settings;
+
+    /// The codes of the first Markdown table under `heading` in `doc`.
+    fn documented_codes(doc: &str, heading: &str) -> Vec<u8> {
+        let section = doc
+            .split_once(heading)
+            .unwrap_or_else(|| panic!("no {heading:?} section"))
+            .1;
+        section
+            .lines()
+            .skip_while(|line| !line.starts_with('|'))
+            .take_while(|line| line.starts_with('|'))
+            .filter_map(|line| line.trim_start_matches('|').split('|').next())
+            .filter_map(|cell| cell.trim().trim_matches('`').parse().ok())
+            .collect()
+    }
+
+    #[test]
+    fn the_exit_codes_are_frozen_and_documented() {
+        let codes: Vec<u8> = CODES.iter().map(|(code, _)| *code).collect();
+        // Frozen for v1 (docs/stability.md): never renumber or remove one.
+        assert_eq!(codes, [0, 1, 2, 3, 4, 130]);
+        let cli = include_str!("../../../docs/cli.md");
+        assert_eq!(documented_codes(cli, "\n## Exit codes\n"), codes);
+        let stability = include_str!("../../../docs/stability.md");
+        assert_eq!(documented_codes(stability, "\n### CLI exit codes\n"), codes);
+    }
 
     #[test]
     fn mcp_errors_exit_by_kind() {

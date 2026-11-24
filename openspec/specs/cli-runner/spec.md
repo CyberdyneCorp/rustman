@@ -64,7 +64,7 @@ The headless face of Rustman. `rustman send` executes one request and `rustman r
 - **THEN** the document SHALL contain `summary.total`, `summary.passed`, `summary.failed`, `summary.errored`, `summary.skipped` and `summary.duration_ms`
 
 ### Requirement: Exit codes
-The CLI SHALL use these exit codes: `0` (all executed requests passed), `1` (at least one assertion failed), `2` (usage or configuration error, such as a bad flag, no workspace, an invalid file or a missing environment), `3` (at least one request errored: network, TLS, timeout or unresolved variable), `130` (interrupted by SIGINT, or on Unix by SIGTERM or SIGHUP, which are handled exactly like Ctrl+C). When both failures and errors occur, `3` SHALL win.
+The CLI SHALL use these exit codes: `0` (every executed request passed), `1` (an assertion failed), `2` (usage or configuration error, such as a bad flag, no workspace, an invalid file or a missing environment), `3` (a request errored: network, TLS, timeout or unresolved variable), `4` (refused by the safety policy, the stress gate or the monitor policy) and `130` (interrupted by SIGINT, or on Unix by SIGTERM or SIGHUP, handled like Ctrl+C). When both failures and errors occur, `3` SHALL win.
 
 #### Scenario: Assertion failure
 - **GIVEN** a run where one assertion fails and nothing errors
@@ -83,6 +83,11 @@ The CLI SHALL use these exit codes: `0` (all executed requests passed), `1` (at 
 #### Scenario: SIGTERM
 - **WHEN** the process receives SIGTERM (or SIGHUP) during a run on Unix
 - **THEN** it SHALL behave as for Ctrl+C: in-flight requests SHALL be cancelled, stdio MCP servers SHALL be stopped with the processes they started, reporters SHALL flush partial results, and the exit code SHALL be 130
+
+#### Scenario: Safety refusal
+- **GIVEN** an exploration whose target is a production host without the production opt-in
+- **WHEN** it is started
+- **THEN** no request SHALL be sent and the exit code SHALL be 4
 
 ### Requirement: Terminal-aware output
 Color and progress animations SHALL be used only when stdout is a TTY. They SHALL be disabled when `NO_COLOR` is set (to any non-empty value), when `--color never` is passed, or when `TERM=dumb`. `--color always` SHALL force color. On a non-TTY, the default reporter SHALL be `pretty` without color or spinners.
@@ -223,3 +228,15 @@ With `--data`, `--bail` SHALL stop the whole run after the first failed or error
 - **GIVEN** 3 rows, and the first of 2 requests fails for row 2
 - **WHEN** the run uses `--bail=iteration`
 - **THEN** row 2's second request SHALL be skipped and row 3 SHALL run both requests
+
+### Requirement: Public contract stability
+Within a major version, the public contracts SHALL change only additively: request-file `version: 1`, `rustman.toml` `version = 1`, the `rustman.report/v1` report, the `rustman-viz/1` protocol, the plugin WIT API `rustman:plugin@1` and the exit codes. Nothing that exists SHALL be renamed, removed, retyped or given a new meaning, and a deprecated item SHALL keep working until the next major version. A test in CI SHALL fail when a frozen contract changes non-additively.
+
+#### Scenario: Unsupported request-file version
+- **GIVEN** a request file of any built-in kind with `version: 2`
+- **WHEN** it is loaded
+- **THEN** it SHALL be refused with `unsupported request file version 2 (expected 1)` and exit code 2
+
+#### Scenario: A report field is removed
+- **WHEN** a change removes or renames a property of a `rustman.report/v1` report kind
+- **THEN** the frozen-surface test of the report schema SHALL fail

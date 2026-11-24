@@ -3,7 +3,7 @@
 > A fast, local-first API workbench for the terminal. It speaks **REST, GraphQL, MCP, gRPC, WebSocket/SSE, JSON-RPC, Kafka/MQTT/AMQP and Ethereum**, it can **test a backend on its own from an OpenAPI spec**, and **AI agents can drive it over MCP**. Written entirely in Rust.
 
 > [!NOTE]
-> **Status: pre-1.0, under active development.** Releases v0.1 to v0.7 of the [roadmap](#roadmap) are implemented: the HTTP engine and CLI runner, the terminal UI, importers, the OpenAPI explorer, the agent MCP server, GraphQL, the MCP client, the webhook inspector, snapshot tests, the mock server, the JSON-RPC, gRPC and WebSocket/SSE clients, contract testing, trace propagation, load and stress testing, and generated API docs. v0.7 added scheduled monitors (`rustman monitor`), secret providers (`{{secret:...}}`), WASM plugins (`rustman plugin`), the traffic recorder (`rustman record`) and Kafka, MQTT and AMQP messaging. Both side tracks are done: the optional Raven companion and the EVM toolkit (`rustman evm`: ABI-aware calls and decoding, provider probing, blockchain GraphQL presets and a signing gate). v1.0 (Stabilize) is next. Every feature is specified first in the [OpenSpec](https://github.com/Fission-AI/OpenSpec) changes in [`openspec/`](openspec/), and the [feature map](#feature-map) lists the follow-ups still planned. Commands and file formats may still change before v1.
+> **Status: pre-1.0, under active development.** Releases v0.1 to v0.7 of the [roadmap](#roadmap) are implemented: the HTTP engine and CLI runner, the terminal UI, importers, the OpenAPI explorer, the agent MCP server, GraphQL, the MCP client, the webhook inspector, snapshot tests, the mock server, the JSON-RPC, gRPC and WebSocket/SSE clients, contract testing, trace propagation, load and stress testing, and generated API docs. v0.7 added scheduled monitors (`rustman monitor`), secret providers (`{{secret:...}}`), WASM plugins (`rustman plugin`), the traffic recorder (`rustman record`) and Kafka, MQTT and AMQP messaging. Both side tracks are done: the optional Raven companion and the EVM toolkit (`rustman evm`: ABI-aware calls and decoding, provider probing, blockchain GraphQL presets and a signing gate). v1.0 (Stabilize) is in progress. Every feature is specified first in the [OpenSpec](https://github.com/Fission-AI/OpenSpec) changes in [`openspec/`](openspec/), and the [feature map](#feature-map) lists the follow-ups still planned. Commands and file formats may still change before v1; [`docs/stability.md`](docs/stability.md) lists the contracts frozen for it.
 
 <p align="center"><img src="docs/images/demo.gif" alt="Rustman's terminal UI sending requests to a local todo API: the environment switcher with the token masked, a JSON response tree, a 201 with a captured id, the timing waterfall and passed assertions, then rustman run passing every request" width="100%"></p>
 <p align="center"><sub>The TUI and <code>rustman run</code> against a small local todo API. Regenerate it with <a href="examples/demo/"><code>examples/demo/render.sh</code></a>.</sub></p>
@@ -33,7 +33,7 @@ rustman export snippet --lang python examples/ping       # the request as Python
 rustman                                # open the terminal UI (or: rustman tui)
 ```
 
-`rustman --help` lists every command, and each one has its own `--help`. The request-file format is documented in [`docs/request-files.md`](docs/request-files.md), and the rest of the documentation lives in [`docs/`](docs/). CI builds and tests on Linux, macOS and Windows for every pull request.
+`rustman --help` lists every command, and each one has its own `--help`. The request-file format is documented in [`docs/request-files.md`](docs/request-files.md), the rest of the documentation lives in [`docs/`](docs/), and [`docs/stability.md`](docs/stability.md) lists the formats and exit codes that stay stable within a major version. CI builds and tests on Linux, macOS and Windows for every pull request.
 
 ---
 
@@ -791,7 +791,7 @@ graph TD
 
 ## Roadmap
 
-All 26 changes are specified in OpenSpec. v0.1 (headless core), v0.2 (usable), v0.3 (autonomous), v0.4 (multi-protocol), v0.5 (protocols), v0.6 (pro testing) and v0.7 (operate & extend) are done, as are both side tracks (the Raven companion and the EVM toolkit). v1.0 (stabilize) is next; open work is tracked in the [roadmap tracking issue](https://github.com/CyberdyneCorp/rustman/issues/46). Releases are ordered by dependency, user value and risk. The full delivery plan, with exit criteria, shared enablers and risks, is in [`ROADMAP.md`](ROADMAP.md).
+All changes are specified in OpenSpec. v0.1 (headless core), v0.2 (usable), v0.3 (autonomous), v0.4 (multi-protocol), v0.5 (protocols), v0.6 (pro testing) and v0.7 (operate & extend) are done, as are both side tracks (the Raven companion and the EVM toolkit). v1.0 (stabilize) is in progress: every OpenSpec change is archived into the living specs in `openspec/specs/`, and the public contracts are frozen ([`docs/stability.md`](docs/stability.md)); open work is tracked in the [roadmap tracking issue](https://github.com/CyberdyneCorp/rustman/issues/46). Releases are ordered by dependency, user value and risk. The full delivery plan, with exit criteria, shared enablers and risks, is in [`ROADMAP.md`](ROADMAP.md).
 
 | Release | Changes | You get | Status |
 |---|---|---|---|
@@ -804,7 +804,7 @@ All 26 changes are specified in OpenSpec. v0.1 (headless core), v0.2 (usable), v
 | **v0.6 - Pro testing** | `add-contract-testing`, `add-trace-propagation`, `add-load-testing`, `add-docs-generator`, `add-stress-testing` | Breaking-change checks, tracing, load and stress tests, generated docs | ✅ done |
 | **v0.7 - Operate & extend** | `add-secret-providers`, `add-scheduled-monitors`, `add-plugin-system`, `add-traffic-recorder`, `add-messaging-client` | Secret providers, monitors, plugins, traffic recorder, message brokers | ✅ done |
 | **Side tracks** | `add-raven-visualizer`, `add-evm-toolkit` | Raven dashboards, Ethereum console (never block a release) | ✅ done |
-| **v1.0 - Stable** | — | Frozen request-file, report, viz and plugin formats; signed release artifacts; a migration guide | next |
+| **v1.0 - Stable** | — | Frozen request-file, report, viz and plugin formats ([stability](docs/stability.md)); signed release artifacts; a migration guide | in progress |
 
 The glossary, capability map and cross-cutting contracts are in [`openspec/ROADMAP.md`](openspec/ROADMAP.md).
 
@@ -817,7 +817,8 @@ Rustman is built **spec-first** with [OpenSpec](https://github.com/Fission-AI/Op
 ```bash
 npm install -g @fission-ai/openspec@latest
 openspec list                      # changes in flight
-openspec show bootstrap-core-engine
+openspec list --specs              # the living specs
+openspec show cli-runner --type spec
 openspec validate --all --strict   # CI runs this on every PR
 ```
 
