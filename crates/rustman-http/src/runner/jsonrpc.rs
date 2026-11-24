@@ -20,6 +20,7 @@ use rustman_core::model::{Assertion, CallFields, JsonrpcRequest, RpcErrorExpecta
 use rustman_core::redact::remember_for_logs;
 use rustman_core::run::{JsonrpcRecord, RequestRecord, RequestStatus, SkipReason};
 use rustman_core::settings::Settings;
+use rustman_core::snapshot::{Exchange as SnapshotExchange, SnapshotReview};
 use rustman_core::vars::{ResolvedJsonrpc, ResolvedRequest, Resolver, resolve_jsonrpc};
 use rustman_core::workspace::RequestRef;
 use serde_json::Value;
@@ -27,6 +28,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::graphql::{STOP_GRACE, until_cancelled};
 use super::record::{exchange_record, redact_capture_messages};
+use super::snapshots::SnapshotTarget;
 use super::{Runner, Sent};
 use crate::engine::{HttpEngine, SendOptions};
 use crate::exchange::Exchange;
@@ -139,6 +141,7 @@ impl Runner<'_> {
             request,
             resolver: &resolver,
             calls: jsonrpc.calls(),
+            subscription: jsonrpc.subscription.is_some(),
         };
         self.check_jsonrpc(&checked, outcome, record)
     }
@@ -155,15 +158,18 @@ impl Runner<'_> {
         if let Some(exchange) = &outcome.exchange {
             record.exchange = Some(exchange_record(&outcome.request, exchange, &redactor));
         }
+        let mut snapshots = Vec::new();
         if let Some(error) = &outcome.error {
             record = record.errored(redactor.text(error).into_owned());
         } else {
-            let verdict = self.check_calls(checked, &outcome, &mut redactor);
+            let mut verdict = self.check_calls(checked, &outcome, &mut redactor);
+            snapshots = std::mem::take(&mut verdict.snapshots);
             verdict.apply(&mut record, &outcome.record, &redactor);
         }
         record.jsonrpc = Some(outcome.record);
         let sent = Sent {
             exchange: outcome.exchange,
+            snapshots,
             ..Sent::from_record(record)
         };
         sent.with_resolved(outcome.request)
@@ -188,6 +194,21 @@ impl Runner<'_> {
                 plugins: plugins.as_ref(),
             };
             let mut results = assertions::evaluate(&assertions, &view, &ctx);
+            let target = SnapshotTarget {
+                request: checked.request,
+                assertions: &assertions,
+            };
+            let exchange = SnapshotExchange {
+                kind: "jsonrpc",
+                status: outcome.exchange.as_ref().map(|e| e.status),
+                headers: &view.headers,
+                body: &view.body,
+                events: call_events(checked, call),
+            };
+            let snapshots =
+                self.check_exchange_snapshots(&target, &exchange, redactor, &mut results);
+            verdict.warnings.extend(snapshots.warnings);
+            verdict.snapshots.extend(snapshots.reviews);
             if batch {
                 let method = fields.method.unwrap_or_default();
                 prefix(&mut results, &format!("call {} ({method}): ", index + 1));
@@ -213,6 +234,8 @@ struct RpcChecked<'c, 'r> {
     request: &'c RequestRef<'r>,
     resolver: &'c Resolver<'c>,
     calls: Vec<CallFields<'c>>,
+    /// A subscription: its snapshots compare the event list.
+    subscription: bool,
 }
 
 /// What checking the calls of an exchange found.
@@ -224,6 +247,8 @@ struct Verdict {
     failures: Vec<String>,
     capture_failures: Vec<String>,
     warnings: Vec<String>,
+    /// The failed, missing and new snapshots, for a review.
+    snapshots: Vec<SnapshotReview>,
 }
 
 impl Verdict {
@@ -268,6 +293,21 @@ fn call_view<'o>(outcome: &'o JsonrpcOutcome, call: &JsonrpcCallCheck) -> Respon
     view.body = Cow::Owned(call.envelope.to_string().into_bytes());
     view.binary = false;
     view
+}
+
+/// The events a subscription collected, which its snapshots compare (as
+/// for GraphQL subscriptions); `None` for other calls.
+fn call_events<'c>(
+    checked: &RpcChecked<'_, '_>,
+    call: &'c JsonrpcCallCheck,
+) -> Option<&'c [Value]> {
+    if !checked.subscription {
+        return None;
+    }
+    call.envelope
+        .get("events")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
 }
 
 /// Whether `assertions` expect the call to fail with an error code.

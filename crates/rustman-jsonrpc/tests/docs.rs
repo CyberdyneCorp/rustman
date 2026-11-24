@@ -86,7 +86,7 @@ fn the_request_file_examples_load() {
 #[test]
 fn the_jsonrpc_page_examples_load() {
     let blocks = request_blocks(&doc("jsonrpc.md"));
-    assert_eq!(blocks.len(), 2);
+    assert_eq!(blocks.len(), 3);
     for block in &blocks {
         load(block);
     }

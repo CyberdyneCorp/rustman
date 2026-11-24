@@ -45,7 +45,7 @@ assertions:
 
 - A request file may hold several snapshot assertions; each needs its own `name` (the default name is `default`). Two with the same name fail to load with `<path>:<line>: duplicate snapshot name 'default'`.
 - Names may use letters, digits, `-` and `_`, since they become part of a file name.
-- Snapshots work for every request kind that produces a response: `http`, `graphql`, `jsonrpc` and `mcp`.
+- Snapshots work for every request kind that produces a response: `http`, `graphql`, `jsonrpc` and `mcp`. For `jsonrpc`, each call's snapshot holds that call's response envelope (`result` or `error`); in a batch, names are unique across all the calls (see [JSON-RPC snapshots](jsonrpc.md#snapshots)).
 - With `--iterations` above 1, every iteration compares against the same snapshot.
 
 ## Where snapshots are stored

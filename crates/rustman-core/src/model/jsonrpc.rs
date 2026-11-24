@@ -443,7 +443,32 @@ impl Checker<'_> {
         for (call, at) in r.calls().into_iter().zip(call_positions) {
             self.call(&call, at, scheme)?;
         }
+        self.unique_snapshot_names(&r.calls())?;
         self.unique_ids(&r.calls())
+    }
+
+    /// Each snapshot is a file named after the request file and the
+    /// snapshot, so names are unique across every call of a batch.
+    fn unique_snapshot_names(&self, calls: &[CallFields<'_>]) -> Result<(), LoadError> {
+        let mut seen: Vec<&str> = Vec::new();
+        let snapshots = calls
+            .iter()
+            .flat_map(|c| c.assertions)
+            .filter_map(|a| match a.get() {
+                Assertion::Snapshot(spec) => Some((spec.name(), a.position())),
+                _ => None,
+            });
+        for (name, at) in snapshots {
+            if seen.contains(&name) {
+                let mut message = format!("duplicate snapshot name '{name}'");
+                if calls.len() > 1 {
+                    message.push_str(" (give each call's snapshot its own name)");
+                }
+                return self.fail(at, &message);
+            }
+            seen.push(name);
+        }
+        Ok(())
     }
 
     /// The position of the top-level `key:` of the file, when the file is
@@ -696,6 +721,33 @@ mod tests {
         assert_eq!(err.to_string(), "r.rman.yaml:9: duplicate id 1 in batch");
         let distinct = "batch:\n  - method: a\n    id: 1\n  - method: b\n    id: \"1\"\n";
         assert!(parse(&format!("{HEAD}endpoint: http://x\n{distinct}")).is_ok());
+    }
+
+    #[test]
+    fn snapshot_names_are_unique_across_the_file() {
+        let err = parse(&format!(
+            "{HEAD}endpoint: http://x\nmethod: m\nassertions:\n  - snapshot\n  - snapshot\n"
+        ))
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "r.rman.yaml:8: duplicate snapshot name 'default'"
+        );
+        let batch = "batch:\n  - method: a\n    assertions:\n      - snapshot\n\
+                     \x20 - method: b\n    assertions:\n      - snapshot\n";
+        let err = parse(&format!("{HEAD}endpoint: http://x\n{batch}")).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "r.rman.yaml:11: duplicate snapshot name 'default' \
+             (give each call's snapshot its own name)"
+        );
+        let named = batch.replacen("- snapshot\n", "- snapshot: {name: a}\n", 1);
+        let r = parse(&format!("{HEAD}endpoint: http://x\n{named}")).unwrap();
+        let request = crate::model::Request::Jsonrpc(Box::new(r));
+        assert_eq!(
+            crate::snapshot::snapshot_names(&request),
+            Some(vec!["a".to_owned(), "default".to_owned()])
+        );
     }
 
     #[test]
