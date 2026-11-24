@@ -286,6 +286,15 @@ pub fn import(
         .import(target.format, target.source)
         .map_err(ConfigError::Usage)?;
     let planned = plan(target.into, &files, &**plugins).map_err(ConfigError::Usage)?;
+    for file in &planned {
+        for reference in &file.neutralized {
+            println!(
+                "review: {}: secret reference {reference} from the source neutralized: \
+                 it is kept as literal text and never resolved",
+                file.path
+            );
+        }
+    }
     if target.dry_run {
         for file in &planned {
             println!("would write {}", file.path);

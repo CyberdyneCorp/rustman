@@ -204,13 +204,13 @@ Environments come from the files next to the `.http` file (or in the folder):
 
 ### Secret references from the source
 
-A source cannot name your secrets. A [secret reference](secrets.md) (`{{secret:...}}`) found in an imported document is written escaped, as `\{{secret:...}}`: literal text that is sent as written and never reads a provider secret. This covers every source (Postman, Insomnia, Bruno, HAR, HTTP files), every field that takes templates (URLs, headers, bodies, auth, variables, environments, assertion values), and references a translation produces (Insomnia `{{ _.secret:vault/x }}`). Each one is listed in the report as a `review` note:
+A source cannot name your secrets. A [secret reference](secrets.md) (`{{secret:...}}`) found in an imported document is written escaped, as `\{{secret:...}}`: literal text that is sent as written and never reads a provider secret. This covers every source (Postman, Insomnia, Bruno, HAR, HTTP files), every field that takes templates (URLs, headers, bodies and GraphQL variables, auth including OAuth2 scopes, variables, environments, assertion values), and references a translation produces (Insomnia `{{ _.secret:vault/x }}`). Each one is listed in the report as a `review` note:
 
 ```text
 review: secret reference {{secret:vault/kv/prod/db#password}} from the source neutralized: it is kept as literal text and never resolved (evil.json > Leak)
 ```
 
-If you trust the source and want the reference, remove the backslash by hand. Plain `{{name}}` placeholders, and references the source already escaped, are left as they are.
+If you trust the source and want the reference, remove the backslash by hand. Plain `{{name}}` placeholders, and references the source already escaped, are left as they are. Files returned by an [importer plugin](plugins.md#importers) get the same treatment.
 
 ## Secrets
 

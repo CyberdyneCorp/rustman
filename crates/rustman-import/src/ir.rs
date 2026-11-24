@@ -422,6 +422,8 @@ impl VisitStrings for ImportedAuth {
                 o.auth_url.iter_mut().for_each(&mut *f);
                 f(&mut o.client_id);
                 o.client_secret.iter_mut().for_each(&mut *f);
+                // Scopes are interpolated at send time too.
+                o.scopes.iter_mut().for_each(&mut *f);
             }
         }
     }

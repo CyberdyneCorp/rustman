@@ -314,7 +314,7 @@ A `transformer` plugin SHALL register request transformers (run after interpolat
 - **AND** history SHALL store both bodies
 
 ### Requirement: Importer extension point
-An `importer` plugin SHALL register a format usable as `rustman import <format> <src>`. With `fs:read` granted for the source path, the plugin SHALL receive the source bytes. It SHALL return request files and environments using the workspace schema, which the host validates and writes. The plugin SHALL NOT write files itself.
+An `importer` plugin SHALL register a format usable as `rustman import <format> <src>`. With `fs:read` granted for the source path, the plugin SHALL receive the source bytes. It SHALL return request files and environments using the workspace schema, which the host validates and writes; the plugin SHALL NOT write files. A live `{{secret:...}}` reference it returns SHALL be written escaped (`\{{secret:...}}`) and listed; a file that cannot be escaped SHALL fail the import.
 
 #### Scenario: Plugin importer
 - **GIVEN** a plugin registering format `soapui`
@@ -324,6 +324,11 @@ An `importer` plugin SHALL register a format usable as `rustman import <format> 
 #### Scenario: Invalid output
 - **WHEN** an importer returns a request with an unregistered `kind`
 - **THEN** nothing SHALL be written, and the error SHALL name the plugin and the offending request
+
+#### Scenario: Secret reference in importer output
+- **GIVEN** an importer that returns a request with header value `'pw={{secret:vault/kv/prod/db#password}}'`
+- **WHEN** the import runs
+- **THEN** the file SHALL be written with `pw=\{{secret:vault/kv/prod/db#password}}`, and the output SHALL list the neutralized reference
 
 ### Requirement: Request kind extension point
 A `kind` plugin SHALL register a new request kind in the `workspace` kind registry, with a JSON Schema for its fields. It SHALL execute requests through granted host functions and return an exchange. The TUI pane SHALL be described declaratively (fields, editors, response views) and rendered by `tui`. Plugin kinds SHALL NOT override built-in kinds.

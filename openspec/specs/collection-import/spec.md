@@ -196,6 +196,11 @@ A `{{secret:...}}` reference in an imported source, or one a translation produce
 - **WHEN** it is imported
 - **THEN** the request file SHALL hold `X-Db: \{{secret:vault/kv/prod/db#password}}`, the URL SHALL stay `{{base_url}}/leak`, and the report SHALL have a `review` note naming the neutralized reference
 
+#### Scenario: Planted reference in an OAuth2 scope or GraphQL variable
+- **GIVEN** a Postman request whose OAuth2 `scope` or GraphQL variable `pw` is `{{secret:vault/kv/prod/db#password}}`
+- **WHEN** it is imported
+- **THEN** the scope or variable SHALL be written as `\{{secret:vault/kv/prod/db#password}}`, the GraphQL variables SHALL stay structured, and the report SHALL have a `review` note
+
 ### Requirement: Secret extraction
 Before writing, the importer SHALL detect secrets: `Authorization`, `Proxy-Authorization`, `Cookie` and API-key header or query values; basic, bearer, API-key and OAuth2 credential fields; and variables whose name matches `token|secret|password|passwd|api[_-]?key|client[_-]?secret` (case-insensitive). Literal secret values SHALL be replaced by `{{name}}` placeholders and stored as `environments` secrets.
 
