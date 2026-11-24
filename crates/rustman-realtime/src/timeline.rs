@@ -4,11 +4,13 @@
 //! [`MAX_TIMELINE_BYTES`] (payloads, types and ids counted), are kept; the
 //! oldest are dropped and counted.
 
+use std::borrow::Cow;
 use std::collections::VecDeque;
+use std::sync::Arc;
 use std::time::Instant;
 
 use rustman_core::Redactor;
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use serde_json::{Value, json};
 
 /// The most bytes a timeline keeps (256 MiB) of payloads, types and ids:
@@ -33,7 +35,7 @@ pub fn message_json(entry: &TimelineEntry) -> Value {
         "dir": entry.dir.as_str(),
         "type": entry.kind,
         "size": entry.size,
-        "id": entry.id,
+        "id": entry.id.as_deref(),
         "data": entry.payload,
     })
 }
@@ -72,9 +74,13 @@ pub struct TimelineEntry {
     pub kind: String,
     /// Text as received; binary data in base64.
     pub payload: String,
-    /// The SSE event id (the last event id when the event arrived).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
+    /// The SSE event id (the last event id when the event arrived), shared
+    /// with the other events that carry it rather than copied into each.
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_id"
+    )]
+    pub id: Option<Arc<str>>,
     /// The round-trip time of a pong answering one of our pings.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rtt_ms: Option<u64>,
@@ -88,9 +94,10 @@ impl TimelineEntry {
     }
 
     /// The bytes this entry holds that the server controls: its payload,
-    /// type and id, as the timeline's byte budget counts them.
+    /// type and id, as the timeline's byte budget counts them. A shared id
+    /// is counted for each entry, so the budget never undercounts.
     pub fn held_bytes(&self) -> usize {
-        self.payload.len() + self.kind.len() + self.id.as_ref().map_or(0, String::len)
+        self.payload.len() + self.kind.len() + self.id.as_deref().map_or(0, str::len)
     }
 
     /// The entry with every secret `redactor` knows replaced in what the
@@ -100,9 +107,18 @@ impl TimelineEntry {
         let text = |t: &str| redactor.text(t).into_owned();
         self.payload = text(&self.payload);
         self.kind = text(&self.kind);
-        self.id = self.id.as_deref().map(text);
+        // Kept shared unless it held a secret.
+        self.id = self.id.map(|id| match redactor.text(&id) {
+            Cow::Borrowed(_) => id,
+            Cow::Owned(redacted) => Arc::from(redacted),
+        });
         self
     }
+}
+
+/// An id as the string it holds.
+fn serialize_id<S: Serializer>(id: &Option<Arc<str>>, serializer: S) -> Result<S::Ok, S::Error> {
+    id.as_deref().serialize(serializer)
 }
 
 /// The entries of a session, capped.
@@ -249,7 +265,7 @@ mod tests {
                 size: 1,
                 kind: "k".repeat(8),
                 payload: n.to_string(),
-                id: Some("i".repeat(8)),
+                id: Some("i".repeat(8).into()),
                 rtt_ms: None,
             };
             timeline.push(entry);
@@ -285,10 +301,28 @@ mod tests {
                 "d-SECRETTOKEN0a1b".into(),
             )
             .clone();
-        entry.id = Some("SECRETTOKEN0a1b".to_owned());
+        entry.id = Some("SECRETTOKEN0a1b".into());
         let shown = serde_json::to_string(&entry.redacted(&redactor)).unwrap();
         assert!(!shown.contains("SECRETTOKEN0a1b"), "{shown}");
         assert!(shown.contains("t-«redacted:token»"), "{shown}");
+    }
+
+    /// #82: redacting an entry keeps its id shared unless the id held a
+    /// secret; serialized, the id is a plain string.
+    #[test]
+    fn redaction_keeps_an_id_without_secrets_shared() {
+        let secret = rustman_core::Secret::new("token", "SECRETTOKEN0a1b".to_owned());
+        let redactor = Redactor::new().with(&secret);
+        let id: Arc<str> = Arc::from("evt-41");
+        let mut timeline = Timeline::new(Instant::now(), 10);
+        let mut entry = timeline
+            .record(Direction::Received, "tick", 1, "x".into())
+            .clone();
+        entry.id = Some(Arc::clone(&id));
+        let redacted = entry.redacted(&redactor);
+        assert!(Arc::ptr_eq(redacted.id.as_ref().unwrap(), &id));
+        assert_eq!(serde_json::to_value(&redacted).unwrap()["id"], "evt-41");
+        assert_eq!(message_json(&redacted)["id"], "evt-41");
     }
 
     #[test]

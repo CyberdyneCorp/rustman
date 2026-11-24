@@ -82,7 +82,7 @@ fn handshake(h: &Handshake) -> HandshakeRecord {
 
 fn entry(e: &TimelineEntry) -> TimelineRecord {
     let mut recorded = TimelineRecord::new(e.dir.as_str(), e.t_ms, e.size, &e.kind, &e.payload);
-    recorded.id.clone_from(&e.id);
+    recorded.id = e.id.as_deref().map(str::to_owned);
     recorded.rtt_ms = e.rtt_ms;
     recorded
 }

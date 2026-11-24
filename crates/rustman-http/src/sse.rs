@@ -11,8 +11,11 @@
 //! grow past the size limit.
 //!
 //! An `event` or `id` value longer than [`MAX_FIELD_BYTES`] is ignored, as
-//! an `id` holding NUL is: both are copied into every event they apply
-//! to, so they stay small however large events may be.
+//! an `id` holding NUL is, so they stay small however large events may be.
+//! The last event id is shared, not copied: every event dispatched under
+//! the same id holds the same [`Arc<str>`].
+
+use std::sync::Arc;
 
 /// The media type of an event stream.
 pub const EVENT_STREAM: &str = "text/event-stream";
@@ -31,8 +34,8 @@ pub struct SseEvent {
     /// The `data` lines joined with `\n`.
     pub data: String,
     /// The last event id when the event was dispatched; `None` while it is
-    /// empty.
-    pub id: Option<String>,
+    /// empty. Shared with every other event dispatched under the same id.
+    pub id: Option<Arc<str>>,
 }
 
 /// An event (with the line still being read) larger than the limit.
@@ -58,7 +61,7 @@ pub struct SseParser {
     /// buffer"): it becomes the last event id when the event is
     /// dispatched.
     id_buffer: String,
-    last_event_id: String,
+    last_event_id: Arc<str>,
     retry: Option<u64>,
     limit: u64,
     /// Dispatch an event with a type and no data (see
@@ -76,7 +79,7 @@ impl SseParser {
             event: None,
             data: None,
             id_buffer: String::new(),
-            last_event_id: String::new(),
+            last_event_id: Arc::from(""),
             retry: None,
             limit,
             typed_without_data: false,
@@ -98,7 +101,7 @@ impl SseParser {
     #[must_use]
     pub fn resuming(mut self, id: &str) -> Self {
         id.clone_into(&mut self.id_buffer);
-        id.clone_into(&mut self.last_event_id);
+        self.last_event_id = Arc::from(id);
         self
     }
 
@@ -108,6 +111,12 @@ impl SseParser {
     /// Sent as `Last-Event-ID` when reconnecting.
     pub fn last_event_id(&self) -> &str {
         &self.last_event_id
+    }
+
+    /// [`SseParser::last_event_id`], shared with the events that carry it;
+    /// `None` while it is empty.
+    pub fn shared_last_event_id(&self) -> Option<Arc<str>> {
+        (!self.last_event_id.is_empty()).then(|| Arc::clone(&self.last_event_id))
     }
 
     /// The last valid `retry` value, in milliseconds.
@@ -223,8 +232,8 @@ impl SseParser {
     /// An event when data was given (or, when kept, a type); the event
     /// type is reset and the last event id set either way.
     fn dispatch(&mut self) -> Option<SseEvent> {
-        if self.last_event_id != self.id_buffer {
-            self.last_event_id.clone_from(&self.id_buffer);
+        if *self.last_event_id != *self.id_buffer {
+            self.last_event_id = Arc::from(self.id_buffer.as_str());
         }
         let event = self.event.take();
         let typed = event.as_ref().is_some_and(|e| !e.is_empty());
@@ -238,7 +247,7 @@ impl SseParser {
                 .filter(|e| !e.is_empty())
                 .unwrap_or_else(|| "message".to_owned()),
             data,
-            id: (!self.last_event_id.is_empty()).then(|| self.last_event_id.clone()),
+            id: self.shared_last_event_id(),
         })
     }
 }
@@ -411,6 +420,26 @@ mod tests {
         assert_eq!(parser.last_event_id(), "42");
         parser.push(b"id: 4\x003\n\n").unwrap();
         assert_eq!(parser.last_event_id(), "42", "an id with NUL is ignored");
+    }
+
+    /// #82: events dispatched under the same id share one copy of it.
+    #[test]
+    fn events_share_one_copy_of_their_id() {
+        let mut parser = SseParser::new(64 * 1024);
+        let long = "i".repeat(MAX_FIELD_BYTES);
+        let stream = format!("id: {long}\ndata: a\n\ndata: b\n\nid: {long}\ndata: c\n\n");
+        let events = parser.push(stream.as_bytes()).unwrap();
+        let ids: Vec<&Arc<str>> = events.iter().map(|e| e.id.as_ref().unwrap()).collect();
+        assert_eq!(&**ids[0], long.as_str());
+        assert!(Arc::ptr_eq(ids[0], ids[1]));
+        assert!(Arc::ptr_eq(ids[0], ids[2]), "the same id sent again");
+        let shared = parser.shared_last_event_id().unwrap();
+        assert!(Arc::ptr_eq(ids[0], &shared));
+        let next = parser.push(b"id: 2\ndata: d\n\n").unwrap();
+        assert_eq!(next[0].id.as_deref(), Some("2"));
+        assert_eq!(&**ids[0], long.as_str(), "earlier events keep their id");
+        parser.push(b"id\n\n").unwrap();
+        assert_eq!(parser.shared_last_event_id(), None);
     }
 
     #[test]

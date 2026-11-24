@@ -54,7 +54,7 @@ mod tests {
             size: payload.len() as u64,
             kind: kind.to_owned(),
             payload: payload.to_owned(),
-            id: Some("42".to_owned()),
+            id: Some("42".into()),
             rtt_ms: None,
         }
     }
