@@ -188,6 +188,14 @@ Source variable references SHALL be translated to `{{name}}`: Postman/Insomnia/B
 - **WHEN** it is imported
 - **THEN** the placeholder SHALL be kept and the report SHALL list `unmapped dynamic variable $randomCity`
 
+### Requirement: Imported secret references are neutralized
+A `{{secret:...}}` reference in an imported source, or one a translation produces (`{{ _.secret:... }}`), SHALL be written escaped as `\{{secret:...}}`, literal text that never resolves a provider secret, in request, collection and environment files and in assertion values. The report SHALL list each one as a `review` note. Plain `{{name}}` placeholders and references the source already escaped SHALL stay as written.
+
+#### Scenario: Planted reference in a Postman header
+- **GIVEN** a Postman request with header `X-Db: {{secret:vault/kv/prod/db#password}}` and URL `{{base_url}}/leak`
+- **WHEN** it is imported
+- **THEN** the request file SHALL hold `X-Db: \{{secret:vault/kv/prod/db#password}}`, the URL SHALL stay `{{base_url}}/leak`, and the report SHALL have a `review` note naming the neutralized reference
+
 ### Requirement: Secret extraction
 Before writing, the importer SHALL detect secrets: `Authorization`, `Proxy-Authorization`, `Cookie` and API-key header or query values; basic, bearer, API-key and OAuth2 credential fields; and variables whose name matches `token|secret|password|passwd|api[_-]?key|client[_-]?secret` (case-insensitive). Literal secret values SHALL be replaced by `{{name}}` placeholders and stored as `environments` secrets.
 

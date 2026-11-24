@@ -34,9 +34,10 @@ pub fn environments(
                 format!("server URL '{base_url}' is relative; set 'baseUrl' in environment '{name}' by hand"),
             ));
         }
+        let at = format!("/servers/{index}");
         out.push(Environment {
             name,
-            variables: variables(server, base_url),
+            variables: variables(server, base_url, &at, warnings),
             secrets: secrets.to_vec(),
             production: false,
             trace: Default::default(),
@@ -65,11 +66,21 @@ fn base_url(server: &Server, location: Option<&Location>) -> String {
     url
 }
 
-fn variables(server: &Server, base_url: String) -> Variables {
+/// `baseUrl` and the server variables, with any `{{secret:...}}`
+/// reference from the document neutralized.
+fn variables(
+    server: &Server,
+    mut base_url: String,
+    at: &str,
+    warnings: &mut Vec<Diagnostic>,
+) -> Variables {
+    super::inert::text(&mut base_url, at, warnings);
     let mut entries = vec![(BASE_URL.to_owned(), VarValue::String(base_url))];
     for variable in &server.variables {
         if variable.name != BASE_URL {
-            let value = VarValue::String(variable.default.clone());
+            let mut default = variable.default.clone();
+            super::inert::text(&mut default, at, warnings);
+            let value = VarValue::String(default);
             entries.push((variable.name.clone(), value));
         }
     }

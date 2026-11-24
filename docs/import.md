@@ -202,6 +202,16 @@ Environments come from the files next to the `.http` file (or in the folder):
 
 `{{name}}` placeholders stay as they are. Dynamic variables are translated: `{{$guid}}` and `{{$randomUUID}}` become `{{$uuid}}`; `{{$timestamp}}`, `{{$randomInt}}` and Rustman's own dynamic variables stay. Any other (`{{$randomCity}}`) is kept unchanged and reported as `unmapped dynamic variable $randomCity`.
 
+### Secret references from the source
+
+A source cannot name your secrets. A [secret reference](secrets.md) (`{{secret:...}}`) found in an imported document is written escaped, as `\{{secret:...}}`: literal text that is sent as written and never reads a provider secret. This covers every source (Postman, Insomnia, Bruno, HAR, HTTP files), every field that takes templates (URLs, headers, bodies, auth, variables, environments, assertion values), and references a translation produces (Insomnia `{{ _.secret:vault/x }}`). Each one is listed in the report as a `review` note:
+
+```text
+review: secret reference {{secret:vault/kv/prod/db#password}} from the source neutralized: it is kept as literal text and never resolved (evil.json > Leak)
+```
+
+If you trust the source and want the reference, remove the backslash by hand. Plain `{{name}}` placeholders, and references the source already escaped, are left as they are.
+
 ## Secrets
 
 Before anything is written, the importer looks for secrets in three passes.

