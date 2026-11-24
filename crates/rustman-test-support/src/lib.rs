@@ -23,6 +23,7 @@ pub mod oauth;
 pub mod openapi;
 #[cfg(feature = "otlp")]
 pub mod otlp;
+pub mod ports;
 pub mod proxy;
 pub mod raw;
 pub mod realtime_sse;

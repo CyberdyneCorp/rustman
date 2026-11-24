@@ -123,10 +123,7 @@ impl OtlpCollector {
 
 /// An `http://127.0.0.1:<port>` nothing listens on: a collector that is down.
 pub async fn unreachable_endpoint() -> String {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    drop(listener);
-    format!("http://{addr}")
+    crate::ports::closed_url()
 }
 
 type Body = BoxBody<Bytes, Infallible>;
