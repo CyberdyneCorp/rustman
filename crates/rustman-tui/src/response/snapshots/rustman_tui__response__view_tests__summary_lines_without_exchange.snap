@@ -1,0 +1,7 @@
+---
+source: crates/rustman-tui/src/response/view_tests.rs
+expression: "lines.join(\"\\n\")"
+---
+✔ OK · kafka produce · 42 ms
+✔ OK · files tools/call · ok · 42 ms
+✔ OK · redis · GET user:1 · 42 ms
