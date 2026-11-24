@@ -88,10 +88,10 @@ pub fn request(name: &str, url: &str, extra: &str) -> String {
     format!("version: 1\nkind: http\nname: {name}\nurl: '{url}'\n{extra}")
 }
 
-/// A port nothing listens on: connecting to it is refused.
+/// A port nothing listens on: connecting to it is refused, and no other
+/// test's server can take it.
 pub fn closed_port() -> u16 {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    listener.local_addr().unwrap().port()
+    rustman_test_support::ports::closed_port()
 }
 
 /// A prefix for `/timed` ids that no other test uses.

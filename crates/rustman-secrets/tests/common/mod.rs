@@ -85,8 +85,5 @@ pub fn configured(workspace: &str, user: &str, ctx: &Context) -> SecretProviders
 
 /// A local port nothing listens on: connections are refused at once.
 pub fn closed_port_url() -> String {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let port = listener.local_addr().unwrap().port();
-    drop(listener);
-    format!("http://127.0.0.1:{port}")
+    rustman_test_support::ports::closed_url()
 }

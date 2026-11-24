@@ -61,8 +61,7 @@ pub fn error(id: Value, code: i64, message: &str) -> Value {
     json!({"jsonrpc": "2.0", "id": id, "error": {"code": code, "message": message}})
 }
 
-/// A local port nothing listens on: bound, then released.
+/// A local port nothing listens on, held so no other test can take it.
 pub fn closed_port() -> u16 {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    listener.local_addr().unwrap().port()
+    rustman_test_support::ports::closed_port()
 }
