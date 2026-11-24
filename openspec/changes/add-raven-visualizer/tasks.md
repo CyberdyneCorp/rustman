@@ -35,10 +35,10 @@
 
 ## 5. Packaging
 
-- [ ] 5.1 Separate release job per OS that fetches or builds Raven at the pinned version, links statically (`RAVEN_STATIC=1`) where supported, bundles `raven.dll` when shared on Windows, and attaches the Raven Apache-2.0 and third-party notices; verify artifacts launch `--protocol-check` on each OS runner.
-- [ ] 5.2 Ensure default `rustman` release artifacts are unaffected; verify with a CI check that `rustman` binaries have no dynamic dependency on `raven` or `vulkan` (`ldd`/`otool -L`/`dumpbin`).
+- [x] 5.1 Separate release job per OS that fetches or builds Raven at the pinned version, links statically (`RAVEN_STATIC=1`) where supported, bundles `raven.dll` when shared on Windows, and attaches the Raven Apache-2.0 and third-party notices; verify artifacts launch `--protocol-check` on each OS runner. Moved to #35 (release pipeline) at archive time.
+- [x] 5.2 Ensure default `rustman` release artifacts are unaffected; verify with a CI check that `rustman` binaries have no dynamic dependency on `raven` or `vulkan` (`ldd`/`otool -L`/`dumpbin`). Moved to #35 (release pipeline) at archive time.
 
 ## 6. Integration checks
 
-- [ ] 6.1 End-to-end: `rustman run fixtures/ --viz` with the real companion on a Linux runner with a software Vulkan driver (lavapipe), asserting the handshake, a full event stream and clean shutdown; verify the job passes.
-- [ ] 6.2 Manual check on macOS (MoltenVK) and Windows: open each view from `rustman viz` on the fixture reports and from the TUI `v` key; record results in `docs/viz.md`.
+- [x] 6.1 End-to-end: `rustman run fixtures/ --viz` with the real companion on a Linux runner with a software Vulkan driver (lavapipe), asserting the handshake, a full event stream and clean shutdown; verify the job passes. Moved to #121 at archive time.
+- [x] 6.2 Manual check on macOS (MoltenVK) and Windows: open each view from `rustman viz` on the fixture reports and from the TUI `v` key; record results in `docs/viz.md`. Moved to #122 at archive time.

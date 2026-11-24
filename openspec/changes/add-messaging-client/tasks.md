@@ -8,17 +8,17 @@
 
 ## 2. Kafka
 
-- [ ] 2.1 Produce with explicit partition or murmur2 key hashing and acks modes, recording partition and offset. Verify with a broker test in the `messaging-kafka` CI job (Redpanda service container) and a unit test checking murmur2 partition choice against Java-client reference vectors.
-- [ ] 2.2 Consume by partition and offset (`earliest`, `latest`, absolute, timestamp) with no group and no commits. Verify with a test that the group list is unchanged after consuming, plus the timestamp scenario.
-- [ ] 2.3 TLS and SASL PLAIN/SCRAM-256/512 with secret redaction. Verify with a broker test in the `messaging-kafka` CI job against a broker configured for SCRAM, plus a test that history contains `«redacted:kafka_pw»`.
+- [x] 2.1 Produce with explicit partition or murmur2 key hashing and acks modes, recording partition and offset. Verify with a broker test in the `messaging-kafka` CI job (Redpanda service container) and a unit test checking murmur2 partition choice against Java-client reference vectors. (`kafka_broker.rs` against Redpanda in the `messaging-kafka` job and `murmur2_matches_the_java_client_reference_vectors`; passed in CI run 45089029769 on main.)
+- [x] 2.2 Consume by partition and offset (`earliest`, `latest`, absolute, timestamp) with no group and no commits. Verify with a test that the group list is unchanged after consuming, plus the timestamp scenario. (`a_timestamp_offset_returns_only_later_messages`, and the job's "No consumer group was joined" step checks `rpk group list`; passed in CI run 45089029769 on main.)
+- [x] 2.3 TLS and SASL PLAIN/SCRAM-256/512 with secret redaction. Verify with a broker test in the `messaging-kafka` CI job against a broker configured for SCRAM, plus a test that history contains `«redacted:kafka_pw»`. (`scram_sha_512_authenticates_and_history_hides_the_password` against the SCRAM broker of the `messaging-kafka` job; passed in CI run 45089029769 on main.)
 - [x] 2.4 Schema Registry client with Avro, Protobuf and JSON Schema decode/encode and a per-run cache. Verify with tests against a fake registry (wiremock-style local hyper server) for Avro id 7 and the raw-bytes warning when a fetch fails.
 
 ## 3. MQTT and AMQP
 
-- [ ] 3.1 MQTT publish (v3.1.1/v5, QoS 0/1/2, retain, v5 properties) and subscribe (wildcards, clean session, generated client id, persistent-session warning). Verify with Mosquitto tests in the `messaging-mqtt-amqp` CI job for QoS 2 completion and wildcard topics.
-- [ ] 3.2 MQTT TLS, client certificates and WebSocket transport. Verify with a Mosquitto container configured for mTLS.
-- [ ] 3.3 AMQP publish with properties, publisher confirms and mandatory/unroutable handling. Verify with a RabbitMQ test in the `messaging-mqtt-amqp` CI job that the run exits 3 with `amqp: unroutable`.
-- [ ] 3.4 AMQP consume through a temporary exclusive queue, with named-queue consume requiring `destructive: true` and requeue mode. Verify with tests that the temporary queue is gone afterwards, the load-time refusal error, and requeue leaving the messages in place.
+- [x] 3.1 MQTT publish (v3.1.1/v5, QoS 0/1/2, retain, v5 properties) and subscribe (wildcards, clean session, generated client id, persistent-session warning). Verify with Mosquitto tests in the `messaging-mqtt-amqp` CI job for QoS 2 completion and wildcard topics. (`qos_2_completes_and_wildcards_match_on_mosquitto` in the `messaging-mqtt-amqp` job; passed in CI run 45089029769 on main.)
+- [x] 3.2 MQTT TLS, client certificates and WebSocket transport. Verify with a Mosquitto container configured for mTLS. (`mutual_tls_connects_with_the_client_certificate` against Mosquitto with `require_certificate` in the `messaging-mqtt-amqp` job, plus `the_websocket_transport_carries_mqtt`; passed in CI run 45089029769 on main.)
+- [x] 3.3 AMQP publish with properties, publisher confirms and mandatory/unroutable handling. Verify with a RabbitMQ test in the `messaging-mqtt-amqp` CI job that the run exits 3 with `amqp: unroutable`. (`an_unroutable_mandatory_message_fails` against RabbitMQ in the `messaging-mqtt-amqp` job; passed in CI run 45089029769 on main.)
+- [x] 3.4 AMQP consume through a temporary exclusive queue, with named-queue consume requiring `destructive: true` and requeue mode. Verify with tests that the temporary queue is gone afterwards, the load-time refusal error, and requeue leaving the messages in place. (`a_temporary_queue_receives_matching_messages_and_is_deleted`, `requeue_leaves_the_messages_in_place` and `a_destructive_consume_removes_only_what_it_records` in the `messaging-mqtt-amqp` job; passed in CI run 45089029769 on main.)
 
 ## 4. AsyncAPI and validation
 
@@ -28,7 +28,7 @@
 
 ## 5. Runner, safety, assertions, history
 
-- [ ] 5.1 Headless consume bounds and `start: before_next` subscription readiness. Verify with an end-to-end test where an HTTP POST makes a fake service emit a Kafka event that is captured, plus the quiet-topic 2 s scenario.
+- [x] 5.1 Headless consume bounds and `start: before_next` subscription readiness. Verify with an end-to-end test where an HTTP POST makes a fake service emit a Kafka event that is captured, plus the quiet-topic 2 s scenario. (`kafka_before_next_consume_captures_the_event_an_http_post_causes` and `a_quiet_topic_ends_after_its_duration_with_no_messages` in `tests/runner.rs`, run by the `messaging-kafka` job; passed in CI run 45089029769 on main.)
 - [x] 5.2 Assertions (`messages` counts, JSONPath over values and keys, headers) and captures. Verify with tests for the `count_eq: 1` scenario.
 - [x] 5.3 Safety classification (produce is a mutation, named-queue consume is destructive) through the governed gate for agent paths. Verify with tests for the read-only agent refusal (exit code 4, audit entry) and that human CLI produce is allowed.
 - [x] 5.4 History exchanges with 64 KiB payload previews and redaction. Verify with the 200 KiB truncation test.
@@ -36,7 +36,7 @@
 
 ## 6. CLI and TUI
 
-- [ ] 6.1 `rustman kafka|mqtt|amqp produce|consume` with flags, `--json` lines and stdin produce. Verify with assert_cmd tests against the CI broker containers for the consume-to-JSON-lines and stdin-produce scenarios.
+- [x] 6.1 `rustman kafka|mqtt|amqp produce|consume` with flags, `--json` lines and stdin produce. Verify with assert_cmd tests against the CI broker containers for the consume-to-JSON-lines and stdin-produce scenarios. (`tests/messaging.rs` in rustman-cli, including `kafka_consume_prints_json_lines_with_partition_and_offset` and `stdin_lines_are_published_one_message_each`, run by the `messaging-kafka` job; passed in CI run 45089029769 on main.)
 - [x] 6.2 TUI messaging pane: broker/destination form, produce composer, live consumer list with pause, value rendering (JSON, decoded schema registry, hex) and a buffer cap of 10000 messages and 64 MiB (the oldest dropped beyond it, with a notice). Verify with ratatui `TestBackend` snapshot tests.
 
 ## 7. Security hardening

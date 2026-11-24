@@ -18,17 +18,17 @@
 ## 3. Built-in providers
 
 - [x] 3.1 `keychain` and `env` providers. Verify "Process environment in CI", plus a keychain round-trip with `secret set`.
-- [ ] 3.2 `sops` provider: SOPS format parsing, MAC check, age decryption, PGP via `gpg`, and workspace path confinement. Verify against SOPS-generated fixtures ("age-encrypted file", "Path escape", "PGP without gpg").
+- [x] 3.2 `sops` provider: SOPS format parsing, MAC check, age decryption, PGP via `gpg`, and workspace path confinement. Verify against SOPS-generated fixtures ("age-encrypted file", "Path escape", "PGP without gpg"). (`tests/sops.rs` covers the scenarios; `real_sops_files_decrypt` decrypts a file from the real `sops` binary in the `test` job with `RUSTMAN_REQUIRE_SOPS=1`; passed in CI run 45089029769 on main.)
 - [x] 3.3 `onepassword` provider through the `op` CLI and Connect REST. Verify with a fake `op` binary on `PATH` and a mock Connect server ("op CLI", "op not signed in").
-- [ ] 3.4 `vault` provider: KV v1/v2 detection, versions, namespaces, and token/AppRole/OIDC auth. Verify against a `vault server -dev` container in CI ("KV v2 with version", "Permission denied" with no token in the message).
+- [x] 3.4 `vault` provider: KV v1/v2 detection, versions, namespaces, and token/AppRole/OIDC auth. Verify against a `vault server -dev` container in CI ("KV v2 with version", "Permission denied" with no token in the message). (Mock-server tests in `tests/vault.rs` for versions, namespaces, token/AppRole/OIDC, and `vault_dev_server` in the `secrets-vault` job; passed in CI run 45089029769 on main.)
 - [x] 3.5 `cmd` provider from user config, running argv with no shell. Verify the "User-defined command" scenario with a test script.
 
 ## 4. Cloud providers (feature-gated)
 
-- [ ] 4.1 `aws-secrets-manager` and `aws-ssm` behind `secrets-aws`. Verify against LocalStack in CI ("AWS JSON secret field", "No cloud credentials").
+- [x] 4.1 `aws-secrets-manager` and `aws-ssm` behind `secrets-aws`. Verify against LocalStack in CI ("AWS JSON secret field", "No cloud credentials"). (`aws_json_secret_field` and `no_cloud_credentials` in `tests/aws.rs`, and `localstack` in the `secrets-localstack` job; passed in CI run 45089029769 on main.)
 - [x] 4.2 `gcp-secret-manager` behind `secrets-gcp`. Verify with a mock Secret Manager REST server and fake ADC credentials.
 - [x] 4.3 `azure-key-vault` behind `secrets-azure`. Verify with a mock Key Vault REST server and a fake token credential.
-- [ ] 4.4 Enable all cloud features in release builds, with a binary-size budget check. Verify with a release CI job that asserts every provider type is listed by `secret list-providers --types`.
+- [x] 4.4 Enable all cloud features in release builds, with a binary-size budget check. Verify with a release CI job that asserts every provider type is listed by `secret list-providers --types`. (The `release-secrets` job builds with `cloud-secrets`, checks every type in `secret list-providers --types` and a 2 MiB size budget; passed in CI run 45089029769 on main. Official release artifacts are tracked in #35.)
 
 ## 5. CLI, agents and plugins
 
