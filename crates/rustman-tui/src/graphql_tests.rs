@@ -370,8 +370,10 @@ async fn a_subscription_streams_events_until_stopped() {
     }
     let live = text(&state);
     assert!(live.contains("Subscribed: 3 events"), "{live}");
+    // The feed row is clipped to the pane width, and the elapsed column
+    // ("+12 ms" vs "+120 ms") moves the clip point: match a prefix that fits.
     assert!(
-        live.contains("{\"data\":{\"onMessage\":{\"n\":3}}}"),
+        live.contains("{\"data\":{\"onMessage\":{\"n\":3}"),
         "{live}"
     );
     let effects = update(&mut state, Action::Key(event("Alt+X")));
