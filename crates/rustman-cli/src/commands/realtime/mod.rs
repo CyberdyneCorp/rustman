@@ -25,7 +25,7 @@ use rustman_core::vars::ResolvedFrame;
 use rustman_core::workspace::RequestRef;
 use rustman_core::{ConfigError, Workspace};
 use rustman_http::runner::{RunContext, Runner, Sent};
-use rustman_realtime::{Command, RealtimeRunner, TimelineEntry};
+use rustman_realtime::{Command, RealtimeRunner};
 use serde_json::{Map, Value};
 use tokio::sync::mpsc;
 
@@ -223,7 +223,7 @@ impl Session {
             None => None,
         };
         let store = secret_store(self.root())?;
-        let (feed, mut entries) = mpsc::unbounded_channel::<TimelineEntry>();
+        let (feed, mut entries) = rustman_realtime::feed_channel();
         let realtime = RealtimeRunner {
             max_messages: listen.max_messages,
             duration: listen.duration,
@@ -252,12 +252,12 @@ impl Session {
             loop {
                 tokio::select! {
                     sent = &mut send => break sent,
-                    Some(entry) = entries.recv() => printer.entry(&entry),
+                    Some(item) = entries.recv() => printer.item(&item),
                 }
             }
         });
-        while let Ok(entry) = entries.try_recv() {
-            printer.entry(&entry);
+        while let Some(item) = entries.try_recv() {
+            printer.item(&item);
         }
         if let Err(e) = runner.finish() {
             print_warnings(&[e.to_string()]);

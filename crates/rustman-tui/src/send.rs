@@ -453,7 +453,7 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         unbounded: true,
         ..GrpcRunner::default()
     };
-    let (rt_feed, rt_entries) = unbounded_channel();
+    let (rt_feed, rt_entries) = rustman_realtime::feed_channel();
     let realtime = RealtimeRunner {
         interactive: Some(job.stop.clone()),
         feed: Some(rt_feed),

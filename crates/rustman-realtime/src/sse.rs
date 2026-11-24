@@ -20,6 +20,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::RealtimeError;
 use crate::exchange::{Handshake, RealtimeExchange, SessionEnd};
+use crate::feed::FeedSender;
 use crate::session::{Bounds, Command, SessionOptions, forward, recv, until};
 use crate::timeline::{Direction, TimelineEntry};
 
@@ -63,7 +64,7 @@ struct Stream<'t> {
     bounds: Option<Bounds>,
     deadline: Option<Instant>,
     cancel: CancellationToken,
-    feed: Option<mpsc::UnboundedSender<TimelineEntry>>,
+    feed: Option<FeedSender>,
     commands: Option<mpsc::Receiver<Command>>,
     last_event_id: Option<String>,
     retry: Duration,

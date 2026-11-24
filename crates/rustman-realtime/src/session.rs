@@ -10,6 +10,7 @@ use rustman_core::vars::ResolvedFrame;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
+use crate::feed::FeedSender;
 use crate::timeline::TimelineEntry;
 
 /// When a headless session stops listening, once its steps are done.
@@ -55,8 +56,9 @@ pub struct SessionOptions {
     pub bounds: Option<Bounds>,
     /// Closes the session (Ctrl+C, the TUI's close control).
     pub cancel: CancellationToken,
-    /// Gets every timeline entry as it is recorded, redacted.
-    pub feed: Option<mpsc::UnboundedSender<TimelineEntry>>,
+    /// Gets every timeline entry as it is recorded, redacted, unless the
+    /// consumer fell behind (see [`crate::feed_channel`]).
+    pub feed: Option<FeedSender>,
     /// Frames and closes to perform while the session runs.
     pub commands: Option<mpsc::Receiver<Command>>,
 }
@@ -72,14 +74,12 @@ impl SessionOptions {
     }
 }
 
-/// Hand `entry`, redacted, to whoever follows the session.
-pub(crate) fn forward(
-    feed: Option<&mpsc::UnboundedSender<TimelineEntry>>,
-    redactor: &Redactor,
-    entry: TimelineEntry,
-) {
+/// Hand `entry`, redacted, to whoever follows the session. A consumer
+/// that fell behind does not get it (nor is it redacted): the feed counts
+/// it as skipped and never makes the session wait.
+pub(crate) fn forward(feed: Option<&FeedSender>, redactor: &Redactor, entry: TimelineEntry) {
     if let Some(feed) = feed {
-        let _ = feed.send(entry.redacted(redactor));
+        feed.send_with(|| entry.redacted(redactor));
     }
 }
 

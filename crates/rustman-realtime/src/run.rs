@@ -16,10 +16,10 @@ use rustman_http::runner::{RealtimeCall, RealtimeExecutor, RealtimeFuture, Realt
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
+use crate::feed::FeedSender;
 use crate::record::outcome;
 use crate::session::{Bounds, Command, SessionOptions};
 use crate::sse::run_sse;
-use crate::timeline::TimelineEntry;
 use crate::ws::run_ws;
 
 /// Runs the realtime sessions of a run.
@@ -35,8 +35,9 @@ pub struct RealtimeRunner {
     /// Interactive: sessions have no bounds and stay open until this token
     /// is cancelled (or the server closes).
     pub interactive: Option<CancellationToken>,
-    /// Gets every timeline entry, redacted, as it is recorded.
-    pub feed: Option<mpsc::UnboundedSender<TimelineEntry>>,
+    /// Gets every timeline entry, redacted, as it is recorded (unless the
+    /// consumer fell behind: see [`crate::feed_channel`]).
+    pub feed: Option<FeedSender>,
     /// Frames and closes for the first session that starts (it takes the
     /// receiver).
     pub commands: Mutex<Option<mpsc::Receiver<Command>>>,

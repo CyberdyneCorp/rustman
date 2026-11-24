@@ -14,7 +14,7 @@ use rustman_core::vars::{
 };
 use rustman_http::{ProxySettings, SendOptions, TlsSettings};
 use rustman_realtime::{
-    Bounds, Direction, RealtimeExchange, SessionOptions, TimelineEntry, run_ws,
+    Bounds, Direction, FeedItem, RealtimeExchange, SessionOptions, TimelineEntry, run_ws,
 };
 use rustman_test_support::server::Tls;
 use rustman_test_support::{RealtimeWsServer, TestCerts, TestProxy, WsAction, WsBehavior};
@@ -538,13 +538,13 @@ async fn the_live_feed_is_redacted() {
         ],
     );
     session.http.secrets = vec![Secret::new("api_token", canary.to_owned())];
-    let (feed, mut entries) = tokio::sync::mpsc::unbounded_channel();
+    let (feed, mut entries) = rustman_realtime::feed_channel();
     let mut options = headless(1_000);
     options.feed = Some(feed);
     let exchange = run_ws(&session, &SendOptions::default(), options).await;
     assert_eq!(exchange.error, None);
     let mut shown = Vec::new();
-    while let Ok(entry) = entries.try_recv() {
+    while let Some(FeedItem::Entry(entry)) = entries.try_recv() {
         shown.push(serde_json::to_string(&entry).unwrap());
     }
     let shown = shown.join("\n");
@@ -556,7 +556,7 @@ async fn the_live_feed_is_redacted() {
 async fn an_interactive_session_runs_commands_until_closed() {
     let server = RealtimeWsServer::start(WsBehavior::echo()).await;
     let (commands, rx) = rustman_realtime::command_channel();
-    let (feed, mut entries) = tokio::sync::mpsc::unbounded_channel();
+    let (feed, mut entries) = rustman_realtime::feed_channel();
     let options = SessionOptions {
         bounds: None,
         cancel: CancellationToken::new(),
@@ -573,7 +573,9 @@ async fn an_interactive_session_runs_commands_until_closed() {
         .await
         .unwrap();
     loop {
-        let entry = entries.recv().await.expect("an entry");
+        let Some(FeedItem::Entry(entry)) = entries.recv().await else {
+            panic!("an entry");
+        };
         if entry.dir == Direction::Received {
             assert_eq!(entry.payload, "a");
             break;
@@ -586,4 +588,37 @@ async fn an_interactive_session_runs_commands_until_closed() {
     let exchange = task.await.unwrap();
     assert_eq!(exchange.error, None);
     assert_eq!(exchange.end.unwrap().reason, "closed by client: 1000");
+}
+
+/// Regression (#81): the live feed was an unbounded channel, so a consumer
+/// slower than the session queued entries without limit. A consumer that
+/// reads nothing while the session runs now finds at most the feed's
+/// capacity waiting, then one marker counting the rest; the timeline and
+/// the message count stay complete.
+#[tokio::test]
+async fn a_slow_feed_consumer_holds_a_bounded_queue() {
+    const SENT: usize = 300;
+    const QUEUE: usize = 16;
+    let flood = (0..SENT).map(|n| WsAction::Text(format!("m{n}"))).collect();
+    let server = RealtimeWsServer::start(WsBehavior::echo().on_connect(flood)).await;
+    let (feed, mut entries) = rustman_realtime::feed_channel_with(QUEUE, usize::MAX);
+    let mut options = headless(SENT as u64);
+    options.feed = Some(feed);
+    let session = target(&server.url("/"), vec![]);
+    let exchange = run_ws(&session, &SendOptions::default(), options).await;
+    assert_eq!(exchange.error, None);
+    assert_eq!(exchange.received, SENT as u64);
+    let recorded = exchange.timeline.len();
+    assert!(recorded > SENT, "every message is in the timeline");
+    assert!(entries.len() <= QUEUE, "{} waiting", entries.len());
+    let (mut shown, mut skipped) = (0, 0);
+    while let Some(item) = entries.try_recv() {
+        match item {
+            FeedItem::Entry(_) => shown += 1,
+            FeedItem::Skipped(n) => skipped += n,
+        }
+    }
+    assert!(shown <= QUEUE, "{shown} shown");
+    assert!(skipped > 0);
+    assert_eq!(shown + usize::try_from(skipped).unwrap(), recorded);
 }

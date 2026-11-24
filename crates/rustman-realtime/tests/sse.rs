@@ -8,7 +8,7 @@ use std::time::Duration;
 use rustman_core::model::{RealtimeLimits, Reconnect, RequestSettings};
 use rustman_core::vars::{Resolved, ResolvedBody, ResolvedRequest, ResolvedSse, TlsFiles};
 use rustman_http::{HttpEngine, SendOptions};
-use rustman_realtime::{Bounds, Direction, RealtimeExchange, SessionOptions, run_sse};
+use rustman_realtime::{Bounds, Direction, FeedItem, RealtimeExchange, SessionOptions, run_sse};
 use rustman_test_support::{RealtimeSseServer, SseReply};
 use serde_json::json;
 use tokio_util::sync::CancellationToken;
@@ -257,7 +257,7 @@ async fn a_cancelled_session_ends_without_error() {
         },
         cancel.clone(),
     );
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tx, mut rx) = rustman_realtime::feed_channel();
     let options = SessionOptions {
         feed: Some(tx),
         ..options
@@ -267,8 +267,10 @@ async fn a_cancelled_session_ends_without_error() {
     let send = SendOptions::default();
     let session = run_sse(&engine, &sse, &send, options);
     let watcher = async {
-        while let Some(entry) = rx.recv().await {
-            if entry.dir == Direction::Received {
+        while let Some(item) = rx.recv().await {
+            if let FeedItem::Entry(entry) = item
+                && entry.dir == Direction::Received
+            {
                 cancel.cancel();
             }
         }
