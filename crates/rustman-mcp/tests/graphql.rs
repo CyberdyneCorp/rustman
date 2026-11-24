@@ -349,3 +349,62 @@ async fn subscriptions_are_refused() {
     assert_eq!(refusal(&adhoc).0, "blocked");
     assert!(server.hits().is_empty());
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_operation_in_the_endpoint_url_is_refused_and_not_sent() {
+    let server = GraphqlHttpServer::start(|_| Reply::graphql(json!({"data": {}}))).await;
+    let base = server.url("");
+    let ws = workspace(&base, "");
+    let client = connect(ws.path()).await;
+    // Some servers let URL parameters override the POSTed body.
+    for suffix in [
+        "?query=mutation%7Brename(name:%22x%22)%7Bid%7D%7D",
+        "?operationName=B",
+        "?a=1&extensions=%7B%7D",
+    ] {
+        let endpoint = format!("{base}/graphql{suffix}");
+        let refused = call(
+            &client,
+            "graphql_query",
+            json!({"endpoint": endpoint, "query": "{ __typename }"}),
+        )
+        .await;
+        let (code, message) = refusal(&refused);
+        assert_eq!(code, "blocked", "{suffix}");
+        assert!(message.contains("operation parameters"), "{message}");
+        let introspect = call(&client, "graphql_introspect", json!({"endpoint": endpoint})).await;
+        assert_eq!(refusal(&introspect).0, "blocked", "{suffix}");
+    }
+    assert!(server.hits().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn ad_hoc_variables_cannot_upload_workspace_files() {
+    let server = GraphqlHttpServer::start(|_| Reply::graphql(json!({"data": {}}))).await;
+    let base = server.url("");
+    let ws = workspace(
+        &base,
+        "\n[agent]\nallow_mutations = true\nrequire_confirmation = false\n",
+    );
+    write(ws.path(), "certs/client.key", "PRIVATE KEY");
+    let client = connect(ws.path()).await;
+    for variables in [
+        json!({"f": {"$file": "certs/client.key"}}),
+        json!({"input": {"files": [{"$file": "certs/client.key"}]}}),
+    ] {
+        let refused = call(
+            &client,
+            "graphql_query",
+            json!({
+                "endpoint": format!("{base}/graphql"),
+                "query": "mutation($f: Upload) { upload(file: $f) }",
+                "variables": variables,
+            }),
+        )
+        .await;
+        let (code, message) = refusal(&refused);
+        assert_eq!(code, "blocked");
+        assert!(message.contains("file uploads"), "{message}");
+    }
+    assert!(server.hits().is_empty());
+}

@@ -104,6 +104,19 @@ The server SHALL provide `import_openapi` (supports `dry_run`), `explore_plan` (
 - **WHEN** an agent calls `graphql_query` with a mutation
 - **THEN** the result SHALL have `code: "blocked"` and nothing SHALL be sent
 
+### Requirement: GraphQL operation sources
+The GraphQL tools SHALL refuse with `blocked`, before anything is sent, an endpoint URL or query parameters naming `query`, `operationName` or `extensions` on a POST (a server could run them in place of the checked body), and `$file` upload markers anywhere in the variables of an ad-hoc `graphql_query` operation.
+
+#### Scenario: Operation in the endpoint URL
+- **GIVEN** an endpoint `https://h/graphql?query=mutation{drop}` on the allowlist
+- **WHEN** an agent calls `graphql_query` with that endpoint and the query `{ __typename }`
+- **THEN** the result SHALL have `code: "blocked"` and nothing SHALL be sent
+
+#### Scenario: Upload in ad-hoc variables
+- **GIVEN** `[agent] allow_mutations` is true
+- **WHEN** an agent calls `graphql_query` with an ad-hoc mutation whose variables hold `{"$file": "certs/client.key"}`
+- **THEN** the result SHALL have `code: "blocked"` and no file SHALL be read or sent
+
 ### Requirement: Webhook captures tool
 `list_webhook_captures` SHALL list the webhook captures saved to request history (inbound entries), newest first, filtered by path text, method, signature verdict and time, paginated and redacted. It SHALL NOT start a listener or replay a capture.
 

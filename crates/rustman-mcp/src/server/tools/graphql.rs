@@ -28,6 +28,7 @@ use rustman_core::workspace::RequestRef;
 use rustman_graphql::{
     GraphqlRunner, HttpSender, OperationKind, SchemaCache, SchemaOrigin, SendFuture, SharedSender,
     active_schema, load_document, normalize_endpoint, refresh_schema, select_operation,
+    upload::FILE_MARKER,
 };
 use rustman_http::runner::{RunContext, RunOptions, Runner, Sent};
 use rustman_http::{GovernedError, GovernedSender, RequestError, SendOptions};
@@ -49,6 +50,17 @@ pub const QUERY_TOOL: &str = "graphql_query";
 
 /// The name ad-hoc operations are reported under.
 const AD_HOC: &str = "ad-hoc";
+
+/// The parameters a GraphQL server may read the operation from.
+const OPERATION_PARAMS: [&str; 3] = ["query", "operationName", "extensions"];
+
+/// Why an endpoint URL carrying the operation is refused: some servers let
+/// it override the body, so it would bypass the operation read here.
+const OPERATION_IN_URL: &str = "the endpoint URL must not carry GraphQL operation parameters (query, operationName, extensions)";
+
+/// Why agents cannot attach files.
+const NO_UPLOADS: &str =
+    "file uploads (`$file` variables) are not available to ad-hoc agent operations";
 
 /// Why agents cannot subscribe.
 const NO_SUBSCRIPTIONS: &str = "subscriptions are not available to agents (graphql_query sends queries and mutations over HTTP)";
@@ -377,6 +389,11 @@ async fn authorize(
     let resolved = resolve(ctx, request, vars)?;
     let url = resolved.http.url.text.clone();
     call.target.set("POST", &url);
+    let in_query =
+        |p: &rustman_core::vars::ResolvedPair| OPERATION_PARAMS.contains(&p.name.text.as_str());
+    if operation_in_url(&url) || resolved.http.query.iter().any(in_query) {
+        return Err(ToolError::blocked(OPERATION_IN_URL));
+    }
     let redactor = resolved.redactor();
     let document =
         load_document(request, graphql).map_err(|e| invalid(e.redacted(&redactor).to_string()))?;
@@ -424,6 +441,9 @@ fn ad_hoc_entry(
         fields.insert("operation_name".into(), json!(name));
     }
     if let Some(variables) = variables {
+        if variables.values().any(has_file_marker) {
+            return Err(ToolError::blocked(NO_UPLOADS));
+        }
         fields.insert("variables".into(), Value::Object(variables.clone()));
     }
     if let Some(headers) = headers {
@@ -441,6 +461,26 @@ fn ad_hoc_entry(
         path,
         request: Request::Graphql(Box::new(request)),
     })
+}
+
+/// Whether `value` holds a `$file` key at any depth: the engine would read
+/// that workspace file and upload it, which the human never confirmed.
+fn has_file_marker(value: &Value) -> bool {
+    match value {
+        Value::Object(map) => map.contains_key(FILE_MARKER) || map.values().any(has_file_marker),
+        Value::Array(items) => items.iter().any(has_file_marker),
+        _ => false,
+    }
+}
+
+/// Whether the query string of `url` names an operation parameter.
+fn operation_in_url(url: &str) -> bool {
+    let without_fragment = url.split('#').next().unwrap_or_default();
+    let Some((_, query)) = without_fragment.split_once('?') else {
+        return false;
+    };
+    url::form_urlencoded::parse(query.as_bytes())
+        .any(|(name, _)| OPERATION_PARAMS.contains(&&*name))
 }
 
 /// The saved graphql request `path`.
@@ -632,9 +672,29 @@ impl HttpSender for AgentSender {
 }
 
 /// Why `request` is not a plain query: a mutation or subscription document,
-/// or a multipart upload. A body without a document (a persisted query's
+/// a multipart upload, or an operation in the URL that a server could read
+/// in place of the body. A body without a document (a persisted query's
 /// hash) is the operation already read.
 fn not_a_query(request: &ResolvedRequest) -> Option<&'static str> {
+    if operation_in_url(&request.url.text) {
+        return Some(OPERATION_IN_URL);
+    }
+    // Over GET the operation travels as parameters, once each; over POST it
+    // is the body alone.
+    let most = match request.body {
+        ResolvedBody::None => 1,
+        _ => 0,
+    };
+    let count = |wanted: &str| {
+        request
+            .query
+            .iter()
+            .filter(|p| p.name.text == wanted)
+            .count()
+    };
+    if OPERATION_PARAMS.iter().any(|n| count(n) > most) {
+        return Some(OPERATION_IN_URL);
+    }
     let (document, name) = match &request.body {
         ResolvedBody::Json(Value::Object(payload)) => (
             payload
@@ -713,6 +773,51 @@ mod tests {
         let mut upload = post(Value::Null);
         upload.body = ResolvedBody::Multipart(Vec::new());
         assert!(not_a_query(&upload).is_some());
+    }
+
+    #[test]
+    fn an_operation_in_the_url_is_not_a_query() {
+        let mut overridden = post(json!({"query": "{ __typename }"}));
+        overridden.url = Resolved::literal("http://h/graphql?query=mutation%7Bdrop%7D");
+        assert_eq!(not_a_query(&overridden), Some(OPERATION_IN_URL));
+        overridden.url = Resolved::literal("http://h/graphql?x=1&operationName=B#f");
+        assert_eq!(not_a_query(&overridden), Some(OPERATION_IN_URL));
+        // Only the fragment names it: not sent to the server.
+        overridden.url = Resolved::literal("http://h/graphql#?query=x");
+        assert_eq!(not_a_query(&overridden), None);
+        // A POST whose query parameters carry an operation.
+        let mut param = post(json!({"query": "{ __typename }"}));
+        param.query.push(ResolvedPair {
+            name: Resolved::literal("operationName"),
+            value: Resolved::literal("B"),
+        });
+        assert_eq!(not_a_query(&param), Some(OPERATION_IN_URL));
+        // A GET sending two documents: the server may read either.
+        let mut get = post(Value::Null);
+        get.body = ResolvedBody::None;
+        for document in ["{ a }", "mutation { drop }"] {
+            get.query.push(ResolvedPair {
+                name: Resolved::literal("query"),
+                value: Resolved::literal(document),
+            });
+        }
+        assert_eq!(not_a_query(&get), Some(OPERATION_IN_URL));
+        get.query.pop();
+        assert_eq!(not_a_query(&get), None);
+    }
+
+    #[test]
+    fn ad_hoc_variables_refuse_file_markers() {
+        for variables in [
+            json!({"f": {"$file": "certs/client.key"}}),
+            json!({"f": [{"nested": {"$file": "a", "x": 1}}]}),
+        ] {
+            let Value::Object(variables) = variables else {
+                unreachable!()
+            };
+            let refused = ad_hoc_entry("http://h/graphql", "{ a }", None, Some(&variables), None);
+            assert_eq!(refused.unwrap_err().code, ErrorCode::Blocked);
+        }
     }
 
     #[test]
