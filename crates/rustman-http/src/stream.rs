@@ -15,6 +15,7 @@ use http::{HeaderMap, Uri};
 use http_body_util::BodyExt;
 use hyper::body::Incoming;
 use rustman_core::Redactor;
+use rustman_core::trace::SentTrace;
 use rustman_core::vars::ResolvedRequest;
 
 use crate::engine::{HttpEngine, SendOptions, add_credentials, on_the_wire};
@@ -39,6 +40,9 @@ pub struct StreamedResponse {
     /// The sensitive header values sent and received (cookies, proxy
     /// credentials), to merge into the request's redactor.
     pub credentials: Redactor,
+    /// The trace context the request carried: injected, or set by the
+    /// request itself.
+    pub trace: Option<SentTrace>,
     body: Incoming,
     /// The request's secrets and [`Self::credentials`]: what body errors
     /// are redacted with.
@@ -144,6 +148,7 @@ impl HttpEngine {
                 .map(|w| redactor.text(w).into_owned())
                 .collect(),
             credentials,
+            trace: prepared.trace,
             body,
             redactor: body_redactor,
         })
@@ -157,6 +162,15 @@ pub async fn request_head(
     request: &ResolvedRequest,
     options: &SendOptions,
 ) -> Result<(Uri, HeaderMap), RequestError> {
+    let (uri, headers, _) = traced_request_head(request, options).await?;
+    Ok((uri, headers))
+}
+
+/// [`request_head`] with the trace context the head carries.
+pub(crate) async fn traced_request_head(
+    request: &ResolvedRequest,
+    options: &SendOptions,
+) -> Result<(Uri, HeaderMap, Option<SentTrace>), RequestError> {
     let head = async {
         let prepared = HttpEngine::prepare(request, options, None).await?;
         let mut wire = on_the_wire(&prepared.outgoing, options);
@@ -164,7 +178,7 @@ pub async fn request_head(
             signer.sign(&mut wire, SystemTime::now())?;
         }
         let (parts, _) = wire.into_parts();
-        Ok((parts.uri, parts.headers))
+        Ok((parts.uri, parts.headers, prepared.trace))
     };
     head.await
         .map_err(|e: RequestError| e.redacted(&HttpEngine::secrets(request, options)))

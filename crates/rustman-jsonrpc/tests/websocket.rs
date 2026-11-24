@@ -160,6 +160,39 @@ async fn a_silent_server_times_out_per_call() {
     );
 }
 
+/// Issue #119: with tracing on, calls still share a pooled connection
+/// (each handshake head gets fresh span ids, which are not part of the
+/// pool key), and every call records the handshake's context.
+#[tokio::test]
+async fn pooled_traced_calls_share_the_handshake_trace() {
+    let server = JsonrpcWsServer::start(node(0, Duration::ZERO)).await;
+    let engine = HttpEngine::new();
+    let pool = WsPool::default();
+    let client = JsonrpcClient::new(&engine).with_pool(&pool);
+    let options = SendOptions {
+        trace: Some(rustman_core::trace::TracePropagation::default()),
+        ..SendOptions::default()
+    };
+    let request = target(&server.url("/"), vec![call("eth_blockNumber")], false);
+    let mut traces = Vec::new();
+    for _ in 0..2 {
+        let exchange = client.send(&request, &options).await;
+        assert!(exchange.passed(), "{:?}", exchange.error);
+        traces.push(exchange.trace.expect("the handshake's trace"));
+    }
+    assert_eq!(server.sessions().len(), 1, "one pooled connection");
+    assert_eq!(traces[0], traces[1]);
+    let sent = server.sessions()[0]
+        .header("traceparent")
+        .map(str::to_owned);
+    let context = &traces[0].context;
+    assert_eq!(
+        sent,
+        Some(format!("00-{}-{}-01", context.trace_id, context.span_id))
+    );
+    pool.close_all().await;
+}
+
 #[tokio::test]
 async fn a_run_pool_reuses_one_connection_per_endpoint_and_headers() {
     let server = JsonrpcWsServer::start(node(0, Duration::ZERO)).await;

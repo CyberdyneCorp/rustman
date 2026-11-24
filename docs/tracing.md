@@ -100,7 +100,7 @@ Trace headers are custom request headers: a browser-facing API with a strict COR
 |------|------------------------|
 | `http` | The request's headers, on every redirect hop. |
 | `graphql` | The HTTP `POST` or `GET`, the SSE subscription request, and the WebSocket upgrade request. |
-| `jsonrpc` | The HTTP request, or the WebSocket upgrade. A WebSocket connection is reused for the run, so calls sharing it share the handshake's context. |
+| `jsonrpc` | The HTTP request, or the WebSocket upgrade. A WebSocket connection is reused for the run (trace headers are not part of what decides the reuse), so calls sharing it share the handshake's context. |
 | `grpc` | Request metadata (`traceparent`, `b3`, `x-b3-*`) on native gRPC; HTTP headers on gRPC-Web. |
 | `ws` | The WebSocket upgrade request. Frames carry no trace context, so the whole session shares the handshake's. |
 | `sse` | The stream request, sent again on each reconnect. |
@@ -108,7 +108,7 @@ Trace headers are custom request headers: a browser-facing API with a strict COR
 
 ## What is recorded
 
-Every exchange that carried trace context (propagation on, or a `traceparent`/B3 header the request set itself, even with propagation off) records a `trace` object in [history](history.md) and in each request of a `--reporter json` run report (`requests[].trace`), and exploration findings record the ids of their evidence exchange (`evidence.trace`). Sessions of the `ws` and `sse` kinds, WebSocket calls of `graphql` and `jsonrpc`, MCP sessions and native gRPC calls carry the context but do not record it yet:
+Every exchange that carried trace context (propagation on, or a `traceparent`/B3 header the request set itself, even with propagation off) records a `trace` object in [history](history.md) and in each request of a `--reporter json` run report (`requests[].trace`), and exploration findings record the ids of their evidence exchange (`evidence.trace`). Kinds without an HTTP exchange record the context of the request that opened them: a `ws` session and a `graphql` subscription over WebSocket the upgrade's, an `sse` session and a `graphql` subscription over SSE the first stream request's (a reconnect sends the context again but the record keeps the first), a `jsonrpc` call over WebSocket the handshake of the connection it shares, and a `grpc` call the metadata it sent (native) or its request's headers (gRPC-Web); the `traceresponse` of the handshake or response headers is read as for HTTP. MCP requests carry the context on every HTTP request of a session but do not record it yet:
 
 ```json
 "trace": {

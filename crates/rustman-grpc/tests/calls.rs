@@ -312,16 +312,24 @@ async fn trace_context_is_sent_as_request_metadata() {
         "message: {{id: p-1}}\nmetadata:\n  - {{name: traceparent, value: '{explicit}'}}\n"
     );
     let own = request_file(&server.target(), GET, &own);
+    let mut recorded = Vec::new();
     for text in [&plain, &own] {
         let (call, mut options) = fixture.prepare(text).unwrap();
         options.http.trace = Some(TracePropagation {
             formats: vec![PropagationFormat::W3c, PropagationFormat::B3],
             ..TracePropagation::default()
         });
-        call.send(&options).await.unwrap();
+        let exchange = call.send(&options).await.unwrap();
+        recorded.push(exchange.trace.expect("the call's trace context"));
     }
-    fixture.send(&plain).await.unwrap();
+    let untraced = fixture.send(&plain).await.unwrap();
+    assert_eq!(untraced.trace, None);
     let calls = server.calls();
+    // Issue #119: the exchange keeps the context its metadata carried.
+    for (call, sent) in calls.iter().zip(&recorded) {
+        let ids = format!("00-{}-{}-01", sent.context.trace_id, sent.context.span_id);
+        assert_eq!(call.text("traceparent"), Some(ids));
+    }
     let traceparent = calls[0].text("traceparent").unwrap();
     assert!(traceparent.starts_with("00-") && traceparent.len() == 55);
     assert!(

@@ -263,6 +263,7 @@ async fn exchange(
         .open_stream_with_body(request, http, body)
         .await
         .map_err(|e| request_error(call, e, options))?;
+    state.trace.clone_from(&response.trace);
     state.first_byte = Some(recorder.elapsed());
     state.headers = header_entries(&response.headers);
     if let Some(status) = trailers_only(&response.headers, state) {

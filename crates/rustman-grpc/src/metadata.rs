@@ -13,7 +13,9 @@ use tonic::metadata::{
 };
 
 use crate::error::GrpcError;
-use rustman_core::trace::{self, TraceContext, TraceContextInjector, TracePropagation};
+use rustman_core::trace::baggage::BAGGAGE;
+use rustman_core::trace::w3c::TRACESTATE;
+use rustman_core::trace::{self, SentTrace, TraceContextInjector, TracePropagation};
 
 /// One metadata entry as recorded: binary values in base64.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -102,11 +104,17 @@ pub fn header_entries(headers: &HeaderMap) -> Vec<MetadataEntry> {
 }
 
 /// Add the trace metadata of `propagation` to `map` (W3C and B3 headers as
-/// ASCII metadata), unless the call already sets its own, and return the
-/// context sent: `None` when the call sets a trace header that does not
+/// ASCII metadata), unless the call already sets its own, and return what
+/// was sent: `None` when the call sets a trace header that does not
 /// parse, which is then sent as given.
-pub fn inject_trace(map: &mut MetadataMap, propagation: &TracePropagation) -> Option<TraceContext> {
-    trace::inject_random(&mut TraceMetadata(map), propagation)
+pub fn inject_trace(map: &mut MetadataMap, propagation: &TracePropagation) -> Option<SentTrace> {
+    let mut carrier = TraceMetadata(map);
+    let context = trace::inject_random(&mut carrier, propagation)?;
+    Some(SentTrace {
+        context,
+        tracestate: carrier.get(TRACESTATE),
+        baggage: carrier.get(BAGGAGE),
+    })
 }
 
 /// Request metadata as a trace carrier.

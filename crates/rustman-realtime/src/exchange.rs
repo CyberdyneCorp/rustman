@@ -5,6 +5,7 @@
 use std::time::{Duration, Instant};
 
 use rustman_core::Redactor;
+use rustman_core::trace::SentTrace;
 use rustman_core::vars::ResolvedRequest;
 
 use crate::error::RealtimeError;
@@ -87,6 +88,9 @@ pub struct RealtimeExchange {
     /// from the jar) and the credentials their responses set: values to
     /// redact along with the request's secrets.
     pub credentials: Redactor,
+    /// The trace context the first opening request carried (the WebSocket
+    /// handshake, the first SSE request): the whole session shares it.
+    pub trace: Option<SentTrace>,
 }
 
 impl RealtimeExchange {
@@ -107,6 +111,7 @@ impl RealtimeExchange {
             first_message_ms: None,
             elapsed: Duration::ZERO,
             credentials: Redactor::new(),
+            trace: None,
         }
     }
 

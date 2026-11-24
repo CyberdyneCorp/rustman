@@ -4,7 +4,7 @@
 //! the connect timeout, proxies (HTTP `CONNECT`, HTTPS and SOCKS5) and TLS
 //! (`ca_bundle`, client certificate, `verify_tls`) work as for HTTP
 //! requests. The handshake carries the request's headers, auth helpers and
-//! cookies, as [`request_head`] builds them.
+//! cookies, as [`request_head`](crate::request_head) builds them.
 
 use std::io;
 use std::pin::Pin;
@@ -13,6 +13,7 @@ use std::time::Duration;
 
 use http::{HeaderMap, HeaderValue, Uri};
 use rustman_core::Redactor;
+use rustman_core::trace::SentTrace;
 use rustman_core::vars::{Resolved, ResolvedBody, ResolvedRequest};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio_tungstenite::WebSocketStream;
@@ -24,7 +25,7 @@ use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use crate::engine::{SendOptions, add_credentials, header_pairs};
 use crate::error::RequestError;
 use crate::raw_stream::open_raw_stream;
-use crate::stream::request_head;
+use crate::stream::traced_request_head;
 use crate::tunnel::BoxIo;
 
 /// Handshake headers the WebSocket client sets itself, or that do not
@@ -86,6 +87,9 @@ pub struct OpenedWebSocket {
     /// What the handshake added on the wire (auth helpers, cookies from
     /// the jar) and the response's credentials: values to redact.
     pub credentials: Redactor,
+    /// The trace context the handshake carried: injected, or set by the
+    /// request itself. Every message of the session shares it.
+    pub trace: Option<SentTrace>,
 }
 
 /// The most bytes of a refused upgrade's body a record shows (64 KiB).
@@ -200,7 +204,7 @@ pub async fn open_websocket(
         text: with_scheme(&handshake.url.text, UrlScheme::Http),
         ..handshake.url
     };
-    let (uri, headers) = request_head(&handshake, options).await?;
+    let (uri, headers, trace) = traced_request_head(&handshake, options).await?;
     let ws_url = with_scheme(&uri.to_string(), UrlScheme::Ws);
     let client_request = client_request(&ws_url, &headers, subprotocols)?;
     let mut credentials = Redactor::new();
@@ -227,6 +231,7 @@ pub async fn open_websocket(
         response,
         request: handshake,
         credentials,
+        trace,
     })
 }
 

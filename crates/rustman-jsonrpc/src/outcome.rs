@@ -3,6 +3,7 @@
 
 use std::time::Duration;
 
+use rustman_core::trace::SentTrace;
 use rustman_http::Exchange;
 use serde_json::{Map, Value};
 
@@ -184,6 +185,10 @@ pub struct RpcExchange {
     /// Why the exchange produced no usable answer; redacted.
     pub error: Option<JsonrpcError>,
     pub elapsed: Duration,
+    /// Over WebSocket: the trace context of the connection.s handshake,
+    /// which every call on it shares, and its `traceresponse` header.
+    pub trace: Option<SentTrace>,
+    pub traceresponse: Option<String>,
 }
 
 impl RpcExchange {
@@ -199,6 +204,8 @@ impl RpcExchange {
             subscription: None,
             error: None,
             elapsed: Duration::ZERO,
+            trace: None,
+            traceresponse: None,
         }
     }
 

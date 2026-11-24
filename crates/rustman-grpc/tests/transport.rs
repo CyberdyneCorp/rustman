@@ -140,6 +140,24 @@ async fn grpc_web_unary_call() {
     );
     let call = &server.calls()[0];
     assert_eq!(call.get("trace-bin"), Some([1u8, 2, 3].as_slice()));
+    assert_eq!(exchange.trace, None, "no trace context without tracing");
+}
+
+/// Issue #119: a traced gRPC-Web call keeps the context its request
+/// headers carried.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_traced_grpc_web_call_keeps_its_trace_context() {
+    let server = GrpcServer::start(Reflection::None).await;
+    let fixture = Fixture::new();
+    let rest = "transport: grpc-web\nmessage: {id: p-1}\n";
+    let (call, mut options) = fixture
+        .prepare(&request_file(&server.target(), GET, rest))
+        .unwrap();
+    options.http.trace = Some(rustman_core::trace::TracePropagation::default());
+    let exchange = call.send(&options).await.unwrap();
+    let sent = exchange.trace.expect("the call's trace context");
+    let ids = format!("00-{}-{}-01", sent.context.trace_id, sent.context.span_id);
+    assert_eq!(server.calls()[0].text("traceparent"), Some(ids));
 }
 
 /// A gRPC-Web response frame longer than `[http] max_body_bytes` is

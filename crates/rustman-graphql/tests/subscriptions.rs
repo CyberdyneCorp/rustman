@@ -565,10 +565,11 @@ async fn a_traced_websocket_upgrade_carries_a_traceparent() {
     })
     .await;
     let f = Fixture::new(&server.url("ws", ""), "transport: ws\n");
-    subscribe_with(&f, None, None, CancellationToken::new(), &traced())
+    let executed = subscribe_with(&f, None, None, CancellationToken::new(), &traced())
         .await
         .unwrap();
     assert_traceparent(server.sessions()[0].header("traceparent"));
+    assert_recorded(&executed, server.sessions()[0].header("traceparent"));
     let plain = GraphqlWsServer::start(WsScript::Modern {
         events: 1,
         complete: true,
@@ -587,8 +588,22 @@ async fn a_traced_sse_subscription_post_carries_a_traceparent() {
     })
     .await;
     let f = Fixture::new(&server.url(""), "transport: sse\n");
-    subscribe_with(&f, None, None, CancellationToken::new(), &traced())
+    let executed = subscribe_with(&f, None, None, CancellationToken::new(), &traced())
         .await
         .unwrap();
     assert_traceparent(server.hits()[0].header("traceparent"));
+    assert_recorded(&executed, server.hits()[0].header("traceparent"));
+}
+
+/// Issue #119: the subscription keeps the context its opening request
+/// carried, and so does the exchange runs record.
+fn assert_recorded(executed: &Executed, sent: Option<&str>) {
+    let Delivery::Subscription(sub) = &executed.delivery else {
+        panic!("a subscription");
+    };
+    let trace = sub.trace.as_ref().expect("the opening request's trace");
+    let ids = format!("00-{}-{}-01", trace.context.trace_id, trace.context.span_id);
+    assert_eq!(Some(ids.as_str()), sent);
+    let exchange = rustman_graphql::run::subscription_exchange(sub);
+    assert_eq!(exchange.trace.as_ref(), Some(trace));
 }

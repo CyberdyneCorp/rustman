@@ -21,13 +21,14 @@ use rustman_core::redact::remember_for_logs;
 use rustman_core::run::{JsonrpcRecord, RequestRecord, RequestStatus, SkipReason};
 use rustman_core::settings::Settings;
 use rustman_core::snapshot::{Exchange as SnapshotExchange, SnapshotReview};
+use rustman_core::trace::SentTrace;
 use rustman_core::vars::{ResolvedJsonrpc, ResolvedRequest, Resolver, resolve_jsonrpc};
 use rustman_core::workspace::RequestRef;
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
 use super::graphql::{STOP_GRACE, until_cancelled};
-use super::record::{exchange_record, redact_capture_messages};
+use super::record::{exchange_record, redact_capture_messages, sent_trace_record};
 use super::snapshots::SnapshotTarget;
 use super::{Runner, Sent};
 use crate::engine::{HttpEngine, SendOptions};
@@ -79,6 +80,11 @@ pub struct JsonrpcOutcome {
     /// Not yet redacted: the runner redacts it with every secret of the run.
     pub record: JsonrpcRecord,
     pub elapsed: Duration,
+    /// Over WebSocket, where there is no HTTP exchange: the trace context
+    /// of the connection.s handshake, which every call on it shares, and
+    /// the handshake response.s `traceresponse` header.
+    pub trace: Option<SentTrace>,
+    pub traceresponse: Option<String>,
 }
 
 /// The future a [`JsonrpcExecutor`] returns. The error is shown as the
@@ -165,6 +171,13 @@ impl Runner<'_> {
             let mut verdict = self.check_calls(checked, &outcome, &mut redactor);
             snapshots = std::mem::take(&mut verdict.snapshots);
             verdict.apply(&mut record, &outcome.record, &redactor);
+        }
+        if outcome.exchange.is_none() {
+            record.trace = outcome.trace.as_ref().map(|sent| {
+                let traceresponse = outcome.traceresponse.as_deref();
+                let link = self.link.as_ref();
+                sent_trace_record(sent, traceresponse, outcome.elapsed, link, &redactor)
+            });
         }
         record.jsonrpc = Some(outcome.record);
         let sent = Sent {
