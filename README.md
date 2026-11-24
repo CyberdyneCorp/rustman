@@ -353,7 +353,7 @@ The listener accepts any method on any path and stores bodies byte for byte. You
 
 _Side track. The companion and the Rustman side are built. Prebuilt `rustman-viz` packages are not published yet: [build it from source](docs/viz.md#installing) with the Raven library._
 
-With the optional **`rustman-viz`** companion, built on the [Raven](https://github.com/oscar-soirey/Raven) GUI library, run and exploration results open as native dashboards:
+With the optional **`rustman-viz`** companion, built on the [Raven](https://github.com/oscar-soirey/Raven) GUI library, run, exploration and load-test (`rustman bench`) results open as native dashboards:
 
 ![Run dashboard](docs/images/viz-run-dashboard.png)
 
@@ -569,7 +569,7 @@ rustman bench api/ --target https://staging.example.com --executor constant-arri
   --threshold "p95<300ms" --threshold "error_rate<1%" --report html=out/bench.html
 ```
 
-You can run a fixed number of virtual users (`constant-vus`), ramp them in stages (`ramping-vus`), or hold a constant arrival rate (`constant-arrival-rate`). Each VU has its own variables, captures and cookies, and `--data` feeds rows from a CSV or JSON file. In the open model, latency counts from each iteration's scheduled start, so queuing in a server that falls behind shows up in the percentiles. Thresholds such as `p95<300ms` make the command exit with 1 when breached (a trailing `!` stops the bench at once), and reports come as JSON, HTML, Markdown, JUnit or SARIF. On a terminal a live dashboard shows progress; in CI, one line every 10 seconds. `--viz` streams per-second metrics to the viz companion, which has no bench dashboard yet, so today it only prints a warning. Load tests are capped by default (50 VUs, 5 minutes, 200 rps; only `rustman.toml [bench]` raises them), stay on the single `--target` origin, need `--allow-mutations` for writes, and AI agents can't start them. See [`docs/bench.md`](docs/bench.md).
+You can run a fixed number of virtual users (`constant-vus`), ramp them in stages (`ramping-vus`), or hold a constant arrival rate (`constant-arrival-rate`). Each VU has its own variables, captures and cookies, and `--data` feeds rows from a CSV or JSON file. In the open model, latency counts from each iteration's scheduled start, so queuing in a server that falls behind shows up in the percentiles. Thresholds such as `p95<300ms` make the command exit with 1 when breached (a trailing `!` stops the bench at once), and reports come as JSON, HTML, Markdown, JUnit or SARIF. On a terminal a live dashboard shows progress; in CI, one line every 10 seconds. `--viz` streams per-second metrics to the viz companion's bench dashboard, and `rustman viz` opens a saved bench report there. Load tests are capped by default (50 VUs, 5 minutes, 200 rps; only `rustman.toml [bench]` raises them), stay on the single `--target` origin, need `--allow-mutations` for writes, and AI agents can't start them. See [`docs/bench.md`](docs/bench.md).
 
 ### 17. Find where your backend breaks
 

@@ -179,6 +179,93 @@ fn viz_refuses_a_stress_report_with_the_html_hint() {
     assert!(err.contains("--format html"), "{err}");
 }
 
+/// Contract reports have no view in the companion either.
+#[test]
+fn viz_refuses_a_contract_report_with_the_html_hint() {
+    let dir = tempfile::tempdir().unwrap();
+    let snapshot =
+        include_str!("../../rustman-report/tests/snapshots/contract__contract_json.snap");
+    let json = snapshot.splitn(3, "---\n").nth(2).unwrap();
+    write(dir.path(), "contract.json", json);
+    let output = rustman(dir.path())
+        .args(["viz", "contract.json"])
+        .output()
+        .unwrap();
+    let err = stderr(&output);
+    assert_eq!(output.status.code(), Some(2), "{err}");
+    assert!(err.contains("contract.json is a contract report"), "{err}");
+    assert!(err.contains("--format html"), "{err}");
+}
+
+/// The companion's own fixture: a bench report as `rustman bench
+/// --report json=` writes it (the companion's tests load the same file).
+const BENCH_REPORT: &str = include_str!("../../rustman-viz/tests/fixtures/bench-report.json");
+
+#[cfg(unix)]
+#[test]
+fn viz_opens_a_bench_report_in_the_bench_view() {
+    let dir = tempfile::tempdir().unwrap();
+    write(dir.path(), "bench.json", BENCH_REPORT);
+    let ack = ACK.replace(
+        r#""response_inspector"]"#,
+        r#""response_inspector","bench"]"#,
+    );
+    let script = stub(dir.path(), &ack, None);
+    let output = rustman(dir.path())
+        .env("RUSTMAN_VIZ", &script)
+        .args(["viz", "bench.json"])
+        .output()
+        .unwrap();
+    let err = stderr(&output);
+    assert_eq!(output.status.code(), Some(0), "{err}");
+    assert!(err.contains("Opened bench.json in stub-viz 0.1"), "{err}");
+    let log = log_of(&script, r#""type":"close""#);
+    assert_eq!(
+        kinds(&log),
+        ["hello", "open_view", "load_report", "close"],
+        "{log}"
+    );
+    assert!(log.contains(r#""view":"bench""#), "{log}");
+    assert!(log.contains(r#""kind":"bench""#), "{log}");
+
+    // No API graph for a bench.
+    let output = rustman(dir.path())
+        .env("RUSTMAN_VIZ", &script)
+        .args(["viz", "bench.json", "--view", "graph"])
+        .output()
+        .unwrap();
+    let err = stderr(&output);
+    assert_eq!(output.status.code(), Some(2), "{err}");
+    assert!(err.contains("bench.json is a bench report"), "{err}");
+}
+
+/// A companion built before the bench view does not advertise it: the
+/// report is not sent, and the error says to upgrade.
+#[cfg(unix)]
+#[test]
+fn viz_with_a_companion_without_a_bench_view_says_so() {
+    let dir = tempfile::tempdir().unwrap();
+    write(dir.path(), "bench.json", BENCH_REPORT);
+    let script = stub(dir.path(), ACK, None);
+    let output = rustman(dir.path())
+        .env("RUSTMAN_VIZ", &script)
+        .args(["viz", "bench.json"])
+        .output()
+        .unwrap();
+    let err = stderr(&output);
+    assert_eq!(output.status.code(), Some(2), "{err}");
+    assert!(
+        err.contains("the viz companion has no bench view; upgrade rustman-viz"),
+        "{err}"
+    );
+    assert!(
+        err.contains("rustman report render bench.json --format html"),
+        "{err}"
+    );
+    let log = log_of(&script, r#""type":"close""#);
+    assert!(!log.contains("load_report"), "{log}");
+}
+
 #[test]
 fn viz_without_a_companion_offers_the_html_report() {
     let server = Server::http();

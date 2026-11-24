@@ -33,7 +33,7 @@ const EXIT_NO_GRAPHICS: u8 = 3;
 const USAGE: &str = "\
 rustman-viz: the graphical companion of rustman.
 
-rustman starts it (rustman run --viz, rustman explore run --viz,
+rustman starts it (rustman run --viz, rustman explore run --viz, rustman bench --viz,
 rustman viz <report>, the TUI's v key); it is not meant to be run alone.
 
 Usage: rustman-viz [--protocol-check | --version | --help]

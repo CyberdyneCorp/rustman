@@ -2,6 +2,7 @@
 //! saved reports, and pushed to the window by [`crate::app`]. Nothing here
 //! touches Raven, so the dashboards' content is tested without a GPU.
 
+pub mod bench;
 pub mod exploration;
 pub mod graph;
 pub mod inspector;

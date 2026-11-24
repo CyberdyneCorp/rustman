@@ -16,10 +16,17 @@ pub enum ViewKind {
     Exploration,
     Graph,
     Inspector,
+    Bench,
 }
 
 impl ViewKind {
-    pub const ALL: [Self; 4] = [Self::Run, Self::Exploration, Self::Graph, Self::Inspector];
+    pub const ALL: [Self; 5] = [
+        Self::Run,
+        Self::Exploration,
+        Self::Graph,
+        Self::Inspector,
+        Self::Bench,
+    ];
 
     pub fn from_view(view: View) -> Option<Self> {
         match view {
@@ -27,11 +34,10 @@ impl ViewKind {
             View::ExplorationDashboard => Some(Self::Exploration),
             View::ApiGraph => Some(Self::Graph),
             View::ResponseInspector => Some(Self::Inspector),
-            // No bench, stress or monitor trend view yet: the companion
-            // does not advertise them, and producers fall back.
-            View::Bench | View::Stress | View::MonitorTrend | View::ChainProbe | View::Unknown => {
-                None
-            }
+            View::Bench => Some(Self::Bench),
+            // No stress, monitor trend or chain probe view yet: the
+            // companion does not advertise them, and producers fall back.
+            View::Stress | View::MonitorTrend | View::ChainProbe | View::Unknown => None,
         }
     }
 
@@ -42,6 +48,7 @@ impl ViewKind {
             Self::Exploration => "exploration_dashboard.xml",
             Self::Graph => "api_graph.xml",
             Self::Inspector => "response_inspector.xml",
+            Self::Bench => "bench.xml",
         }
     }
 
@@ -51,6 +58,7 @@ impl ViewKind {
             Self::Exploration => include_str!("../layouts/exploration_dashboard.xml"),
             Self::Graph => include_str!("../layouts/api_graph.xml"),
             Self::Inspector => include_str!("../layouts/response_inspector.xml"),
+            Self::Bench => include_str!("../layouts/bench.xml"),
         }
     }
 
@@ -108,6 +116,27 @@ impl ViewKind {
                 "selection",
             ],
             Self::Inspector => &["title", "heading", "summary", "tabs", "table", "json"],
+            Self::Bench => &[
+                "title",
+                "subtitle",
+                "state",
+                "kpi_requests",
+                "kpi_rps",
+                "kpi_p95",
+                "kpi_error_rate",
+                "kpi_vus",
+                "spark_requests",
+                "spark_rps",
+                "spark_p95",
+                "spark_error_rate",
+                "spark_vus",
+                "throughput",
+                "latency",
+                "vus",
+                "summary",
+                "thresholds_heading",
+                "thresholds",
+            ],
         }
     }
 }
@@ -121,6 +150,15 @@ pub const RUN_TILES: [(&str, &str); 5] = [
     ("kpi_errors", "spark_errors"),
 ];
 
+/// The KPI tiles of the bench dashboard: (value label, sparkline slot).
+pub const BENCH_TILES: [(&str, &str); 5] = [
+    ("kpi_requests", "spark_requests"),
+    ("kpi_rps", "spark_rps"),
+    ("kpi_p95", "spark_p95"),
+    ("kpi_error_rate", "spark_error_rate"),
+    ("kpi_vus", "spark_vus"),
+];
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,8 +167,8 @@ mod tests {
     /// stress view landed in the protocol after the companion.
     #[test]
     fn views_without_a_dashboard_have_no_layout() {
+        assert_eq!(ViewKind::from_view(View::Bench), Some(ViewKind::Bench));
         for view in [
-            View::Bench,
             View::Stress,
             View::MonitorTrend,
             View::ChainProbe,
@@ -158,6 +196,10 @@ mod tests {
         for (label, spark) in RUN_TILES {
             assert!(ViewKind::Run.slots().contains(&label));
             assert!(ViewKind::Run.slots().contains(&spark));
+        }
+        for (label, spark) in BENCH_TILES {
+            assert!(ViewKind::Bench.slots().contains(&label));
+            assert!(ViewKind::Bench.slots().contains(&spark));
         }
     }
 

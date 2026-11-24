@@ -35,8 +35,8 @@ use crate::exit::{self, CliError};
 
 #[derive(Debug, Args)]
 pub struct VizArgs {
-    /// A JSON report from `rustman run --reporter json` or `rustman explore
-    /// run`
+    /// A JSON report from `rustman run --reporter json`, `rustman explore
+    /// run` or `rustman bench --report json=<file>`
     #[arg(value_name = "REPORT")]
     report: PathBuf,
     /// The view to open: dashboard (default), or graph for the API graph of
@@ -62,15 +62,15 @@ pub fn run(args: &VizArgs) -> Result<u8, CliError> {
     let kind = match report {
         Report::Run(_) => ReportKind::Run,
         Report::Exploration(_) => ReportKind::Exploration,
-        Report::Contract(_) | Report::Bench(_) | Report::Stress(_) => {
+        Report::Bench(_) => ReportKind::Bench,
+        Report::Contract(_) | Report::Stress(_) => {
             let other = match report {
                 Report::Contract(_) => "contract",
-                Report::Bench(_) => "bench",
                 _ => "stress",
             };
             return Err(ConfigError::Usage(format!(
-                "{shown} is a {other} report; the viz companion shows run and exploration reports \
-                 (render it with rustman report render {shown} --format html)"
+                "{shown} is a {other} report; the viz companion shows run, exploration and bench \
+                 reports (render it with rustman report render {shown} --format html)"
             ))
             .into());
         }
@@ -78,16 +78,31 @@ pub fn run(args: &VizArgs) -> Result<u8, CliError> {
     let view = match (args.view, kind) {
         (Some(ViewArg::Graph), ReportKind::Exploration) => View::ApiGraph,
         (Some(ViewArg::Graph), _) => {
+            let what = if kind == ReportKind::Bench {
+                "bench"
+            } else {
+                "run"
+            };
             return Err(ConfigError::Usage(format!(
-                "--view graph needs an exploration report; {shown} is a run report"
+                "--view graph needs an exploration report; {shown} is a {what} report"
             ))
             .into());
         }
         (_, ReportKind::Run) => View::RunDashboard,
+        (_, ReportKind::Bench) => View::Bench,
         _ => View::ExplorationDashboard,
     };
     let path = dunce::canonicalize(&args.report).unwrap_or_else(|_| args.report.clone());
-    let mut stream = match open(view, &shown, None) {
+    // Companions older than the bench view do not advertise it.
+    let opened = match open_checked(view, &shown, None) {
+        Ok(Some(stream)) => Ok(stream),
+        Ok(None) => Err(format!(
+            "the viz companion has no {} view; upgrade rustman-viz",
+            view_name(view)
+        )),
+        Err(e) => Err(e.to_string()),
+    };
+    let mut stream = match opened {
         Ok(stream) => stream,
         Err(e) => {
             eprintln!("error: {e}");
@@ -105,6 +120,14 @@ pub fn run(args: &VizArgs) -> Result<u8, CliError> {
     stream.close();
     eprintln!("Opened {shown} in {}", stream.viewer());
     Ok(exit::SUCCESS)
+}
+
+/// The protocol name of `view`, such as `bench`.
+fn view_name(view: View) -> String {
+    serde_json::to_value(view)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_owned))
+        .unwrap_or_default()
 }
 
 /// Find, probe and start the companion, and open `view`.
@@ -473,27 +496,34 @@ fn open_with(
     root: Option<&Path>,
     missing: &str,
 ) -> Result<Stream, String> {
-    let program = Discovery::from_env()
-        .locate()
-        .map_err(|e| unavailable(&e))?;
+    match open_checked(view, title, root) {
+        Ok(Some(stream)) => Ok(stream),
+        Ok(None) => Err(format!("{missing}; continuing without visuals")),
+        Err(e) => Err(unavailable(&e)),
+    }
+}
+
+/// [`open`], or `Ok(None)` (after closing the session) when the
+/// companion's `hello_ack` lacks `view`.
+fn open_checked(view: View, title: &str, root: Option<&Path>) -> Result<Option<Stream>, VizError> {
+    let program = Discovery::from_env().locate()?;
     let options = ConnectOptions {
         log: root.and_then(log_file),
         ..ConnectOptions::new(format!("rustman {}", rustman_core::VERSION))
     };
-    let connection =
-        rustman_viz_client::connect(&program, &options).map_err(|e| unavailable(&e))?;
+    let connection = rustman_viz_client::connect(&program, &options)?;
     let has_view = connection.views.contains(&view);
     let warn: Warn = Arc::new(|warning: &str| eprintln!("warning: {warning}"));
     let mut stream = Stream::start(connection, StreamOptions::default(), warn);
     if !has_view {
         stream.close();
-        return Err(format!("{missing}; continuing without visuals"));
+        return Ok(None);
     }
     stream.send(&Message::OpenView(OpenView {
         view,
         title: Some(title.to_owned()),
     }));
-    Ok(stream)
+    Ok(Some(stream))
 }
 
 fn probe_outcome(outcome: &ProbeOutcome) -> Outcome {
