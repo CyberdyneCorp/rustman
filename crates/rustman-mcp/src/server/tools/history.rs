@@ -110,7 +110,7 @@ fn now_millis() -> u64 {
         .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
 }
 
-fn since_millis(text: &str) -> Result<u64, ToolError> {
+pub(super) fn since_millis(text: &str) -> Result<u64, ToolError> {
     if let Ok(age) = parse_age(text) {
         let age = u64::try_from(age.as_millis()).unwrap_or(u64::MAX);
         return Ok(now_millis().saturating_sub(age));

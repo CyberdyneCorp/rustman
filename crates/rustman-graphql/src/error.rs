@@ -38,6 +38,10 @@ pub enum GraphqlError {
     MutationOverGet,
     #[error("graphql: subscriptions cannot be sent over HTTP; use transport ws or sse")]
     SubscriptionOverHttp,
+    /// A subscription sent through a sender that admits each HTTP request
+    /// (the agent interface): it would go over WebSocket or SSE instead.
+    #[error("graphql: subscriptions cannot be sent here")]
+    SubscriptionNotAdmitted,
     #[error("graphql: uploads cannot use GET")]
     UploadOverGet,
     #[error("graphql: upload file not found: {0}")]

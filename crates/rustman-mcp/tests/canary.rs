@@ -293,6 +293,8 @@ async fn call_every_tool(
     call_realtime_listen(client, out).await;
     called.push("realtime_listen".to_owned());
     called.extend(call_grpc_tools(client, out).await);
+    called.extend(call_graphql_tools(client, out).await);
+    called.extend(call_webhook_tool(client, out).await);
     called.extend(call_evm_tools(client, out).await);
     let simple = [
         ("list_requests", json!({})),
@@ -418,6 +420,94 @@ async fn call_evm_tools(client: &Client, out: &mut Outputs) -> Vec<String> {
     called
 }
 
+/// The GraphQL tools: an operation sending the canary (header and
+/// variables) to a server that echoes it, a document naming it, an
+/// introspection that fails on an endpoint carrying it, and blocked
+/// endpoints naming it.
+#[cfg(feature = "graphql")]
+async fn call_graphql_tools(client: &Client, out: &mut Outputs) -> Vec<String> {
+    let blocked = format!("http://blocked-{CANARY}.example/graphql");
+    let calls = [
+        (
+            "graphql_query",
+            json!({"endpoint": "{{base_url}}/echo", "query": "query Q($k: String) { a(k: $k) }",
+                   "variables": {"k": "{{api_token}}"},
+                   "headers": {"Authorization": "Bearer {{api_token}}"}}),
+        ),
+        (
+            "graphql_query",
+            json!({"endpoint": "{{base_url}}/echo", "query": format!("{{ a(k: \"{CANARY}\") }}")}),
+        ),
+        (
+            "graphql_query",
+            json!({"endpoint": blocked, "query": "{ a }"}),
+        ),
+        (
+            "graphql_introspect",
+            json!({"endpoint": "{{base_url}}/echo?k={{api_token}}"}),
+        ),
+        ("graphql_introspect", json!({"endpoint": blocked})),
+    ];
+    let mut called = Vec::new();
+    for (tool, args) in calls {
+        out.add(tool, &call(client, tool, args).await);
+        called.push(tool.to_owned());
+    }
+    called
+}
+
+#[cfg(not(feature = "graphql"))]
+async fn call_graphql_tools(_: &Client, _: &mut Outputs) -> Vec<String> {
+    Vec::new()
+}
+
+/// A webhook capture carrying the canary in a header, the query and the
+/// body, saved to history as the webhook inspector saves it, by a redactor
+/// that knows no secret.
+#[cfg(feature = "webhook")]
+fn save_webhook_capture(root: &Path) {
+    use rustman_core::Redactor;
+    use rustman_core::history::HistoryStore;
+    use rustman_webhook::{Capture, HeaderEntry};
+
+    let ws = Workspace::load(root).unwrap();
+    let store = HistoryStore::for_workspace(root, &ws.settings.history);
+    let capture = Capture {
+        id: 1,
+        received_at: time::OffsetDateTime::UNIX_EPOCH,
+        remote: "127.0.0.1:5000".parse().unwrap(),
+        version: http::Version::HTTP_11,
+        method: "POST".into(),
+        path: "/hooks/github".into(),
+        query: Some(format!("k={CANARY}")),
+        headers: vec![HeaderEntry::new("X-Hook-Key", CANARY)],
+        body: format!("{{\"key\":\"{CANARY}\"}}").into(),
+        status: 200,
+        mock: None,
+        signature: None,
+    };
+    rustman_webhook::save::save_to_history(&capture, &store, &Redactor::new()).unwrap();
+}
+
+#[cfg(not(feature = "webhook"))]
+fn save_webhook_capture(_: &Path) {}
+
+/// `list_webhook_captures` over that capture, and a filter naming the
+/// canary.
+#[cfg(feature = "webhook")]
+async fn call_webhook_tool(client: &Client, out: &mut Outputs) -> Vec<String> {
+    for args in [json!({}), json!({"path": CANARY})] {
+        let result = call(client, "list_webhook_captures", args).await;
+        out.add("list_webhook_captures", &result);
+    }
+    vec!["list_webhook_captures".to_owned()]
+}
+
+#[cfg(not(feature = "webhook"))]
+async fn call_webhook_tool(_: &Client, _: &mut Outputs) -> Vec<String> {
+    Vec::new()
+}
+
 /// `realtime_listen` with the secret in the URL, a pasted literal, frames
 /// and a request path.
 async fn call_realtime_listen(client: &Client, out: &mut Outputs) {
@@ -455,6 +545,7 @@ async fn the_canary_never_reaches_the_client() {
     let api = BadApi::start().await;
     let grpc = GrpcServer::start(Reflection::V1).await;
     let ws = workspace(&server, &api, &grpc);
+    save_webhook_capture(ws.path());
     let agent = Agent::default();
     let seen = agent.seen.clone();
     let client = connect(ws.path(), agent).await;

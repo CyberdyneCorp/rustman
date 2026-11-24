@@ -5,7 +5,7 @@
 //! sending or validating a request never introspects implicitly.
 
 use rustman_core::vars::{ResolvedBody, ResolvedGraphql, ResolvedRequest};
-use rustman_http::{HttpEngine, SendOptions};
+use rustman_http::SendOptions;
 use serde_json::{Value, json};
 
 use crate::cache::{CachedSchema, SchemaCache, normalize_endpoint};
@@ -15,6 +15,7 @@ use crate::introspection::{
     self, INTROSPECTION_QUERY, LEGACY_INTROSPECTION_QUERY, OPERATION_NAME, needs_legacy_query,
 };
 use crate::schema::GraphqlSchema;
+use crate::sender::HttpSender;
 
 /// A schema fetched by introspection.
 #[derive(Clone, Debug)]
@@ -33,7 +34,8 @@ enum Attempt {
     Rejected(Vec<String>),
 }
 
-/// Introspect the endpoint of `target`. A server that rejects the fields
+/// Introspect the endpoint of `target` through `sender` (an engine, or a
+/// sender that admits each request). A server that rejects the fields
 /// newer than the June 2018 specification is asked again with the legacy
 /// query. Every failure is a [`GraphqlError::IntrospectionFailed`] with a
 /// redacted reason.
@@ -43,16 +45,16 @@ enum Attempt {
 /// stops downloading as soon as the limit is passed and is refused,
 /// never spilled to disk or read back.
 pub async fn introspect(
-    engine: &HttpEngine,
+    sender: &dyn HttpSender,
     options: &SendOptions,
     target: &ResolvedGraphql,
     max_schema_bytes: u64,
 ) -> Result<Introspected, GraphqlError> {
     let options = &capped_at(options, max_schema_bytes);
-    let (result, legacy) = match attempt(engine, options, target, INTROSPECTION_QUERY).await? {
+    let (result, legacy) = match attempt(sender, options, target, INTROSPECTION_QUERY).await? {
         Attempt::Schema(result) => (result, false),
         Attempt::Rejected(errors) if needs_legacy_query(&errors) => {
-            match attempt(engine, options, target, LEGACY_INTROSPECTION_QUERY).await? {
+            match attempt(sender, options, target, LEGACY_INTROSPECTION_QUERY).await? {
                 Attempt::Schema(result) => (result, true),
                 Attempt::Rejected(errors) => return Err(rejected(&errors)),
             }
@@ -74,13 +76,13 @@ pub async fn introspect(
 /// Introspect the endpoint of `target` and replace its cached schema. The
 /// response may be at most `max_schema_bytes` (see [`introspect`]).
 pub async fn refresh_schema(
-    engine: &HttpEngine,
+    sender: &dyn HttpSender,
     options: &SendOptions,
     target: &ResolvedGraphql,
     cache: &SchemaCache,
     max_schema_bytes: u64,
 ) -> Result<CachedSchema, GraphqlError> {
-    let fetched = introspect(engine, options, target, max_schema_bytes).await?;
+    let fetched = introspect(sender, options, target, max_schema_bytes).await?;
     cache.store(
         &target.http.url.text,
         &fetched.result,
@@ -100,7 +102,7 @@ fn too_large(limit: u64) -> GraphqlError {
 }
 
 async fn attempt(
-    engine: &HttpEngine,
+    sender: &dyn HttpSender,
     options: &SendOptions,
     target: &ResolvedGraphql,
     query: &str,
@@ -108,7 +110,7 @@ async fn attempt(
     let request = introspection_request(target, query);
     // `options` comes from `introspect`, capped at the schema limit.
     let limit = options.body.max_in_memory;
-    let exchange = match engine.send(&request, options).await {
+    let exchange = match sender.send(&request, options).await {
         Ok(exchange) => exchange,
         Err(e) if over_limit(&e, limit) => return Err(too_large(limit)),
         Err(e) => return Err(GraphqlError::IntrospectionFailed(e.to_string())),

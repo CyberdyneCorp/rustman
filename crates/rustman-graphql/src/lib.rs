@@ -25,6 +25,7 @@ pub mod preset;
 pub mod response;
 pub mod run;
 pub mod schema;
+pub mod sender;
 pub mod source;
 pub mod subscription;
 pub mod upload;
@@ -51,6 +52,7 @@ pub use run::{
     execute_paged,
 };
 pub use schema::GraphqlSchema;
+pub use sender::{HttpSender, SendFuture, SharedSender};
 pub use source::{ActiveSchema, SchemaOrigin, active_schema};
 pub use subscription::{
     DEFAULT_ACK_TIMEOUT, Ended, Limits, SubscribeOptions, Subscription, SubscriptionEvent,

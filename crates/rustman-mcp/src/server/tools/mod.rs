@@ -7,6 +7,8 @@
 pub mod evm;
 mod execute;
 mod explore;
+#[cfg(feature = "graphql")]
+pub mod graphql;
 #[cfg(feature = "grpc")]
 pub mod grpc;
 mod history;
@@ -15,6 +17,8 @@ pub mod realtime;
 pub mod reference;
 pub(crate) mod reports;
 pub mod rpc;
+#[cfg(feature = "webhook")]
+pub mod webhook;
 pub(crate) mod workspace;
 
 use std::sync::Arc;
@@ -194,11 +198,12 @@ pub fn catalog() -> Vec<Tool> {
 }
 
 /// Tools of optional protocol capabilities: `rpc_call` with
-/// `jsonrpc-requests`, `realtime_listen` with `realtime-sessions`, and
-/// `grpc_list`, `grpc_describe` and `grpc_call` with `grpc-requests` (the
-/// `grpc` feature). `graphql_introspect` and
-/// `graphql_query` (`graphql-requests`) and `list_webhook_captures`
-/// (`webhook-inspector`) are not registered by this build yet.
+/// `jsonrpc-requests`, `realtime_listen` with `realtime-sessions`,
+/// `graphql_introspect` and `graphql_query` with `graphql-requests` (the
+/// `graphql` feature), `list_webhook_captures` with `webhook-inspector`
+/// (the `webhook` feature), and `grpc_list`, `grpc_describe` and
+/// `grpc_call` with `grpc-requests` (the `grpc` feature). A build without
+/// a feature registers none of its tools.
 fn protocol_tools() -> Vec<Tool> {
     let mut tools = vec![
         tool::<rpc::RpcCallArgs, rpc::RpcCallResult>(
@@ -212,9 +217,51 @@ fn protocol_tools() -> Vec<Tool> {
             Effect::Sends,
         ),
     ];
+    tools.extend(graphql_tools());
+    tools.extend(webhook_tools());
     tools.extend(grpc_tools());
     tools.extend(evm_tools());
     tools
+}
+
+/// The GraphQL tools, in a build with the `graphql` feature.
+#[cfg(feature = "graphql")]
+fn graphql_tools() -> Vec<Tool> {
+    vec![
+        tool::<graphql::GraphqlIntrospectArgs, graphql::GraphqlSchemaResult>(
+            graphql::INTROSPECT_TOOL,
+            "The schema of a GraphQL endpoint or saved graphql request: its schema_file or cached schema, else (or with refresh) introspected through the safety policy and cached. Lists the root and named types, or describes type_name.",
+            Effect::ReadOnly,
+        ),
+        tool::<graphql::GraphqlQueryArgs, graphql::GraphqlQueryResult>(
+            graphql::QUERY_TOOL,
+            "Validate and send a GraphQL query or mutation (endpoint, query, operation_name, variables, headers) or a saved graphql request over HTTP through the safety policy. A mutation needs [agent] allow_mutations and the human's confirmation; subscriptions are refused. Returns the redacted data and errors.",
+            Effect::Sends,
+        ),
+    ]
+}
+
+#[cfg(not(feature = "graphql"))]
+fn graphql_tools() -> Vec<Tool> {
+    Vec::new()
+}
+
+/// The webhook inspector tool, in a build with the `webhook` feature.
+#[cfg(feature = "webhook")]
+fn webhook_tools() -> Vec<Tool> {
+    vec![tool::<
+        webhook::ListWebhookCapturesArgs,
+        webhook::WebhookCaptureList,
+    >(
+        webhook::TOOL,
+        "List the webhook captures saved to request history from the webhook inspector, newest first, filtered by path text, method, signature verdict and time, 50 per page. Redacted; nothing is replayed.",
+        Effect::ReadOnly,
+    )]
+}
+
+#[cfg(not(feature = "webhook"))]
+fn webhook_tools() -> Vec<Tool> {
+    Vec::new()
 }
 
 /// The read-only EVM tools (`evm-toolkit`). None signs or sends a
@@ -279,6 +326,20 @@ fn grpc_tools() -> Vec<Tool> {
 #[cfg(not(feature = "grpc"))]
 fn grpc_tools() -> Vec<Tool> {
     Vec::new()
+}
+
+/// Run a tool of an optional feature (gRPC, GraphQL, webhook inspector);
+/// `None` when `name` is not one of this build.
+async fn call_optional(name: &str, call: &Call) -> Option<Result<ToolOutput, ToolError>> {
+    #[cfg(feature = "graphql")]
+    if let Some(result) = graphql::dispatch(name, call).await {
+        return Some(result);
+    }
+    #[cfg(feature = "webhook")]
+    if name == webhook::TOOL {
+        return Some(webhook::list_webhook_captures(call));
+    }
+    call_grpc(name, call).await
 }
 
 /// Run a gRPC tool; `None` when `name` is not one of this build.
@@ -353,7 +414,7 @@ pub async fn call(name: &str, call: &Call) -> Result<ToolOutput, ToolError> {
         _ if evm::TOOLS.contains(&name) => evm::dispatch(name, call)
             .await
             .unwrap_or_else(|| Err(ToolError::internal("unregistered evm tool"))),
-        _ => call_grpc(name, call).await.unwrap_or_else(|| {
+        _ => call_optional(name, call).await.unwrap_or_else(|| {
             Err(ToolError::new(
                 ErrorCode::NotFound,
                 format!("no tool '{name}'"),
@@ -397,6 +458,34 @@ mod tests {
             assert!(!exists(name), "{name}");
         }
         assert!(grpc_tools().is_empty());
+    }
+
+    const GRAPHQL_TOOLS: [&str; 2] = ["graphql_introspect", "graphql_query"];
+
+    /// agent-mcp-interface "Conditional protocol tools": the GraphQL tools
+    /// exist exactly when the build has the `graphql` feature.
+    #[test]
+    fn the_graphql_tools_follow_the_graphql_feature() {
+        for name in GRAPHQL_TOOLS {
+            assert_eq!(exists(name), cfg!(feature = "graphql"), "{name}");
+        }
+        if cfg!(feature = "graphql") {
+            assert_eq!(hints("graphql_introspect"), (true, false));
+            assert_eq!(hints("graphql_query"), (false, true));
+        }
+    }
+
+    /// agent-mcp-interface "Build without webhook inspector".
+    #[test]
+    fn list_webhook_captures_follows_the_webhook_feature() {
+        assert_eq!(
+            exists("list_webhook_captures"),
+            cfg!(feature = "webhook"),
+            "list_webhook_captures"
+        );
+        if cfg!(feature = "webhook") {
+            assert_eq!(hints("list_webhook_captures"), (true, false));
+        }
     }
 
     /// stress-testing "Agents cannot start stress runs": no tool starts a

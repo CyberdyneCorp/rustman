@@ -102,6 +102,7 @@ async fn subscribe_with(
         graphql,
         resolved: &resolved,
         engine: &engine,
+        sender: None,
         options,
         root: &ws.root,
         settings: &ws.settings,

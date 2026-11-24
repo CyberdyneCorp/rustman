@@ -36,6 +36,7 @@ use crate::execute::{HttpOperation, HttpResult, execute_http};
 use crate::paginate::{self, Pager, Paginate};
 use crate::preset;
 use crate::response::NOT_GRAPHQL;
+use crate::sender::{HttpSender, SharedSender};
 use crate::source::{ActiveSchema, active_schema};
 use crate::subscription::{
     DEFAULT_ACK_TIMEOUT, Limits, SubscribeOptions, Subscription, SubscriptionEvent, subscribe_sse,
@@ -49,6 +50,10 @@ pub struct Execution<'a> {
     pub graphql: &'a GraphqlRequest,
     pub resolved: &'a ResolvedGraphql,
     pub engine: &'a HttpEngine,
+    /// Sends the HTTP requests in place of `engine` when set. Such a
+    /// sender admits every request, so subscriptions, which go over
+    /// WebSocket or SSE, are refused.
+    pub sender: Option<&'a dyn HttpSender>,
     pub options: &'a SendOptions,
     pub root: &'a Path,
     pub settings: &'a Settings,
@@ -297,9 +302,14 @@ fn deliver<'a>(
     operation: &'a HttpOperation,
 ) -> Pin<Box<dyn Future<Output = Result<Delivery, GraphqlError>> + Send + 'a>> {
     let options = exec.options;
-    match exec.graphql.effective_transport() {
+    let transport = exec.graphql.effective_transport();
+    if exec.sender.is_some() && transport != GraphqlTransport::Http {
+        return Box::pin(async { Err(GraphqlError::SubscriptionNotAdmitted) });
+    }
+    match transport {
         GraphqlTransport::Http => Box::pin(async move {
-            let result = execute_http(exec.engine, options, resolved, operation).await?;
+            let sender = exec.sender.unwrap_or(exec.engine);
+            let result = execute_http(sender, options, resolved, operation).await?;
             Ok(Delivery::Http(Box::new(result)))
         }),
         GraphqlTransport::Ws => Box::pin(async move {
@@ -349,6 +359,11 @@ pub struct GraphqlRunner {
     /// Check every subgraph's freshness (the TUI, `rustman graphql
     /// query`), not only for `subgraph` assertions.
     pub freshness: bool,
+    /// Sends every HTTP request (the operation, its pages and a subgraph's
+    /// `_meta`) in place of the run's engine: the agent interface admits
+    /// each one through its policy. Subscriptions are refused with it. The
+    /// chain head is read by `chain_head`, not through it.
+    pub sender: Option<SharedSender>,
 }
 
 /// A subscription the user starts and stops.
@@ -371,6 +386,7 @@ impl Default for GraphqlRunner {
             paginate: None,
             chain_head: None,
             freshness: false,
+            sender: None,
         }
     }
 }
@@ -404,6 +420,7 @@ impl GraphqlRunner {
                 graphql: call.graphql,
                 resolved: call.resolved,
                 engine: call.engine,
+                sender: self.sender.as_ref().map(|s| &*s.0),
                 options: call.options,
                 root: call.root,
                 settings: call.settings,
@@ -444,7 +461,11 @@ impl GraphqlRunner {
             rpc: call.chain_rpc.is_some(),
             ..SubgraphFacts::default()
         };
-        match Box::pin(fetch_meta(call)).await {
+        let sender = self
+            .sender
+            .as_ref()
+            .map_or(call.engine as &dyn HttpSender, |s| &*s.0);
+        match Box::pin(fetch_meta(call, sender)).await {
             Ok((block, errors)) => {
                 facts.indexed_block = Some(block);
                 facts.has_indexing_errors = errors;
@@ -514,7 +535,10 @@ impl GraphqlRunner {
 
 /// The block a subgraph indexed and whether it has indexing errors, from
 /// its `_meta` (redacted error).
-async fn fetch_meta(call: &GraphqlCall<'_>) -> Result<(u64, bool), String> {
+async fn fetch_meta(
+    call: &GraphqlCall<'_>,
+    sender: &dyn HttpSender,
+) -> Result<(u64, bool), String> {
     let mut graphql = call.graphql.clone();
     graphql.apq = Some(false);
     graphql.method = None;
@@ -526,7 +550,7 @@ async fn fetch_meta(call: &GraphqlCall<'_>) -> Result<(u64, bool), String> {
     let no_uploads = |path: &str| Err(GraphqlError::UploadNotFound(path.to_owned()));
     let operation = HttpOperation::prepare(META_QUERY.to_owned(), &graphql, &resolved, no_uploads)
         .map_err(|e| e.to_string())?;
-    let result = execute_http(call.engine, call.options, &resolved, &operation)
+    let result = execute_http(sender, call.options, &resolved, &operation)
         .await
         .map_err(|e| format!("_meta: {}", e.redacted(&resolved.redactor())))?;
     let meta = result
