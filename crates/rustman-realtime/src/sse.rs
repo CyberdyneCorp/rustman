@@ -6,6 +6,7 @@
 //! after the last `retry` with `Last-Event-ID`, up to
 //! `reconnect.max_attempts`. A `204 No Content` ends the session.
 
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use rustman_core::Redactor;
@@ -65,7 +66,7 @@ struct Stream<'t> {
     cancel: CancellationToken,
     feed: Option<mpsc::UnboundedSender<TimelineEntry>>,
     commands: Option<mpsc::Receiver<Command>>,
-    last_event_id: Option<String>,
+    last_event_id: Option<Arc<str>>,
     retry: Duration,
     /// The last `retry` the server sent, as sent.
     server_retry: Option<u64>,
@@ -90,7 +91,11 @@ impl<'t> Stream<'t> {
             cancel: session.cancel,
             feed: session.feed,
             commands: session.commands,
-            last_event_id: target.last_event_id.clone().filter(|id| !id.is_empty()),
+            last_event_id: target
+                .last_event_id
+                .as_deref()
+                .filter(|id| !id.is_empty())
+                .map(Arc::from),
             retry,
             server_retry: None,
             attempts: 0,
@@ -208,8 +213,8 @@ impl<'t> Stream<'t> {
     /// Read events until the session ends or the stream drops.
     async fn read(&mut self, mut response: StreamedResponse) -> Result<Flow, RealtimeError> {
         let limit = self.target.limits.effective_max_message_bytes();
-        let resumed = self.last_event_id.clone().unwrap_or_default();
-        let mut parser = SseParser::new(limit).resuming(&resumed);
+        let resumed = self.last_event_id.as_deref().unwrap_or_default();
+        let mut parser = SseParser::new(limit).resuming(resumed);
         loop {
             let chunk = match self.wake(&mut response).await {
                 Wake::Chunk(chunk) => chunk,
@@ -267,8 +272,7 @@ impl<'t> Stream<'t> {
     /// Keep the last event id and `retry` the parser saw. A `retry` over
     /// [`MAX_RETRY_MS`] is capped, with a note.
     fn resume_state(&mut self, parser: &SseParser) {
-        let id = parser.last_event_id();
-        self.last_event_id = (!id.is_empty()).then(|| id.to_owned());
+        self.last_event_id = parser.shared_last_event_id();
         let Some(ms) = parser.retry().filter(|&ms| self.server_retry != Some(ms)) else {
             return;
         };

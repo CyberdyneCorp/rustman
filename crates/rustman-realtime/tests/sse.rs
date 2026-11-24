@@ -59,7 +59,13 @@ fn received(exchange: &RealtimeExchange) -> Vec<(String, Option<String>, String)
         .timeline
         .entries()
         .filter(|e| e.dir == Direction::Received)
-        .map(|e| (e.kind.clone(), e.id.clone(), e.payload.clone()))
+        .map(|e| {
+            (
+                e.kind.clone(),
+                e.id.as_deref().map(str::to_owned),
+                e.payload.clone(),
+            )
+        })
         .collect()
 }
 
