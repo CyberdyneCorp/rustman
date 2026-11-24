@@ -55,8 +55,7 @@ use rustman_core::{Environment, Redactor, SecretStore};
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 
-use self::export::SpanExport;
-pub use self::export::{FLUSH_WAIT, OTLP_BUILT, export_host, flush_all_exports};
+pub use self::export::{FLUSH_WAIT, OTLP_BUILT, SpanExport, export_host, flush_all_exports};
 
 use crate::HttpEngine;
 use crate::cookies::CookieJar;

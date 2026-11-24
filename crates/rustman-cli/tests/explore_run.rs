@@ -642,13 +642,16 @@ fn exported_regressions_fail_against_the_bad_api_and_pass_against_the_fixed_one(
 }
 
 #[test]
-fn an_exploration_warns_that_it_does_not_export_spans() {
+fn an_exploration_exports_spans_like_a_run() {
     let api = Api::start();
     let ws = workspace();
+    let port = common::closed_port();
     write(
         ws.path(),
         "rustman.toml",
-        "[workspace]\nname = \"t\"\nversion = 1\n[trace.export]\nenabled = true\nendpoint = \"http://127.0.0.1:9\"\n",
+        &format!(
+            "[workspace]\nname = \"t\"\nversion = 1\n[trace.export]\nenabled = true\nendpoint = \"http://127.0.0.1:{port}\"\n"
+        ),
     );
     let args = [
         "--env",
@@ -658,13 +661,16 @@ fn an_exploration_warns_that_it_does_not_export_spans() {
         "--operations",
         "getUser",
     ];
+    // A collector that is down (or a build that cannot export) only warns,
+    // as it does for `rustman run`; the exploration's result is unchanged.
     let output = explore(ws.path(), &api, &args);
     assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
     let stderr = text(&output.stderr);
-    assert!(
-        stderr.contains(
-            "warning: trace.export: explorations do not export client spans yet; probes still carry trace headers"
-        ),
-        "{stderr}"
-    );
+    let expected = if cfg!(feature = "otlp") {
+        format!("warning: trace export to 127.0.0.1:{port} failed")
+    } else {
+        "warning: trace.export: this build cannot export spans".to_owned()
+    };
+    assert!(stderr.contains(&expected), "{stderr}");
+    assert_eq!(stderr.matches("warning: trace").count(), 1, "{stderr}");
 }

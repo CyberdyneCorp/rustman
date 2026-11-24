@@ -10,7 +10,9 @@ use std::time::Duration;
 use rustman_core::safety::{Governor, Limits, PolicyError, SafetyPolicy};
 use rustman_explore::collection::collection_dir;
 use rustman_explore::explore::drive::{Drive, Finished, drive};
-use rustman_explore::explore::exec::{Context, Executor, Identity, exploration_send_options};
+use rustman_explore::explore::exec::{
+    Context, Executor, Identity, exploration_export, exploration_send_options,
+};
 use rustman_explore::explore::graph::Graph;
 use rustman_explore::explore::plan::{self, DEFAULT_FUZZ_CASES, Family, Plan};
 use rustman_explore::explore::rules::Severity;
@@ -591,7 +593,10 @@ async fn exploration_job(
         disabled_rules: &ws.settings.explore.disabled_rules,
         send,
     };
-    let executor = Executor::new(&sender, context);
+    // The probes' client spans go to the process's exporter, whose worker
+    // sends them within its batch delay: the server outlives the job.
+    let export = exploration_export(&ws.settings, environment.as_ref());
+    let executor = Executor::new(&sender, context).exporting(export);
     let options = Drive {
         plan: &planned.plan,
         model,

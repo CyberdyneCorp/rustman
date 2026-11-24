@@ -15,7 +15,7 @@ use rustman_core::settings::Settings as WorkspaceSettings;
 use rustman_core::{ConfigError, Environment, Workspace};
 use rustman_explore::explore::drive::{Drive, Finished, drive};
 use rustman_explore::explore::exec::{
-    Context, Executor, Identity, Outcome, exploration_export_warning, exploration_send_options,
+    Context, Executor, Identity, Outcome, exploration_export, exploration_send_options,
 };
 use rustman_explore::explore::graph::Graph;
 use rustman_explore::explore::journal::{self, requests_sent};
@@ -28,6 +28,7 @@ use rustman_explore::explore::setup::{self, NewExploration};
 use rustman_explore::store::sha256;
 use rustman_explore::{ApiModel, ImportOptions, Imported, import};
 use rustman_http::GovernedSender;
+use rustman_http::runner::FLUSH_WAIT;
 use rustman_report::{Report, ReportTarget};
 use tokio_util::sync::CancellationToken;
 
@@ -249,9 +250,6 @@ fn execute(runtime: &tokio::runtime::Runtime, execution: Execution<'_>) -> Resul
     let ws_settings = workspace_settings(workspace);
     let secrets = secret_store(root)?;
     let sender = GovernedSender::new(policy, Governor::new(limits));
-    if let Some(warning) = exploration_export_warning(&ws_settings, environment) {
-        eprintln!("warning: {warning}");
-    }
     let graph = session.state.graph.clone();
     let target = session.state.target.clone();
     let context = Context {
@@ -271,7 +269,8 @@ fn execute(runtime: &tokio::runtime::Runtime, execution: Execution<'_>) -> Resul
         disabled_rules: &ws_settings.explore.disabled_rules,
         send: exploration_send_options(&ws_settings, environment, &secrets).map_err(usage)?,
     };
-    let executor = Executor::new(&sender, context);
+    let executor =
+        Executor::new(&sender, context).exporting(exploration_export(&ws_settings, environment));
     let cancel = CancellationToken::new();
     let mut printer = Printer::default();
     let fail_on = session.state.settings.fail_on;
@@ -298,7 +297,10 @@ fn execute(runtime: &tokio::runtime::Runtime, execution: Execution<'_>) -> Resul
             probe: live.then_some(&mut on_probe as &mut ProbeObserver<'_>),
         };
         drive(&mut session, &executor, options).await
-    })?;
+    });
+    executor.flush_spans(FLUSH_WAIT);
+    print_warnings(&executor.export_warnings());
+    let finished = finished?;
     if let Some(viz) = viz {
         viz.finish(match &finished {
             Finished::Completed(report) => Some(report),

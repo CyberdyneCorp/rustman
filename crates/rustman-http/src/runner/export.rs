@@ -6,8 +6,12 @@ use std::sync::Arc;
 use std::sync::{Mutex, PoisonError};
 use std::time::Duration;
 
+use rustman_core::Redactor;
 use rustman_core::run::RequestRecord;
 use rustman_core::trace::{ClientSpan, ExportTarget, TraceConfig};
+use rustman_core::vars::ResolvedRequest;
+
+use crate::exchange::Exchange;
 
 /// How long `rustman send` and `rustman run` wait for the last spans.
 pub const FLUSH_WAIT: Duration = Duration::from_secs(5);
@@ -37,9 +41,12 @@ pub fn flush_all_exports(wait: Duration) -> Vec<String> {
     warnings
 }
 
-/// The export of one run.
+/// The span export of one run, or of one exploration, whose probes go
+/// through a governed sender rather than a runner: a client span per
+/// exchange, queued on the collector's exporter (shared by every export of
+/// the process to that collector).
 #[derive(Default)]
-pub(super) struct SpanExport {
+pub struct SpanExport {
     #[cfg(feature = "otlp")]
     exporter: Option<Arc<crate::otlp::Exporter>>,
     warnings: Mutex<Vec<String>>,
@@ -83,6 +90,27 @@ impl SpanExport {
         }
         #[cfg(not(feature = "otlp"))]
         let _ = (record, ClientSpan::from_record);
+    }
+
+    /// Queue the span of `exchange`, sent for `request` outside a runner
+    /// (an exploration probe), with what `redactor` knows replaced; `id`
+    /// becomes its `rustman.request.id`. A no-op without export.
+    pub fn record_exchange(
+        &self,
+        id: &str,
+        request: &ResolvedRequest,
+        exchange: &Exchange,
+        redactor: &Redactor,
+    ) {
+        #[cfg(feature = "otlp")]
+        if self.exporter.is_some() {
+            let mut record = RequestRecord::new(id.to_owned(), id.to_owned(), String::new());
+            record.exchange = Some(super::record::exchange_record(request, exchange, redactor));
+            record.trace = super::record::trace_record(exchange, None, redactor);
+            self.record(&record);
+        }
+        #[cfg(not(feature = "otlp"))]
+        let _ = (id, request, exchange, redactor);
     }
 
     /// Send the queued spans, waiting at most `wait`.

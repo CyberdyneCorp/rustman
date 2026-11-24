@@ -205,13 +205,15 @@ One span of kind `CLIENT` per exchange that got a response and carried a sampled
 | `http.response.status_code` | `200` |
 | `network.protocol.version` | `1.1` |
 | `error.type` | the status code, for `4xx` and `5xx` (the span status is then `ERROR`) |
-| `rustman.request.id` | the request's id in the workspace |
+| `rustman.request.id` | the request's id in the workspace; for an exploration probe, `<probe id>/<step>` (`cleanup` for a cleanup delete) |
 
 Every query value in `url.full` is replaced by `«redacted:<key>»` and every query component without `=` by `«redacted»`, credentials in the URL become `REDACTED:REDACTED` and the fragment is dropped. **Header values are never exported**, so `Authorization` and cookies cannot leak this way. The phases (`dns`, `connect`, `tls`, `waiting`, `download`) are span events at the end of each phase, with `rustman.phase.duration_ms`. Request and response bodies are not exported.
 
 ### Delivery and failures
 
-Spans are built after an exchange completes and queued; a worker thread sends them in batches every 5 seconds (or as soon as 512 are waiting), so export never sits on a request's path. The queue holds 2048 spans and drops the oldest when full. `rustman send`, `rustman run` and the other commands that send requests wait up to 5 seconds for the last batch before exiting; the TUI does the same when it quits, and prints the last export warnings once the terminal is restored. Explorations (`rustman explore run` and the agent's explore tools) propagate trace context but do not export client spans yet; `rustman explore run` prints `warning: trace.export: explorations do not export client spans yet; probes still carry trace headers` when export is enabled.
+Spans are built after an exchange completes and queued; a worker thread sends them in batches every 5 seconds (or as soon as 512 are waiting), so export never sits on a request's path. The queue holds 2048 spans and drops the oldest when full. `rustman send`, `rustman run` and the other commands that send requests wait up to 5 seconds for the last batch before exiting; the TUI does the same when it quits, and prints the last export warnings once the terminal is restored.
+
+Explorations export too: `rustman explore run` (and `explore resume`) and the agent's explore tools send one client span per probe exchange (each step of a probe, and each cleanup delete) through the same exporter, with the `[trace.export]` of the exploration's environment. Under `scope: run` every probe of an exploration shares one trace. `rustman explore run` waits up to 5 seconds for the last batch before exiting and prints export warnings like `rustman run`; the agent server, which outlives the exploration, lets the worker send them on its schedule.
 
 A collector that is down, slow or refusing never changes a result: exchanges, assertions, reports and exit codes are the same as without export. Failures are shown as a warning at most once a minute, such as:
 
@@ -223,4 +225,4 @@ The TUI shows `OTLP →<host:port>` in the status bar while the active environme
 
 ## Library use
 
-Front-ends and other transports use the same primitives from `rustman-core`'s `trace` module: `TraceConfig` (the settings block), `TracePropagation` (the settings resolved for a run, set on `SendOptions::trace` for `rustman-http`), and `TraceContextInjector`, the trait a transport implements to receive the headers or metadata when it does not go through `rustman-http`'s request builder, as native gRPC does. `ClientSpan::from_record` builds the exported span of a recorded exchange, and `ExportTarget` resolves `[trace.export]`; the exporter itself is `rustman-http`'s `otlp` feature, used through the runner.
+Front-ends and other transports use the same primitives from `rustman-core`'s `trace` module: `TraceConfig` (the settings block), `TracePropagation` (the settings resolved for a run, set on `SendOptions::trace` for `rustman-http`), and `TraceContextInjector`, the trait a transport implements to receive the headers or metadata when it does not go through `rustman-http`'s request builder, as native gRPC does. `ClientSpan::from_record` builds the exported span of a recorded exchange, and `ExportTarget` resolves `[trace.export]`; the exporter itself is `rustman-http`'s `otlp` feature, used through the runner, or through `runner::SpanExport` (`record_exchange`, `flush`, `take_warnings`) by senders that do not go through a runner, as explorations do.
