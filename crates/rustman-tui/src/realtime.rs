@@ -14,8 +14,8 @@ use std::time::Instant;
 
 use base64::Engine;
 use rustman_core::vars::{ResolvedBinary, ResolvedFrame};
-use rustman_realtime::{Command, Direction, Timeline, TimelineEntry};
-use tokio::sync::mpsc::{Receiver, Sender, UnboundedReceiver};
+use rustman_realtime::{Command, Direction, FeedItem, FeedReceiver, Timeline, TimelineEntry};
+use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::app::State;
 use crate::toast::Severity;
@@ -123,6 +123,26 @@ impl RealtimeLog {
     /// hold too many payload bytes.
     pub fn push(&mut self, entry: TimelineEntry) {
         self.0.push(entry);
+    }
+
+    /// Note, in place, that the feed skipped `n` entries because the pane
+    /// fell behind; the exchange shown once the session ends has them.
+    pub fn skipped(&mut self, n: u64) {
+        let t_ms = self
+            .len()
+            .checked_sub(1)
+            .and_then(|i| self.get(i))
+            .map_or(0, |e| e.t_ms);
+        let what = if n == 1 { "entry" } else { "entries" };
+        self.push(TimelineEntry {
+            dir: Direction::System,
+            t_ms,
+            size: 0,
+            kind: "skipped".to_owned(),
+            payload: format!("{n} {what} not shown: the display fell behind"),
+            id: None,
+            rtt_ms: None,
+        });
     }
 
     pub fn len(&self) -> usize {
@@ -241,14 +261,17 @@ impl Live {
     }
 }
 
-/// Keep a session's (redacted) entries for the pane. Never returns: the
-/// runner holds the feed's sender until the send is over.
-pub async fn collect(mut entries: UnboundedReceiver<TimelineEntry>, log: Option<&SharedLog>) {
-    while let Some(entry) = entries.recv().await {
+/// Keep a session's (redacted) entries for the pane, with a note where
+/// the bounded feed skipped some. Never returns: the runner holds the
+/// feed's sender until the send is over.
+pub async fn collect(mut entries: FeedReceiver, log: Option<&SharedLog>) {
+    while let Some(item) = entries.recv().await {
         if let Some(log) = log {
-            log.lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .push(entry);
+            let mut log = log.lock().unwrap_or_else(PoisonError::into_inner);
+            match item {
+                FeedItem::Entry(entry) => log.push(entry),
+                FeedItem::Skipped(n) => log.skipped(n),
+            }
         }
     }
     std::future::pending::<()>().await;
@@ -413,5 +436,32 @@ mod tests {
         drop(rx);
         assert!(!live.is_connected());
         assert!(!live.send(Command::Send(ResolvedFrame::Text("b".into()))));
+    }
+
+    /// A pane slower than its session gets a note where the bounded feed
+    /// skipped entries (#81).
+    #[tokio::test]
+    async fn skipped_entries_show_as_a_note_in_place() {
+        let (tx, rx) = rustman_realtime::feed_channel_with(2, usize::MAX);
+        for p in ["a", "b", "c", "d"] {
+            tx.send(entry(Direction::Received, "text", p));
+        }
+        drop(tx);
+        let live = Live::new(1000);
+        let log = Arc::clone(&live.log);
+        let collected = tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            collect(rx, Some(&log)),
+        );
+        assert!(collected.await.is_err(), "collect never returns");
+        let log = live.log();
+        let shown: Vec<&str> = (0..log.len())
+            .map(|i| log.get(i).unwrap().payload.as_str())
+            .collect();
+        assert_eq!(
+            shown,
+            ["a", "b", "2 entries not shown: the display fell behind"]
+        );
+        assert_eq!(log.get(2).unwrap().dir, Direction::System);
     }
 }

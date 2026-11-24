@@ -20,6 +20,7 @@ use super::CLOSE_WAIT;
 use super::frames::{outgoing, shown_binary, text_kind};
 use crate::error::RealtimeError;
 use crate::exchange::{RealtimeExchange, SessionEnd};
+use crate::feed::FeedSender;
 use crate::session::{Bounds, Command, SessionOptions, forward, recv, until};
 use crate::timeline::{Direction, TimelineEntry};
 use rustman_core::model::MAX_CLOSE_REASON;
@@ -51,7 +52,7 @@ pub(super) struct Live {
     started: Instant,
     bounds: Option<Bounds>,
     cancel: CancellationToken,
-    feed: Option<mpsc::UnboundedSender<TimelineEntry>>,
+    feed: Option<FeedSender>,
     commands: Option<mpsc::Receiver<Command>>,
 }
 

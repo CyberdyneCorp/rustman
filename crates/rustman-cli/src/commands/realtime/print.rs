@@ -4,7 +4,7 @@
 
 use std::io::Write;
 
-use rustman_realtime::{TimelineEntry, message_json};
+use rustman_realtime::{FeedItem, TimelineEntry, message_json};
 
 /// How messages are printed: each payload as received, newlines included
 /// (a multi-line SSE event spans several lines), or one JSON object per
@@ -32,6 +32,16 @@ impl Printer {
         })
     }
 
+    /// Print what the feed delivered: an entry, or on stderr (stdout
+    /// stays one message per line) how many entries were not shown because
+    /// the terminal fell behind.
+    pub fn item(self, item: &FeedItem) {
+        match item {
+            FeedItem::Entry(entry) => self.entry(entry),
+            FeedItem::Skipped(n) => eprintln!("{}", skipped_note(*n)),
+        }
+    }
+
     /// Print `entry`, if it is a message. A closed stdout (`| head`) is
     /// not worth an error: the session still ends at its bounds.
     pub fn entry(self, entry: &TimelineEntry) {
@@ -40,6 +50,15 @@ impl Printer {
             let _ = writeln!(out, "{line}").and_then(|()| out.flush());
         }
     }
+}
+
+/// The note for `n` entries the feed did not show.
+fn skipped_note(n: u64) -> String {
+    let what = if n == 1 { "entry" } else { "entries" };
+    format!(
+        "warning: output fell behind: {n} timeline {what} not shown \
+         (the session's timeline and history keep them)"
+    )
 }
 
 #[cfg(test)]
@@ -76,6 +95,16 @@ mod tests {
         assert_eq!(value["id"], "42");
         assert_eq!(value["data"], "{\"p\":1}");
         assert_eq!(value["t_ms"], 12);
+    }
+
+    #[test]
+    fn skipped_entries_are_counted_in_a_note() {
+        assert_eq!(
+            skipped_note(3),
+            "warning: output fell behind: 3 timeline entries not shown \
+             (the session's timeline and history keep them)"
+        );
+        assert!(skipped_note(1).contains(" 1 timeline entry not shown"));
     }
 
     #[test]

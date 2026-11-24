@@ -64,6 +64,8 @@ Every frame, event and connection change is a timeline entry:
 
 The timeline keeps at most `limits.max_timeline` entries (default 10000) and at most 256 MiB of payloads, types and ids, so memory stays bounded however large the messages are: the oldest entries are dropped and counted in `dropped_entries` (the newest entry is always kept). The TUI's live view keeps the same bounds.
 
+Entries reach the terminal (`rustman ws connect`, `rustman sse listen`) and the TUI's live view through a bounded feed. At most 1024 entries, holding at most 64 MiB, wait for the display; a single larger entry is still shown when nothing else waits. A display slower than the messages never slows the session down. Entries that do not fit are not shown, and a note says how many were skipped, in place: on stderr, `warning: output fell behind: <n> timeline entries not shown (the session's timeline and history keep them)`, and in the TUI a system entry, `<n> entries not shown: the display fell behind`. Skipped entries are still recorded in the timeline, so assertions, history and reports see every one of them.
+
 ## Bounds and limits
 
 Under `rustman run` a session runs its steps, then listens until `limits.max_messages` received messages (default 50) or `limits.duration_ms` since it started (default 30000), whichever comes first, and closes with code 1000. The end is recorded as `max_messages reached (50)` or `duration reached (30000 ms)`. A server that streams forever is therefore always bounded. Ctrl+C closes the session.
@@ -149,6 +151,7 @@ Exit codes: 0 when the session ended normally (its steps done, a bound reached, 
 The [agent MCP server](agent.md) registers the `realtime_listen` tool. It takes either `path` (a saved `kind: ws` or `kind: sse` request) or `url` (`ws://` / `wss://` for a WebSocket, `http://` / `https://` for an SSE stream; a URL that starts with a `{{variable}}` opens an SSE stream unless `frames` are given) with optional `frames` (a string is a text frame, any other value is sent as JSON), plus `max_messages`, `duration_ms` and `vars`. It returns the received messages (`t_ms`, `type`, `id`, `data`), how the session ended and the request's assertions, all redacted.
 
 - A session stops after at most 100 messages or 60 s, whatever `max_messages`, `duration_ms` or the file's `limits` ask for.
+- The tool follows no live feed: it reads the session's timeline once the session ends, so it has the same bounds as the timeline.
 - The URL must pass the agent allowlist (`[agent] allowed_hosts`, or the hosts of the active environment); a `ws://` URL is checked as its `http://` origin and `wss://` as `https://`, and the environment's `ws(s)://` values count as those origins. Otherwise the call is refused with `blocked: host not allowed` and nothing is opened.
 - Sending frames is a mutation, whether they come from `frames` or from the `send` steps of a saved request: with `[agent] allow_mutations = false` (the default) the call is refused with `blocked: sending frames requires allow_mutations`, and otherwise the human confirms it as for any mutating request. An SSE `POST` stream is a mutation too.
 - Sessions are recorded in history like any request.

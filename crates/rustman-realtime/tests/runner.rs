@@ -11,7 +11,7 @@ use rustman_core::history::HistoryStore;
 use rustman_core::run::{RequestRecord, RequestStatus, plan};
 use rustman_core::{Secret, SecretStore, Workspace};
 use rustman_http::runner::{RunContext, RunOptions, Runner};
-use rustman_realtime::RealtimeRunner;
+use rustman_realtime::{FeedItem, RealtimeRunner};
 use rustman_test_support::routes::SESSION;
 use rustman_test_support::server::Tls;
 use rustman_test_support::{
@@ -365,7 +365,7 @@ fn jar_workspace(server: &TestServer, feed: &str) -> tempfile::TempDir {
 
 /// The feed of a session, with the run's records.
 async fn run_followed(root: &Path) -> (Vec<RequestRecord>, String) {
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tx, mut rx) = rustman_realtime::feed_channel();
     let realtime = RealtimeRunner {
         feed: Some(tx),
         ..RealtimeRunner::default()
@@ -373,8 +373,10 @@ async fn run_followed(root: &Path) -> (Vec<RequestRecord>, String) {
     let records = run_with(root, &realtime).await;
     drop(realtime);
     let mut fed = Vec::new();
-    while let Some(entry) = rx.recv().await {
-        fed.push(serde_json::to_string(&entry).unwrap());
+    while let Some(item) = rx.recv().await {
+        if let FeedItem::Entry(entry) = item {
+            fed.push(serde_json::to_string(&entry).unwrap());
+        }
     }
     (records, fed.join("\n"))
 }

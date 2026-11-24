@@ -11,6 +11,7 @@
 mod adhoc;
 mod error;
 mod exchange;
+mod feed;
 mod record;
 pub mod run;
 mod session;
@@ -21,6 +22,9 @@ pub mod ws;
 pub use adhoc::{AD_HOC, ad_hoc_entry, header_fields, kind_of};
 pub use error::RealtimeError;
 pub use exchange::{Handshake, RealtimeExchange, SessionEnd};
+pub use feed::{
+    FEED_MAX_BYTES, FEED_QUEUE, FeedItem, FeedReceiver, FeedSender, feed_channel, feed_channel_with,
+};
 pub use record::{messages, outcome, record};
 pub use run::RealtimeRunner;
 pub use session::{Bounds, COMMAND_QUEUE, Command, SessionOptions, command_channel};
