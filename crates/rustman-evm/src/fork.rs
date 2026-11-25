@@ -166,7 +166,7 @@ impl Anvil {
             .kill_on_drop(true);
         #[cfg(unix)]
         command.process_group(0);
-        let mut child = command.spawn().map_err(|e| {
+        let mut child = retry_busy(|| command.spawn()).await.map_err(|e| {
             EvmError::config(format!("cannot start {}: {e}", options.program.display()))
         })?;
         if let Some(pid) = child.id() {
@@ -454,8 +454,64 @@ fn process_gone(_pid: u32) -> bool {
     false
 }
 
+/// Call `attempt` again, with a short doubling pause, while it fails with
+/// "text file busy": on Linux a program just written (a stub in tests, a
+/// fresh install) can still be held open for writing by a child another
+/// thread forked meanwhile, until that child's own `exec` (milliseconds).
+async fn retry_busy<T>(mut attempt: impl FnMut() -> std::io::Result<T>) -> std::io::Result<T> {
+    let mut pause = Duration::from_millis(10);
+    for _ in 0..5 {
+        match attempt() {
+            Err(e) if e.kind() == std::io::ErrorKind::ExecutableFileBusy => {
+                tokio::time::sleep(pause).await;
+                pause *= 2;
+            }
+            result => return result,
+        }
+    }
+    attempt()
+}
+
 #[cfg(test)]
 mod tests {
+    fn busy() -> std::io::Error {
+        std::io::Error::from(std::io::ErrorKind::ExecutableFileBusy)
+    }
+
+    #[tokio::test]
+    async fn a_busy_program_is_retried_until_it_starts() {
+        // Regression: a fake anvil written just before the start failed
+        // with "Text file busy" when a parallel test forked meanwhile.
+        let mut calls = 0;
+        let started = super::retry_busy(|| {
+            calls += 1;
+            if calls < 3 { Err(busy()) } else { Ok(calls) }
+        });
+        assert_eq!(started.await.unwrap(), 3);
+    }
+
+    #[tokio::test]
+    async fn other_errors_and_a_program_that_stays_busy_are_returned() {
+        let mut calls = 0;
+        let denied = super::retry_busy::<()>(|| {
+            calls += 1;
+            Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied))
+        });
+        assert_eq!(
+            denied.await.unwrap_err().kind(),
+            std::io::ErrorKind::PermissionDenied
+        );
+        assert_eq!(calls, 1);
+        let mut calls = 0;
+        let busy_forever = super::retry_busy::<()>(|| {
+            calls += 1;
+            Err(busy())
+        });
+        let err = busy_forever.await.unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::ExecutableFileBusy);
+        assert_eq!(calls, 6);
+    }
+
     use super::*;
 
     #[test]
