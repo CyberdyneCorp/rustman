@@ -3,8 +3,10 @@
 //! `pure` functions unless all are shown, as read-only `eth_call`
 //! simulations), typed argument fields, a block tag selector, and the
 //! decoded result with unit toggles on quantities, the revert, the call
-//! trace and the event timeline. An `evm-tx` opens read-only: signing is
-//! not available.
+//! trace and the event timeline. An `evm-tx` opens read-only; `evm.sign`
+//! takes it through the signing gate (see [`crate::evm_sign`]), and its
+//! Result tab shows what the gate showed (preview, summary, hash, decoded
+//! receipt, explorer link) and the audit record.
 //!
 //! Edits patch the file's text (top-level `function`, `args` and `block`
 //! only), so comments and every other field are kept as written.
@@ -97,6 +99,31 @@ pub struct EvmResultView {
 }
 
 impl EvmResultView {
+    /// From the audit record of a signed transaction: its status and
+    /// chain, then the hash, block, gas, fee and explorer link.
+    pub fn from_audit(evm: &Value) -> Self {
+        let text = |v: &Value| v.as_str().map_or_else(|| v.to_string(), str::to_owned);
+        let outputs = ["hash", "nonce", "block", "gas_used", "fee", "explorer"]
+            .into_iter()
+            .filter(|key| !evm[*key].is_null())
+            .map(|key| OutputRow {
+                name: key.to_owned(),
+                value: printable(&text(&evm[key])).into_owned(),
+            })
+            .collect();
+        let status = format!(
+            "transaction {} · {} ({})",
+            text(&evm["status"]),
+            text(&evm["chain"]),
+            text(&evm["chain_id"])
+        );
+        Self {
+            status: Some(printable(&status).into_owned()),
+            outputs,
+            ..Self::default()
+        }
+    }
+
     /// From the runner's `evm` record.
     pub fn from_record(evm: &Value) -> Self {
         let result = &evm["result"];
@@ -163,6 +190,9 @@ pub struct EvmEditor {
     /// The live event timeline: one decoded line per event.
     pub events: Vec<String>,
     pub native: Denomination,
+    /// What the signing gate showed for the last `evm.sign`, escaped;
+    /// `true` marks a warning.
+    pub sign_log: Vec<(String, bool)>,
 }
 
 /// The most lines the event timeline keeps.
@@ -187,6 +217,7 @@ impl EvmEditor {
             result: None,
             events: Vec::new(),
             native: Denomination::default(),
+            sign_log: Vec::new(),
         };
         editor.abi_note = match common.abi.map(|a| a.get()) {
             Some(AbiSpec::Source(name)) if BUILT_IN.contains(&name.as_str()) => {
@@ -305,12 +336,24 @@ impl EvmEditor {
     /// Show the runner's `evm` record, and add the events its call emits
     /// (simulated when the request reads events) to the timeline.
     pub fn set_result(&mut self, evm: &Value) {
-        self.result = Some(EvmResultView::from_record(evm));
+        self.result = Some(match evm["kind"] == "evm-tx" {
+            true => EvmResultView::from_audit(evm),
+            false => EvmResultView::from_record(evm),
+        });
         self.tab = EvmTab::Result;
         let lines = evm.get("events").and_then(Value::as_array);
         for line in lines.into_iter().flatten().filter_map(Value::as_str) {
             self.push_event(line);
         }
+    }
+
+    /// Add a line the signing gate showed, bounded like the timeline.
+    pub fn push_sign_line(&mut self, line: &str, warn: bool) {
+        if self.sign_log.len() >= MAX_EVENTS {
+            self.sign_log.drain(..=self.sign_log.len() - MAX_EVENTS);
+        }
+        self.sign_log
+            .push((rustman_core::text::printable_line(line).into_owned(), warn));
     }
 
     /// Add a decoded event line to the timeline, dropping the oldest past
@@ -517,7 +560,7 @@ impl PaneEditor for EvmEditor {
 
     fn notice(&self) -> Option<String> {
         if self.is_tx() {
-            return Some(rustman_core::model::EVM_TX_NEEDS_SIGNING.to_owned());
+            return Some(crate::evm_sign::TX_NOTICE.to_owned());
         }
         self.abi_note.clone()
     }

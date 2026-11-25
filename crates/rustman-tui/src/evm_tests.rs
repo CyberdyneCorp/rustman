@@ -2,7 +2,7 @@
 //! function picker (view and pure functions by default, all on toggle),
 //! typed argument fields, the block selector, the decoded result with unit
 //! toggles, a revert, the trace and the event timeline, and an `evm-tx`
-//! opened read-only.
+//! opened read-only (signed only by `evm.sign`, see `evm_sign_tests`).
 
 use std::path::Path;
 
@@ -219,12 +219,7 @@ fn an_evm_tx_opens_read_only() {
         );
     let mut editor = editor(&tx);
     assert_eq!(editor.kind(), "evm-tx");
-    assert_eq!(
-        editor.notice().as_deref(),
-        Some(
-            "evm-tx: sign and send it with `rustman evm send --sign` or `rustman run --sign`; nothing was signed or sent"
-        )
-    );
+    assert_eq!(editor.notice().as_deref(), Some(crate::evm_sign::TX_NOTICE));
     assert!(!press(editor.as_mut(), Code::Down));
 }
 

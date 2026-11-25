@@ -1,5 +1,6 @@
 ---
 source: crates/rustman-tui/src/commands.rs
+assertion_line: 678
 expression: text
 ---
 ┌ › Sidebar ───────────────┐┌ Request ───────────────────────────────────┐┌ Response ──────────────────────────────────┐
@@ -9,7 +10,7 @@ expression: text
 │                       │                                                                      │                       │
 │                       │  Send request                                    Ctrl+Enter, Ctrl+R  │                       │
 │                       │  Send following subgraph pagination                           Alt+G  │                       │
-│                       │                                                                      │                       │
+│                       │  Sign and send evm-tx (confirm first)                         Alt+T  │                       │
 │                       │                                                                      │                       │
 │                       │                                                                      │                       │
 │                       │                                                                      │                       │

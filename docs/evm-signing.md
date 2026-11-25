@@ -2,9 +2,9 @@
 
 `kind: evm-tx` requests are the only way Rustman signs or sends a transaction. Every one goes through the signing gate of the `rustman-evm-signing` crate; the agent interface (`rustman-mcp`) does not depend on that crate, so agents can never reach a signer.
 
-This page covers signer configuration (keystore and OS keychain; hardware wallets are not available yet), the refusal of raw private keys, the gate preconditions, fees, gas and nonces, the confirmation prompt, sending, the receipt wait and the audit record that `rustman evm send` produces, and signing in `rustman run --sign`. A plain `rustman run` skips `evm-tx` files as `skipped (signing not requested)`, which is not a failure.
+This page covers signer configuration (keystore and OS keychain; hardware wallets are not available yet), the refusal of raw private keys, the gate preconditions, fees, gas and nonces, the confirmation prompt, sending, the receipt wait and the audit record that `rustman evm send` produces, signing in `rustman run --sign`, and signing from the TUI's `evm-tx` pane. A plain `rustman run` skips `evm-tx` files as `skipped (signing not requested)`, which is not a failure.
 
-Signing happens on the command line only (`--sign`). The TUI does not sign in this release: an `evm-tx` file opens read-only there, with a notice pointing to `rustman evm send --sign` and `rustman run --sign`. TUI signing is tracked in [#112](https://github.com/CyberdyneCorp/rustman/issues/112).
+Every signature needs a per-invocation opt-in: `--sign` on the command line, or the `evm.sign` action (`Alt+T`) in the TUI (see [In the TUI](#in-the-tui)).
 
 ## Opting in
 
@@ -237,6 +237,22 @@ rustman run . --env anvil --sign --yes-local
 - `--yes-local` (which requires `--sign`) confirms without a prompt on chain 31337 and `[evm] headless_signing_chains` only. Without a terminal, every `evm-tx` file on another chain is refused, and the run exits with code 4. On a terminal, each transaction is confirmed as with `rustman evm send`.
 - Nonces count up across the run: two transactions of one signer use the pending count, then that count + 1, without asking the node again.
 - A refusal is the request's error and makes the run exit with code 4; a receipt timeout, an unreadable receipt or an unknown broadcast is an error (exit code 3), with the audit record kept; Ctrl+C before a transaction is signed skips it as interrupted (exit code 130), and Ctrl+C during its receipt wait keeps its audit record (`pending`) and makes the interrupted run exit with code 3; a failed receipt assertion or a transaction that reverted on chain fails the request (exit code 1). The receipt timeout is 120 s and one confirmation is awaited.
+
+## In the TUI
+
+An `evm-tx` file opens read-only in the EVM pane, with the notice ``evm-tx: Alt+T (evm.sign) signs and sends it after your confirmation; [evm] allow_signing = true is required``. `Ctrl+R` (`request.send`) never signs: the request is skipped as `signing not requested`, as in a plain `rustman run`.
+
+`evm.sign` (`Alt+T`, or **Sign and send evm-tx (confirm first)** in the palette) is the TUI's counterpart of `--sign`. It takes the request through the same gate as `rustman evm send --sign`, with every precondition shared: `[evm] allow_signing = true`, a signer from `RUSTMAN_EVM_SIGNER` or the request's `signer` (keystore or keychain signers; raw keys refused), the environment's `chain_id` pin and the node's `eth_chainId`, the simulation, fees and nonces, then the receipt wait and the audit record. `evm.sign_force_revert` (palette only) is the `--force-revert` equivalent. There is no `--yes-local` equivalent: every transaction is confirmed in the dialog, on chain 31337 too.
+
+The gate asks in a modal dialog:
+
+- the keystore password (when the signer has no `password` secret), never echoed;
+- the decoded summary, the same fields as on the command line, each value escaped and kept in its own column, with **Cancel** preselected. A forced transaction carries a `SIMULATION REVERTED: …` banner, and a max cost above `[evm] max_cost` a warning;
+- on chain 1 and `[evm] protected_chains`, after **Sign and send**, the chain name, typed exactly.
+
+`Esc` (or `Ctrl+C`) at any of them stops the gate: nothing is signed or sent and the request is shown as skipped (interrupted). Choosing **Cancel** declines (`cancelled; nothing was signed or sent`). A wrong chain name cancels.
+
+The gate runs off the UI loop, so the screen stays responsive while the password is checked and the receipt is awaited. The Result tab shows what the gate showed (the preview, the summary, `sent 0x…`, the decoded receipt and the explorer link), then the audit record's status, hash, block, gas used and fee. Another send from that tab is refused while it runs. `Esc` in the pane cancels it: before the signature nothing is sent; during the receipt wait the audit record is kept with status `pending` and the hash is shown. Quitting does the same, and waits for the audit record to be written before Rustman exits. History keeps the same audit entry as `rustman evm send`, including `receipt-unknown` and `broadcast-unknown`.
 
 ## Agents can never sign
 

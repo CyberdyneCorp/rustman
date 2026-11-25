@@ -79,6 +79,8 @@ pub enum ActionId {
     GraphqlSubscriptionStart,
     GraphqlSubscriptionStop,
     GraphqlPaginate,
+    EvmSign,
+    EvmSignForceRevert,
     GraphqlDisplay,
     GraphqlLinks,
     CopyAs,
@@ -104,7 +106,7 @@ const fn def(action: ActionId, id: &'static str, title: &'static str) -> ActionD
 }
 
 /// Every action, in the order the palette and the docs list them.
-pub const REGISTRY: [ActionDef; 80] = [
+pub const REGISTRY: [ActionDef; 82] = [
     def(ActionId::RequestSend, "request.send", "Send request"),
     def(ActionId::RequestCancel, "request.cancel", "Cancel request"),
     def(ActionId::RequestSave, "request.save", "Save request"),
@@ -244,6 +246,16 @@ pub const REGISTRY: [ActionDef; 80] = [
         ActionId::GraphqlPaginate,
         "graphql.paginate",
         "Send following subgraph pagination",
+    ),
+    def(
+        ActionId::EvmSign,
+        "evm.sign",
+        "Sign and send evm-tx (confirm first)",
+    ),
+    def(
+        ActionId::EvmSignForceRevert,
+        "evm.sign_force_revert",
+        "Sign evm-tx even if the simulation reverts",
     ),
     def(
         ActionId::GraphqlDisplay,

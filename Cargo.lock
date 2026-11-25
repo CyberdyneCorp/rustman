@@ -7736,6 +7736,7 @@ dependencies = [
 name = "rustman-tui"
 version = "0.1.0"
 dependencies = [
+ "alloy-primitives",
  "base64 0.23.1",
  "bytes",
  "crossterm",
@@ -7751,6 +7752,7 @@ dependencies = [
  "rustman-bench",
  "rustman-core",
  "rustman-evm",
+ "rustman-evm-signing",
  "rustman-graphql",
  "rustman-grpc",
  "rustman-http",

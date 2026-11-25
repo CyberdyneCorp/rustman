@@ -36,6 +36,7 @@ pub fn shell_key(state: &mut State, chord: Chord) -> Vec<Effect> {
         Some(Overlay::Monitors(_)) => crate::monitors::key(state, chord),
         Some(Overlay::PluginTrust(_)) => crate::plugin_trust::key(state, chord),
         Some(Overlay::ChainLinks(_)) => crate::chain_links::key(state, chord),
+        Some(Overlay::Sign(_)) => crate::evm_sign::key(state, chord),
         _ => match crate::webhook::key(state, chord)
             .or_else(|| crate::mock_server::key(state, chord))
             .or_else(|| crate::mcp::key(state, chord))
@@ -312,6 +313,8 @@ pub fn run(state: &mut State, action: ActionId) -> Vec<Effect> {
             graphql::stop_subscription(state);
         }
         ActionId::GraphqlPaginate => return send::start_paged(state),
+        ActionId::EvmSign => return crate::evm_sign::start(state, false),
+        ActionId::EvmSignForceRevert => return crate::evm_sign::start(state, true),
         ActionId::GraphqlDisplay => graphql::cycle_display(state),
         ActionId::GraphqlLinks => crate::chain_links::open(state),
         ActionId::EditorComplete if jsonrpc::is_active(state) => jsonrpc::complete(state),

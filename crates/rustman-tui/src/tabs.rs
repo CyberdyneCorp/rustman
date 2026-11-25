@@ -64,6 +64,9 @@ pub struct InFlight {
     pub outbound: Option<UnboundedSender<serde_json::Value>>,
     /// The other end of `outbound`, taken by the send job.
     pub typed: Typed,
+    /// An `evm-tx` going through the signing gate: another send from the
+    /// tab is refused until it ends, so it is never cancelled by one.
+    pub signing: bool,
 }
 
 /// The receiving end of the messages typed during a gRPC bidi call.
@@ -193,6 +196,7 @@ impl Tab {
             live: LiveEvents::default(),
             outbound: Some(outbound),
             typed: Arc::new(Mutex::new(Some(typed))),
+            signing: false,
         });
         (seq, token)
     }

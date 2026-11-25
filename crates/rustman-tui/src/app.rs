@@ -129,6 +129,9 @@ pub enum Overlay {
     PluginTrust(Box<rustman_core::plugins::PluginTrustPrompt>),
     /// A GraphQL result's addresses and hashes, into the EVM toolkit.
     ChainLinks(Box<crate::chain_links::ChainLinks>),
+    /// The signing gate asks: the keystore password, the confirmation of
+    /// the decoded summary, or the typed chain name.
+    Sign(Box<crate::evm_sign::SignDialog>),
 }
 
 /// What fills the terminal.
@@ -339,6 +342,8 @@ pub enum Action {
     SnapshotApproved(Box<review::Approved>),
     /// The Monitors view's load or run finished.
     MonitorsDone(Box<crate::monitors::MonitorsDone>),
+    /// A signing job showed a line or asks a question.
+    Sign(Box<crate::evm_sign::Msg>),
 }
 
 /// Why the loop stopped without the user quitting.
@@ -668,6 +673,7 @@ fn on_workbench(state: &mut State, action: Action) -> Vec<Effect> {
             crate::monitors::on_done(state, *done);
             Vec::new()
         }
+        Action::Sign(msg) => crate::evm_sign::on_msg(state, *msg),
         other => viewer_keys::on_action(state, other),
     }
 }

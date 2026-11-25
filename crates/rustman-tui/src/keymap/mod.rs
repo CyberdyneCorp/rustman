@@ -123,6 +123,7 @@ pub const DEFAULT: &[Builtin] = &[
     (Context::Global, "Alt+S", ActionId::GraphqlSubscriptionStart),
     (Context::Global, "Alt+X", ActionId::GraphqlSubscriptionStop),
     (Context::Global, "Alt+G", ActionId::GraphqlPaginate),
+    (Context::Global, "Alt+T", ActionId::EvmSign),
     (Context::Global, "Alt+A", ActionId::SnapshotReview),
     (Context::Global, "Ctrl+O", ActionId::TraceOpen),
     (Context::Editor, "Ctrl+E", ActionId::EditorExternal),
