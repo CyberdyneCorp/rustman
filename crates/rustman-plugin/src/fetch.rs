@@ -5,8 +5,10 @@
 //! trusted (`rustman plugin verify`, a headless load), so the URL a
 //! repository commits must not reach this machine or a private network: a
 //! host name that resolves to an address that is not public is refused
-//! when the connection opens, unless the URL names that address (or
-//! `localhost`) itself.
+//! when the connection opens. A URL naming such an address (or
+//! `localhost`) itself is downloaded only by `rustman plugin add`, whose
+//! URL the user typed ([`FetchOptions::allow_local`]); a committed one
+//! (`plugin verify`, a headless load) is refused before anything is sent.
 
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -31,6 +33,11 @@ pub struct FetchOptions {
     /// cannot be turned off.
     pub ca_bundle: Option<Vec<u8>>,
     pub timeout: Duration,
+    /// Download from a URL that names this machine or a private network
+    /// (`localhost`, a literal non-public address). Only `plugin add`
+    /// turns it on: there the user typed the URL. Off, such a URL is
+    /// refused before any connection.
+    pub allow_local: bool,
 }
 
 impl Default for FetchOptions {
@@ -38,6 +45,7 @@ impl Default for FetchOptions {
         Self {
             ca_bundle: None,
             timeout: Duration::from_secs(60),
+            allow_local: false,
         }
     }
 }
@@ -57,6 +65,9 @@ pub async fn fetch(plugin: &str, url: &str, options: &FetchOptions) -> Result<Ve
     let engine = HttpEngine::with_address_guard(Arc::new(check_download_address));
     let send = send_options(options);
     let mut current = require_https(url)?;
+    if !options.allow_local {
+        refuse_local(plugin, url, &current)?;
+    }
     for _ in 0..=MAX_REDIRECTS {
         let exchange = engine
             .send(&get(current.as_str()), &send)
@@ -83,6 +94,23 @@ pub fn check_download_address(host: &str, ip: IpAddr) -> Result<(), String> {
         let bare = host.trim_start_matches('[').trim_end_matches(']');
         format!("{bare} resolves to the non-public address {ip} (download from the address itself to reach it)")
     })
+}
+
+/// Refuse a committed URL source whose host names this machine or a
+/// private network itself (`localhost`, `10.1.2.3`, `[::1]`): verifying an
+/// untrusted clone must not send a request there. Redirects stay on this
+/// host, so checking the first URL covers them.
+fn refuse_local(plugin: &str, url: &str, parsed: &url::Url) -> Result<(), LoadError> {
+    let host = parsed.host_str().unwrap_or_default();
+    if !crate::sandbox::net::is_local_host(host) {
+        return Ok(());
+    }
+    let bare = host.trim_start_matches('[').trim_end_matches(']');
+    let message = format!(
+        "{bare} is this machine or a private network, which a committed source \
+         may not name (`rustman plugin add` run by you downloads and caches it)"
+    );
+    Err(failed(plugin, url, &message))
 }
 
 /// The next hop of a redirect from `current` to `location`: `https`, on
@@ -183,6 +211,29 @@ mod tests {
         assert!(check_download_address("plugins.example.com", ip("93.184.216.34")).is_ok());
         assert!(check_download_address("localhost", ip("127.0.0.1")).is_ok());
         assert!(check_download_address("10.1.2.3", ip("10.1.2.3")).is_ok());
+    }
+
+    /// A committed URL naming this machine or a private network is refused
+    /// before anything is sent; a public host is not.
+    #[test]
+    fn committed_sources_may_not_name_local_addresses() {
+        let check = |url: &str| refuse_local("p", url, &url::Url::parse(url).unwrap());
+        for local in [
+            "https://localhost:8443/p.wasm",
+            "https://10.1.2.3/p.wasm",
+            "https://169.254.169.254/p.wasm",
+            "https://[::1]:9/p.wasm",
+            "https://[fd00::1]/p.wasm",
+        ] {
+            let err = check(local).unwrap_err().to_string();
+            assert!(
+                err.contains("is this machine or a private network"),
+                "{local}: {err}"
+            );
+        }
+        assert!(check("https://plugins.example.com/p.wasm").is_ok());
+        assert!(check("https://93.184.216.34/p.wasm").is_ok());
+        assert!(!FetchOptions::default().allow_local);
     }
 
     #[test]

@@ -62,9 +62,85 @@ fn key_segment(segment: &str) -> bool {
         && bytes.iter().any(u8::is_ascii_alphabetic)
 }
 
+/// What a URL's userinfo is shown and stored as.
+pub const USERINFO_MARK: &str = "«redacted:userinfo»";
+
+/// The byte range of the userinfo of `url` (`scheme://userinfo@host`):
+/// before the last `@` of the authority, as URL parsers read it. `None`
+/// without a scheme, without an `@`, or with an empty userinfo.
+pub fn url_userinfo(url: &str) -> Option<std::ops::Range<usize>> {
+    let start = url.find("://")? + 3;
+    userinfo_at(url, start, &['/', '?', '#', '\\'])
+}
+
+/// The userinfo after `start` (just past a `://`), the authority ending at
+/// the first of `ends`.
+fn userinfo_at(text: &str, start: usize, ends: &[char]) -> Option<std::ops::Range<usize>> {
+    let rest = &text[start..];
+    let authority = &rest[..rest.find(ends).unwrap_or(rest.len())];
+    let at = authority.rfind('@')?;
+    (at > 0).then_some(start..start + at)
+}
+
+/// `text` with the userinfo of every URL in it (`scheme://user:pw@host`)
+/// replaced by [`USERINFO_MARK`]: a password typed into a URL is no known
+/// secret, so redaction alone would keep it. Text without one is borrowed.
+pub fn hide_userinfo(text: &str) -> std::borrow::Cow<'_, str> {
+    const ENDS: [char; 11] = ['/', '?', '#', '\\', ' ', '\t', '\n', '"', '\'', '>', ')'];
+    let mut out = String::new();
+    let mut copied = 0;
+    let mut from = 0;
+    while let Some(found) = text[from..].find("://") {
+        let start = from + found + 3;
+        from = start;
+        let has_scheme = text[..start - 3]
+            .chars()
+            .next_back()
+            .is_some_and(|c| c.is_ascii_alphanumeric());
+        let Some(range) = has_scheme
+            .then(|| userinfo_at(text, start, &ENDS))
+            .flatten()
+        else {
+            continue;
+        };
+        out.push_str(&text[copied..range.start]);
+        out.push_str(USERINFO_MARK);
+        copied = range.end;
+        from = range.end;
+    }
+    if copied == 0 {
+        return std::borrow::Cow::Borrowed(text);
+    }
+    out.push_str(&text[copied..]);
+    std::borrow::Cow::Owned(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn userinfo_is_found_and_hidden() {
+        let url = "https://alice:hunter2@h.example:8443/p@x?q=a@b";
+        assert_eq!(&url[url_userinfo(url).unwrap()], "alice:hunter2");
+        assert_eq!(url_userinfo("https://h/p@x"), None);
+        assert_eq!(url_userinfo("https://@h/"), None);
+        assert_eq!(url_userinfo("no url"), None);
+        assert_eq!(
+            hide_userinfo(url),
+            "https://«redacted:userinfo»@h.example:8443/p@x?q=a@b"
+        );
+        let text = "error sending to http://u:p@a/x (from wss://tok@b): mail me@c.example";
+        assert_eq!(
+            hide_userinfo(text),
+            "error sending to http://«redacted:userinfo»@a/x \
+             (from wss://«redacted:userinfo»@b): mail me@c.example"
+        );
+        assert!(matches!(
+            hide_userinfo("https://h/x and ://u@v"),
+            std::borrow::Cow::Borrowed(_)
+        ));
+    }
 
     #[test]
     fn keys_in_paths_queries_and_userinfo_are_found() {

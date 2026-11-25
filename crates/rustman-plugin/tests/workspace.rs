@@ -26,6 +26,8 @@ fn https_options(certs: &TestCerts) -> LoadOptions {
     LoadOptions {
         fetch: FetchOptions {
             ca_bundle: Some(certs.ca_pem.clone().into_bytes()),
+            // The test server is on localhost.
+            allow_local: true,
             ..FetchOptions::default()
         },
         allow_fetch: true,
@@ -164,6 +166,29 @@ async fn url_sources_are_fetched_once_and_cached() {
     assert_eq!(std::fs::read(cache_path(ws.root(), &pin)).unwrap(), wasm);
 }
 
+/// A committed URL source naming this machine (or a private network) is
+/// not downloaded by `plugin verify` or a load: nothing is sent to it.
+#[tokio::test]
+async fn committed_local_sources_are_not_downloaded() {
+    let certs = TestCerts::generate();
+    let server = FileServer::https(&certs).await;
+    let wasm = plugin_bytes();
+    let pin = sha256_hex(&wasm);
+    server.serve("/hmac.wasm", wasm);
+    let ws = Ws::new();
+    let url = server.url("/hmac.wasm");
+    ws.declare("hmac", &url, &pin, &[]);
+    let mut options = https_options(&certs);
+    options.fetch.allow_local = false;
+    let err = load(ws.root(), &options).await.unwrap_err().to_string();
+    assert!(
+        err.contains("is this machine or a private network"),
+        "{err}"
+    );
+    assert_eq!(server.hits("/hmac.wasm"), 0);
+    assert!(!cache_path(ws.root(), &pin).exists());
+}
+
 #[tokio::test]
 async fn no_silent_upgrade() {
     let certs = TestCerts::generate();
@@ -226,13 +251,20 @@ async fn local_https_download() {
         b"component bytes"
     );
     // TLS verification is always on: without the test CA, it fails.
-    let err = fetch("p", &server.url("/p.wasm"), &FetchOptions::default())
+    let no_ca = FetchOptions {
+        allow_local: true,
+        ..FetchOptions::default()
+    };
+    let hits = server.hits("/p.wasm");
+    let err = fetch("p", &server.url("/p.wasm"), &no_ca)
         .await
         .unwrap_err();
     assert!(
         err.to_string().starts_with("plugin p: download of "),
         "{err}"
     );
+    assert!(!err.to_string().contains("private network"), "{err}");
+    assert_eq!(server.hits("/p.wasm"), hits);
 }
 
 #[tokio::test]

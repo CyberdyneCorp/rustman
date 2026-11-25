@@ -33,12 +33,18 @@ History SHALL keep at most `[history] max_entries` exchanges (default 500) per s
 - **THEN** the store SHALL hold 500 exchanges and the oldest SHALL be gone, including its spill file
 
 ### Requirement: Redacted at rest
-History SHALL store exchanges only after applying the secret redaction invariant. `--show-secrets` SHALL NOT affect what is stored.
+History SHALL store exchanges only after applying the secret redaction invariant. `--show-secrets` SHALL NOT affect what is stored. The userinfo of every stored URL (`user:password@`) SHALL be stored as `«redacted:userinfo»`, and the replay part SHALL keep it only when it comes from secrets.
 
 #### Scenario: Token not stored
 - **GIVEN** a request with a secret bearer token
 - **WHEN** the exchange is recorded
 - **THEN** no file under `.rustman/history/` SHALL contain the token value
+
+#### Scenario: Password typed into a URL
+- **GIVEN** a request to `https://alice:hunter2@api.example.com/x` that uses no secret variable
+- **WHEN** the exchange is recorded
+- **THEN** the entry SHALL show `https://«redacted:userinfo»@api.example.com/x` and no file SHALL contain `hunter2`
+- **AND** `rustman history replay` SHALL fail before sending, naming `the URL's userinfo` as not kept
 
 ### Requirement: List and search
 `rustman history list [--limit n] [--status <code|class>] [--method m] [--grep <text>] [--since <duration>]` SHALL list exchanges newest first, as one line each: time, method, URL, status and total ms. `--grep` SHALL match URL, request body and response body text. `--json` SHALL print machine-readable output.

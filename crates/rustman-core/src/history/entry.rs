@@ -1,5 +1,7 @@
 //! One recorded exchange, as stored in `.rustman/history/<ulid>.json`.
 
+use std::borrow::Cow;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -7,6 +9,7 @@ use super::replay::ReplayRequest;
 use super::ulid::new_ulid;
 use crate::run::{RequestRecord, SentRequest, now_rfc3339};
 use crate::trace::TraceRecord;
+use crate::url_secrets::hide_userinfo;
 
 /// The `schema` of every stored entry.
 pub const ENTRY_SCHEMA: &str = "rustman.history/v1";
@@ -55,21 +58,32 @@ pub struct NewEntry<'a> {
 }
 
 impl Entry {
-    /// A new entry with a fresh id and the current time.
+    /// A new entry with a fresh id and the current time. The userinfo of
+    /// every stored URL (`user:password@`) is replaced by a marker: a
+    /// credential typed into a URL is no known secret, so the redactor
+    /// keeps it.
     pub fn new(new: NewEntry<'_>) -> Self {
         let exchange = new.record.exchange.as_ref();
+        let mut sent = exchange.map_or(new.sent, |e| e.request.clone());
+        sent.url = hide_userinfo(&sent.url).into_owned();
+        let mut record = serde_json::to_value(new.record).unwrap_or(Value::Null);
+        hide_record_userinfo(&mut record);
         Self {
             schema: ENTRY_SCHEMA.to_owned(),
             id: new_ulid(),
             timestamp: now_rfc3339(),
             request: new.request.unwrap_or(AD_HOC_REQUEST).to_owned(),
             environment: new.environment.map(str::to_owned),
-            sent: exchange.map_or(new.sent, |e| e.request.clone()),
+            sent,
             status: exchange.map(|e| e.response.status),
             total_ms: exchange.map(|e| e.timings.total_ms),
-            error: new.record.error.clone(),
+            error: new
+                .record
+                .error
+                .as_deref()
+                .map(|e| hide_userinfo(e).into_owned()),
             spill: new.spill,
-            record: serde_json::to_value(new.record).unwrap_or(Value::Null),
+            record,
             replay: new.replay,
         }
     }
@@ -89,9 +103,67 @@ impl Entry {
     }
 }
 
+/// Hide the userinfo of the URLs `record` stores: the request's, each
+/// redirect's, and any in its error and warnings.
+fn hide_record_userinfo(record: &mut Value) {
+    let hide = |value: &mut Value| {
+        if let Value::String(text) = value
+            && let Cow::Owned(hidden) = hide_userinfo(text)
+        {
+            *text = hidden;
+        }
+    };
+    if let Some(url) = record.pointer_mut("/exchange/request/url") {
+        hide(url);
+    }
+    if let Some(Value::Array(redirects)) = record.pointer_mut("/exchange/redirects") {
+        redirects
+            .iter_mut()
+            .filter_map(|r| r.get_mut("url"))
+            .for_each(hide);
+    }
+    if let Some(error) = record.get_mut("error") {
+        hide(error);
+    }
+    if let Some(Value::Array(warnings)) = record.get_mut("warnings") {
+        warnings.iter_mut().for_each(hide);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stored_urls_keep_no_userinfo() {
+        let mut record = RequestRecord::new("r".into(), "r".into(), "r.rman.yaml".into());
+        record.error = Some("connect to https://alice:pw1@h.example/x failed".into());
+        record.warnings = vec!["via https://tok@h.example".into()];
+        let sent = SentRequest {
+            method: "GET".into(),
+            url: "https://alice:pw1@h.example/x?q=1".into(),
+            headers: Vec::new(),
+            body: None,
+        };
+        let entry = Entry::new(NewEntry {
+            record: &record,
+            sent,
+            request: None,
+            environment: None,
+            spill: None,
+            replay: None,
+        });
+        assert_eq!(
+            entry.sent.url,
+            "https://«redacted:userinfo»@h.example/x?q=1"
+        );
+        assert_eq!(
+            entry.error.as_deref(),
+            Some("connect to https://«redacted:userinfo»@h.example/x failed")
+        );
+        let json = serde_json::to_string(&entry).unwrap();
+        assert!(!json.contains("pw1") && !json.contains("tok@"), "{json}");
+    }
 
     fn entry(record: Value) -> Entry {
         let json = serde_json::json!({

@@ -7562,6 +7562,7 @@ dependencies = [
  "jsonschema",
  "libc",
  "rand 0.10.4",
+ "rustix",
  "rustman-core",
  "rustman-http",
  "rustman-plugin",
@@ -7579,6 +7580,7 @@ dependencies = [
  "url",
  "wasmtime",
  "wat",
+ "winapi-util",
  "wit-component 0.261.0",
  "wit-parser 0.261.0",
 ]

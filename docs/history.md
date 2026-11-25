@@ -50,6 +50,8 @@ Entries are readable by the current user only, like the secrets file: mode `0600
 
 History is written through the same redaction as every other output (see [Environments, variables and secrets](environments.md)): secret values become `«redacted:<name>»`, and the values of the `Authorization`, `Proxy-Authorization`, `Cookie` and `Set-Cookie` headers become `«redacted:<Header-Name>»`, including when a server echoes them back. `--show-secrets` never changes what is stored.
 
+A password typed into a URL is no known secret, so redaction alone would keep it: the userinfo of every stored URL (the request's, each redirect's, and any URL in an error or warning) is stored as `«redacted:userinfo»`, so `https://alice:hunter2@api.example.com/x` is recorded as `https://«redacted:userinfo»@api.example.com/x`. The `replay` part keeps the userinfo only when it comes from secrets (`https://{{user}}:{{password}}@api.example.com/x`); written literally, it is not kept, and `rustman history replay` stops before sending with `this exchange cannot be replayed: the URL's userinfo was not kept in history (send the request from its file instead)`.
+
 ## Listing and searching
 
 `rustman history list` prints one line per exchange, newest first: id, time, method, URL, status and total time. The status is the HTTP status; an exchange without one (a [plugin request kind](plugins.md)) shows its recorded outcome, `passed` or `failed`, and one that got no response shows `error`.

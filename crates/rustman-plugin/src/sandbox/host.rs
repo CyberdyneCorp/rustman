@@ -134,20 +134,19 @@ impl fs_read::Host for HostState {
     }
 }
 
-/// The entry names of the folder at the canonical `path`, refused unless
-/// `path` still resolves to itself after the listing (a component swapped
-/// for a symlink meanwhile).
+/// The entry names of the folder at the canonical `path`, refused when
+/// `path` changed between the grant check and the listing (a component
+/// swapped for a symlink): see [`crate::files::list_checked_dir`].
 fn list_checked(path: &std::path::Path) -> Result<Vec<String>, HostError> {
     let failed = |e: std::io::Error| HostError::Failed(e.to_string());
-    let entries = std::fs::read_dir(path).map_err(failed)?;
+    let Some(entries) = crate::files::list_checked_dir(path).map_err(failed)? else {
+        return Err(HostError::Failed(SWAPPED.to_owned()));
+    };
     let mut names: Vec<String> = entries
-        .filter_map(Result::ok)
-        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .iter()
+        .map(|name| name.to_string_lossy().into_owned())
         .filter(|name| !name.eq_ignore_ascii_case(rustman_core::secrets::STATE_DIR))
         .collect();
-    if dunce::canonicalize(path).map_err(failed)? != path {
-        return Err(HostError::Failed(SWAPPED.to_owned()));
-    }
     names.sort();
     Ok(names)
 }

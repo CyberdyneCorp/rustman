@@ -25,9 +25,10 @@ use crate::model::{
 use crate::redact::{Redactor, sensitive_header};
 use crate::secret::Secret;
 use crate::secrets::provider::{SecretProviders, SecretRef, resolve_with_secrets};
+use crate::url_secrets::{USERINFO_MARK, url_userinfo};
 use crate::vars::{
-    Interpolator, Layer, Lookup, ResolveError, ResolvedBody, ResolvedFile, ResolvedPair,
-    ResolvedRequest, Resolver, SecretLookup, TlsFiles, VarSource,
+    Interpolator, Layer, Lookup, ResolveError, Resolved, ResolvedBody, ResolvedFile, ResolvedPair,
+    ResolvedRequest, Resolver, SecretLookup, SecretSpan, TlsFiles, VarSource,
 };
 
 /// A resolved request as templates over its secrets.
@@ -171,7 +172,7 @@ impl ReplayRequest {
             t: Templater::new(&request.secrets),
             withheld: Vec::new(),
         };
-        let url = builder.t.resolved(&request.url);
+        let url = builder.url(&request.url);
         let query = request.query.iter().map(|p| builder.pair(p)).collect();
         let headers = request.headers.iter().map(|p| builder.header(p)).collect();
         let body = builder.body(&request.body);
@@ -300,6 +301,39 @@ struct Builder<'a> {
 }
 
 impl Builder<'_> {
+    /// The URL's template. Userinfo (`user:password@`) is a credential:
+    /// kept only when it comes from secrets (`:` aside), else replaced by
+    /// a marker and noted as withheld.
+    fn url(&mut self, url: &Resolved) -> String {
+        let Some(info) = url_userinfo(&url.text).filter(|r| self.t.has_literal(url, r)) else {
+            return self.t.resolved(url);
+        };
+        self.withheld.push("the URL's userinfo".to_owned());
+        let text = format!(
+            "{}{USERINFO_MARK}{}",
+            &url.text[..info.start],
+            &url.text[info.end..]
+        );
+        let moved = |i: usize| i - info.len() + USERINFO_MARK.len();
+        let secret_spans = url
+            .secret_spans
+            .iter()
+            .filter_map(|s| {
+                if s.range.end <= info.start {
+                    Some(s.clone())
+                } else if s.range.start >= info.end {
+                    Some(SecretSpan {
+                        name: s.name.clone(),
+                        range: moved(s.range.start)..moved(s.range.end),
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect();
+        self.t.resolved(&Resolved { text, secret_spans })
+    }
+
     fn pair(&self, pair: &ResolvedPair) -> ReplayPair {
         ReplayPair {
             name: self.t.resolved(&pair.name),

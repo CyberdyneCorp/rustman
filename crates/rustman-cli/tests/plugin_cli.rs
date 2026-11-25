@@ -121,6 +121,19 @@ fn add_without_grants() {
         .code(2)
         .stderr(predicate::str::contains("already declared"));
     assert_eq!(files.server.hits("/hmac-0.2.0.wasm"), 1);
+
+    // The URL names this machine: `plugin add` (the user's own URL)
+    // downloaded it, but `plugin verify` of the committed source does
+    // not, so an untrusted clone cannot make it send a request there.
+    std::fs::remove_file(root.join(format!(".rustman/plugins/{pin}.wasm"))).unwrap();
+    rustman(root)
+        .args(["plugin", "verify"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains(
+            "localhost is this machine or a private network",
+        ));
+    assert_eq!(files.server.hits("/hmac-0.2.0.wasm"), 1);
 }
 
 /// "Plain HTTP refused", before anything is sent.
