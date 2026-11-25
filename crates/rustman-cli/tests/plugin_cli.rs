@@ -132,8 +132,32 @@ fn add_without_grants() {
         .code(2)
         .stderr(predicate::str::contains(
             "localhost is this machine or a private network",
+        ))
+        .stderr(predicate::str::contains(
+            "rustman plugin verify --allow-local-sources",
         ));
     assert_eq!(files.server.hits("/hmac-0.2.0.wasm"), 1);
+
+    // A teammate who trusts the declared source fills the cache without
+    // touching rustman.toml (and its grants): verify, opted in.
+    files.server.serve("/hmac-0.2.0.wasm", wasm.clone());
+    let before = std::fs::read_to_string(root.join("rustman.toml")).unwrap();
+    rustman(root)
+        .args(["plugin", "verify", "--allow-local-sources"])
+        .assert()
+        .code(0)
+        .stdout(predicate::str::contains(format!(
+            "ok hmac 0.1.0 sha256 {pin}"
+        )));
+    assert_eq!(files.server.hits("/hmac-0.2.0.wasm"), 2);
+    let cached = root.join(format!(".rustman/plugins/{pin}.wasm"));
+    assert_eq!(std::fs::read(cached).unwrap(), wasm);
+    assert_eq!(
+        std::fs::read_to_string(root.join("rustman.toml")).unwrap(),
+        before
+    );
+    rustman(root).args(["plugin", "verify"]).assert().code(0);
+    assert_eq!(files.server.hits("/hmac-0.2.0.wasm"), 2);
 }
 
 /// "Plain HTTP refused", before anything is sent.

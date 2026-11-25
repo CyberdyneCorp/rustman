@@ -42,7 +42,7 @@ enum PluginCommand {
     Remove(RemoveArgs),
     /// Re-hash every plugin against its pin and update rustman.lock;
     /// exits 2 on a mismatch
-    Verify(WorkspaceFlag),
+    Verify(VerifyArgs),
     /// List the plugin API versions this rustman supports
     Api,
     /// Run a plugin's test cases in the sandbox, with a fake clock,
@@ -73,6 +73,17 @@ struct AddArgs {
     /// The workspace's name for the plugin (default: the manifest's name)
     #[arg(long, value_name = "NAME")]
     name: Option<String>,
+    #[command(flatten)]
+    workspace: WorkspaceFlag,
+}
+
+#[derive(Debug, Args)]
+struct VerifyArgs {
+    /// Also download URL sources that name this machine or a private
+    /// network (localhost, 10.0.0.5), which a committed source may not
+    /// reach otherwise; use it only for sources you trust
+    #[arg(long)]
+    allow_local_sources: bool,
     #[command(flatten)]
     workspace: WorkspaceFlag,
 }
@@ -197,9 +208,10 @@ fn remove(args: &RemoveArgs) -> Result<u8, CliError> {
     Ok(SUCCESS)
 }
 
-fn verify(args: &WorkspaceFlag) -> Result<u8, CliError> {
-    let root = args.root()?;
-    let fetch = manage::fetch_options(&root).map_err(usage)?;
+fn verify(args: &VerifyArgs) -> Result<u8, CliError> {
+    let root = args.workspace.root()?;
+    let mut fetch = manage::fetch_options(&root).map_err(usage)?;
+    fetch.allow_local = args.allow_local_sources;
     let (set, lock_changed) = super::exec::runtime()?
         .block_on(manage::verify(&root, fetch))
         .map_err(usage)?;

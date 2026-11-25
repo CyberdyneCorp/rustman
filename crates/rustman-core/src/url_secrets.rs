@@ -65,12 +65,27 @@ fn key_segment(segment: &str) -> bool {
 /// What a URL's userinfo is shown and stored as.
 pub const USERINFO_MARK: &str = "«redacted:userinfo»";
 
+/// Where a URL's authority ends, as URL parsers end it: its userinfo may
+/// hold any other character (sub-delims such as `'` and `)` included).
+const URL_ENDS: [char; 4] = ['/', '?', '#', '\\'];
+
+/// Where the authority of a URL inside free text (an error, a warning)
+/// ends: where a URL's ends, or at whitespace. Quotes and brackets do not
+/// end it, since a password may hold them.
+const TEXT_ENDS: [char; 8] = ['/', '?', '#', '\\', ' ', '\t', '\n', '\r'];
+
 /// The byte range of the userinfo of `url` (`scheme://userinfo@host`):
 /// before the last `@` of the authority, as URL parsers read it. `None`
 /// without a scheme, without an `@`, or with an empty userinfo.
 pub fn url_userinfo(url: &str) -> Option<std::ops::Range<usize>> {
     let start = url.find("://")? + 3;
-    userinfo_at(url, start, &['/', '?', '#', '\\'])
+    userinfo_at(url, start, &URL_ENDS)
+}
+
+/// The userinfo ranges of `url` and of every URL nested in it
+/// (`?next=https://user:pw@host/`), in order.
+pub fn url_userinfos(url: &str) -> Vec<std::ops::Range<usize>> {
+    userinfos(url, &URL_ENDS)
 }
 
 /// The userinfo after `start` (just past a `://`), the authority ending at
@@ -82,37 +97,56 @@ fn userinfo_at(text: &str, start: usize, ends: &[char]) -> Option<std::ops::Rang
     (at > 0).then_some(start..start + at)
 }
 
-/// `text` with the userinfo of every URL in it (`scheme://user:pw@host`)
-/// replaced by [`USERINFO_MARK`]: a password typed into a URL is no known
-/// secret, so redaction alone would keep it. Text without one is borrowed.
-pub fn hide_userinfo(text: &str) -> std::borrow::Cow<'_, str> {
-    const ENDS: [char; 11] = ['/', '?', '#', '\\', ' ', '\t', '\n', '"', '\'', '>', ')'];
-    let mut out = String::new();
-    let mut copied = 0;
+/// The userinfo ranges after every `scheme://` in `text`, in order.
+fn userinfos(text: &str, ends: &[char]) -> Vec<std::ops::Range<usize>> {
+    let mut found = Vec::new();
     let mut from = 0;
-    while let Some(found) = text[from..].find("://") {
-        let start = from + found + 3;
+    while let Some(at) = text[from..].find("://") {
+        let start = from + at + 3;
         from = start;
         let has_scheme = text[..start - 3]
             .chars()
             .next_back()
             .is_some_and(|c| c.is_ascii_alphanumeric());
-        let Some(range) = has_scheme
-            .then(|| userinfo_at(text, start, &ENDS))
-            .flatten()
-        else {
-            continue;
-        };
+        if let Some(range) = has_scheme.then(|| userinfo_at(text, start, ends)).flatten() {
+            from = range.end;
+            found.push(range);
+        }
+    }
+    found
+}
+
+/// `text` with `ranges` (in order, apart) replaced by [`USERINFO_MARK`];
+/// borrowed when there are none.
+fn mark<'t>(text: &'t str, ranges: &[std::ops::Range<usize>]) -> std::borrow::Cow<'t, str> {
+    if ranges.is_empty() {
+        return std::borrow::Cow::Borrowed(text);
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut copied = 0;
+    for range in ranges {
         out.push_str(&text[copied..range.start]);
         out.push_str(USERINFO_MARK);
         copied = range.end;
-        from = range.end;
-    }
-    if copied == 0 {
-        return std::borrow::Cow::Borrowed(text);
     }
     out.push_str(&text[copied..]);
     std::borrow::Cow::Owned(out)
+}
+
+/// The URL `url` with its userinfo, and that of every URL nested in it,
+/// replaced by [`USERINFO_MARK`]. The authority ends only where a URL
+/// parser ends it, so a password holding `'`, `)` or a space is hidden
+/// whole. Free text goes through [`hide_userinfo`] instead.
+pub fn hide_url_userinfo(url: &str) -> std::borrow::Cow<'_, str> {
+    mark(url, &url_userinfos(url))
+}
+
+/// `text` with the userinfo of every URL in it (`scheme://user:pw@host`)
+/// replaced by [`USERINFO_MARK`]: a password typed into a URL is no known
+/// secret, so redaction alone would keep it. A URL in free text also ends
+/// at whitespace. Text without one is borrowed.
+pub fn hide_userinfo(text: &str) -> std::borrow::Cow<'_, str> {
+    mark(text, &userinfos(text, &TEXT_ENDS))
 }
 
 #[cfg(test)]
@@ -140,6 +174,47 @@ mod tests {
             hide_userinfo("https://h/x and ://u@v"),
             std::borrow::Cow::Borrowed(_)
         ));
+    }
+
+    /// `'`, `)` and the like are valid in userinfo: the whole password is
+    /// hidden, in a URL field and in free text.
+    #[test]
+    fn passwords_with_sub_delims_are_hidden_whole() {
+        for url in [
+            "https://bob:Pa)ss9@api.example/x",
+            "https://bob:pa'ss@api.example/x",
+            "https://bob:pa\"ss>@api.example/x",
+            "https://bob:pa ss@api.example/x",
+        ] {
+            assert_eq!(
+                hide_url_userinfo(url),
+                "https://«redacted:userinfo»@api.example/x",
+                "{url}"
+            );
+        }
+        assert_eq!(
+            hide_userinfo("invalid URL 'https://bob:Pa)ss9@api.example/x': bad"),
+            "invalid URL 'https://«redacted:userinfo»@api.example/x': bad"
+        );
+        assert_eq!(
+            hide_userinfo("(see 'http://h') mail me@c.example"),
+            "(see 'http://h') mail me@c.example"
+        );
+    }
+
+    /// A URL nested in another one's query keeps no userinfo either.
+    #[test]
+    fn nested_url_userinfo_is_found() {
+        let url = "https://api.example.com/login?next=https://bob:hunter2@intranet.example/";
+        let found: Vec<&str> = url_userinfos(url).into_iter().map(|r| &url[r]).collect();
+        assert_eq!(found, ["bob:hunter2"]);
+        assert_eq!(
+            hide_url_userinfo(url),
+            "https://api.example.com/login?next=https://«redacted:userinfo»@intranet.example/"
+        );
+        let both = "https://a:b@h/?u=wss://c:d@i/";
+        let found: Vec<&str> = url_userinfos(both).into_iter().map(|r| &both[r]).collect();
+        assert_eq!(found, ["a:b", "c:d"]);
     }
 
     #[test]

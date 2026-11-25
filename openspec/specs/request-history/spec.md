@@ -45,6 +45,7 @@ History SHALL store exchanges only after applying the secret redaction invariant
 - **WHEN** the exchange is recorded
 - **THEN** the entry SHALL show `https://«redacted:userinfo»@api.example.com/x` and no file SHALL contain `hunter2`
 - **AND** `rustman history replay` SHALL fail before sending, naming `the URL's userinfo` as not kept
+- **AND** a password holding `)` or `'`, or a URL nested in the query (`?next=https://bob:pw@intranet/`), SHALL be stored the same way, in the replay part too
 
 ### Requirement: List and search
 `rustman history list [--limit n] [--status <code|class>] [--method m] [--grep <text>] [--since <duration>]` SHALL list exchanges newest first, as one line each: time, method, URL, status and total ms. `--grep` SHALL match URL, request body and response body text. `--json` SHALL print machine-readable output.

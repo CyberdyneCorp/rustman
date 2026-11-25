@@ -7,6 +7,9 @@ Re-hash every plugin against its pin and update rustman.lock; exits 2 on a misma
 Usage: rustman plugin verify [OPTIONS]
 
 Options:
+      --allow-local-sources
+          Also download URL sources that name this machine or a private network (localhost, 10.0.0.5), which a committed source may not reach otherwise; use it only for sources you trust
+
       --workspace <DIR>
           Workspace directory (default: search from the current directory upwards)
 
