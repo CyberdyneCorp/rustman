@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Why Rustman</title>
+<meta name="description" content="Rustman is an open-source, local-first API workbench in one Rust binary: a terminal UI, a CLI for CI and an MCP server for AI agents. See how it compares with Postman.">
+<meta property="og:title" content="Why Rustman">
+<meta property="og:description" content="An open-source, local-first API workbench in one Rust binary. Requests live as YAML in your repo. No account, no seat limits.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://cyberdynecorp.github.io/rustman/why/">
+<meta property="og:image" content="https://cyberdynecorp.github.io/rustman/images/viz-run-dashboard.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;700;800;900&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a dark graphite hero band carrying the thesis and the live demo, then light editorial sections:
+   proof (stats, screens), evidence (features, comparison), action (switching, install). */
+:root {
+  --bg: #f3f4f7;
+  --surface: #ffffff;
+  --ink: #14161b;
+  --muted: #586070;
+  --line: #dcdfe6;
+  --rust: #b0481f;
+  --rust-ink: #ffffff;
+  --rust-soft: #f7e7df;
+  --pass: #1d7a6c;
+  --partial: #976700;
+  --none: #98a0ac;
+  --band: #14171e;
+  --band-ink: #eef0f4;
+  --band-muted: #a3abbb;
+  --band-line: #2a2f3b;
+  --glow: rgba(226, 119, 75, 0.18);
+  --display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1116; --surface: #161920; --ink: #e9ebf0; --muted: #9ca3b2; --line: #282d38;
+    --rust: #e2774b; --rust-ink: #14161b; --rust-soft: #35211a; --pass: #4cbfa9; --partial: #d9a63a; --none: #6b7280;
+    --band: #0a0c10; --band-ink: #eef0f4; --band-muted: #9aa2b3; --band-line: #232833; --glow: rgba(226, 119, 75, 0.14);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1116; --surface: #161920; --ink: #e9ebf0; --muted: #9ca3b2; --line: #282d38;
+  --rust: #e2774b; --rust-ink: #14161b; --rust-soft: #35211a; --pass: #4cbfa9; --partial: #d9a63a; --none: #6b7280;
+  --band: #0a0c10; --band-ink: #eef0f4; --band-muted: #9aa2b3; --band-line: #232833; --glow: rgba(226, 119, 75, 0.14);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.6 var(--body); -webkit-font-smoothing: antialiased;
+}
+img { max-width: 100%; height: auto; display: block; }
+[hidden] { display: none !important; }
+a { color: var(--rust); text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--rust); outline-offset: 3px; border-radius: 4px; }
+h1, h2, h3 { font-family: var(--display); margin: 0; line-height: 1.1; text-wrap: balance; }
+p { margin: 0; }
+code { font-family: var(--mono); font-size: 0.88em; }
+.wrap {
+  max-width: 1160px; margin: 0 auto;
+  padding-left: max(20px, env(safe-area-inset-left, 0px));
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
+}
+.eyebrow { font: 600 0.76rem/1.2 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--rust); }
+.lede { color: var(--muted); font-size: 1.12rem; max-width: 62ch; }
+.section { padding-block: 96px; }
+.section + .section { border-top: 1px solid var(--line); }
+.head { display: grid; gap: 14px; margin-bottom: 40px; max-width: 72ch; }
+.head h2 { font-size: clamp(1.8rem, 3.4vw, 2.6rem); font-weight: 800; letter-spacing: -0.015em; }
+
+/* Nav */
+.nav { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--band) 92%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--band-line); padding-top: env(safe-area-inset-top, 0px); }
+.nav .wrap { display: flex; align-items: center; gap: 24px; height: 60px; }
+.brand { display: inline-flex; align-items: center; gap: 10px; color: var(--band-ink); text-decoration: none; font: 800 1.1rem var(--display); letter-spacing: -0.01em; }
+.brand svg { width: 26px; height: 26px; }
+.nav-links { display: flex; gap: 22px; margin-left: auto; align-items: center; }
+.nav-links a { color: var(--band-muted); text-decoration: none; font-size: 0.92rem; font-weight: 500; }
+.nav-links a:hover { color: var(--band-ink); }
+.theme { background: transparent; border: 1px solid var(--band-line); color: var(--band-muted); border-radius: 8px; width: 36px; height: 36px; display: grid; place-items: center; cursor: pointer; }
+.theme:hover { color: var(--band-ink); }
+.theme svg { width: 18px; height: 18px; }
+@media (max-width: 760px) { .nav-links a.opt { display: none; } }
+
+/* Hero */
+.hero { background: var(--band); color: var(--band-ink); position: relative; overflow: hidden; }
+.hero::before {
+  content: ""; position: absolute; inset: -40% -10% auto auto; width: 70%; height: 140%;
+  background: radial-gradient(closest-side, var(--glow), transparent 70%); pointer-events: none;
+}
+.hero::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.35;
+  background-image: linear-gradient(var(--band-line) 1px, transparent 1px), linear-gradient(90deg, var(--band-line) 1px, transparent 1px);
+  background-size: 48px 48px; mask-image: linear-gradient(to bottom, black, transparent 85%);
+  -webkit-mask-image: linear-gradient(to bottom, black, transparent 85%);
+}
+.hero .wrap { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr); gap: 56px; align-items: center; padding-block: 88px 96px; }
+.hero-copy { display: grid; gap: 24px; min-width: 0; }
+.hero h1 { font-size: clamp(2.5rem, 5.6vw, 4.4rem); font-weight: 900; letter-spacing: -0.03em; }
+.hero h1 span { color: var(--rust); }
+.hero .lede { color: var(--band-muted); }
+.badges { display: flex; flex-wrap: wrap; gap: 8px; }
+.badge { font: 500 0.78rem var(--mono); padding: 5px 11px; border-radius: 999px; border: 1px solid var(--band-line); color: var(--band-muted); background: rgba(255,255,255,0.02); }
+.install { display: flex; align-items: stretch; border: 1px solid var(--band-line); border-radius: 10px; overflow: hidden; background: rgba(255,255,255,0.03); max-width: 100%; }
+.install code { flex: 1; min-width: 0; padding: 13px 16px; font-size: 0.86rem; color: var(--band-ink); white-space: nowrap; overflow-x: auto; }
+.install code::before { content: "$ "; color: var(--rust); }
+.install button { border: 0; border-left: 1px solid var(--band-line); background: transparent; color: var(--band-muted); font: 600 0.82rem var(--body); padding: 0 16px; cursor: pointer; }
+.install button:hover { color: var(--band-ink); }
+.ctas { display: flex; flex-wrap: wrap; gap: 12px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 9px; font-weight: 600; font-size: 0.96rem; text-decoration: none; border: 1px solid var(--rust); }
+.btn svg { width: 18px; height: 18px; }
+.btn.primary { background: var(--rust); color: var(--rust-ink); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.ghost { color: var(--band-ink); border-color: var(--band-line); }
+.btn.ghost:hover { border-color: var(--band-muted); }
+.window { border-radius: 14px; overflow: hidden; border: 1px solid var(--band-line); background: #1b1d23; box-shadow: 0 30px 80px -30px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.02); min-width: 0; }
+.window-bar { display: flex; align-items: center; gap: 7px; padding: 11px 14px; background: #20232b; border-bottom: 1px solid #2c303a; }
+.window-bar i { width: 11px; height: 11px; border-radius: 50%; display: block; background: #3b404c; }
+.window-bar span { margin-left: 10px; font: 0.76rem var(--mono); color: #8a92a3; }
+
+/* Stats */
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); overflow: hidden; }
+.stats div { padding: 26px 24px; display: grid; gap: 6px; }
+.stats div + div { border-left: 1px solid var(--line); }
+.stats b { font: 800 2.2rem/1 var(--display); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.stats b em { font-style: normal; color: var(--rust); }
+.stats span { color: var(--muted); font-size: 0.93rem; }
+.why-now { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; align-items: end; margin-bottom: 36px; }
+
+/* Screens */
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+.tab { font: 600 0.9rem var(--body); padding: 9px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer; }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.screen { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 40px; align-items: center; }
+.screen .window { background: #1b1d23; }
+.screen-copy { display: grid; gap: 14px; min-width: 0; }
+.screen-copy h3 { font-size: 1.5rem; font-weight: 800; }
+.screen-copy p { color: var(--muted); }
+.screen-copy pre { margin: 0; background: var(--band); color: var(--band-ink); border-radius: 10px; padding: 14px 16px; font: 0.82rem/1.6 var(--mono); overflow-x: auto; }
+
+/* Features */
+.grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; display: grid; gap: 10px; align-content: start; min-width: 0; transition: border-color 0.2s, transform 0.2s; }
+.card:hover { border-color: color-mix(in srgb, var(--rust) 45%, var(--line)); transform: translateY(-2px); }
+@media (prefers-reduced-motion: reduce) { .card, .card:hover { transition: none; transform: none; } }
+.icon { width: 40px; height: 40px; border-radius: 10px; background: var(--rust-soft); color: var(--rust); display: grid; place-items: center; }
+.icon svg { width: 22px; height: 22px; }
+.card h3 { font-size: 1.05rem; font-weight: 700; }
+.card p { color: var(--muted); font-size: 0.93rem; }
+
+/* Compare */
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+.filters .lbl { color: var(--muted); font-size: 0.88rem; margin-right: 4px; }
+.chip { font: 600 0.85rem var(--body); padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer; }
+.chip[aria-pressed="true"] { border-color: var(--rust); color: var(--rust); background: var(--rust-soft); }
+.legend { display: flex; flex-wrap: wrap; gap: 18px; color: var(--muted); font-size: 0.86rem; margin-left: auto; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.table { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+table { width: 100%; min-width: 760px; border-collapse: collapse; }
+th, td { text-align: left; vertical-align: top; padding: 15px 18px; border-bottom: 1px solid var(--line); font-size: 0.93rem; }
+thead th { font: 600 0.74rem var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); background: var(--bg); }
+thead th.us { color: var(--rust); }
+tbody tr:last-child td { border-bottom: 0; }
+tr.group td { background: var(--bg); font: 700 0.92rem var(--display); padding-block: 10px; color: var(--ink); }
+td.topic { font-weight: 600; width: 20%; }
+td.col { width: 40%; }
+td.col div { display: flex; gap: 10px; align-items: flex-start; }
+td.col p { min-width: 0; }
+td.lead-us { background: color-mix(in srgb, var(--pass) 6%, transparent); }
+td.lead-them { background: color-mix(in srgb, var(--partial) 7%, transparent); }
+.mk { flex: none; width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center; color: #fff; font: 700 0.7rem var(--body); margin-top: 1px; }
+.mk.yes { background: var(--pass); }
+.mk.part { background: var(--partial); }
+.mk.no { background: var(--none); }
+.note { color: var(--muted); font-size: 0.84rem; margin-top: 14px; }
+
+/* Gain / give */
+.duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 32px; display: grid; gap: 18px; align-content: start; min-width: 0; }
+.panel.us { background: linear-gradient(180deg, var(--rust-soft), var(--surface) 140px); border-color: color-mix(in srgb, var(--rust) 35%, var(--line)); }
+.panel h3 { font-size: 1.45rem; font-weight: 800; }
+.panel ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 14px; }
+.panel li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; }
+.panel li svg { width: 20px; height: 20px; margin-top: 2px; }
+.panel.us li svg { color: var(--pass); }
+.panel.them li svg { color: var(--partial); }
+.panel li b { display: block; font-weight: 600; }
+.panel li span { color: var(--muted); font-size: 0.93rem; }
+
+/* Switch */
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; counter-reset: step; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.step .n { font: 600 0.8rem var(--mono); color: var(--rust); }
+.step h3 { font-size: 1.08rem; }
+.step pre { margin: 0; background: var(--band); color: var(--band-ink); border-radius: 10px; padding: 13px 15px; font: 0.8rem/1.6 var(--mono); overflow-x: auto; }
+.step p { color: var(--muted); font-size: 0.92rem; }
+
+/* Final CTA */
+.final { background: var(--band); color: var(--band-ink); }
+.final .wrap { padding-block: 88px; display: grid; gap: 22px; justify-items: start; position: relative; }
+.final h2 { font-size: clamp(2rem, 4vw, 3rem); font-weight: 900; letter-spacing: -0.02em; max-width: 20ch; }
+.final p { color: var(--band-muted); max-width: 60ch; }
+footer { background: var(--band); color: var(--band-muted); border-top: 1px solid var(--band-line); font-size: 0.86rem; }
+footer .wrap { padding-block: 28px calc(36px + env(safe-area-inset-bottom, 0px)); display: flex; flex-wrap: wrap; gap: 10px 28px; justify-content: space-between; }
+footer a { color: var(--band-ink); }
+
+@media (max-width: 980px) {
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hero .wrap, .screen, .why-now { grid-template-columns: minmax(0, 1fr); }
+  .hero .wrap { padding-block: 56px 64px; gap: 40px; }
+}
+@media (max-width: 760px) {
+  .duo, .steps { grid-template-columns: minmax(0, 1fr); }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stats div:nth-child(3) { border-left: 0; }
+  .stats div:nth-child(n+3) { border-top: 1px solid var(--line); }
+  .section { padding-block: 64px; }
+  .legend { margin-left: 0; }
+}
+@media (max-width: 460px) {
+  .grid, .stats { grid-template-columns: minmax(0, 1fr); }
+  .stats div + div { border-left: 0; border-top: 1px solid var(--line); }
+}
+</style>
+</head>
+<body>
+
+<nav class="nav" aria-label="Main">
+  <div class="wrap">
+    <a class="brand" href="./">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#b0481f"/><path d="M9 11l5 5-5 5M16 22h7" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Rustman
+    </a>
+    <div class="nav-links">
+      <a class="opt" href="#features">Features</a>
+      <a class="opt" href="#compare">Compare</a>
+      <a class="opt" href="#switch">Switch</a>
+      <a href="../index.html">Docs</a>
+      <a href="https://github.com/CyberdyneCorp/rustman">GitHub</a>
+      <button class="theme" id="theme" type="button" aria-label="Toggle light and dark theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="hero-copy">
+      <span class="eyebrow">Open source · v1.0 · MIT or Apache-2.0</span>
+      <h1>Your API workbench belongs in <span>your repo</span>.</h1>
+      <p class="lede">Rustman is a local-first API client and test runner written in Rust. One native binary gives you a terminal UI for exploring, a CLI for CI and an MCP server for AI agents. Requests are plain YAML files you review in pull requests. No account, no telemetry, no seat limits.</p>
+      <div class="badges">
+        <span class="badge">REST · GraphQL · gRPC</span>
+        <span class="badge">WebSocket · SSE · JSON-RPC</span>
+        <span class="badge">MCP · Kafka · MQTT · AMQP</span>
+        <span class="badge">Linux · macOS · Windows</span>
+      </div>
+      <div class="install">
+        <code id="install-cmd">cargo install --git https://github.com/CyberdyneCorp/rustman rustman-cli --locked</code>
+        <button type="button" id="copy-install" data-copy="install-cmd">Copy</button>
+      </div>
+      <div class="ctas">
+        <a class="btn primary" href="https://github.com/CyberdyneCorp/rustman">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>
+          Star on GitHub</a>
+        <a class="btn ghost" href="../getting-started.html">Get started</a>
+      </div>
+    </div>
+    <div class="window">
+      <div class="window-bar"><i></i><i></i><i></i><span>rustman · todo-api</span></div>
+      <img src="../images/demo.gif" width="1280" height="720" alt="Rustman's terminal UI sending requests to a local todo API: switching environments with the token masked, sending requests and checking assertions" loading="eager">
+    </div>
+  </div>
+</header>
+
+<main>
+
+<section class="section" id="why">
+  <div class="wrap">
+    <div class="why-now">
+      <div class="head" style="margin-bottom:0">
+        <span class="eyebrow">Why now</span>
+        <h2>The incumbent's free tier is a single seat. Ours has no meter at all.</h2>
+      </div>
+      <p class="lede">Postman's Free plan is one user, with 1,000 monitoring requests and 50 AI credits a month, and its Team plan is $19 per user per month. Rustman has no server, so there is nothing to meter: run it for a team of one or a thousand.</p>
+    </div>
+    <div class="stats">
+      <div><b><em>$</em>0</b><span>for any team size, for good</span></div>
+      <div><b>1</b><span>native binary, no Electron, no daemon</span></div>
+      <div><b>0</b><span>accounts, logins or telemetry</span></div>
+      <div><b>35</b><span>capabilities specified with OpenSpec before they were built</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="screens">
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow">Three front-ends, one engine</span>
+      <h2>The same request files, wherever you work</h2>
+      <p class="lede">Explore in the terminal UI, run the same files in CI, let an agent drive them through MCP, and open the optional companion when you want charts.</p>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Rustman front-ends">
+      <button class="tab" role="tab" id="tab-tui" aria-controls="panel-tui" aria-selected="true" type="button">Terminal UI</button>
+      <button class="tab" role="tab" id="tab-ci" aria-controls="panel-ci" aria-selected="false" type="button">CI</button>
+      <button class="tab" role="tab" id="tab-agents" aria-controls="panel-agents" aria-selected="false" type="button">Agents</button>
+      <button class="tab" role="tab" id="tab-viz" aria-controls="panel-viz" aria-selected="false" type="button">Dashboards</button>
+    </div>
+
+    <div class="screen" role="tabpanel" id="panel-tui" aria-labelledby="tab-tui">
+      <div class="window"><div class="window-bar"><i></i><i></i><i></i><span>rustman tui</span></div>
+        <img src="../images/tui-shell.svg" width="1166" height="534" alt="Rustman TUI: collection sidebar, an open request on its Headers tab and its JSON response as a collapsible tree" loading="lazy"></div>
+      <div class="screen-copy">
+        <h3>A full workbench in your terminal</h3>
+        <p>Collections in a sidebar, requests in tabs, responses as collapsible trees, a timing waterfall, a command palette and an environment switcher with secrets masked. It runs over SSH.</p>
+        <pre>rustman            # opens the TUI
+rustman tui api/   # on a workspace</pre>
+      </div>
+    </div>
+
+    <div class="screen" role="tabpanel" id="panel-ci" aria-labelledby="tab-ci" hidden>
+      <div class="window"><div class="window-bar"><i></i><i></i><i></i><span>ci</span></div>
+        <img src="../images/viz-run-dashboard.png" width="1600" height="972" alt="Run dashboard of the Rustman companion: pass and fail totals, durations per request and failed assertions" loading="lazy"></div>
+      <div class="screen-copy">
+        <h3>The same files in CI</h3>
+        <p>JUnit, TAP, SARIF, HTML and JSON reports, data-driven runs and exit codes that stay stable across 1.x. It replaces <code>newman run</code> line for line.</p>
+        <pre>rustman run . --env staging \
+  --reporter junit:out/junit.xml \
+  --reporter pretty</pre>
+      </div>
+    </div>
+
+    <div class="screen" role="tabpanel" id="panel-agents" aria-labelledby="tab-agents" hidden>
+      <div class="window"><div class="window-bar"><i></i><i></i><i></i><span>rustman mcp</span></div>
+        <img src="../images/tui-mcp.svg" width="1166" height="534" alt="Rustman TUI MCP inspector listing the workspace's MCP servers, with the workspace-trust dialog" loading="lazy"></div>
+      <div class="screen-copy">
+        <h3>An API workbench for your AI agent</h3>
+        <p>A built-in MCP server lets Claude Code and IDE agents send requests, run collections and explore specs, read-only unless <code>rustman.toml</code> allows more. It can also inspect and test other MCP servers.</p>
+        <pre>rustman mcp serve</pre>
+      </div>
+    </div>
+
+    <div class="screen" role="tabpanel" id="panel-viz" aria-labelledby="tab-viz" hidden>
+      <div class="window"><div class="window-bar"><i></i><i></i><i></i><span>rustman-viz</span></div>
+        <img src="../images/viz-exploration-dashboard.png" width="1600" height="972" alt="Exploration dashboard: a heatmap of operations by status class, coverage gauges and findings by severity" loading="lazy"></div>
+      <div class="screen-copy">
+        <h3>Dashboards when the terminal isn't enough</h3>
+        <p>The optional native companion draws run, exploration and bench dashboards and a response inspector. It is read-only and never sends requests.</p>
+        <pre>rustman run api/ --viz</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="features">
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow">Beyond sending requests</span>
+      <h2>Everything around the API, built in</h2>
+      <p class="lede">Mocks, load tests, contract checks and docs usually need four more tools. In Rustman they all read the request files you already have.</p>
+    </div>
+    <div class="grid">
+      <article class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 11h6M11 8v6"/></svg></div>
+        <h3>Tests from an OpenAPI spec</h3><p>Point it at a spec and it plans and runs a campaign: conformance, auth, injection and undocumented behavior, under a safety policy.</p></article>
+      <article class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></div>
+        <h3>Load and stress</h3><p><code>bench</code> for load, <code>stress</code> to find the breaking point with spikes, soak, fuzzing, wire faults and recovery checks.</p></article>
+      <article class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 12l2 2 4-4"/><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg></div>
+        <h3>Contracts and snapshots</h3><p>OpenAPI breaking-change diff in CI, Pact generate and verify, and snapshot assertions for whole responses.</p></article>
+      <article class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 14h3"/></svg></div>
+        <h3>Mocks, docs, monitors</h3><p>A mock server from OpenAPI, a static docs site from your requests, and monitors run by cron or CI. No call quotas.</p></article>
+      <article class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg></div>
+        <h3>Traffic recorder</h3><p>A recording proxy with a per-workspace local CA turns real traffic into request files and HAR, with secrets detected.</p></article>
+      <article class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h6"/><circle cx="18" cy="16" r="3"/></svg></div>
+        <h3>Trace propagation</h3><p>W3C and B3 context on every request, trace links in reports and OTLP export, so you can follow a call into your backend.</p></article>
+      <article class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l7 10-7 10-7-10z"/><path d="M5 12l7 3 7-3"/></svg></div>
+        <h3>Ethereum console</h3><p>ABI-aware calls and decoded logs, provider probing, subgraph presets, Anvil forks and a signing gate agents can never pass.</p></article>
+      <article class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7M21 3l-9 9"/><path d="M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg></div>
+        <h3>WASM plugins</h3><p>Auth schemes, assertion functions, generators and importers as sandboxed components with a frozen API and pinned hashes.</p></article>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="compare">
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow">Side by side</span>
+      <h2>Rustman and Postman, feature by feature</h2>
+      <p class="lede">An honest comparison. Postman is a mature platform with real strengths, and the rows where it leads say so.</p>
+    </div>
+    <div class="filters">
+      <span class="lbl">Show</span>
+      <button class="chip" type="button" id="f-all" data-filter="all" aria-pressed="true">All</button>
+      <button class="chip" type="button" id="f-us" data-filter="us" aria-pressed="false">Rustman leads</button>
+      <button class="chip" type="button" id="f-them" data-filter="them" aria-pressed="false">Postman leads</button>
+      <button class="chip" type="button" id="f-both" data-filter="both" aria-pressed="false">Both</button>
+      <div class="legend"><span><i class="mk yes">✓</i>Built in</span><span><i class="mk part">~</i>Partly</span><span><i class="mk no">–</i>Not built in</span></div>
+    </div>
+    <div class="table">
+      <table>
+        <thead><tr><th>Topic</th><th class="us">Rustman</th><th>Postman</th></tr></thead>
+        <tbody>
+          <tr class="group"><td colspan="3">Ownership and cost</td></tr>
+          <tr data-lead="us"><td class="topic">License and price</td>
+            <td class="col lead-us"><div><i class="mk yes">✓</i><p>Open source, MIT or Apache-2.0. Free for any number of people.</p></div></td>
+            <td class="col"><div><i class="mk part">~</i><p>Proprietary. Free plan is 1 user; Solo $9, Team $19 per user per month.</p></div></td></tr>
+          <tr data-lead="us"><td class="topic">Account</td>
+            <td class="col lead-us"><div><i class="mk yes">✓</i><p>None. There is nothing to sign in to.</p></div></td>
+            <td class="col"><div><i class="mk part">~</i><p>A Postman account for workspaces, sync and most features.</p></div></td></tr>
+          <tr data-lead="us"><td class="topic">Where requests live</td>
+            <td class="col lead-us"><div><i class="mk yes">✓</i><p>Plain <code>*.rman.yaml</code> files in your repository, reviewed in pull requests.</p></div></td>
+            <td class="col"><div><i class="mk part">~</i><p>Cloud workspaces by default; Native Git can keep collections as local files.</p></div></td></tr>
+          <tr data-lead="both"><td class="topic">Secrets</td>
+            <td class="col"><div><i class="mk yes">✓</i><p>OS keychain, plus 1Password, HashiCorp Vault, SOPS and AWS, GCP and Azure secret managers.</p></div></td>
+            <td class="col"><div><i class="mk yes">✓</i><p>Postman Vault and secret variables, with external vault integrations.</p></div></td></tr>
+
+          <tr class="group"><td colspan="3">Daily use</td></tr>
+          <tr data-lead="them"><td class="topic">Interface</td>
+            <td class="col"><div><i class="mk part">~</i><p>Terminal UI, CLI and MCP server, plus an optional chart companion. No point-and-click GUI.</p></div></td>
+            <td class="col lead-them"><div><i class="mk yes">✓</i><p>Polished desktop and web app, easiest for newcomers.</p></div></td></tr>
+          <tr data-lead="us"><td class="topic">Footprint</td>
+            <td class="col lead-us"><div><i class="mk yes">✓</i><p>One native Rust binary. Starts instantly and runs over SSH.</p></div></td>
+            <td class="col"><div><i class="mk part">~</i><p>Electron desktop app, with a separate CLI for automation.</p></div></td></tr>
+          <tr data-lead="them"><td class="topic">Custom logic</td>
+            <td class="col"><div><i class="mk part">~</i><p>Declarative assertions and captures; sandboxed WASM plugins for anything else.</p></div></td>
+            <td class="col lead-them"><div><i class="mk yes">✓</i><p>Full JavaScript in pre-request and test scripts.</p></div></td></tr>
+          <tr data-lead="them"><td class="topic">Collaboration</td>
+            <td class="col"><div><i class="mk part">~</i><p>Through Git: branches, pull requests and code review.</p></div></td>
+            <td class="col lead-them"><div><i class="mk yes">✓</i><p>Real-time shared workspaces, comments, roles and a public API network.</p></div></td></tr>
+
+          <tr class="group"><td colspan="3">Protocols</td></tr>
+          <tr data-lead="us"><td class="topic">Coverage</td>
+            <td class="col lead-us"><div><i class="mk yes">✓</i><p>HTTP, GraphQL, gRPC, WebSocket, SSE, JSON-RPC, MCP, Kafka, MQTT and AMQP.</p></div></td>
+            <td class="col"><div><i class="mk yes">✓</i><p>HTTP, GraphQL, gRPC, WebSocket, Socket.IO, MQTT and MCP.</p></div></td></tr>
+          <tr data-lead="us"><td class="topic">Ethereum</td>
+            <td class="col lead-us"><div><i class="mk yes">✓</i><p>ABI-aware calls, decoding, provider probing, Anvil forks and a signing gate.</p></div></td>
+            <td class="col"><div><i class="mk no">–</i><p>Raw JSON-RPC requests.</p></div></td></tr>
+
+          <tr class="group"><td colspan="3">Testing</td></tr>
+          <tr data-lead="both"><td class="topic">CI runs</td>
+            <td class="col"><div><i class="mk yes">✓</i><p><code>rustman run</code> with JUnit, TAP, SARIF, HTML and JSON reports and stable exit codes.</p></div></td>
+            <td class="col"><div><i class="mk yes">✓</i><p>Postman CLI and Newman.</p></div></td></tr>
+          <tr data-lead="us"><td class="topic">Tests from OpenAPI</td>
+            <td class="col lead-us"><div><i class="mk yes">✓</i><p>Plans and runs a full test campaign under a safety policy.</p></div></td>
+            <td class="col"><div><i class="mk part">~</i><p>Generates a collection from a spec; the tests are yours to write.</p></div></td></tr>
+          <tr data-lead="us"><td class="topic">Snapshots and contracts</td>
+            <td class="col lead-us"><div><i class="mk yes">✓</i><p>Snapshot assertions, OpenAPI breaking-change diff, Pact generate and verify.</p></div></td>
+            <td class="col"><div><i class="mk part">~</i><p>Spec linting and governance rules on higher plans.</p></div></td></tr>
+          <tr data-lead="us"><td class="topic">Load and stress</td>
+            <td class="col lead-us"><div><i class="mk yes">✓</i><p>Load testing, plus stress modes that find the breaking point.</p></div></td>
+            <td class="col"><div><i class="mk part">~</i><p>Performance tests with load profiles.</p></div></td></tr>
+          <tr data-lead="us"><td class="topic">Tracing</td>
+            <td class="col lead-us"><div><i class="mk yes">✓</i><p>W3C and B3 propagation, trace links and OTLP export.</p></div></td>
+            <td class="col"><div><i class="mk no">–</i><p>Not built in.</p></div></td></tr>
+
+          <tr class="group"><td colspan="3">Around the API</td></tr>
+          <tr data-lead="both"><td class="topic">Mocks, docs, monitors</td>
+            <td class="col"><div><i class="mk yes">✓</i><p>Local mock server, static docs site, monitors run by cron or CI. No quotas.</p></div></td>
+            <td class="col"><div><i class="mk yes">✓</i><p>Hosted mocks, published docs and cloud monitors (1,000 monitor requests a month on Free).</p></div></td></tr>
+          <tr data-lead="both"><td class="topic">Traffic capture</td>
+            <td class="col"><div><i class="mk yes">✓</i><p>Recording proxy with a local CA, saved as request files and HAR.</p></div></td>
+            <td class="col"><div><i class="mk yes">✓</i><p>Interceptor and the built-in proxy.</p></div></td></tr>
+          <tr data-lead="both"><td class="topic">AI agents</td>
+            <td class="col"><div><i class="mk yes">✓</i><p>MCP server for any agent, read-only by default, no credits.</p></div></td>
+            <td class="col"><div><i class="mk yes">✓</i><p>Agent Mode in the app, metered by AI credits (50 a month on Free).</p></div></td></tr>
+          <tr data-lead="them"><td class="topic">Maturity</td>
+            <td class="col"><div><i class="mk part">~</i><p>Version 1.0, a young and growing community.</p></div></td>
+            <td class="col lead-them"><div><i class="mk yes">✓</i><p>Over a decade old, millions of users, integrations everywhere.</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Postman plans and limits from <a href="https://www.postman.com/pricing/">postman.com/pricing</a>, checked November 2026. Postman changes often; corrections are welcome as <a href="https://github.com/CyberdyneCorp/rustman/issues">issues</a>.</p>
+  </div>
+</section>
+
+<section class="section" id="tradeoffs">
+  <div class="wrap">
+    <div class="duo">
+      <div class="panel us">
+        <span class="eyebrow">Only in Rustman</span>
+        <h3>What you gain</h3>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg><div><b>Requests as code</b><span>YAML next to your source, diffed and reviewed like everything else.</span></div></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg><div><b>A terminal-native workbench</b><span>A full TUI that works over SSH, without leaving the keyboard.</span></div></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg><div><b>Autonomous OpenAPI testing</b><span>Findings with evidence and a curl command to reproduce each one.</span></div></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg><div><b>Stress testing that finds the break</b><span>Breakpoint, spike, soak and fuzz modes with recovery checks.</span></div></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg><div><b>Contracts you can rely on</b><span>Request files, reports, the plugin API and exit codes are frozen for 1.x, each guarded by a test.</span></div></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg><div><b>Signed releases</b><span>Every archive carries Sigstore build provenance you can verify with <code>gh attestation verify</code>.</span></div></li>
+        </ul>
+      </div>
+      <div class="panel them">
+        <span class="eyebrow">Where Postman is still ahead</span>
+        <h3>What you give up</h3>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg><div><b>A graphical app</b><span>Postman's GUI is easier for people who don't live in a terminal.</span></div></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg><div><b>JavaScript scripting</b><span>No script engine, by design. Imported checks become assertions; other logic moves to WASM plugins.</span></div></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg><div><b>Real-time collaboration</b><span>Shared cloud workspaces, comments and roles. Rustman uses Git instead.</span></div></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg><div><b>Hosted services</b><span>Postman runs mocks and monitors in its cloud; with Rustman you run them in CI or on a server.</span></div></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg><div><b>Visual workflows</b><span>Postman Flows has no Rustman equivalent.</span></div></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg><div><b>Ecosystem size</b><span>A decade of integrations, tutorials and answers.</span></div></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="switch">
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow">Switching</span>
+      <h2>Move a Postman collection in three commands</h2>
+      <p class="lede">The importer reads Collection v2.0 and v2.1, moves secret values to the OS keychain and converts <code>pm.test</code> checks to assertions. The <a href="../migrate-from-postman.html">migration guide</a> covers the rest, including what doesn't carry over.</p>
+    </div>
+    <div class="steps">
+      <div class="step"><span class="n">Step 1</span><h3>Create a workspace</h3>
+<pre>rustman init my-api
+cd my-api</pre>
+        <p>Writes <code>rustman.toml</code>, a local environment and a sample request.</p></div>
+      <div class="step"><span class="n">Step 2</span><h3>Import</h3>
+<pre>rustman import postman-env \
+  staging.postman_environment.json
+rustman import postman \
+  shop.postman_collection.json</pre>
+        <p>Secrets go to the keychain, never into files.</p></div>
+      <div class="step"><span class="n">Step 3</span><h3>Run it in CI</h3>
+<pre>rustman run . --env staging \
+  --reporter junit:out/junit.xml</pre>
+        <p>Replaces <code>newman run</code>. Exits 1 on a failed check.</p></div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<section class="final">
+  <div class="wrap">
+    <span class="eyebrow">Rustman 1.0</span>
+    <h2>Own your API tests like you own your code.</h2>
+    <p>Install it in a minute, import your collections, and keep everything in the repository where it belongs.</p>
+    <div class="ctas">
+      <a class="btn primary" href="https://github.com/CyberdyneCorp/rustman">Star on GitHub</a>
+      <a class="btn ghost" href="../install.html">Install</a>
+      <a class="btn ghost" href="../index.html">Read the docs</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>Rustman is open source under MIT or Apache-2.0. <a href="https://github.com/CyberdyneCorp/rustman">github.com/CyberdyneCorp/rustman</a></span>
+    <span>Postman is a trademark of Postman, Inc. This page compares publicly documented features and is not affiliated with Postman.</span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var KEY = "rustman-theme";
+  try { var saved = localStorage.getItem(KEY); if (saved) root.setAttribute("data-theme", saved); } catch (e) {}
+  document.getElementById("theme").addEventListener("click", function () {
+    var current = root.getAttribute("data-theme") ||
+      (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    var next = current === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    try { localStorage.setItem(KEY, next); } catch (e) {}
+  });
+
+  var btn = document.getElementById("copy-install");
+  btn.addEventListener("click", function () {
+    var text = document.getElementById(btn.getAttribute("data-copy")).textContent;
+    var reset = function () { setTimeout(function () { btn.textContent = "Copy"; }, 1600); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { btn.textContent = "Copied"; reset(); },
+        function () { btn.textContent = "Select and copy"; reset(); });
+    } else { btn.textContent = "Select and copy"; reset(); }
+  });
+
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
+  function select(tab) {
+    tabs.forEach(function (t) {
+      var on = t === tab;
+      t.setAttribute("aria-selected", on ? "true" : "false");
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+    });
+  }
+  tabs.forEach(function (tab, i) {
+    tab.addEventListener("click", function () { select(tab); });
+    tab.addEventListener("keydown", function (e) {
+      var d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+      if (!d) return;
+      var next = tabs[(i + d + tabs.length) % tabs.length];
+      select(next); next.focus();
+    });
+  });
+
+  var chips = Array.prototype.slice.call(document.querySelectorAll(".chip"));
+  var rows = Array.prototype.slice.call(document.querySelectorAll("tbody tr"));
+  chips.forEach(function (chip) {
+    chip.addEventListener("click", function () {
+      var f = chip.getAttribute("data-filter");
+      chips.forEach(function (c) { c.setAttribute("aria-pressed", c === chip ? "true" : "false"); });
+      var group = null, shown = 0;
+      rows.forEach(function (r) {
+        if (r.classList.contains("group")) {
+          if (group) group.hidden = shown === 0;
+          group = r; shown = 0; return;
+        }
+        var on = f === "all" || r.getAttribute("data-lead") === f;
+        r.hidden = !on; if (on) shown++;
+      });
+      if (group) group.hidden = shown === 0;
+    });
+  });
+})();
+</script>
+</body>
+</html>

@@ -2,6 +2,8 @@
 
 User and developer documentation for Rustman. Pages are added as the features they describe are implemented; the behavior itself is specified in [`openspec/`](https://github.com/CyberdyneCorp/rustman/tree/main/openspec/).
 
+New here? [Why Rustman](https://cyberdynecorp.github.io/rustman/why/) is a one-page tour, with a side-by-side comparison with Postman.
+
 The same pages are published as a book at <https://cyberdynecorp.github.io/rustman/>, built with [mdBook](https://rust-lang.github.io/mdBook/) from this folder: `docs/SUMMARY.md` is its table of contents, and `python3 scripts/check_docs.py` checks that every page is listed there and every relative link and anchor resolves.
 
 ## Available
