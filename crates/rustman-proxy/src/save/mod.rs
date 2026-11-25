@@ -8,8 +8,10 @@
 //! 1. templatize each path ([`template`]) and group by method, origin and
 //!    templated path, keeping the most recent capture as the example;
 //! 2. put each origin in the environment (`base_url`, `base_url_2`...),
-//!    with the first value of every path variable as its default (a
-//!    secret one for segments that look like secrets, see [`template`]);
+//!    with the first value of every path variable as its default; segments
+//!    that look like secrets (see [`template`]) become secrets holding the
+//!    value of the capture each file saves, suffixed (`reset_id_2`) when
+//!    another value already holds the name;
 //! 3. parameterize credential headers ([`secrets`]), then name the other
 //!    secrets with the importer's extraction, reusing the names the
 //!    environment already declares (`resave`);
@@ -273,16 +275,9 @@ pub fn collection_with(
             }
         };
         let templated = templatize(url.path);
-        let plain_vars = templated.variables.iter().map(|v| (v, false));
-        let secret_vars = templated.secrets.iter().map(|v| (v, true));
-        for ((name, value), secret) in plain_vars.chain(secret_vars) {
+        for (name, value) in &templated.variables {
             if !defaults.iter().any(|d| &d.name == name) {
-                defaults.push(Variable {
-                    name: name.clone(),
-                    value: value.clone(),
-                    secret,
-                    path: false,
-                });
+                defaults.push(plain(name.clone(), value.clone()));
             }
         }
         let key = (index, templated.path.clone(), exchange.method.clone());
@@ -294,8 +289,21 @@ pub fn collection_with(
             },
         );
     }
+    // Secret path variables take the value of the capture each file saves,
+    // so it is the one moved out (and scrubbed wherever the request repeats
+    // it, a `Referer` say); a name another value holds is suffixed.
+    for group in groups.values_mut() {
+        bind_secrets(&mut group.templated, &mut defaults);
+    }
     let names = base_url_names(&origins, known);
     let mut builder = Builder::new(per_host, &origins, names);
+    for name in builder.names.clone() {
+        builder.secrets.reserve(&name, None);
+    }
+    for default in &defaults {
+        let secret = default.secret.then_some(default.value.as_str());
+        builder.secrets.reserve(&default.name, secret);
+    }
     for ((index, _, _), group) in &groups {
         builder.add(*index, group);
     }
@@ -464,6 +472,50 @@ impl Builder {
         Recording {
             collection,
             warnings: self.warnings,
+        }
+    }
+}
+
+/// Declare the secret path variables of `templated` in `defaults` with the
+/// values it replaced. A name that `defaults` already gives another value
+/// (a plain default, or a secret of another request) is renamed in
+/// `templated` to the first free `name_2`, `name_3`..., so every secret
+/// value of a saved request reaches the environment.
+fn bind_secrets(templated: &mut Templated, defaults: &mut Vec<Variable>) {
+    for index in 0..templated.secrets.len() {
+        let (name, value) = templated.secrets[index].clone();
+        let in_template = |n: &str| {
+            templated
+                .variables
+                .iter()
+                .chain(&templated.secrets)
+                .any(|(t, _)| t == n)
+        };
+        let fits = |n: &str| {
+            defaults
+                .iter()
+                .all(|d| d.name != n || (d.secret && d.value == value))
+        };
+        let bound = (1..)
+            .map(|n| match n {
+                1 => name.clone(),
+                n => format!("{name}_{n}"),
+            })
+            .find(|c| fits(c) && (*c == name || !in_template(c)))
+            .expect("some suffix is free");
+        if bound != name {
+            templated.path = templated
+                .path
+                .replace(&format!("{{{{{name}}}}}"), &format!("{{{{{bound}}}}}"));
+            templated.secrets[index].0 = bound.clone();
+        }
+        if !defaults.iter().any(|d| d.name == bound) {
+            defaults.push(Variable {
+                name: bound,
+                value,
+                secret: true,
+                path: false,
+            });
         }
     }
 }
