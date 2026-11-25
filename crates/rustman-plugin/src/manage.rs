@@ -77,7 +77,8 @@ pub fn source_text(root: &Path, cwd: &Path, path: &str) -> Result<String, LoadEr
 /// Declare the plugin at `source` (a workspace-relative path or an `https`
 /// URL) as `name` (default: its manifest's name), with no grants: fetch
 /// it, pin its sha256, check its manifest and component, then write
-/// `rustman.toml` and `rustman.lock`. A URL download is cached.
+/// `rustman.toml` and `rustman.lock`. A URL download is cached; the URL
+/// may name this machine or a private network ([`FetchOptions::allow_local`]).
 pub async fn add(
     root: &Path,
     source: &str,
@@ -87,9 +88,15 @@ pub async fn add(
     let context = name.unwrap_or(source);
     let source = Source::parse(context, source.trim())?;
     refuse_declared(root, name, &source)?;
+    // The URL is the user's own argument, not a committed one: it may
+    // name this machine or a private network.
+    let options = FetchOptions {
+        allow_local: true,
+        ..options.clone()
+    };
     let package = match &source {
         Source::Path(path) => read_path(root, context, path)?,
-        Source::Url(url) => package_from_download(context, fetch(context, url, options).await?)?,
+        Source::Url(url) => package_from_download(context, fetch(context, url, &options).await?)?,
     };
     let manifest = Manifest::parse(context, &package.manifest)?;
     let declaration = Declaration {

@@ -136,6 +136,9 @@ rustix = { version = "1.1", default-features = false, features = ["std", "proces
 # `O_NOFOLLOW` and `O_NONBLOCK` for opening plugin files without following a
 # final symlink or blocking on a FIFO or device (rustman-plugin).
 libc = "0.2"
+# The volume serial and file index of an open handle on Windows (safe
+# `GetFileInformationByHandle`), to check a plugin-read file against its path.
+winapi-util = "0.1"
 # Peak heap usage in the body memory-ceiling test (a counting global allocator).
 peak_alloc = "0.3"
 

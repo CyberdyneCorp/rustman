@@ -117,6 +117,41 @@ fn literal_credentials_are_withheld() {
     );
 }
 
+/// A URL's userinfo is a credential: written literally, it is replaced
+/// by a marker and the entry cannot be replayed; from secrets, it is kept
+/// as placeholders.
+#[test]
+fn literal_url_userinfo_is_withheld() {
+    let mut original = request(spanned("Bearer ", "s3cr3t"));
+    let text = "https://alice:pw-literal@h.example/x/s3cr3t";
+    original.url = Resolved {
+        text: text.into(),
+        secret_spans: vec![SecretSpan {
+            name: "token".into(),
+            range: text.len() - 6..text.len(),
+        }],
+    };
+    let replay = ReplayRequest::new(&original, None);
+    assert_eq!(
+        replay.url,
+        "https://«redacted:userinfo»@h.example/x/{{token}}"
+    );
+    assert_eq!(replay.withheld, ["the URL's userinfo"]);
+    let json = serde_json::to_string(&replay).unwrap();
+    assert!(
+        !json.contains("pw-literal") && !json.contains("alice"),
+        "{json}"
+    );
+
+    original.url = Resolved {
+        text: "https://s3cr3t:s3cr3t@h.example/".into(),
+        secret_spans: Vec::new(),
+    };
+    let replay = ReplayRequest::new(&original, None);
+    assert_eq!(replay.url, "https://{{token}}:{{token}}@h.example/");
+    assert!(replay.withheld.is_empty(), "{:?}", replay.withheld);
+}
+
 #[test]
 fn file_bodies_are_withheld() {
     let mut original = request(spanned("Bearer ", "s3cr3t"));

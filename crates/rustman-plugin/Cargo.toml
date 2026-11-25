@@ -41,6 +41,11 @@ wit-parser = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true
+# Listing a folder through the descriptor that was checked (`fdopendir`).
+rustix = { workspace = true, features = ["fs"] }
+
+[target.'cfg(windows)'.dependencies]
+winapi-util.workspace = true
 
 [dev-dependencies]
 hmac.workspace = true

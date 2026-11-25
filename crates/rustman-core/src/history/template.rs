@@ -45,6 +45,20 @@ impl<'a> Templater<'a> {
         }
     }
 
+    /// Whether `range` of `resolved` holds text that came from no secret,
+    /// `:` separators aside.
+    pub(crate) fn has_literal(&self, resolved: &Resolved, range: &Range<usize>) -> bool {
+        let text = &resolved.text;
+        let parts = self.parts(text, &resolved.secret_spans);
+        parts.pieces.iter().any(|piece| match piece {
+            Piece::Literal(r) => {
+                let (start, end) = (r.start.max(range.start), r.end.min(range.end));
+                start < end && text[start..end].chars().any(|c| c != ':')
+            }
+            Piece::Secret(_) => false,
+        })
+    }
+
     fn parts<'t>(&self, text: &'t str, spans: &[SecretSpan]) -> Parts<'t> {
         let mut found: Vec<(Range<usize>, String)> = spans
             .iter()

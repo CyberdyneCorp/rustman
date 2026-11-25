@@ -77,7 +77,34 @@ fn open_no_follow(path: &Path) -> io::Result<File> {
         .open(path)
 }
 
-#[cfg(not(unix))]
+/// `FILE_FLAG_OPEN_REPARSE_POINT`: open a reparse point (a symbolic link,
+/// a junction) itself instead of what it points to.
+#[cfg(windows)]
+const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+
+/// `FILE_ATTRIBUTE_REPARSE_POINT`.
+#[cfg(windows)]
+const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
+
+/// On Windows, a final reparse point is opened itself, never followed, and
+/// refused: a path swapped for a link just for the open reads nothing.
+#[cfg(windows)]
+fn open_no_follow(path: &Path) -> io::Result<File> {
+    use std::os::windows::fs::{MetadataExt as _, OpenOptionsExt as _};
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)?;
+    if file.metadata()?.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "is a symbolic link",
+        ));
+    }
+    Ok(file)
+}
+
+#[cfg(not(any(unix, windows)))]
 fn open_no_follow(path: &Path) -> io::Result<File> {
     File::open(path)
 }
@@ -99,24 +126,104 @@ pub fn read_capped(file: File, cap: u64) -> io::Result<Vec<u8>> {
 /// Whether `file`, opened from the canonical path `checked`, is still the
 /// file at that path: `checked` still resolves to itself (no component
 /// became a symbolic link) and names the same file (device and inode on
-/// Unix). A swap between a path check and the open fails one of the two.
+/// Unix, volume serial and file index on Windows). A swap between a path
+/// check and the open fails one of the two.
 pub fn is_checked_file(file: &File, checked: &Path) -> io::Result<bool> {
     if dunce::canonicalize(checked)? != checked {
         return Ok(false);
     }
-    let now = std::fs::symlink_metadata(checked)?;
-    Ok(same_file(&file.metadata()?, &now))
+    same_file(file, checked)
 }
 
+/// Whether `file` is the file at `path` (a final symlink not followed).
 #[cfg(unix)]
-fn same_file(a: &std::fs::Metadata, b: &std::fs::Metadata) -> bool {
+fn same_file(file: &File, path: &Path) -> io::Result<bool> {
     use std::os::unix::fs::MetadataExt as _;
-    a.dev() == b.dev() && a.ino() == b.ino()
+    let (a, b) = (file.metadata()?, std::fs::symlink_metadata(path)?);
+    Ok(a.dev() == b.dev() && a.ino() == b.ino())
 }
 
+/// Whether `file` is the file at `path` (a final reparse point not
+/// followed): the same volume serial number and file index.
+#[cfg(windows)]
+fn same_file(file: &File, path: &Path) -> io::Result<bool> {
+    use std::os::windows::fs::OpenOptionsExt as _;
+    use winapi_util::file::information;
+    /// Opens a folder too.
+    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+    let now = std::fs::OpenOptions::new()
+        .access_mode(0)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS)
+        .open(path)?;
+    let (a, b) = (information(file)?, information(&now)?);
+    Ok(a.volume_serial_number() == b.volume_serial_number() && a.file_index() == b.file_index())
+}
+
+#[cfg(not(any(unix, windows)))]
+fn same_file(file: &File, path: &Path) -> io::Result<bool> {
+    let (a, b) = (file.metadata()?, std::fs::symlink_metadata(path)?);
+    Ok(a.is_file() == b.is_file() && a.len() == b.len())
+}
+
+/// The entry names of the folder at the canonical path `checked`; `None`
+/// when the path changed meanwhile (a component swapped for a symlink).
+///
+/// On Unix the folder is opened without following a final symlink
+/// (`O_DIRECTORY | O_NOFOLLOW`), checked against `checked` (device and
+/// inode), and listed through that descriptor: a path swapped away and
+/// back around the listing cannot show another folder's entries.
+#[cfg(unix)]
+pub fn list_checked_dir(checked: &Path) -> io::Result<Option<Vec<std::ffi::OsString>>> {
+    match open_checked_dir(checked)? {
+        Some(dir) => list_open_dir(dir).map(Some),
+        None => Ok(None),
+    }
+}
+
+/// The folder at `checked`, opened without following a final symlink;
+/// `None` unless it is still the folder at that canonical path.
+#[cfg(unix)]
+fn open_checked_dir(checked: &Path) -> io::Result<Option<File>> {
+    use std::os::unix::fs::OpenOptionsExt as _;
+    let opened = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(checked);
+    let dir = match opened {
+        Ok(dir) => dir,
+        Err(_) if std::fs::symlink_metadata(checked).is_ok_and(|m| m.file_type().is_symlink()) => {
+            return Ok(None);
+        }
+        Err(e) => return Err(e),
+    };
+    Ok(is_checked_file(&dir, checked)?.then_some(dir))
+}
+
+/// The entry names of the open folder `dir`, read through its descriptor
+/// (whatever its path names by now).
+#[cfg(unix)]
+fn list_open_dir(dir: File) -> io::Result<Vec<std::ffi::OsString>> {
+    use std::os::unix::ffi::OsStrExt as _;
+    let mut names = Vec::new();
+    for entry in rustix::fs::Dir::new(std::os::fd::OwnedFd::from(dir))? {
+        let entry = entry?;
+        let name = entry.file_name().to_bytes();
+        if name != b"." && name != b".." {
+            names.push(std::ffi::OsStr::from_bytes(name).to_os_string());
+        }
+    }
+    Ok(names)
+}
+
+/// The entry names of the folder at the canonical path `checked`; `None`
+/// when the path no longer resolves to itself after the listing.
 #[cfg(not(unix))]
-fn same_file(a: &std::fs::Metadata, b: &std::fs::Metadata) -> bool {
-    a.is_file() == b.is_file() && a.len() == b.len()
+pub fn list_checked_dir(checked: &Path) -> io::Result<Option<Vec<std::ffi::OsString>>> {
+    let names = std::fs::read_dir(checked)?
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name())
+        .collect();
+    Ok((dunce::canonicalize(checked)? == checked).then_some(names))
 }
 
 #[cfg(test)]
@@ -212,5 +319,77 @@ mod tests {
         std::fs::write(root.join("c.txt"), b"c").unwrap();
         std::os::unix::fs::symlink(root.join("c.txt"), &path).unwrap();
         assert!(!is_checked_file(&file, &path).unwrap());
+    }
+
+    /// A folder is listed through the descriptor that was checked: once
+    /// open, swapping its path for a symlink to another folder (and back)
+    /// cannot list that folder's entries. A path that is a symlink when
+    /// opened is refused.
+    #[cfg(unix)]
+    #[test]
+    fn folders_are_listed_through_the_checked_descriptor() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        let data = root.join("data");
+        std::fs::create_dir(&data).unwrap();
+        std::fs::write(data.join("inside.txt"), "i").unwrap();
+        std::fs::write(outside.path().join("outside.txt"), "o").unwrap();
+        assert_eq!(
+            list_checked_dir(&data).unwrap().unwrap(),
+            [std::ffi::OsString::from("inside.txt")]
+        );
+
+        let opened = open_checked_dir(&data).unwrap().unwrap();
+        std::fs::rename(&data, root.join("old")).unwrap();
+        std::os::unix::fs::symlink(outside.path(), &data).unwrap();
+        assert_eq!(
+            list_open_dir(opened).unwrap(),
+            [std::ffi::OsString::from("inside.txt")]
+        );
+        assert_eq!(list_checked_dir(&data).unwrap(), None);
+        // Another folder at the path is not the one checked.
+        std::fs::remove_file(&data).unwrap();
+        std::fs::create_dir(&data).unwrap();
+        let file = File::open(root.join("old")).unwrap();
+        assert!(!is_checked_file(&file, &data).unwrap());
+    }
+
+    /// Windows: a final reparse point is opened itself and refused, so a
+    /// path swapped for a link just for the open reads nothing outside.
+    #[cfg(windows)]
+    #[test]
+    fn windows_reparse_points_are_not_followed() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        let secret = outside.path().join("secret.txt");
+        std::fs::write(&secret, "s").unwrap();
+        let link = root.join("link.txt");
+        if let Err(e) = std::os::windows::fs::symlink_file(&secret, &link) {
+            eprintln!("skipped: cannot create a symlink here ({e})");
+            return;
+        }
+        let err = open_no_follow(&link).unwrap_err();
+        assert_eq!(err.to_string(), "is a symbolic link");
+        let err = open_regular(&link).unwrap_err();
+        assert_eq!(err.to_string(), "is a symbolic link");
+    }
+
+    /// Windows: an opened file is the file at its path only with the same
+    /// volume serial and file index; a file of the same length is not.
+    #[cfg(windows)]
+    #[test]
+    fn windows_files_are_compared_by_file_index() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        let path = root.join("a.txt");
+        let other = root.join("b.txt");
+        std::fs::write(&path, b"a").unwrap();
+        std::fs::write(&other, b"b").unwrap();
+        let file = open_regular(&path).unwrap();
+        assert!(is_checked_file(&file, &path).unwrap());
+        let same_length = open_regular(&other).unwrap();
+        assert!(!is_checked_file(&same_length, &path).unwrap());
     }
 }
