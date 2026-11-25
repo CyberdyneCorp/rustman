@@ -3,17 +3,32 @@
 //! ObjectIds, ULIDs) become variables named after the previous segment in
 //! singular form (`/users/42` -> `{{user_id}}`), or `{{id_N}}` when there
 //! is no usable previous segment.
+//!
+//! Segments that look like secrets become secret variables instead, so
+//! their values reach neither the URL, the file name nor the committed
+//! environment (issue #104):
+//!
+//! - a segment holding a well-known token (`ghp_...`), or a compact random
+//!   token (see [`is_secret_segment`]), such as the last segment of a
+//!   Slack webhook `/services/T0.../B0.../<secret>`: `{{service_secret}}`
+//!   after a plain word, `{{path_secret}}` otherwise;
+//! - an unguessable identifier (UUID, ULID) after a segment that names a
+//!   credential or a one-time link (`/reset/<uuid>`, `/tokens/<uuid>`).
+
+use rustman_import::secrets::{is_known_token, is_secret_name};
 
 /// A path with its identifier segments replaced.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Templated {
     /// The path with `{{name}}` placeholders: `/users/{{user_id}}`.
     pub path: String,
-    /// The path with `:id` in place of each identifier, for names and
-    /// file names: `/users/:id`.
+    /// The path with `:id` in place of each identifier (and `:secret` in
+    /// place of each secret), for names and file names: `/users/:id`.
     pub shape: String,
     /// Each variable and the value it replaced, in path order.
     pub variables: Vec<(String, String)>,
+    /// Each secret variable and the value it replaced, in path order.
+    pub secrets: Vec<(String, String)>,
 }
 
 /// Templatize `path` (no query), segments kept as written.
@@ -22,28 +37,51 @@ pub fn templatize(path: &str) -> Templated {
         path: String::new(),
         shape: String::new(),
         variables: Vec::new(),
+        secrets: Vec::new(),
     };
     let mut previous: Option<&str> = None;
     let mut fallback = 0;
     for segment in path.split('/').skip(1) {
         out.path.push('/');
         out.shape.push('/');
-        if !is_identifier(segment) {
+        let identifier = is_identifier(segment);
+        if !identifier && is_secret_segment(segment) {
+            let base = previous
+                .filter(|p| {
+                    p.bytes()
+                        .all(|b| b.is_ascii_alphabetic() || b == b'-' || b == b'_')
+                })
+                .and_then(singular_name)
+                .unwrap_or_else(|| "path".to_owned());
+            let name = out.unique(format!("{base}_secret"));
+            out.path.push_str(&format!("{{{{{name}}}}}"));
+            out.shape.push_str(":secret");
+            out.secrets.push((name, segment.to_owned()));
+            previous = None;
+            continue;
+        }
+        if !identifier {
             out.path.push_str(segment);
             out.shape.push_str(segment);
             previous = Some(segment);
             continue;
         }
         let name = match previous.and_then(singular_name) {
-            Some(base) => unique(format!("{base}_id"), &out.variables),
+            Some(base) => out.unique(format!("{base}_id")),
             None => {
                 fallback += 1;
-                unique(format!("id_{fallback}"), &out.variables)
+                out.unique(format!("id_{fallback}"))
             }
         };
         out.path.push_str(&format!("{{{{{name}}}}}"));
         out.shape.push_str(":id");
-        out.variables.push((name, segment.to_owned()));
+        let capability = previous.is_some_and(names_a_capability) && is_unguessable_id(segment);
+        let list = if capability {
+            &mut out.secrets
+        } else {
+            &mut out.variables
+        };
+        list.push((name, segment.to_owned()));
         previous = None;
     }
     if out.path.is_empty() {
@@ -53,16 +91,111 @@ pub fn templatize(path: &str) -> Templated {
     out
 }
 
-/// `name`, or `name_2`, `name_3`... when the path already uses it.
-fn unique(name: String, taken: &[(String, String)]) -> String {
-    let used = |n: &str| taken.iter().any(|(t, _)| t == n);
-    if !used(&name) {
-        return name;
+impl Templated {
+    /// `name`, or `name_2`, `name_3`... when the path already uses it.
+    fn unique(&self, name: String) -> String {
+        let used = |n: &str| {
+            self.variables
+                .iter()
+                .chain(&self.secrets)
+                .any(|(t, _)| t == n)
+        };
+        if !used(&name) {
+            return name;
+        }
+        (2..)
+            .map(|n| format!("{name}_{n}"))
+            .find(|candidate| !used(candidate))
+            .expect("some suffix is free")
     }
-    (2..)
-        .map(|n| format!("{name}_{n}"))
-        .find(|candidate| !used(candidate))
-        .expect("some suffix is free")
+}
+
+/// Path segments after which an unguessable id is a credential: secret
+/// names (`tokens`, `sessions`, `api-keys`) and the words of one-time links.
+const CAPABILITY_WORDS: &[&str] = &[
+    "reset",
+    "resets",
+    "verify",
+    "verification",
+    "verifications",
+    "confirm",
+    "confirmation",
+    "confirmations",
+    "activate",
+    "activation",
+    "activations",
+    "invite",
+    "invites",
+    "invitation",
+    "invitations",
+    "magic",
+    "magic-link",
+    "magic-links",
+    "recover",
+    "recovery",
+    "unsubscribe",
+];
+
+fn names_a_capability(segment: &str) -> bool {
+    is_secret_name(segment)
+        || CAPABILITY_WORDS
+            .iter()
+            .any(|w| w.eq_ignore_ascii_case(segment))
+}
+
+/// Whether `segment` is a UUID or a ULID: an id that cannot be guessed,
+/// and so may work as a credential when it reaches a committed file.
+pub fn is_unguessable_id(segment: &str) -> bool {
+    is_uuid(segment) || is_ulid(segment)
+}
+
+/// Whether a path segment (not an identifier) looks like a secret: it
+/// holds a well-known token, or it is a compact random token: at least 20
+/// letters, digits, `-` or `_`, with uppercase and lowercase letters and
+/// digits, less than half of it made of words (runs of three lowercase
+/// letters or more, capitalized or not). So camelCase names such as
+/// `listOrganizationMembersV2`, lowercase slugs and hex hashes stay plain.
+pub fn is_secret_segment(segment: &str) -> bool {
+    if is_known_token(segment) {
+        return true;
+    }
+    let bytes = segment.as_bytes();
+    if bytes.len() < 20
+        || !bytes
+            .iter()
+            .all(|b| b.is_ascii_alphanumeric() || *b == b'-' || *b == b'_')
+    {
+        return false;
+    }
+    let has = |f: fn(&u8) -> bool| bytes.iter().any(f);
+    if !(has(u8::is_ascii_uppercase) && has(u8::is_ascii_lowercase) && has(u8::is_ascii_digit)) {
+        return false;
+    }
+    word_bytes(bytes) * 2 < bytes.len()
+}
+
+/// The number of bytes of `bytes` in words: runs of three lowercase
+/// letters or more, with the uppercase letter just before them.
+fn word_bytes(bytes: &[u8]) -> usize {
+    let mut total = 0;
+    let mut i = 0;
+    while i < bytes.len() {
+        let start = i;
+        if bytes[i].is_ascii_uppercase() {
+            i += 1;
+        }
+        let lower_start = i;
+        while i < bytes.len() && bytes[i].is_ascii_lowercase() {
+            i += 1;
+        }
+        if i - lower_start >= 3 {
+            total += i - start;
+        }
+        if i == start {
+            i += 1;
+        }
+    }
+    total
 }
 
 /// Whether `segment` is an integer, a UUID, an ObjectId or a ULID.
@@ -229,6 +362,77 @@ mod tests {
             "123456789012345678901",
         ] {
             assert!(!is_identifier(word), "{word}");
+        }
+    }
+
+    const SLACK_SECRET: &str = "Xk7pQ2mZ9rT4vB8nL3wY6sJd";
+    const RESET: &str = "9b2c4d1e-7f3a-4b5c-8d9e-0f1a2b3c4d5e";
+
+    #[test]
+    fn secret_looking_segments_become_secret_variables() {
+        let t = templatize(&format!("/services/T0AAAAAAA/B0BBBBBBB/{SLACK_SECRET}"));
+        assert_eq!(t.path, "/services/T0AAAAAAA/B0BBBBBBB/{{path_secret}}");
+        assert_eq!(t.shape, "/services/T0AAAAAAA/B0BBBBBBB/:secret");
+        assert_eq!(
+            t.secrets,
+            [("path_secret".to_owned(), SLACK_SECRET.to_owned())]
+        );
+        assert!(t.variables.is_empty());
+
+        let t = templatize(&format!("/hooks/{SLACK_SECRET}/{SLACK_SECRET}x"));
+        assert_eq!(t.path, "/hooks/{{hook_secret}}/{{path_secret}}");
+
+        let token = "ghp_q8ZK3vLw0pTn6RxYb2HsJm9CdFgA5eUi7oQ1";
+        let t = templatize(&format!("/repos/{token}/x"));
+        assert_eq!(t.path, "/repos/{{repo_secret}}/x");
+        assert_eq!(t.secrets[0].1, token);
+    }
+
+    #[test]
+    fn unguessable_ids_after_credential_words_are_secret() {
+        let t = templatize(&format!("/password/reset/{RESET}"));
+        assert_eq!(t.path, "/password/reset/{{reset_id}}");
+        assert_eq!(t.shape, "/password/reset/:id");
+        assert_eq!(t.secrets, [("reset_id".to_owned(), RESET.to_owned())]);
+        assert!(t.variables.is_empty());
+
+        let t = templatize("/tokens/01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        assert_eq!(t.secrets.len(), 1, "{t:?}");
+        // A numeric id names a record, not a credential.
+        let t = templatize("/api-keys/3/reset/42");
+        assert!(t.secrets.is_empty(), "{t:?}");
+        assert_eq!(t.variables.len(), 2);
+        // A UUID under an ordinary collection stays a plain variable.
+        let t = templatize(&format!("/orders/{RESET}"));
+        assert!(t.secrets.is_empty());
+        assert_eq!(t.variables, [("order_id".to_owned(), RESET.to_owned())]);
+    }
+
+    #[test]
+    fn ordinary_segments_are_not_secrets() {
+        for segment in [
+            "listOrganizationMembersV2",
+            "getUserProfileSettings2024",
+            "iPhone15ProMaxSpecificationsAndReviews",
+            "my-blog-post-title-2024-01-15",
+            "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+            "DA39A3EE5E6B4B0D3255BFEF95601890AFD80709",
+            "T0AAAAAAA",
+            "B0BBBBBBB",
+            "dQw4w9WgXcQ",
+            "users",
+            "v1",
+            "index.html",
+            "ApplicationSettingsV2Beta3",
+        ] {
+            assert!(!is_secret_segment(segment), "{segment}");
+        }
+        for segment in [
+            SLACK_SECRET,
+            "abcDEF123ghiJKL456mnoPQR",
+            "q8ZK3vLw0pTn6RxYb2HsJm9CdFgA5eUi7oQ1",
+        ] {
+            assert!(is_secret_segment(segment), "{segment}");
         }
     }
 }

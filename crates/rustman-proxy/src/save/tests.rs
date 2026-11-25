@@ -464,3 +464,131 @@ fn shown_captures_redact_every_secret_the_save_path_parameterizes() {
         saved.warnings
     );
 }
+
+/// Issue #104: secrets in URL path segments and in neutral-named fields of
+/// nested JSON objects.
+#[test]
+fn path_segment_and_nested_json_secrets_are_parameterized_and_redacted() {
+    let ws = workspace();
+    let webhook = "Xk7pQ2mZ9rT4vB8nL3wY6sJd";
+    let reset = "9b2c4d1e-7f3a-4b5c-8d9e-0f1a2b3c4d5e";
+    let nested_value = "n3sted-cr3dential";
+    let refresh = "r3fresh-t0ken-value";
+    let captures = [
+        exchange(
+            "POST",
+            &format!("https://hooks.example.com/services/T0AAAAAAA/B0BBBBBBB/{webhook}"),
+            &[("Content-Type", "application/json")],
+            r#"{"text":"hi"}"#,
+        ),
+        exchange(
+            "POST",
+            &format!("https://api.example.com/password/reset/{reset}"),
+            &[("Content-Type", "application/json")],
+            &format!(
+                r#"{{"credentials":{{"type":"password","value":"{nested_value}"}},"nested":{{"refresh":"{refresh}"}}}}"#
+            ),
+        ),
+    ];
+    let saved = save(&captures, &options(ws.path(), "recorded"), None).unwrap();
+    let raw = [webhook, reset, nested_value, refresh];
+    for (path, bytes) in tree(ws.path()) {
+        let text = String::from_utf8_lossy(&bytes);
+        for secret in raw {
+            assert!(!path.contains(secret), "{secret} in the file name {path}");
+            assert!(!text.contains(secret), "saved: {secret} in {path}: {text}");
+        }
+    }
+    let hook = read(
+        ws.path(),
+        "recorded/hooks-example-com/post-services-t0aaaaaaa-b0bbbbbbb-secret.rman.yaml",
+    );
+    assert!(hook.contains("/B0BBBBBBB/{{path_secret}}"), "{hook}");
+    let reset_file = read(
+        ws.path(),
+        "recorded/api-example-com/post-password-reset-id.rman.yaml",
+    );
+    assert!(
+        reset_file.contains("/password/reset/{{reset_id}}"),
+        "{reset_file}"
+    );
+    assert!(reset_file.contains("{{credentials_value}}"), "{reset_file}");
+    assert!(reset_file.contains(r#""type":"password""#), "{reset_file}");
+    let env = read(ws.path(), "environments/recorded.yaml");
+    for name in ["path_secret", "reset_id", "credentials_value", "refresh"] {
+        assert!(
+            env.contains(&format!("- {name}")),
+            "{name} declared secret: {env}"
+        );
+        assert!(
+            saved.secrets.contains(&name.to_owned()),
+            "{name}: {:?}",
+            saved.secrets
+        );
+    }
+    assert!(
+        saved.warnings.iter().all(|w| !w.contains("UUID")),
+        "a secret id is not reported as a plain default: {:?}",
+        saved.warnings
+    );
+
+    let har = crate::har::har(&captures, false).to_string();
+    for capture in &captures {
+        let json = crate::jsonl::capture_json(capture).to_string();
+        let line = capture.redactor().text(&capture.to_string()).into_owned();
+        for (shown, text) in [("HAR", &har), ("--json", &json), ("live line", &line)] {
+            for secret in raw {
+                assert!(!text.contains(secret), "{shown}: {secret} in {text}");
+            }
+        }
+    }
+}
+
+#[test]
+fn ordinary_paths_and_bodies_stay_plain_but_unguessable_defaults_are_reported() {
+    let ws = workspace();
+    let order = "9b2c4d1e-7f3a-4b5c-8d9e-0f1a2b3c4d5e";
+    let sha = "da39a3ee5e6b4b0d3255bfef95601890afd80709";
+    let captures = [
+        exchange(
+            "GET",
+            "https://api.example.com/v2/listOrganizationMembersV2/my-blog-post-title-2024",
+            &[],
+            "",
+        ),
+        exchange(
+            "POST",
+            &format!("https://api.example.com/orders/{order}/commits/{sha}"),
+            &[("Content-Type", "application/json")],
+            r#"{"profile":{"value":"blue"},"auth":{"type":"bearer","user":"alice"}}"#,
+        ),
+    ];
+    let saved = save(&captures, &options(ws.path(), "recorded"), None).unwrap();
+    assert!(saved.secrets.is_empty(), "{:?}", saved.secrets);
+    let env = read(ws.path(), "environments/recorded.yaml");
+    assert!(env.contains(order), "{env}");
+    let requests: Vec<String> = tree(ws.path())
+        .into_iter()
+        .map(|(p, _)| p)
+        .filter(|p| p.ends_with(".rman.yaml"))
+        .collect();
+    assert!(
+        requests
+            .iter()
+            .any(|p| p.contains("listorganizationmembersv2")),
+        "{requests:?}"
+    );
+    assert!(requests.iter().any(|p| p.contains(sha)), "{requests:?}");
+    let reported: Vec<&String> = saved
+        .warnings
+        .iter()
+        .filter(|w| w.contains("UUID or ULID"))
+        .collect();
+    assert_eq!(reported.len(), 1, "{:?}", saved.warnings);
+    assert!(reported[0].contains("order_id"), "{reported:?}");
+    assert!(
+        reported[0].contains("environments/recorded.yaml"),
+        "{reported:?}"
+    );
+    assert!(!reported[0].contains(order), "{reported:?}");
+}

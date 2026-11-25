@@ -188,6 +188,34 @@ When saving, path segments that look like identifiers (integers, UUIDs, 24-hex O
 - **WHEN** it is saved
 - **THEN** the URL SHALL be `{{base_url}}/orders/{{order_id}}/items`
 
+### Requirement: Secret path segments
+When saving, a path segment holding a well-known token or a compact random token (20+ letters, digits, `-`, `_`, mixing cases and digits, mostly not words), and a UUID or ULID after a credential or one-time-link segment (`reset`, `verify`, `invite`, `tokens`), SHALL become a variable declared under `secrets:`, never a plain default, and SHALL NOT appear in the file name. Other UUID or ULID defaults SHALL be reported with a warning.
+
+#### Scenario: Slack webhook path
+- **GIVEN** a capture `POST /services/T0AAAAAAA/B0BBBBBBB/<secret>`
+- **WHEN** it is saved
+- **THEN** the URL SHALL end in `/B0BBBBBBB/{{path_secret}}` with `path_secret` declared as a secret
+- **AND** the secret SHALL NOT appear in any file name or file under the workspace
+
+#### Scenario: Reset token
+- **GIVEN** a capture `POST /password/reset/<uuid>`
+- **WHEN** it is saved
+- **THEN** the URL SHALL be `{{base_url}}/password/reset/{{reset_id}}` with `reset_id` declared as a secret
+
+### Requirement: Secrets in nested JSON fields
+When saving, a string field of a JSON body inside an object or array named like a credential (`credentials`, `auth`, `authorization`, `token`, `secret`) SHALL become a placeholder named after both (`{{credentials_value}}`) when its name only holds a value (`value`, `data`, `current`, `new`) or its value looks random. Descriptive siblings (`type`, `user`) SHALL be kept. A bare `refresh` field SHALL be a secret name.
+
+#### Scenario: Neutral field in a credential object
+- **GIVEN** a captured JSON body `{"credentials":{"type":"password","value":"s3cret"}}`
+- **WHEN** it is saved
+- **THEN** the body SHALL contain `"value":"{{credentials_value}}"` and `"type":"password"`
+- **AND** the recorder pane, `--json` lines and HAR export SHALL NOT show `s3cret`
+
+#### Scenario: Ordinary nested values
+- **GIVEN** a captured JSON body `{"profile":{"value":"blue"},"auth":{"type":"bearer","user":"alice"}}`
+- **WHEN** it is saved
+- **THEN** no value SHALL become a placeholder
+
 ### Requirement: Base URL extraction
 Saving SHALL create or update an environment (`--env <name>`, default `recorded`) with `base_url` set to the scheme, host and port of the captures. A different origin in the same save SHALL get its own variable (`base_url_2`, …) and a warning.
 
@@ -205,7 +233,7 @@ Before anything is written, values of `Authorization`, `Proxy-Authorization`, `C
 - **AND** the string `eyJ` SHALL NOT appear in any file under the workspace
 
 ### Requirement: Redaction in display and export
-Captures SHALL be redacted in the TUI, JSON-lines output, HAR export and logs using the `environments` redaction rules. Every value that saving would replace by a placeholder (secret-named headers and fields, values starting with an auth scheme, known token formats under any name) SHALL be redacted there too. They SHALL be kept unredacted only in memory, for the purpose of saving secrets with `--store-secrets` or replaying.
+Captures SHALL be redacted in the TUI, JSON-lines output, HAR export and logs using the `environments` redaction rules. Every value that saving would replace by a placeholder (secret-named headers and fields, values starting with an auth scheme, known token formats under any name, secret path segments, nested credential fields) SHALL be redacted there too. They SHALL be kept unredacted only in memory, for the purpose of saving secrets with `--store-secrets` or replaying.
 
 #### Scenario: Cookie hidden in the pane
 - **WHEN** a captured request carries `Cookie: sid=abc`
