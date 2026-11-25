@@ -10,7 +10,7 @@ expression: "rendered(&report, format)"
       "tool": {
         "driver": {
           "name": "rustman",
-          "version": "0.1.0",
+          "version": "1.0.0",
           "informationUri": "https://github.com/CyberdyneCorp/rustman",
           "rules": [
             {

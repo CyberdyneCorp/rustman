@@ -123,7 +123,7 @@ This page covers sending and running requests, reporters, terminal behavior, log
 
 The command groups `rustman env`, `rustman secret`, `rustman cookies`, `rustman auth`, `rustman import`, `rustman export`, `rustman explore`, `rustman report`, `rustman graphql`, `rustman rpc`, `rustman evm`, `rustman grpc`, `rustman ws`, `rustman sse`, `rustman kafka`, `rustman mqtt`, `rustman amqp`, `rustman history`, `rustman mcp`, `rustman mcp-client`, `rustman mock`, `rustman snapshot`, `rustman trace`, `rustman webhook`, `rustman contract`, `rustman contract pact`, `rustman docs`, `rustman plugin` and `rustman record ca` only hold the commands above: on their own they print their subcommands and exit with 2. `rustman import` also takes a source file or folder directly (`rustman import export.json`), which is the same as `rustman import auto export.json`.
 
-`rustman --help` and `rustman <command> --help` document every flag; `rustman --version` prints `rustman <version>`, such as `rustman 0.1.0`.
+`rustman --help` and `rustman <command> --help` document every flag; `rustman --version` prints `rustman <version>`, such as `rustman 1.0.0`.
 
 ### Global flags
 
