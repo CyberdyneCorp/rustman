@@ -8,7 +8,10 @@
 //! 1. templatize each path ([`template`]) and group by method, origin and
 //!    templated path, keeping the most recent capture as the example;
 //! 2. put each origin in the environment (`base_url`, `base_url_2`...),
-//!    with the first value of every path variable as its default;
+//!    with the first value of every path variable as its default; segments
+//!    that look like secrets (see [`template`]) become secrets holding the
+//!    value of the capture each file saves, suffixed (`reset_id_2`) when
+//!    another value already holds the name;
 //! 3. parameterize credential headers ([`secrets`]), then name the other
 //!    secrets with the importer's extraction, reusing the names the
 //!    environment already declares (`resave`);
@@ -221,14 +224,14 @@ struct Group<'a> {
 }
 
 /// The parts of an absolute URL.
-struct Url<'a> {
-    origin: &'a str,
-    authority: &'a str,
-    path: &'a str,
-    query: &'a str,
+pub(crate) struct Url<'a> {
+    pub(crate) origin: &'a str,
+    pub(crate) authority: &'a str,
+    pub(crate) path: &'a str,
+    pub(crate) query: &'a str,
 }
 
-fn split(url: &str) -> Url<'_> {
+pub(crate) fn split(url: &str) -> Url<'_> {
     let scheme_end = url.find("://").map_or(0, |i| i + 3);
     let after = &url[scheme_end..];
     let authority_len = after.find(['/', '?', '#']).unwrap_or(after.len());
@@ -260,7 +263,7 @@ pub fn collection_with(
     known: &[(String, String)],
 ) -> Recording {
     let mut origins: Vec<(String, String)> = Vec::new();
-    let mut defaults: Vec<(String, String)> = Vec::new();
+    let mut defaults: Vec<Variable> = Vec::new();
     let mut groups: BTreeMap<(usize, String, String), Group<'_>> = BTreeMap::new();
     for exchange in exchanges {
         let url = split(&exchange.url);
@@ -273,8 +276,8 @@ pub fn collection_with(
         };
         let templated = templatize(url.path);
         for (name, value) in &templated.variables {
-            if !defaults.iter().any(|(n, _)| n == name) {
-                defaults.push((name.clone(), value.clone()));
+            if !defaults.iter().any(|d| &d.name == name) {
+                defaults.push(plain(name.clone(), value.clone()));
             }
         }
         let key = (index, templated.path.clone(), exchange.method.clone());
@@ -286,8 +289,21 @@ pub fn collection_with(
             },
         );
     }
+    // Secret path variables take the value of the capture each file saves,
+    // so it is the one moved out (and scrubbed wherever the request repeats
+    // it, a `Referer` say); a name another value holds is suffixed.
+    for group in groups.values_mut() {
+        bind_secrets(&mut group.templated, &mut defaults);
+    }
     let names = base_url_names(&origins, known);
     let mut builder = Builder::new(per_host, &origins, names);
+    for name in builder.names.clone() {
+        builder.secrets.reserve(&name, None);
+    }
+    for default in &defaults {
+        let secret = default.secret.then_some(default.value.as_str());
+        builder.secrets.reserve(&default.name, secret);
+    }
     for ((index, _, _), group) in &groups {
         builder.add(*index, group);
     }
@@ -396,7 +412,7 @@ impl Builder {
         mut self,
         environment: &str,
         origins: &[(String, String)],
-        defaults: Vec<(String, String)>,
+        defaults: Vec<Variable>,
     ) -> Recording {
         let mut variables: Vec<Variable> = Vec::new();
         for ((origin, _), name) in origins.iter().zip(&self.names) {
@@ -408,7 +424,19 @@ impl Builder {
             }
             variables.push(plain(name, origin.clone()));
         }
-        variables.extend(defaults.into_iter().map(|(n, v)| plain(n, v)));
+        let unguessable: Vec<&str> = defaults
+            .iter()
+            .filter(|d| !d.secret && template::is_unguessable_id(&d.value))
+            .map(|d| d.name.as_str())
+            .collect();
+        if !unguessable.is_empty() {
+            self.warnings.push(format!(
+                "warning: path variables {} keep their recorded UUID or ULID values as defaults \
+                 in environments/{environment}.yaml; review them before committing",
+                unguessable.join(", ")
+            ));
+        }
+        variables.extend(defaults);
         variables.extend(
             self.secrets
                 .moved
@@ -444,6 +472,50 @@ impl Builder {
         Recording {
             collection,
             warnings: self.warnings,
+        }
+    }
+}
+
+/// Declare the secret path variables of `templated` in `defaults` with the
+/// values it replaced. A name that `defaults` already gives another value
+/// (a plain default, or a secret of another request) is renamed in
+/// `templated` to the first free `name_2`, `name_3`..., so every secret
+/// value of a saved request reaches the environment.
+fn bind_secrets(templated: &mut Templated, defaults: &mut Vec<Variable>) {
+    for index in 0..templated.secrets.len() {
+        let (name, value) = templated.secrets[index].clone();
+        let in_template = |n: &str| {
+            templated
+                .variables
+                .iter()
+                .chain(&templated.secrets)
+                .any(|(t, _)| t == n)
+        };
+        let fits = |n: &str| {
+            defaults
+                .iter()
+                .all(|d| d.name != n || (d.secret && d.value == value))
+        };
+        let bound = (1..)
+            .map(|n| match n {
+                1 => name.clone(),
+                n => format!("{name}_{n}"),
+            })
+            .find(|c| fits(c) && (*c == name || !in_template(c)))
+            .expect("some suffix is free");
+        if bound != name {
+            templated.path = templated
+                .path
+                .replace(&format!("{{{{{name}}}}}"), &format!("{{{{{bound}}}}}"));
+            templated.secrets[index].0 = bound.clone();
+        }
+        if !defaults.iter().any(|d| d.name == bound) {
+            defaults.push(Variable {
+                name: bound,
+                value,
+                secret: true,
+                path: false,
+            });
         }
     }
 }

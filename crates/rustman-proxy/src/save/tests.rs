@@ -464,3 +464,291 @@ fn shown_captures_redact_every_secret_the_save_path_parameterizes() {
         saved.warnings
     );
 }
+
+/// Issue #104: secrets in URL path segments and in neutral-named fields of
+/// nested JSON objects.
+#[test]
+fn path_segment_and_nested_json_secrets_are_parameterized_and_redacted() {
+    let ws = workspace();
+    let webhook = "Xk7pQ2mZ9rT4vB8nL3wY6sJd";
+    let reset = "9b2c4d1e-7f3a-4b5c-8d9e-0f1a2b3c4d5e";
+    let nested_value = "n3sted-cr3dential";
+    let refresh = "r3fresh-t0ken-value";
+    let captures = [
+        exchange(
+            "POST",
+            &format!("https://hooks.example.com/services/T0AAAAAAA/B0BBBBBBB/{webhook}"),
+            &[("Content-Type", "application/json")],
+            r#"{"text":"hi"}"#,
+        ),
+        exchange(
+            "POST",
+            &format!("https://api.example.com/password/reset/{reset}"),
+            &[("Content-Type", "application/json")],
+            &format!(
+                r#"{{"credentials":{{"type":"password","value":"{nested_value}"}},"nested":{{"refresh":"{refresh}"}}}}"#
+            ),
+        ),
+    ];
+    let saved = save(&captures, &options(ws.path(), "recorded"), None).unwrap();
+    let raw = [webhook, reset, nested_value, refresh];
+    for (path, bytes) in tree(ws.path()) {
+        let text = String::from_utf8_lossy(&bytes);
+        for secret in raw {
+            assert!(!path.contains(secret), "{secret} in the file name {path}");
+            assert!(!text.contains(secret), "saved: {secret} in {path}: {text}");
+        }
+    }
+    let hook = read(
+        ws.path(),
+        "recorded/hooks-example-com/post-services-t0aaaaaaa-b0bbbbbbb-secret.rman.yaml",
+    );
+    assert!(hook.contains("/B0BBBBBBB/{{path_secret}}"), "{hook}");
+    let reset_file = read(
+        ws.path(),
+        "recorded/api-example-com/post-password-reset-id.rman.yaml",
+    );
+    assert!(
+        reset_file.contains("/password/reset/{{reset_id}}"),
+        "{reset_file}"
+    );
+    assert!(reset_file.contains("{{credentials_value}}"), "{reset_file}");
+    assert!(reset_file.contains(r#""type":"password""#), "{reset_file}");
+    let env = read(ws.path(), "environments/recorded.yaml");
+    for name in ["path_secret", "reset_id", "credentials_value", "refresh"] {
+        assert!(
+            env.contains(&format!("- {name}")),
+            "{name} declared secret: {env}"
+        );
+        assert!(
+            saved.secrets.contains(&name.to_owned()),
+            "{name}: {:?}",
+            saved.secrets
+        );
+    }
+    assert!(
+        saved.warnings.iter().all(|w| !w.contains("UUID")),
+        "a secret id is not reported as a plain default: {:?}",
+        saved.warnings
+    );
+
+    let har = crate::har::har(&captures, false).to_string();
+    for capture in &captures {
+        let json = crate::jsonl::capture_json(capture).to_string();
+        let line = capture.redactor().text(&capture.to_string()).into_owned();
+        for (shown, text) in [("HAR", &har), ("--json", &json), ("live line", &line)] {
+            for secret in raw {
+                assert!(!text.contains(secret), "{shown}: {secret} in {text}");
+            }
+        }
+    }
+}
+
+#[test]
+fn ordinary_paths_and_bodies_stay_plain_but_unguessable_defaults_are_reported() {
+    let ws = workspace();
+    let order = "9b2c4d1e-7f3a-4b5c-8d9e-0f1a2b3c4d5e";
+    let sha = "da39a3ee5e6b4b0d3255bfef95601890afd80709";
+    let captures = [
+        exchange(
+            "GET",
+            "https://api.example.com/v2/listOrganizationMembersV2/my-blog-post-title-2024",
+            &[],
+            "",
+        ),
+        exchange(
+            "POST",
+            &format!("https://api.example.com/orders/{order}/commits/{sha}"),
+            &[("Content-Type", "application/json")],
+            r#"{"profile":{"value":"blue"},"auth":{"type":"bearer","user":"alice"}}"#,
+        ),
+    ];
+    let saved = save(&captures, &options(ws.path(), "recorded"), None).unwrap();
+    assert!(saved.secrets.is_empty(), "{:?}", saved.secrets);
+    let env = read(ws.path(), "environments/recorded.yaml");
+    assert!(env.contains(order), "{env}");
+    let requests: Vec<String> = tree(ws.path())
+        .into_iter()
+        .map(|(p, _)| p)
+        .filter(|p| p.ends_with(".rman.yaml"))
+        .collect();
+    assert!(
+        requests
+            .iter()
+            .any(|p| p.contains("listorganizationmembersv2")),
+        "{requests:?}"
+    );
+    assert!(requests.iter().any(|p| p.contains(sha)), "{requests:?}");
+    let reported: Vec<&String> = saved
+        .warnings
+        .iter()
+        .filter(|w| w.contains("UUID or ULID"))
+        .collect();
+    assert_eq!(reported.len(), 1, "{:?}", saved.warnings);
+    assert!(reported[0].contains("order_id"), "{reported:?}");
+    assert!(
+        reported[0].contains("environments/recorded.yaml"),
+        "{reported:?}"
+    );
+    assert!(!reported[0].contains(order), "{reported:?}");
+}
+
+/// A store that collects the names and values it is handed.
+fn collecting(
+    kept: &Mutex<Vec<(String, String)>>,
+) -> impl Fn(&[(&str, &Secret<String>)]) -> Result<(), SecretError> + '_ {
+    move |batch| {
+        let mut kept = kept.lock().unwrap();
+        for (_, secret) in batch {
+            kept.push((secret.name().to_owned(), secret.expose().clone()));
+        }
+        Ok(())
+    }
+}
+
+/// Every request file's own path secret is moved out, even when an
+/// earlier capture of the same shape (or another request) used the name
+/// for another value; a request repeating it (a `Referer`) is scrubbed.
+#[test]
+fn each_saved_path_secret_reaches_the_environment() {
+    let ws = workspace();
+    let first = "9b2c4d1e-7f3a-4b5c-8d9e-0f1a2b3c4d5e";
+    let second = "c7e1a9f2-58b3-4d6e-9a0f-3b2d8e4c7f15";
+    let third = "0d4e8a1b-2c3f-4a5b-9c6d-7e8f9a0b1c2d";
+    let reset = |method: &str, id: &str| {
+        let referer = format!("https://app.example.com/reset/{id}");
+        exchange(
+            method,
+            &format!("https://api.example.com/reset/{id}"),
+            &[("Referer", &referer)],
+            "",
+        )
+    };
+    let captures = [
+        reset("POST", first),
+        reset("POST", second),
+        reset("PUT", third),
+    ];
+    let kept = Mutex::default();
+    save(
+        &captures,
+        &options(ws.path(), "recorded"),
+        Some(&collecting(&kept)),
+    )
+    .unwrap();
+    for (path, bytes) in tree(ws.path()) {
+        let text = String::from_utf8_lossy(&bytes);
+        for id in [first, second, third] {
+            assert!(!text.contains(id), "{id} in {path}: {text}");
+        }
+    }
+    let post = read(
+        ws.path(),
+        "recorded/api-example-com/post-reset-id.rman.yaml",
+    );
+    assert!(post.contains("/reset/{{reset_id}}"), "{post}");
+    let put = read(ws.path(), "recorded/api-example-com/put-reset-id.rman.yaml");
+    assert!(put.contains("/reset/{{reset_id_2}}"), "{put}");
+    let mut kept = kept.into_inner().unwrap();
+    kept.sort();
+    assert_eq!(
+        kept,
+        [
+            ("reset_id".to_owned(), second.to_owned()),
+            ("reset_id_2".to_owned(), third.to_owned()),
+        ]
+    );
+}
+
+/// A nested body secret never takes the name of a path secret holding
+/// another value; the same value shares the name.
+#[test]
+fn body_secrets_do_not_take_path_secret_names() {
+    let ws = workspace();
+    let path_id = "9b2c4d1e-7f3a-4b5c-8d9e-0f1a2b3c4d5e";
+    let body_id = "c7e1a9f2-58b3-4d6e-9a0f-3b2d8e4c7f15";
+    let captures = [exchange(
+        "POST",
+        &format!("https://api.example.com/tokens/{path_id}/rotate"),
+        &[("Content-Type", "application/json")],
+        &format!(r#"{{"token":{{"id":"{body_id}","value":"{path_id}"}}}}"#),
+    )];
+    let kept = Mutex::default();
+    save(
+        &captures,
+        &options(ws.path(), "recorded"),
+        Some(&collecting(&kept)),
+    )
+    .unwrap();
+    let file = read(
+        ws.path(),
+        "recorded/api-example-com/post-tokens-id-rotate.rman.yaml",
+    );
+    assert!(file.contains("/tokens/{{token_id}}/rotate"), "{file}");
+    assert!(file.contains(r#""id":"{{token_id_2}}""#), "{file}");
+    assert!(file.contains(r#""value":"{{token_id}}""#), "{file}");
+    let mut kept = kept.into_inner().unwrap();
+    kept.sort();
+    assert_eq!(
+        kept,
+        [
+            ("token_id".to_owned(), path_id.to_owned()),
+            ("token_id_2".to_owned(), body_id.to_owned()),
+        ]
+    );
+}
+
+/// Browsers send a string body from `fetch` as `text/plain`: JSON in it
+/// is still judged as JSON.
+#[test]
+fn json_sent_as_text_plain_is_parameterized() {
+    let ws = workspace();
+    let captures = [exchange(
+        "POST",
+        "https://api.example.com/login",
+        &[("Content-Type", "text/plain;charset=UTF-8")],
+        r#"{"credentials":{"type":"password","value":"n3sted-cr3dential"}}"#,
+    )];
+    let saved = save(&captures, &options(ws.path(), "recorded"), None).unwrap();
+    for (path, bytes) in tree(ws.path()) {
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(!text.contains("n3sted-cr3dential"), "{path}: {text}");
+    }
+    let file = read(ws.path(), "recorded/api-example-com/post-login.rman.yaml");
+    assert!(file.contains("{{credentials_value}}"), "{file}");
+    assert!(
+        saved.secrets.contains(&"credentials_value".to_owned()),
+        "{:?}",
+        saved.secrets
+    );
+}
+
+/// A reset token in hex stays out of the URL, the file name and the
+/// environment's defaults.
+#[test]
+fn hex_reset_tokens_are_path_secrets() {
+    let ws = workspace();
+    let token = "5f4dcc3b5aa765d61d8327deb882cf995f4dcc3b5aa765d61d8327deb882cf99";
+    let captures = [exchange(
+        "POST",
+        &format!("https://api.example.com/password/reset/{token}"),
+        &[],
+        "",
+    )];
+    let saved = save(&captures, &options(ws.path(), "recorded"), None).unwrap();
+    for (path, bytes) in tree(ws.path()) {
+        assert!(!path.contains(token), "{path}");
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(!text.contains(token), "{path}: {text}");
+    }
+    let file = read(
+        ws.path(),
+        "recorded/api-example-com/post-password-reset-secret.rman.yaml",
+    );
+    assert!(file.contains("/password/reset/{{reset_secret}}"), "{file}");
+    assert!(
+        saved.secrets.contains(&"reset_secret".to_owned()),
+        "{:?}",
+        saved.secrets
+    );
+}
