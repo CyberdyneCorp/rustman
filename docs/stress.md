@@ -105,7 +105,7 @@ recovered in 14s
 
 ## Soak
 
-`--rps` is held for `--duration` (up to `max_soak_duration`). A linear trend is fitted to the p95 and error rate of each minute. A p95 slope above `--drift-threshold` (default 5% of the median p95 of the first 10 minutes, per hour) is the `medium` finding `latency-drift`, with the slope in ms per hour; an error rate rising by more than one point per hour is the `medium` finding `error-drift`. Both hint at leaks: memory, connections, queues. With fewer than three minutes of data, no trend is fitted: the summary says `p95 trend not available: too little data` instead of a slope.
+`--rps` is held for `--duration` (up to `max_soak_duration`). A linear trend is fitted to the p95 and error rate of each minute. The p95 trend is a Theil-Sen slope (the median of the slopes between every pair of minutes), so a few stalled minutes, such as GC pauses, neither hide a leak nor fake one; the error rate, mostly zero, uses a least-squares slope. A p95 slope above `--drift-threshold` (default 5% of the median p95 of the first 10 minutes, per hour) is the `medium` finding `latency-drift`, with the slope in ms per hour; an error rate rising by more than one point per hour is the `medium` finding `error-drift`. Both hint at leaks: memory, connections, queues. With fewer than three minutes of data, no trend is fitted: the summary says `p95 trend not available: too little data` instead of a slope.
 
 ## Fuzz mixing
 
