@@ -814,6 +814,27 @@ The glossary, capability map and cross-cutting contracts are in [`openspec/ROADM
 
 ## Contributing
 
+### Developer commands with `just`
+
+The repository has a [`justfile`](justfile) with the everyday commands, the same ones CI runs. Install [just](https://just.systems) once (`brew install just`, `cargo install just`, `winget install Casey.Just`, or your package manager), then from the repository root:
+
+```bash
+just                    # list every recipe
+just build              # debug build of `rustman`
+just run send GET https://httpbin.org/get    # run the CLI from source
+just tui examples/demo/workspace  # open the terminal UI on a workspace
+just debug send GET https://httpbin.org/get  # RUST_LOG=debug, full backtraces
+just test               # workspace tests (extra args go to cargo: just test -p rustman-core)
+just test-crate rustman-tui summary          # one crate, filtered
+just lint               # fmt check, clippy (-D warnings), cargo-deny, OpenSpec
+just ci                 # what a pull request must pass: lint + test
+just release            # release build with the official features (cloud-secrets, otlp, smtp)
+```
+
+Other recipes cover the optional-feature and minimal builds (`test-features`, `test-minimal`), the EVM tests on a local Anvil (`test-anvil`), the TUI smoke tests (`test-tui`), insta snapshot review (`snapshots`), regenerating the frozen contract fixtures (`freeze`), the benchmark and fuzzers (`bench`, `fuzz sse|viz`), the plugin templates, the docs book (`docs-check`, `docs-serve`) and the viz companion (`viz`, `viz-test`). Some need an extra tool, named in `just --list`.
+
+### Specs
+
 Rustman is built **spec-first** with [OpenSpec](https://github.com/Fission-AI/OpenSpec):
 
 ```bash
