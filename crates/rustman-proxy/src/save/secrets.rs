@@ -12,6 +12,7 @@
 
 use std::collections::HashMap;
 
+use rustman_core::text::printable_line;
 use rustman_import::ir::{ImportedBody, ImportedRequest, Pair};
 use rustman_import::slug::var_name;
 use serde_json::Value;
@@ -30,14 +31,32 @@ pub struct HeaderSecrets {
     /// Name to value, in the order they were first seen.
     pub moved: Vec<(String, String)>,
     by_value: HashMap<String, String>,
+    /// Names the environment already gives other values (path variables,
+    /// base URLs), which a placeholder must not take.
+    reserved: Vec<String>,
 }
 
 impl HeaderSecrets {
+    /// Keep `name` for a variable declared elsewhere (a path variable, a
+    /// base URL): no placeholder takes it. A secret `value` it holds is
+    /// written as `{{name}}` wherever it shows up, without being moved
+    /// again.
+    pub fn reserve(&mut self, name: &str, secret_value: Option<&str>) {
+        self.reserved.push(name.to_owned());
+        if let Some(value) = secret_value {
+            self.by_value
+                .entry(value.to_owned())
+                .or_insert_with(|| name.to_owned());
+        }
+    }
+
     /// Replace the credentials of `request`'s `Authorization` and `Cookie`
     /// headers, and the nested JSON body fields that are secrets by where
-    /// they sit, by placeholders. (`Proxy-*` headers are never saved.)
+    /// they sit, by placeholders. (`Proxy-*` headers are never saved.) A
+    /// text body holding JSON (sent as `text/plain` or without a
+    /// `Content-Type`) is judged as JSON too.
     pub fn parameterize(&mut self, request: &mut ImportedRequest) {
-        if let Some(ImportedBody::Json { text }) = &mut request.body {
+        if let Some(ImportedBody::Json { text } | ImportedBody::Text { text }) = &mut request.body {
             self.json_body(text);
         }
         for header in &mut request.headers {
@@ -107,7 +126,9 @@ impl HeaderSecrets {
         if let Some(name) = self.by_value.get(&value) {
             return format!("{{{{{name}}}}}");
         }
-        let taken = |n: &str| self.moved.iter().any(|(m, _)| m == n);
+        let taken = |n: &str| {
+            self.moved.iter().any(|(m, _)| m == n) || self.reserved.iter().any(|r| r == n)
+        };
         let name = (1..)
             .map(|n| match n {
                 1 => base.to_owned(),
@@ -153,7 +174,9 @@ fn substitute(value: &mut Value, swaps: &[(String, String)]) {
 /// Warnings for header, query and JSON body values of `request` that look
 /// random but that the secret extraction keeps: neither their names nor
 /// their values (a well-known token, an auth scheme) mark them as secrets.
-/// Values are never shown.
+/// Path segments kept in the URL are judged too, by position. Values are
+/// never shown, and names are written escaped, since JSON keys from the
+/// traffic may hold control characters (terminal escape sequences).
 pub fn entropy_warnings(request: &ImportedRequest, shown: &str) -> Vec<String> {
     let headers = request
         .headers
@@ -171,18 +194,29 @@ pub fn entropy_warnings(request: &ImportedRequest, shown: &str) -> Vec<String> {
         .chain(query)
         .map(|(what, pair): (&str, &Pair)| (what, pair.name.clone()))
         .collect();
-    if let Some(ImportedBody::Json { text }) = &request.body
+    if let Some(ImportedBody::Json { text } | ImportedBody::Text { text }) = &request.body
         && let Ok(body) = serde_json::from_str::<Value>(text)
     {
         let mut fields = Vec::new();
         random_json_fields(&body, "", "", &mut fields);
         kept.extend(fields.into_iter().map(|path| ("body field", path)));
     }
+    // `{{base_url}}/a/b`: the segments after the base URL, counted from 1.
+    let path = request.url.split_once("}}").map_or("", |(_, path)| path);
+    kept.extend(
+        path.split('/')
+            .enumerate()
+            .skip(1)
+            .filter(|(_, segment)| !segment.contains("{{") && looks_random(segment))
+            .map(|(index, _)| ("path segment", index.to_string())),
+    );
     kept.into_iter()
         .map(|(what, name)| {
             format!(
-                "warning: {what} '{name}' of {shown} looks like a secret (high entropy) and was kept; \
-                 review it before committing"
+                "warning: {what} '{}' of {} looks like a secret (high entropy) and was kept; \
+                 review it before committing",
+                printable_line(&name),
+                printable_line(shown),
             )
         })
         .collect()
@@ -404,5 +438,74 @@ mod tests {
         );
         assert!(warnings[1].contains("body field 'items'"), "{warnings:?}");
         assert!(warnings.iter().all(|w| !w.contains(random)));
+    }
+
+    #[test]
+    fn json_keys_in_warnings_cannot_reach_the_terminal_raw() {
+        let random = "q8ZK3vLw0pTn6RxYb2HsJm9CdFgA5eUi7oQ1";
+        let r = json_request(&format!(
+            r#"{{"\u001b]52;c;aGk=\u0007x\u202e": "{random}"}}"#
+        ));
+        let warnings = entropy_warnings(&r, "POST /a");
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(
+            !warnings[0].contains(['\u{1b}', '\u{7}', '\u{202e}']),
+            "{warnings:?}"
+        );
+        assert!(warnings[0].contains(r"\u{1b}]52;c;aGk=\u{7}x\u{202e}"));
+    }
+
+    #[test]
+    fn json_in_a_text_body_is_judged_as_json() {
+        let mut secrets = HeaderSecrets::default();
+        let random = "q8ZK3vLw0pTn6RxYb2HsJm9CdFgA5eUi7oQ1";
+        let mut r = ImportedRequest {
+            body: Some(ImportedBody::Text {
+                text: format!(
+                    r#"{{"credentials":{{"type":"password","value":"n3sted"}},"blob":"{random}"}}"#
+                ),
+            }),
+            ..ImportedRequest::default()
+        };
+        secrets.parameterize(&mut r);
+        let Some(ImportedBody::Text { text }) = &r.body else {
+            panic!("{:?}", r.body);
+        };
+        assert!(
+            text.contains(r#""value":"{{credentials_value}}""#),
+            "{text}"
+        );
+        let warnings = entropy_warnings(&r, "POST /login");
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(warnings[0].contains("body field 'blob'"), "{warnings:?}");
+    }
+
+    #[test]
+    fn placeholders_skip_reserved_names_and_reuse_reserved_secrets() {
+        let mut secrets = HeaderSecrets::default();
+        secrets.reserve("token_id", Some("path-uuid-value"));
+        secrets.reserve("base_url", None);
+        // `id` is no value holder: its random-looking value makes it secret.
+        let mut r = json_request(
+            r#"{"token":{"id":"c7e1a9f2-58b3-4d6e-9a0f-3b2d8e4c7f15","value":"path-uuid-value"}}"#,
+        );
+        secrets.parameterize(&mut r);
+        let text = json_text(&r);
+        assert!(text.contains(r#""id":"{{token_id_2}}""#), "{text}");
+        assert!(text.contains(r#""value":"{{token_id}}""#), "{text}");
+        let names: Vec<&str> = secrets.moved.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, ["token_id_2"]);
+    }
+
+    #[test]
+    fn random_path_segments_kept_in_the_url_are_reported_by_position() {
+        let sha = "da39a3ee5e6b4b0d3255bfef95601890afd80709";
+        let r = ImportedRequest {
+            url: format!("{{{{base_url}}}}/commits/{sha}/{{{{x_secret}}}}"),
+            ..ImportedRequest::default()
+        };
+        let warnings = entropy_warnings(&r, "GET /commits/x");
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(warnings[0].contains("path segment '2'"), "{warnings:?}");
     }
 }

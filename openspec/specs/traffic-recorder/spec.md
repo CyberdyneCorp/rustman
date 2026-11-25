@@ -189,7 +189,7 @@ When saving, path segments that look like identifiers (integers, UUIDs, 24-hex O
 - **THEN** the URL SHALL be `{{base_url}}/orders/{{order_id}}/items`
 
 ### Requirement: Secret path segments
-When saving, a path segment holding a well-known token or a compact random token (20+ letters, digits, `-`, `_`, mixing cases and digits, mostly not words), and a UUID or ULID after a credential or one-time-link segment (`reset`, `verify`, `invite`, `tokens`), SHALL become a variable declared under `secrets:`, never a plain default, and SHALL NOT appear in the file name. Other UUID or ULID defaults SHALL be reported with a warning.
+When saving, a path segment holding a well-known token or a compact random token (20+ letters, digits, `-`, `_`, mixing cases and digits, mostly not words), and a UUID, ULID or 16+ character token in any case after a credential or one-time-link segment (`reset`, `verify`, `tokens`), SHALL become a variable declared under `secrets:` and SHALL NOT appear in the file name. Other UUID or ULID defaults, and kept segments that look random, SHALL be reported with a warning.
 
 #### Scenario: Slack webhook path
 - **GIVEN** a capture `POST /services/T0AAAAAAA/B0BBBBBBB/<secret>`
@@ -202,8 +202,26 @@ When saving, a path segment holding a well-known token or a compact random token
 - **WHEN** it is saved
 - **THEN** the URL SHALL be `{{base_url}}/password/reset/{{reset_id}}` with `reset_id` declared as a secret
 
+#### Scenario: Hex reset token
+- **GIVEN** a capture `POST /password/reset/<64 hex characters>`
+- **WHEN** it is saved
+- **THEN** the URL SHALL be `{{base_url}}/password/reset/{{reset_secret}}` and the token SHALL NOT appear in any file name or file
+
+### Requirement: One name per secret value
+When saving, each secret a request file holds (path segment, header, nested body field) SHALL be declared with the value of the capture that file saves. A name that a path variable, base URL or other secret of the save gives another value SHALL NOT be reused: the new value SHALL get a suffixed name (`token_id_2`).
+
+#### Scenario: Two reset links of the same shape
+- **GIVEN** captures `POST /reset/<a>` then `POST /reset/<b>`, each with a `Referer` holding its own id
+- **WHEN** they are saved
+- **THEN** `reset_id` SHALL hold `<b>` and neither `<a>` nor `<b>` SHALL appear in any file
+
+#### Scenario: Body secret beside a path secret
+- **GIVEN** a capture `POST /tokens/<a>/rotate` with JSON body `{"token":{"id":"<b>"}}`, both random-looking
+- **WHEN** it is saved
+- **THEN** the URL SHALL use `{{token_id}}` for `<a>` and the body `{{token_id_2}}` for `<b>`
+
 ### Requirement: Secrets in nested JSON fields
-When saving, a string field of a JSON body inside an object or array named like a credential (`credentials`, `auth`, `authorization`, `token`, `secret`) SHALL become a placeholder named after both (`{{credentials_value}}`) when its name only holds a value (`value`, `data`, `current`, `new`) or its value looks random. Descriptive siblings (`type`, `user`) SHALL be kept. A bare `refresh` field SHALL be a secret name.
+When saving, a string field of a JSON body inside an object or array named like a credential (`credentials`, `auth`, `authorization`, `token`, `secret`) SHALL become a placeholder named after both (`{{credentials_value}}`) when its name only holds a value (`value`, `data`, `current`, `new`) or its value looks random. Descriptive siblings (`type`, `user`) SHALL be kept. A bare `refresh` field SHALL be a secret name. A text body that parses as JSON SHALL be judged the same.
 
 #### Scenario: Neutral field in a credential object
 - **GIVEN** a captured JSON body `{"credentials":{"type":"password","value":"s3cret"}}`
@@ -215,6 +233,16 @@ When saving, a string field of a JSON body inside an object or array named like 
 - **GIVEN** a captured JSON body `{"profile":{"value":"blue"},"auth":{"type":"bearer","user":"alice"}}`
 - **WHEN** it is saved
 - **THEN** no value SHALL become a placeholder
+
+#### Scenario: JSON sent as text
+- **GIVEN** a capture with `Content-Type: text/plain` and body `{"credentials":{"value":"s3cret"}}`
+- **WHEN** it is saved
+- **THEN** the saved body SHALL contain `{{credentials_value}}` and not `s3cret`
+
+#### Scenario: Warnings escape names from the traffic
+- **GIVEN** a random-looking JSON value under a key holding an escape character
+- **WHEN** the save warns about it
+- **THEN** the key SHALL be shown with the character escaped (`\u{1b}`), never written raw
 
 ### Requirement: Base URL extraction
 Saving SHALL create or update an environment (`--env <name>`, default `recorded`) with `base_url` set to the scheme, host and port of the captures. A different origin in the same save SHALL get its own variable (`base_url_2`, …) and a warning.

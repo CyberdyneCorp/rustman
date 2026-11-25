@@ -13,7 +13,13 @@
 //!   Slack webhook `/services/T0.../B0.../<secret>`: `{{service_secret}}`
 //!   after a plain word, `{{path_secret}}` otherwise;
 //! - an unguessable identifier (UUID, ULID) after a segment that names a
-//!   credential or a one-time link (`/reset/<uuid>`, `/tokens/<uuid>`).
+//!   credential or a one-time link (`/reset/<uuid>`, `/tokens/<uuid>`);
+//! - a token in any case (hex, lowercase and digits) after such a segment
+//!   (`/password/reset/<64 hex>`: `{{reset_secret}}`), see
+//!   [`is_capability_token`].
+//!
+//! Random-looking segments no rule catches are reported by the save's
+//! entropy warnings.
 
 use rustman_import::secrets::{is_known_token, is_secret_name};
 
@@ -45,7 +51,9 @@ pub fn templatize(path: &str) -> Templated {
         out.path.push('/');
         out.shape.push('/');
         let identifier = is_identifier(segment);
-        if !identifier && is_secret_segment(segment) {
+        let capability_token =
+            previous.is_some_and(names_a_capability) && is_capability_token(segment);
+        if !identifier && (capability_token || is_secret_segment(segment)) {
             let base = previous
                 .filter(|p| {
                     p.bytes()
@@ -172,6 +180,23 @@ pub fn is_secret_segment(segment: &str) -> bool {
         return false;
     }
     word_bytes(bytes) * 2 < bytes.len()
+}
+
+/// Whether a segment after a credential or one-time-link word
+/// (`/reset/<token>`, `/verify/<token>`) is a token, in any case: at least
+/// 16 letters, digits, `-` or `_`, with letters and digits, less than half
+/// of it made of words. So the hex and lowercase tokens that
+/// [`is_secret_segment`] leaves alone are caught there (a 64-hex Laravel
+/// reset token), while `/reset/password-form` stays plain.
+fn is_capability_token(segment: &str) -> bool {
+    let bytes = segment.as_bytes();
+    bytes.len() >= 16
+        && bytes
+            .iter()
+            .all(|b| b.is_ascii_alphanumeric() || *b == b'-' || *b == b'_')
+        && bytes.iter().any(u8::is_ascii_digit)
+        && bytes.iter().any(u8::is_ascii_alphabetic)
+        && word_bytes(bytes) * 2 < bytes.len()
 }
 
 /// The number of bytes of `bytes` in words: runs of three lowercase
@@ -402,6 +427,22 @@ mod tests {
         let t = templatize("/api-keys/3/reset/42");
         assert!(t.secrets.is_empty(), "{t:?}");
         assert_eq!(t.variables.len(), 2);
+        // Hex and lowercase tokens after such a word are secrets too.
+        let hex = "5f4dcc3b5aa765d61d8327deb882cf995f4dcc3b5aa765d61d8327deb882cf99";
+        let t = templatize(&format!("/password/reset/{hex}"));
+        assert_eq!(t.path, "/password/reset/{{reset_secret}}");
+        assert_eq!(t.shape, "/password/reset/:secret");
+        assert_eq!(t.secrets, [("reset_secret".to_owned(), hex.to_owned())]);
+        let t = templatize("/verify/k3j4h5g6f7d8s9a0q1w2e3r4t5y6u7i8");
+        assert_eq!(t.path, "/verify/{{verify_secret}}");
+        for plain in [
+            "/reset/password-form",
+            "/verify/email-address-2024",
+            &format!("/commits/{hex}"),
+        ] {
+            let t = templatize(plain);
+            assert!(t.secrets.is_empty(), "{plain}: {t:?}");
+        }
         // A UUID under an ordinary collection stays a plain variable.
         let t = templatize(&format!("/orders/{RESET}"));
         assert!(t.secrets.is_empty());
