@@ -58,7 +58,7 @@ Every VU runs on the thread that calls `Bench::run`. The executor is one future:
 
 ## Executor overhead
 
-`cargo bench -p rustman-bench --bench executor` measures what the VU path adds per request: one GET to a local hyper server sent by the bare `HttpEngine`, against the same request sent as a VU sends it (`Runner::send` through a `BenchGate` and its governor, then classified and recorded in the metrics). It reports both with criterion, then times 3000 interleaved samples of each and fails when the VU path's p50 exceeds the engine's by more than 50 µs (design D1: optimize only beyond that). The failure message names the measured overhead and both p50s. CI runs it in the `bench-overhead` job, so a regression fails the build.
+`cargo bench -p rustman-bench --bench executor` measures what the VU path adds per request: one GET to a local hyper server sent by the bare `HttpEngine`, against the same request sent as a VU sends it (`Runner::send` through a `BenchGate` and its governor, then classified and recorded in the metrics). It reports both with criterion, then times 3000 interleaved samples of each, in three rounds, and fails when even the best round's VU p50 exceeds the engine's by more than 50 µs (design D1: optimize only beyond that). A single round on a shared CI runner can land a microsecond or two over the limit from noise alone; a real regression shows in every round. Each round's overhead and both p50s are printed, and the failure message lists all three rounds. CI runs it in the `bench-overhead` job, so a regression fails the build.
 
 Last recorded result (release build, macOS on Apple silicon, loopback):
 

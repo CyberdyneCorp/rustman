@@ -124,6 +124,14 @@ Soak SHALL hold `--rps` for `--duration`. It SHALL fit a linear trend to per-min
 - **WHEN** the soak finishes
 - **THEN** the summary SHALL state `p95 trend not available: too little data` and no slope
 
+### Requirement: Robust soak trend
+The p95 trend of a soak SHALL be robust to outlier minutes: a few minutes far above or below the trend SHALL NOT hide a drift or fake one. The error-rate trend SHALL be fitted so that mostly-zero error rates rising late are still seen.
+
+#### Scenario: Stalled minutes don't hide a leak
+- **GIVEN** a soak whose p95 climbs steadily, with two early minutes stalled far above the trend
+- **WHEN** the soak finishes
+- **THEN** the report SHALL still contain `latency-drift`
+
 ### Requirement: Fuzz mode and fuzz mixing
 Fuzz mode SHALL hold `--rps` with `--fuzz-ratio` (default 0.2). In every mode, `--fuzz-ratio r` SHALL replace each request with a mutated variant with probability `r`, without changing offered load. Valid and fuzzed exchanges SHALL be measured separately. Ratios outside `0 < r ≤ 1` SHALL be a usage error.
 

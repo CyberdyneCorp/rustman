@@ -1,6 +1,8 @@
 //! Soak mode (stress-testing "Soak mode"): `--rps` held for `--duration`,
 //! with a linear trend fitted to the p95 and error rate of each trend
-//! bucket (a minute). A p95 slope above `--drift-threshold` (default 5% of
+//! bucket (a minute). The p95 trend is a Theil-Sen slope (the median of the
+//! pairwise slopes), so a few stalled minutes neither hide nor fake a
+//! drift; the error rate, mostly zero, keeps a least-squares slope. A p95 slope above `--drift-threshold` (default 5% of
 //! the median p95 of the first 10 minutes, per hour) is the `medium`
 //! finding `latency-drift`; an error rate rising by more than one point per
 //! hour is `error-drift`. Both hint at leaks: memory, connections, queues.
@@ -96,7 +98,7 @@ pub fn analyze(buckets: &[StatsSummary], spec: &SoakSpec, clock: &SoakClock) -> 
         .ceil()
         .max(1.0) as usize;
     let baseline = median(&p95[..baseline_len.min(p95.len())]);
-    let p95_slope = slope(&p95) * per_hour;
+    let p95_slope = robust_slope(&p95) * per_hour;
     let error_slope = slope(&errors) * per_hour;
     let mut findings = Vec::new();
     if p95.len() >= MIN_BUCKETS {
@@ -131,6 +133,20 @@ pub fn analyze(buckets: &[StatsSummary], spec: &SoakSpec, clock: &SoakClock) -> 
         error_slope,
         findings,
     }
+}
+
+/// The Theil-Sen slope of `values` against their index: the median of the
+/// slopes between every pair of points; 0 with fewer than two values.
+/// Unlike least squares, outliers up to about 29% of the points (stalls,
+/// GC pauses) don't move it.
+pub fn robust_slope(values: &[f64]) -> f64 {
+    let mut slopes = Vec::with_capacity(values.len() * values.len().saturating_sub(1) / 2);
+    for (i, a) in values.iter().enumerate() {
+        for (j, b) in values.iter().enumerate().skip(i + 1) {
+            slopes.push((b - a) / (j - i) as f64);
+        }
+    }
+    median(&slopes)
 }
 
 /// The least-squares slope of `values` against their index; 0 with fewer
@@ -186,6 +202,44 @@ mod tests {
 
     fn rules(result: &SoakResult) -> Vec<&'static str> {
         result.findings.iter().map(|f| f.rule).collect()
+    }
+
+    #[test]
+    fn robust_slopes_ignore_a_few_outliers() {
+        assert_eq!(robust_slope(&[1.0, 2.0, 3.0, 4.0]), 1.0);
+        assert_eq!(robust_slope(&[5.0, 5.0, 5.0]), 0.0);
+        assert_eq!(robust_slope(&[3.0]), 0.0);
+        assert_eq!(robust_slope(&[]), 0.0);
+        assert_eq!(robust_slope(&[2.0, 1.0, 0.0]), -1.0);
+        // A flat series with one huge stall stays flat.
+        assert_eq!(robust_slope(&[10.0, 10.0, 900.0, 10.0, 10.0, 10.0]), 0.0);
+    }
+
+    /// Regression: an accelerated soak on a loaded macOS runner stalled in
+    /// two early buckets (633 and 845 ms). The least-squares slope of this
+    /// series is negative, so the leak (42 ms rising to 211 ms) went
+    /// unreported.
+    #[test]
+    fn stalled_buckets_do_not_hide_a_leak() {
+        let p95 = [
+            42.783, 57.215, 71.871, 633.343, 845.311, 118.079, 131.327, 145.407, 160.255, 202.623,
+            197.119, 211.327,
+        ];
+        assert!(slope(&p95) < 0.0, "{}", slope(&p95));
+        let buckets: Vec<StatsSummary> = p95.iter().map(|&p| bucket(p, 0.0)).collect();
+        let clock = SoakClock {
+            bucket: Duration::from_secs(1),
+            hour: Duration::from_secs(6),
+            baseline: Duration::from_secs(1),
+        };
+        let spec = SoakSpec {
+            rps: 20.0,
+            duration: Duration::from_secs(12),
+            drift_threshold: 0.05,
+        };
+        let result = analyze(&buckets, &spec, &clock);
+        assert_eq!(rules(&result), ["latency-drift"]);
+        assert!(result.p95_slope > 30.0, "{}", result.p95_slope);
     }
 
     #[test]
