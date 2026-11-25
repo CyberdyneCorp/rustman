@@ -687,7 +687,7 @@ rustman secret list-providers
 
 ## Coming from Postman?
 
-The [migration guide](docs/migrate-from-postman.md) walks through a full move: exporting, `rustman import`, reviewing converted scripts, replacing Newman in CI, and what doesn't carry over.
+[Why Rustman](https://cyberdynecorp.github.io/rustman/why/) compares the two feature by feature, including where Postman is still ahead. The [migration guide](docs/migrate-from-postman.md) walks through a full move: exporting, `rustman import`, reviewing converted scripts, replacing Newman in CI, and what doesn't carry over.
 
 | Postman / Newman | Rustman |
 |---|---|
