@@ -57,6 +57,24 @@ Signing SHALL require both `[evm] allow_signing = true` in `rustman.toml` and an
 - **WHEN** the user quits
 - **THEN** the audit entry SHALL be recorded with status `pending` before the process exits
 
+### Requirement: TUI confirmation integrity
+The TUI confirmation SHALL keep its question, choices and hints on screen; a summary taller than the room left SHALL scroll, and `Sign and send` SHALL be accepted only once every summary row was drawn. Values SHALL be cut by display width under their own column. Keys other than `Esc` SHALL be ignored for 500 ms after the confirmation opens. Only one transaction SHALL be signed at a time across tabs.
+
+#### Scenario: Summary taller than the terminal
+- **GIVEN** a decoded call whose calldata wraps past the bottom of an 80x24 terminal
+- **WHEN** the user selects `Sign and send` and presses `Enter` before scrolling
+- **THEN** nothing SHALL be signed and the next page of the summary SHALL be shown
+
+#### Scenario: Keys typed as the dialog opens
+- **GIVEN** the user is pressing `Down` then `Enter` in another overlay
+- **WHEN** the confirmation opens between the two keys
+- **THEN** both keys SHALL be ignored and `Cancel` SHALL stay selected
+
+#### Scenario: Second tab while signing
+- **GIVEN** a transaction being signed in one tab
+- **WHEN** the user runs `evm.sign` in another tab
+- **THEN** it SHALL be refused and no second gate SHALL start
+
 ### Requirement: Approved signers only
 Signers SHALL be configured in `[evm.signers.<id>]` as one of: `keystore` (path to a Web3 Secret Storage JSON file, password prompted or from a secret) or `keychain` (key stored in the OS keychain by `rustman evm signer import`). Raw private keys SHALL be rejected wherever they appear: request files, environments, variables, CLI flags or environment variables.
 

@@ -12,16 +12,21 @@
 //! [`Console`] that asks through a modal dialog:
 //!
 //! - the keystore password, with no echo;
-//! - the decoded summary, every value escaped on one line, with
+//! - the decoded summary, every value escaped under its own column, with
 //!   `Cancel` preselected, a `SIMULATION REVERTED` banner for a forced
-//!   transaction and the max-cost warning;
+//!   transaction and the max-cost warning. A summary taller than the
+//!   screen scrolls under a fixed question, and `Sign and send` is taken
+//!   only once all of it was drawn; keys are ignored for [`ARM`] after it
+//!   opens;
 //! - the chain name, typed, on chain 1 and `[evm] protected_chains`.
 //!
 //! `Esc` at any of them interrupts the gate: nothing is signed or sent.
 //! The TUI is always a terminal, so `--yes-local` has no equivalent and
 //! every transaction is confirmed in the dialog.
 //!
-//! The gate runs on a blocking thread of its own (like every send); its
+//! One transaction is signed at a time, across tabs, so two gates never
+//! read the same pending nonce. The gate runs on a blocking thread of its
+//! own (like every send); its
 //! prompts reach the loop as [`Action::Sign`] messages and the answers go
 //! back on a channel, so the UI never blocks. `Esc` in the pane cancels
 //! it: before the signature nothing is sent, during the receipt wait the
@@ -29,11 +34,12 @@
 //! way and waits for the audit entry before the process exits
 //! ([`wait_for_pending`]).
 
+use std::cell::Cell;
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Condvar, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Flex, Layout};
@@ -63,6 +69,10 @@ pub const SIGNER_VAR: &str = "RUSTMAN_EVM_SIGNER";
 /// Why another send from a tab that is signing is refused.
 pub const BUSY: &str =
     "A transaction is being signed in this tab; Esc cancels it before it is sent";
+
+/// Why signing is refused while another tab's transaction is signed.
+pub const BUSY_ELSEWHERE: &str =
+    "A transaction is being signed in another tab; finish or cancel it first";
 
 /// The pane's notice on an `evm-tx` file.
 pub const TX_NOTICE: &str = "evm-tx: Alt+T (evm.sign) signs and sends it after your confirmation; [evm] allow_signing = true is required";
@@ -124,20 +134,33 @@ pub fn start(state: &mut State, force_revert: bool) -> Vec<Effect> {
         state.notify(Severity::Info, "Signing applies to evm-tx requests");
         return Vec::new();
     }
-    if let Some(editor) = tab.editor.evm_mut() {
-        editor.sign_log.clear();
-        editor.tab = crate::evm_pane::EvmTab::Result;
+    // One transaction at a time: two gates running at once would read the
+    // same pending nonce and their dialogs would replace each other.
+    let active = tab.id;
+    let elsewhere = state
+        .tabs
+        .list
+        .iter()
+        .any(|t| t.id != active && t.in_flight.as_ref().is_some_and(|f| f.signing));
+    if elsewhere {
+        state.notify(Severity::Info, BUSY_ELSEWHERE);
+        return Vec::new();
     }
     let mut effects = crate::send::start(state);
     for effect in &mut effects {
         if let Effect::Send(job) = effect {
             job.sign = Some(SignRequest { force_revert });
-            if let Some(flight) = state
-                .tabs
-                .get_mut(job.tab)
-                .and_then(|t| t.in_flight.as_mut())
-            {
-                flight.signing = true;
+            if let Some(tab) = state.tabs.get_mut(job.tab) {
+                if let Some(flight) = tab.in_flight.as_mut() {
+                    flight.signing = true;
+                }
+                // A new attempt: the previous transaction's log and audit
+                // view go, so a refusal or a decline never shows under them.
+                if let Some(editor) = tab.editor.evm_mut() {
+                    editor.sign_log.clear();
+                    editor.result = None;
+                    editor.tab = crate::evm_pane::EvmTab::Result;
+                }
             }
         }
     }
@@ -327,16 +350,8 @@ impl TuiConsole {
     fn prompt(&self, stage: Stage, question: &str) -> Option<Zeroizing<String>> {
         let (tx, rx) = mpsc::channel();
         let summary = self.summary.lock().ok().and_then(|s| s.clone());
-        let dialog = SignDialog {
-            tab: self.tab,
-            seq: self.seq,
-            stage,
-            question: printable_line(question).into_owned(),
-            summary,
-            selected: CANCEL,
-            text: Zeroizing::new(String::new()),
-            reply: Reply(Arc::new(Mutex::new(Some(tx)))),
-        };
+        let reply = Reply(Arc::new(Mutex::new(Some(tx))));
+        let dialog = SignDialog::new(self.tab, self.seq, stage, question, summary, reply);
         if !self.post(Msg::Ask(Box::new(dialog))) {
             return None;
         }
@@ -420,6 +435,37 @@ const LABEL: usize = 13;
 const SIGN: usize = 0;
 const CANCEL: usize = 1;
 
+/// How long the confirmation ignores every key but `Esc` once the loop
+/// opened it. It appears when the simulation and the fees are ready, maybe
+/// while the user is typing elsewhere: a navigation key and `Enter` meant
+/// for another widget must not sign.
+pub const ARM: Duration = Duration::from_millis(500);
+
+/// What the drawings of the dialog showed of its summary.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct Shown {
+    /// The inner width the rows below were counted at.
+    width: u16,
+    /// The summary's rows.
+    rows: u16,
+    /// The summary rows visible at once.
+    page: u16,
+    /// Rows `0..seen` were all drawn, the summary scrolled through without
+    /// a jump: Sign can be confirmed once it covers `rows`.
+    seen: u16,
+}
+
+impl Shown {
+    fn max_scroll(self) -> u16 {
+        self.rows.saturating_sub(self.page)
+    }
+
+    /// Every row of the summary was on screen.
+    fn read(self) -> bool {
+        self.rows == 0 || (self.page > 0 && self.seen >= self.rows)
+    }
+}
+
 /// The signing dialog of one job.
 #[derive(Clone)]
 pub struct SignDialog {
@@ -434,26 +480,57 @@ pub struct SignDialog {
     /// What is typed: the password or the chain name.
     text: Zeroizing<String>,
     reply: Reply,
+    /// The first summary row shown.
+    scroll: u16,
+    /// Set by each drawing.
+    shown: Cell<Shown>,
+    /// When the loop opened it; `None` (not opened by the loop): no delay.
+    opened: Option<Instant>,
 }
 
 impl SignDialog {
     /// A dialog with no job behind it (tests, snapshots).
     pub fn detached(stage: Stage, question: &str, summary: Option<SummaryView>) -> Self {
+        let reply = Reply(Arc::new(Mutex::new(None)));
+        Self::new(0, 0, stage, question, summary, reply)
+    }
+
+    fn new(
+        tab: TabId,
+        seq: u64,
+        stage: Stage,
+        question: &str,
+        summary: Option<SummaryView>,
+        reply: Reply,
+    ) -> Self {
         Self {
-            tab: 0,
-            seq: 0,
+            tab,
+            seq,
             stage,
             question: printable_line(question).into_owned(),
             summary,
             selected: CANCEL,
             text: Zeroizing::new(String::new()),
-            reply: Reply(Arc::new(Mutex::new(None))),
+            reply,
+            scroll: 0,
+            shown: Cell::new(Shown::default()),
+            opened: None,
         }
+    }
+
+    /// The loop shows it at `at`: the confirmation ignores keys for [`ARM`].
+    pub fn opened_at(&mut self, at: Instant) {
+        self.opened = Some(at);
     }
 
     /// How many characters are typed (the password is never shown).
     pub fn typed_len(&self) -> usize {
         self.text.chars().count()
+    }
+
+    /// Whether every row of the summary has been drawn.
+    pub fn summary_read(&self) -> bool {
+        self.shown.get().read()
     }
 
     /// A key; true when the dialog answered and closes.
@@ -464,16 +541,54 @@ impl SignDialog {
             self.reply.send(Answer::Cancelled);
             return true;
         }
+        if self.scroll_key(chord.code) {
+            return false;
+        }
         match self.stage {
             Stage::Confirm => self.choice_key(chord.code),
             Stage::Password | Stage::ChainName => self.text_key(chord),
         }
     }
 
+    /// Up/Down, PageUp/PageDown, Home/End scroll the summary.
+    fn scroll_key(&mut self, code: Code) -> bool {
+        let shown = self.shown.get();
+        let page = shown.page.max(1);
+        self.scroll = match code {
+            Code::Up => self.scroll.saturating_sub(1),
+            Code::Down => self.scroll.saturating_add(1),
+            Code::PageUp => self.scroll.saturating_sub(page),
+            Code::PageDown => self.scroll.saturating_add(page),
+            Code::Home => 0,
+            Code::End => shown.max_scroll(),
+            _ => return false,
+        }
+        .min(shown.max_scroll());
+        true
+    }
+
+    /// Still within [`ARM`] of being opened.
+    fn arming(&self) -> bool {
+        self.opened.is_some_and(|at| at.elapsed() < ARM)
+    }
+
     fn choice_key(&mut self, code: Code) -> bool {
+        if self.arming() {
+            return false;
+        }
         match code {
-            Code::Left | Code::Right | Code::Up | Code::Down | Code::Tab | Code::BackTab => {
+            Code::Left | Code::Right | Code::Tab | Code::BackTab => {
                 self.selected = 1 - self.selected;
+                false
+            }
+            Code::Enter if self.selected == SIGN && !self.summary_read() => {
+                // Part of the summary was never on screen: show the next
+                // page instead of signing what was not seen.
+                let shown = self.shown.get();
+                self.scroll = self
+                    .scroll
+                    .saturating_add(shown.page.max(1))
+                    .min(shown.max_scroll());
                 false
             }
             Code::Enter => {
@@ -512,38 +627,59 @@ impl SignDialog {
         }
     }
 
-    /// The dialog's lines for an inner width of `width` columns. A long
-    /// value continues on indented lines under its own column, so no
+    /// The summary's lines for an inner width of `width` columns, each at
+    /// most `width` display columns, so the paragraph never wraps one. A
+    /// long value continues on indented lines under its own column, so no
     /// part of it can look like another field.
-    fn lines(&self, ui: &UiOptions, width: usize) -> Vec<Line<'static>> {
+    fn summary_lines(&self, ui: &UiOptions, width: usize) -> Vec<Line<'static>> {
         let theme = &ui.theme;
         let mut lines = Vec::new();
-        if let Some(summary) = &self.summary {
-            if let Some(reverted) = &summary.reverted {
-                let style = theme.badge(Token::Error).add_modifier(Modifier::BOLD);
-                lines.push(Line::styled(format!(" {reverted} "), style));
+        let Some(summary) = &self.summary else {
+            return lines;
+        };
+        let room = width.max(LABEL + 16);
+        let mut banner = |text: &str, style| {
+            for (i, part) in columns(text, room - 2).into_iter().enumerate() {
+                let indent = if i == 0 { "" } else { "  " };
+                lines.push(Line::styled(format!("{indent}{part}"), style));
             }
-            if let Some(cost) = &summary.cost {
-                let style = theme.fg(Token::Warn).add_modifier(Modifier::BOLD);
-                lines.push(Line::styled(format!("WARNING: {cost}"), style));
-            }
-            let room = width.saturating_sub(LABEL).max(16);
-            for (label, value) in &summary.fields {
-                let chars: Vec<char> = value.chars().collect();
-                for (i, part) in chars.chunks(room).enumerate() {
-                    let label = if i == 0 { *label } else { "" };
-                    lines.push(Line::from(vec![
-                        Span::styled(format!("{label:<LABEL$}"), theme.fg(Token::Muted)),
-                        Span::styled(part.iter().collect::<String>(), theme.fg(Token::Text)),
-                    ]));
-                }
-            }
-            lines.push(Line::default());
+        };
+        if let Some(reverted) = &summary.reverted {
+            let style = theme.badge(Token::Error).add_modifier(Modifier::BOLD);
+            banner(&format!(" {reverted} "), style);
         }
+        if let Some(cost) = &summary.cost {
+            let style = theme.fg(Token::Warn).add_modifier(Modifier::BOLD);
+            banner(&format!("WARNING: {cost}"), style);
+        }
+        for (label, value) in &summary.fields {
+            for (i, part) in columns(value, room - LABEL).into_iter().enumerate() {
+                let label = if i == 0 { *label } else { "" };
+                lines.push(Line::from(vec![
+                    Span::styled(format!("{label:<LABEL$}"), theme.fg(Token::Muted)),
+                    Span::styled(part, theme.fg(Token::Text)),
+                ]));
+            }
+        }
+        lines.push(Line::default());
+        lines
+    }
+
+    /// The question, the choices or the input, and the hints; `below`: the
+    /// summary scrolls and has that many rows under the visible ones.
+    fn footer_lines(&self, ui: &UiOptions, below: Option<u16>) -> Vec<Line<'static>> {
+        let theme = &ui.theme;
         let dot = ui.glyphs.dot;
+        let mut lines = vec![Line::from(self.question.trim_end().to_owned())];
+        let scroll = below.map(|below| {
+            let text = match below {
+                0 => format!("Up/PgUp scroll the summary {dot} all of it was shown"),
+                n => format!("{n} more summary lines below: Down/PgDn to read them, then sign"),
+            };
+            Line::styled(text, theme.fg(Token::Warn))
+        });
         match self.stage {
             Stage::Confirm => {
-                lines.push(Line::from(self.question.trim_end().to_owned()));
                 lines.push(Line::default());
                 let mut spans = Vec::new();
                 for (i, label) in ["Sign and send", "Cancel"].into_iter().enumerate() {
@@ -557,6 +693,7 @@ impl SignDialog {
                 }
                 lines.push(Line::from(spans));
                 lines.push(Line::default());
+                lines.extend(scroll);
                 lines.push(hint(
                     &format!(
                         "Left/Right choose {dot} Enter confirm {dot} Esc cancel: nothing is signed"
@@ -565,7 +702,6 @@ impl SignDialog {
                 ));
             }
             Stage::ChainName | Stage::Password => {
-                lines.push(Line::from(self.question.trim_end().to_owned()));
                 let shown = match self.stage {
                     Stage::Password => String::new(),
                     _ => printable_line(&self.text).into_owned(),
@@ -580,6 +716,7 @@ impl SignDialog {
                 }
                 lines.push(Line::from(input));
                 lines.push(Line::default());
+                lines.extend(scroll);
                 lines.push(hint(
                     &format!("Enter confirm {dot} Esc cancel: nothing is signed"),
                     ui,
@@ -588,6 +725,29 @@ impl SignDialog {
         }
         lines
     }
+}
+
+/// `text` cut into pieces of at most `room` display columns (a wide
+/// character counts two); never empty.
+fn columns(text: &str, room: usize) -> Vec<String> {
+    let room = room.max(2);
+    let mut parts = Vec::new();
+    let mut part = String::new();
+    let mut used = 0;
+    let mut buf = [0; 4];
+    for c in text.chars() {
+        let width = Span::raw(&*c.encode_utf8(&mut buf)).width();
+        if used + width > room && !part.is_empty() {
+            parts.push(std::mem::take(&mut part));
+            used = 0;
+        }
+        part.push(c);
+        used += width;
+    }
+    if !part.is_empty() || parts.is_empty() {
+        parts.push(part);
+    }
+    parts
 }
 
 impl fmt::Debug for SignDialog {
@@ -600,14 +760,21 @@ impl fmt::Debug for SignDialog {
             .field("question", &self.question)
             .field("summary", &self.summary)
             .field("selected", &self.selected)
+            .field("scroll", &self.scroll)
             .finish_non_exhaustive()
     }
 }
 
 impl PartialEq for SignDialog {
     fn eq(&self, other: &Self) -> bool {
-        (self.tab, self.seq, self.stage, self.selected)
-            == (other.tab, other.seq, other.stage, other.selected)
+        (self.tab, self.seq, self.stage, self.selected, self.scroll)
+            == (
+                other.tab,
+                other.seq,
+                other.stage,
+                other.selected,
+                other.scroll,
+            )
             && self.question == other.question
             && self.summary == other.summary
             && Arc::ptr_eq(&self.reply.0, &other.reply.0)
@@ -616,14 +783,52 @@ impl PartialEq for SignDialog {
 
 impl Eq for SignDialog {}
 
-/// Draw the dialog centred, wide enough for an address and its label.
+/// Draw the dialog centred, wide enough for an address and its label. The
+/// question, the choices and the hints stay at the bottom; a summary
+/// taller than the room left scrolls above them, and Sign is confirmed
+/// only once all of it was drawn.
 pub fn render(frame: &mut Frame, dialog: &SignDialog, ui: &UiOptions) {
     let area = frame.area();
     let width = area.width.min(96);
-    let inner = usize::from(width.saturating_sub(4));
-    let paragraph = Paragraph::new(dialog.lines(ui, inner)).wrap(Wrap { trim: false });
-    let rows = paragraph.line_count(width.saturating_sub(4));
-    let height = u16::try_from(rows + 2).unwrap_or(u16::MAX).min(area.height);
+    let inner = width.saturating_sub(4);
+    let count = |lines: &[Line<'static>]| {
+        let rows = Paragraph::new(lines.to_vec())
+            .wrap(Wrap { trim: false })
+            .line_count(inner);
+        u16::try_from(rows).unwrap_or(u16::MAX)
+    };
+    let body = dialog.summary_lines(ui, usize::from(inner));
+    let rows = count(&body);
+    let room = area.height.saturating_sub(2);
+    let fits = rows.saturating_add(count(&dialog.footer_lines(ui, None))) <= room;
+    let page = if fits {
+        rows
+    } else {
+        // The widest scroll line, so the footer's height holds.
+        let footer = count(&dialog.footer_lines(ui, Some(rows)));
+        room.saturating_sub(footer).min(rows)
+    };
+    let mut shown = dialog.shown.get();
+    if shown.width != inner || shown.rows != rows {
+        shown = Shown::default();
+    }
+    let max_scroll = rows.saturating_sub(page);
+    let scroll = dialog.scroll.min(max_scroll);
+    // Only rows reached without a jump count as read.
+    if scroll <= shown.seen {
+        shown.seen = shown.seen.max(scroll.saturating_add(page));
+    }
+    dialog.shown.set(Shown {
+        width: inner,
+        rows,
+        page,
+        seen: shown.seen,
+    });
+    let footer = dialog.footer_lines(ui, (!fits).then(|| max_scroll - scroll));
+    let height = page
+        .saturating_add(count(&footer))
+        .saturating_add(2)
+        .min(area.height);
     let [row] = Layout::vertical([Constraint::Length(height)])
         .flex(Flex::Center)
         .areas(area);
@@ -632,7 +837,17 @@ pub fn render(frame: &mut Frame, dialog: &SignDialog, ui: &UiOptions) {
         .areas(row);
     frame.render_widget(Clear, rect);
     let frame_block = block(dialog.title(), ui).padding(Padding::horizontal(1));
-    frame.render_widget(paragraph.block(frame_block), rect);
+    let content = frame_block.inner(rect);
+    frame.render_widget(frame_block, rect);
+    let [top, bottom] =
+        Layout::vertical([Constraint::Length(page), Constraint::Fill(1)]).areas(content);
+    frame.render_widget(
+        Paragraph::new(body)
+            .wrap(Wrap { trim: false })
+            .scroll((scroll, 0)),
+        top,
+    );
+    frame.render_widget(Paragraph::new(footer).wrap(Wrap { trim: false }), bottom);
 }
 
 // ---- the loop's side ------------------------------------------------------
@@ -653,6 +868,10 @@ pub fn on_msg(state: &mut State, msg: Msg) -> Vec<Effect> {
                 .is_some_and(|f| f.seq == dialog.seq && f.signing);
             if live {
                 // The prompt wins over any other overlay: the gate waits.
+                // Keys already on their way to that overlay are no answer:
+                // the confirmation is armed after [`ARM`].
+                let mut dialog = dialog;
+                dialog.opened_at(Instant::now());
                 state.overlay = Some(Overlay::Sign(dialog));
             } else {
                 dialog.reply.send(Answer::Cancelled);
@@ -685,8 +904,6 @@ pub fn close_dialog(state: &mut State, tab: TabId, seq: u64) {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Instant;
-
     use super::*;
 
     #[test]
