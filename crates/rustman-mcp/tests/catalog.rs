@@ -182,7 +182,8 @@ async fn checked(
     structured
 }
 
-/// Every file of the workspace outside `.rustman/`, with its text.
+/// Every file of the workspace outside `.rustman/`, with its text, keyed by
+/// its `/`-separated relative path on every OS.
 fn snapshot_files(root: &Path) -> BTreeMap<String, String> {
     let mut files = BTreeMap::new();
     let mut stack = vec![root.to_path_buf()];
@@ -199,7 +200,7 @@ fn snapshot_files(root: &Path) -> BTreeMap<String, String> {
                     .strip_prefix(root)
                     .unwrap()
                     .to_string_lossy()
-                    .into_owned();
+                    .replace('\\', "/");
                 files.insert(rel, std::fs::read_to_string(&path).unwrap_or_default());
             }
         }
