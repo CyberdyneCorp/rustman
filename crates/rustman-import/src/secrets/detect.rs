@@ -15,10 +15,11 @@ static SECRET_NAME: LazyLock<Regex> = LazyLock::new(|| {
 
 /// Further names that usually carry credentials, beyond the spec pattern:
 /// sessions, cookies, keys, OAuth authorization codes (`code`), signatures
-/// (`sig`, `X-Sig`), one-time passwords and short password names (`pass`).
+/// (`sig`, `X-Sig`), one-time passwords, short password names (`pass`) and
+/// the bare `refresh` field of token pairs (`{"access": ..., "refresh": ...}`).
 static EXTRA_SECRET_NAME: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r"(?i)session|bearer|credential|cookie|jwt|access[_-]?key|private[_-]?key|^(auth|key|sid)$|^(auth[_-]?)?code$|(^|[_-])(sig|pass|otp)$|signature|passcode|passphrase",
+        r"(?i)session|bearer|credential|cookie|jwt|access[_-]?key|private[_-]?key|^(auth|key|sid|refresh)$|^(auth[_-]?)?code$|(^|[_-])(sig|pass|otp)$|signature|passcode|passphrase",
     )
     .expect("the extra secret-name pattern is valid")
 });
@@ -233,6 +234,7 @@ mod tests {
             "session",
             "cookie",
             "X-CSRF-Token",
+            "refresh",
         ] {
             assert!(is_secret_name(name), "{name}");
         }
@@ -246,6 +248,8 @@ mod tests {
             "options",
             "status_code",
             "zip-code",
+            "refreshed_at",
+            "auto_refresh",
         ] {
             assert!(!is_secret_name(name), "{name}");
         }

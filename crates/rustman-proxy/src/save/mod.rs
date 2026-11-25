@@ -8,7 +8,8 @@
 //! 1. templatize each path ([`template`]) and group by method, origin and
 //!    templated path, keeping the most recent capture as the example;
 //! 2. put each origin in the environment (`base_url`, `base_url_2`...),
-//!    with the first value of every path variable as its default;
+//!    with the first value of every path variable as its default (a
+//!    secret one for segments that look like secrets, see [`template`]);
 //! 3. parameterize credential headers ([`secrets`]), then name the other
 //!    secrets with the importer's extraction, reusing the names the
 //!    environment already declares (`resave`);
@@ -221,14 +222,14 @@ struct Group<'a> {
 }
 
 /// The parts of an absolute URL.
-struct Url<'a> {
-    origin: &'a str,
-    authority: &'a str,
-    path: &'a str,
-    query: &'a str,
+pub(crate) struct Url<'a> {
+    pub(crate) origin: &'a str,
+    pub(crate) authority: &'a str,
+    pub(crate) path: &'a str,
+    pub(crate) query: &'a str,
 }
 
-fn split(url: &str) -> Url<'_> {
+pub(crate) fn split(url: &str) -> Url<'_> {
     let scheme_end = url.find("://").map_or(0, |i| i + 3);
     let after = &url[scheme_end..];
     let authority_len = after.find(['/', '?', '#']).unwrap_or(after.len());
@@ -260,7 +261,7 @@ pub fn collection_with(
     known: &[(String, String)],
 ) -> Recording {
     let mut origins: Vec<(String, String)> = Vec::new();
-    let mut defaults: Vec<(String, String)> = Vec::new();
+    let mut defaults: Vec<Variable> = Vec::new();
     let mut groups: BTreeMap<(usize, String, String), Group<'_>> = BTreeMap::new();
     for exchange in exchanges {
         let url = split(&exchange.url);
@@ -272,9 +273,16 @@ pub fn collection_with(
             }
         };
         let templated = templatize(url.path);
-        for (name, value) in &templated.variables {
-            if !defaults.iter().any(|(n, _)| n == name) {
-                defaults.push((name.clone(), value.clone()));
+        let plain_vars = templated.variables.iter().map(|v| (v, false));
+        let secret_vars = templated.secrets.iter().map(|v| (v, true));
+        for ((name, value), secret) in plain_vars.chain(secret_vars) {
+            if !defaults.iter().any(|d| &d.name == name) {
+                defaults.push(Variable {
+                    name: name.clone(),
+                    value: value.clone(),
+                    secret,
+                    path: false,
+                });
             }
         }
         let key = (index, templated.path.clone(), exchange.method.clone());
@@ -396,7 +404,7 @@ impl Builder {
         mut self,
         environment: &str,
         origins: &[(String, String)],
-        defaults: Vec<(String, String)>,
+        defaults: Vec<Variable>,
     ) -> Recording {
         let mut variables: Vec<Variable> = Vec::new();
         for ((origin, _), name) in origins.iter().zip(&self.names) {
@@ -408,7 +416,19 @@ impl Builder {
             }
             variables.push(plain(name, origin.clone()));
         }
-        variables.extend(defaults.into_iter().map(|(n, v)| plain(n, v)));
+        let unguessable: Vec<&str> = defaults
+            .iter()
+            .filter(|d| !d.secret && template::is_unguessable_id(&d.value))
+            .map(|d| d.name.as_str())
+            .collect();
+        if !unguessable.is_empty() {
+            self.warnings.push(format!(
+                "warning: path variables {} keep their recorded UUID or ULID values as defaults \
+                 in environments/{environment}.yaml; review them before committing",
+                unguessable.join(", ")
+            ));
+        }
+        variables.extend(defaults);
         variables.extend(
             self.secrets
                 .moved
