@@ -1,5 +1,6 @@
 ---
 source: crates/rustman-tui/src/jsonrpc_tests.rs
+assertion_line: 350
 expression: screen
 ---
 ┌ head ────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -54,6 +55,7 @@ expression: screen
 │             │   Alt+S                    Start GraphQL subscription                │             │
 │             │   Alt+X                    Stop GraphQL subscription                 │             │
 │             │   Alt+G                    Send following subgraph pagination        │             │
+│             │   Alt+T                    Sign and send evm-tx (confirm first)      │             │
 │             │   Alt+C                    Copy as…                                  │             │
 │             │   Alt+A                    Review snapshots                          │             │
 │             │   Ctrl+O                   Open trace link                           │             │
@@ -61,7 +63,6 @@ expression: screen
 │             │                                                                      │             │
 │             │ ↑↓ scroll · Esc close                                                │             │
 │             └──────────────────────────────────────────────────────────────────────┘             │
-│                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │

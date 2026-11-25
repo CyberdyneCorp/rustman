@@ -27,6 +27,9 @@ rustman-mock.workspace = true
 rustman-monitor.workspace = true
 rustman-proxy.workspace = true
 rustman-evm.workspace = true
+# The signing gate for the evm-tx pane's sign action (issue #112). Agents
+# (rustman-mcp) still do not link it.
+rustman-evm-signing.workspace = true
 ratatui.workspace = true
 crossterm.workspace = true
 thiserror.workspace = true
@@ -52,6 +55,8 @@ http.workspace = true
 otlp = ["rustman-http/otlp"]
 
 [dev-dependencies]
+# Transactions for the signing dialog's snapshots.
+alloy-primitives.workspace = true
 # The plugin trust store and test plugins (add-plugin-system task 4.1).
 rustman-plugin = { workspace = true, features = ["test-fixtures"] }
 bytes.workspace = true

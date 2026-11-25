@@ -90,6 +90,11 @@ pub struct SendJob {
     pub messaging: Option<ConsumerLink>,
     /// `graphql.paginate`: follow subgraph pagination (`id_gt`).
     pub paginate: bool,
+    /// `evm.sign`: take the `evm-tx` through the signing gate. Only the
+    /// effect runner's interceptor ([`crate::evm_sign::intercept`]) links
+    /// such a job to the confirmation dialog; without that link nothing
+    /// can be confirmed, so nothing is signed.
+    pub sign: Option<crate::evm_sign::SignRequest>,
 }
 
 impl fmt::Debug for SendJob {
@@ -131,6 +136,10 @@ pub fn start_with(state: &mut State, validate: bool) -> Vec<Effect> {
         state.notify(Severity::Info, "Open a request to send it");
         return Vec::new();
     };
+    if tab.in_flight.as_ref().is_some_and(|f| f.signing) {
+        state.notify(Severity::Info, crate::evm_sign::BUSY);
+        return Vec::new();
+    }
     let request = match tab.editor.request() {
         Ok(request) => request,
         Err(message) => {
@@ -169,6 +178,7 @@ pub fn start_with(state: &mut State, validate: bool) -> Vec<Effect> {
         plugins: state.plugin_gate.clone(),
         messaging,
         paginate: false,
+        sign: None,
     };
     state.status.in_flight = state.tabs.in_flight();
     vec![Effect::Send(Box::new(job))]
@@ -217,18 +227,30 @@ pub fn finished(state: &mut State, tab: TabId, seq: u64, mut received: Received)
         state.notify(Severity::Warn, warning);
     }
     let warnings = received.record.warnings.clone();
+    let signed = crate::evm_sign::is_signed(&received.record);
+    crate::evm_sign::close_dialog(state, tab, seq);
     if let Some(evm) = received.record.evm.clone() {
-        if let Some(status) = evm["status"].as_str() {
+        // An evm-tx audit record's `status` is the transaction's, not the
+        // node's.
+        if let Some(status) = evm["status"].as_str()
+            && evm["kind"] != "evm-tx"
+        {
             state.status.chain = Some(status.to_owned());
         }
         if let Some(editor) = state.tabs.get_mut(tab).and_then(|t| t.editor.evm_mut()) {
             editor.set_result(&evm);
         }
     }
-    let shown = state
-        .tabs
-        .get_mut(tab)
-        .is_some_and(|t| t.finish(seq, received));
+    // A transaction that may be out is shown even when its send was
+    // cancelled (Esc during the receipt wait): its hash and audit status.
+    let shown = state.tabs.get_mut(tab).is_some_and(|t| {
+        if signed && t.in_flight.is_none() {
+            t.show(received);
+            true
+        } else {
+            t.finish(seq, received)
+        }
+    });
     state.status.in_flight = state.tabs.in_flight();
     if shown {
         for warning in warnings {
@@ -240,11 +262,17 @@ pub fn finished(state: &mut State, tab: TabId, seq: u64, mut received: Received)
 /// Run `job` to completion. Blocks: the effect runner calls it on a
 /// blocking thread.
 pub fn execute(job: &SendJob) -> Action {
+    execute_with(job, None)
+}
+
+/// [`execute`], with the action channel a signing job's confirmation
+/// dialog is asked through (`None`: nothing can be confirmed).
+pub fn execute_with(job: &SendJob, actions: Option<&UnboundedSender<Action>>) -> Action {
     let received = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
     {
-        Ok(runtime) => runtime.block_on(send(job)),
+        Ok(runtime) => runtime.block_on(send(job, actions)),
         Err(e) => failed(job, format!("cannot start the async runtime: {e}")),
     };
     Action::SendFinished {
@@ -291,10 +319,13 @@ pub(crate) fn secret_store(
     Ok(SecretStore::open(root, backend))
 }
 
-async fn send(job: &SendJob) -> Received {
+/// The action channel of a signing job's dialog.
+type Ui<'a> = Option<&'a UnboundedSender<Action>>;
+
+async fn send(job: &SendJob, ui: Ui<'_>) -> Received {
     match &job.workspace {
-        Some(ws) => send_in_workspace(job, ws).await,
-        None => send_scratch(job).await,
+        Some(ws) => send_in_workspace(job, ws, ui).await,
+        None => send_scratch(job, ui).await,
     }
 }
 
@@ -349,7 +380,7 @@ pub(crate) fn loose_entry(path: Option<&Path>, request: &Request) -> RequestEntr
     }
 }
 
-async fn send_in_workspace(job: &SendJob, ws: &Workspace) -> Received {
+async fn send_in_workspace(job: &SendJob, ws: &Workspace, ui: Ui<'_>) -> Received {
     let (ws, path) = with_edit(ws, job.path.as_deref(), &job.request);
     let loose = loose_entry(job.path.as_deref(), &job.request);
     let target = target(&ws, path.as_deref(), &loose);
@@ -363,10 +394,10 @@ async fn send_in_workspace(job: &SendJob, ws: &Workspace) -> Received {
         environment: env,
         in_workspace: true,
     };
-    run(job, &place, &target, path.is_none()).await
+    run(job, &place, &target, path.is_none(), ui).await
 }
 
-async fn send_scratch(job: &SendJob) -> Received {
+async fn send_scratch(job: &SendJob, ui: Ui<'_>) -> Received {
     let root = match std::env::current_dir() {
         Ok(dir) => dir,
         Err(e) => return failed(job, format!("no current directory: {e}")),
@@ -389,7 +420,7 @@ async fn send_scratch(job: &SendJob) -> Received {
         environment: None,
         in_workspace: false,
     };
-    run(job, &place, &target, true).await
+    run(job, &place, &target, true, ui).await
 }
 
 /// The workspace's plugins, when its set is trusted on this machine: the
@@ -423,7 +454,13 @@ impl Place<'_> {
     }
 }
 
-async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: bool) -> Received {
+async fn run(
+    job: &SendJob,
+    place: &Place<'_>,
+    target: &RequestRef<'_>,
+    ad_hoc: bool,
+    ui: Ui<'_>,
+) -> Received {
     let store = match secret_store(place.root, job.backend) {
         Ok(store) => store,
         Err(message) => return failed(job, message),
@@ -467,11 +504,23 @@ async fn run(job: &SendJob, place: &Place<'_>, target: &RequestRef<'_>, ad_hoc: 
         ..MessagingRunner::default()
     };
     let evm = rustman_evm::exec::EvmRunner::new(Arc::new(rustman_http::HttpEngine::new()));
+    // `evm.sign`: the same gate as `rustman evm send --sign`, asking
+    // through the confirmation dialog.
+    let console = job
+        .sign
+        .map(|_| crate::evm_sign::TuiConsole::new(job, ui.cloned()));
+    let signing = job.sign.zip(console.as_ref()).map(|(request, console)| {
+        let keychain = crate::evm_sign::keychain(job.backend);
+        rustman_evm_signing::Signing::new(request.options(), console, keychain)
+    });
     let options = RunOptions {
         cancel: job.cancel.clone(),
         history: place.history(),
         ad_hoc,
         evm: Some(&evm),
+        evm_tx: signing
+            .as_ref()
+            .map(|s| s as &dyn rustman_http::runner::EvmTxExecutor),
         graphql: Some(&graphql),
         jsonrpc: Some(&jsonrpc),
         mcp: Some(&mcp),
@@ -775,6 +824,7 @@ mod tests {
             plugins: crate::plugin_trust::Gate::default(),
             messaging: None,
             paginate: false,
+            sign: None,
         };
         let mut other = job.clone();
         assert_eq!(job, other);

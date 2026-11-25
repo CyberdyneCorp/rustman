@@ -375,7 +375,7 @@ The refusal reads:
 signing and sending go through 'evm-tx' (signing gate)
 ```
 
-The guard applies to `rustman rpc`, `rustman run`, the TUI and the MCP server. `[evm] allow_raw_send_local` is not honored in this build: a transaction can only be signed and sent through the signing gate (an `evm-tx` request with `rustman evm send --sign` or `rustman run --sign`, see [EVM signing](evm-signing.md)), so raw sends with these methods are refused on every chain, including 31337.
+The guard applies to `rustman rpc`, `rustman run`, the TUI and the MCP server. `[evm] allow_raw_send_local` is not honored in this build: a transaction can only be signed and sent through the signing gate (an `evm-tx` request with `rustman evm send --sign`, `rustman run --sign` or the TUI's `evm.sign`, see [EVM signing](evm-signing.md)), so raw sends with these methods are refused on every chain, including 31337.
 
 ## Typed JSON-RPC methods
 
@@ -495,7 +495,7 @@ rustman evm fork --env staging --json
 - **Result**: the status line (`Ethereum Mainnet (1) · geth 1.14.11`), the decoded outputs, the revert, and the gas estimate. `u` cycles the unit form of quantities: native units, wei, gwei and hex for balance-like outputs, token units for ERC-20 amounts, decimal and hex otherwise.
 - **Trace**: the call tree, or why there is none. **Events**: the decoded event timeline (the events each send's simulated call emits, when the file reads events; the latest 1,000 lines), reorged logs marked `REORGED`.
 
-Edits change only the top-level `function`, `args` and `block` lines of the file; comments and the other fields are kept. An `evm-tx` opens read-only with ``evm-tx: sign and send it with `rustman evm send --sign` or `rustman run --sign`; nothing was signed or sent``. After a send, the status bar shows the chain and the node client of the endpoint, such as `Base (8453) · geth 1.14.11`.
+Edits change only the top-level `function`, `args` and `block` lines of the file; comments and the other fields are kept. An `evm-tx` opens read-only with ``evm-tx: Alt+T (evm.sign) signs and sends it after your confirmation; [evm] allow_signing = true is required``; `evm.sign` takes it through the signing gate with a confirmation dialog (see [EVM signing](evm-signing.md#in-the-tui)). After a send, the status bar shows the chain and the node client of the endpoint, such as `Base (8453) · geth 1.14.11`.
 
 ## Blockchain GraphQL presets
 

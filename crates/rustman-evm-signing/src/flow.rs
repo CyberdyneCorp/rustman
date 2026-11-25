@@ -111,6 +111,13 @@ pub trait Console: Sync {
     fn password(&self, question: &str) -> Result<Option<Zeroizing<String>>, String>;
     /// Whether Ctrl+C was pressed.
     fn cancelled(&self) -> bool;
+    /// The summary the user is about to confirm, with the warning of a max
+    /// cost above `[evm] max_cost`. By default it is [`Console::show`]n as
+    /// text, never redacted (see [`confirmation_text`]); the TUI also keeps
+    /// it for its confirmation dialog.
+    fn summary(&self, summary: &Summary, cost: Option<&str>) {
+        self.show(&confirmation_text(summary, cost));
+    }
 }
 
 /// How a sent transaction ended.
@@ -210,8 +217,7 @@ impl<'c> Signing<'c> {
             .summarize(call, &ctx, &id, &signer, &request, &simulation)
             .await?;
         let cost = confirm::cost_warning(&summary, &ctx.settings)?;
-        self.console
-            .show(&confirmation_text(&summary, cost.as_deref()));
+        self.console.summary(&summary, cost.as_deref());
         let confirmation = self.confirm(&summary, &ctx.settings)?;
         self.check_interrupted()?;
         // The chain is asked once more, right before signing.
@@ -688,7 +694,7 @@ fn shown(call: &EvmTxCall<'_>, text: &str) -> String {
 /// what is signed. No transaction field holds a secret
 /// ([`check_visible_fields`]) and no password is part of the summary.
 /// `cost` is the warning of a max cost above `[evm] max_cost`.
-fn confirmation_text(summary: &Summary, cost: Option<&str>) -> String {
+pub fn confirmation_text(summary: &Summary, cost: Option<&str>) -> String {
     match cost {
         Some(warning) => format!("WARNING: {}\n{}", printable_line(warning), summary.render()),
         None => summary.render(),

@@ -435,6 +435,8 @@ The table below is generated from the action registry; a test fails if it drifts
 | Start GraphQL subscription | `graphql.subscription_start` | `Alt+S` |  |
 | Stop GraphQL subscription | `graphql.subscription_stop` | `Alt+X` |  |
 | Send following subgraph pagination | `graphql.paginate` | `Alt+G` |  |
+| Sign and send evm-tx (confirm first) | `evm.sign` | `Alt+T` |  |
+| Sign evm-tx even if the simulation reverts | `evm.sign_force_revert` |  |  |
 | Cycle blockchain scalar display | `graphql.display` | `u` (response) |  |
 | Open result value in EVM toolkit | `graphql.links` | `L` (response) |  |
 | Copy as… | `request.copy_as` | `Alt+C` |  |

@@ -156,7 +156,8 @@ pub fn spawn_runner_with(
             let effect = crate::webhook::intercept(effect, &actions)
                 .and_then(|effect| crate::mock_server::intercept(effect, &actions))
                 .and_then(|effect| crate::mcp::intercept(effect, &actions))
-                .and_then(|effect| crate::recorder::intercept(effect, &actions));
+                .and_then(|effect| crate::recorder::intercept(effect, &actions))
+                .and_then(|effect| crate::evm_sign::intercept(effect, &actions));
             let Some(effect) = effect else {
                 continue;
             };

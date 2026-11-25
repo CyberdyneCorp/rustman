@@ -131,10 +131,20 @@ fn block(editor: &EvmEditor, ctx: &RenderCtx) -> Vec<Line<'static>> {
 
 fn result(editor: &EvmEditor, ctx: &RenderCtx) -> Vec<Line<'static>> {
     let theme = &ctx.ui.theme;
-    let Some(view) = &editor.result else {
-        return vec![muted("Not sent yet.", ctx)];
-    };
     let mut lines = Vec::new();
+    let Some(view) = &editor.result else {
+        if editor.is_tx() && editor.sign_log.is_empty() {
+            return vec![muted(
+                "Not signed yet: evm.sign (Alt+T) shows the decoded summary to confirm first.",
+                ctx,
+            )];
+        }
+        if editor.sign_log.is_empty() {
+            return vec![muted("Not sent yet.", ctx)];
+        }
+        sign_log(editor, &mut lines, ctx);
+        return lines;
+    };
     if let Some(status) = &view.status {
         lines.push(muted(status, ctx));
     }
@@ -154,10 +164,23 @@ fn result(editor: &EvmEditor, ctx: &RenderCtx) -> Vec<Line<'static>> {
     if let Some(gas) = &view.gas_estimate {
         lines.push(muted(&format!("gas estimate: {gas}"), ctx));
     }
-    if !view.outputs.is_empty() {
+    if !view.outputs.is_empty() && !editor.is_tx() {
         lines.push(muted("u: toggle units", ctx));
     }
+    if !editor.sign_log.is_empty() {
+        lines.push(Line::default());
+        sign_log(editor, &mut lines, ctx);
+    }
     lines
+}
+
+/// What the signing gate showed, warnings in the warning colour.
+fn sign_log(editor: &EvmEditor, lines: &mut Vec<Line<'static>>, ctx: &RenderCtx) {
+    let theme = &ctx.ui.theme;
+    for (line, warn) in &editor.sign_log {
+        let token = if *warn { Token::Warn } else { Token::Text };
+        lines.push(Line::styled(format!(" {line}"), theme.fg(token)));
+    }
 }
 
 fn trace_lines(editor: &EvmEditor) -> Vec<String> {

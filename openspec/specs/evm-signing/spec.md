@@ -19,7 +19,7 @@ A `kind: evm-tx` request file SHALL contain `rpc`, `to` (address or ENS, require
 - **THEN** loading SHALL fail with `contract deployment is out of scope; use Foundry or Hardhat`
 
 ### Requirement: Signing disabled by default
-Signing SHALL require both `[evm] allow_signing = true` in `rustman.toml` and an explicit per-invocation opt-in, `--sign` on the CLI (`rustman evm send`, `rustman run`). If either is missing, the system SHALL refuse with exit code 4 and a message naming what is missing. `rustman run` SHALL skip `evm-tx` files unless `--sign` is passed. Signing from the TUI is out of scope for this change: the TUI SHALL open `evm-tx` files read-only, with a notice pointing to the CLI, and SHALL NOT sign or send.
+Signing SHALL require both `[evm] allow_signing = true` in `rustman.toml` and an explicit per-invocation opt-in: `--sign` on the CLI (`rustman evm send`, `rustman run`) or the `evm.sign` action of the TUI's `evm-tx` pane. If either is missing, the system SHALL refuse with exit code 4 and a message naming what is missing. `rustman run` SHALL skip `evm-tx` files unless `--sign` is passed.
 
 #### Scenario: Workspace not opted in
 - **GIVEN** `rustman.toml` has no `[evm] allow_signing`
@@ -35,9 +35,27 @@ Signing SHALL require both `[evm] allow_signing = true` in `rustman.toml` and an
 - **WHEN** `rustman run .` includes an `evm-tx` file and `--sign` is absent
 - **THEN** that file SHALL be reported as `skipped (signing not requested)` and SHALL NOT count as a failure
 
-#### Scenario: TUI does not sign
-- **WHEN** an `evm-tx` file is opened in the TUI
-- **THEN** it SHALL be shown read-only with a notice naming `rustman evm send --sign` and `rustman run --sign`, and nothing SHALL be signed or sent
+#### Scenario: TUI opens evm-tx read-only
+- **WHEN** an `evm-tx` file is opened in the TUI, or sent with `request.send`
+- **THEN** it SHALL be shown read-only with a notice naming `evm.sign`, and nothing SHALL be signed or sent without `evm.sign`
+
+### Requirement: TUI signing dialog
+`evm.sign` SHALL run the same gate as `rustman evm send --sign`, off the UI loop, and ask in a dialog: the keystore password without echo, the decoded summary (each value escaped, `Cancel` preselected, a `SIMULATION REVERTED` banner when forced) and the typed chain name where required. `Esc` SHALL stop with nothing signed or sent. The TUI SHALL never sign without the dialog's confirmation, and SHALL keep the audit entry when cancelled or quit after sending.
+
+#### Scenario: Esc at the confirmation
+- **GIVEN** `allow_signing = true` and the summary shown in the dialog
+- **WHEN** the user presses `Esc`
+- **THEN** nothing SHALL be signed or sent and the request SHALL be shown as interrupted
+
+#### Scenario: Signed from the TUI
+- **GIVEN** an Anvil environment pinning chain 31337
+- **WHEN** the user runs `evm.sign`, enters the password and chooses `Sign and send`
+- **THEN** the transaction SHALL be sent, its hash and decoded receipt shown, and history SHALL hold the same audit entry as the CLI
+
+#### Scenario: Quit while pending
+- **GIVEN** a transaction sent from the TUI whose receipt is awaited
+- **WHEN** the user quits
+- **THEN** the audit entry SHALL be recorded with status `pending` before the process exits
 
 ### Requirement: Approved signers only
 Signers SHALL be configured in `[evm.signers.<id>]` as one of: `keystore` (path to a Web3 Secret Storage JSON file, password prompted or from a secret) or `keychain` (key stored in the OS keychain by `rustman evm signer import`). Raw private keys SHALL be rejected wherever they appear: request files, environments, variables, CLI flags or environment variables.

@@ -1,0 +1,28 @@
+---
+source: crates/rustman-tui/src/evm_sign_tests.rs
+expression: text
+---
+
+
+
+  ┌ Sign and send transaction ───────────────────────────────────────────────────────────────────┐
+  │  SIMULATION REVERTED: InsufficientBalance(5, 10)                                             │
+  │ WARNING: max cost 2 ETH is above [evm] max_cost (1 ETH)                                      │
+  │ chain        Sepolia (11155111)                                                              │
+  │ signer       0x1111111111111111111111111111111111111111 (deployer)                           │
+  │ to           0x2222222222222222222222222222222222222222 (bob.eth)                            │
+  │ call         transfer(to=0x2222222222222222222222222222222222222222, amount=10.00 USDC)\u{a} │
+  │              chain  Mainnet                                                                  │
+  │ value        0 ETH                                                                           │
+  │ gas          65000                                                                           │
+  │ max fee      30 gwei (suggested)                                                             │
+  │ priority fee 2 gwei (suggested)                                                              │
+  │ nonce        7                                                                               │
+  │ max cost     0.00195 ETH                                                                     │
+  │                                                                                              │
+  │ sign and send this transaction? [y/N]                                                        │
+  │                                                                                              │
+  │  Sign and send    Cancel                                                                     │
+  │                                                                                              │
+  │ Left/Right choose · Enter confirm · Esc cancel: nothing is signed                            │
+  └──────────────────────────────────────────────────────────────────────────────────────────────┘

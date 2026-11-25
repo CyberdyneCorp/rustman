@@ -189,6 +189,7 @@ pub fn overlay(frame: &mut Frame, state: &State) {
         Some(Overlay::Monitors(view)) => crate::monitors::render(frame, view, &state.ui),
         Some(Overlay::PluginTrust(prompt)) => crate::plugin_trust::render(frame, prompt, &state.ui),
         Some(Overlay::ChainLinks(view)) => crate::chain_links::render(frame, view, &state.ui),
+        Some(Overlay::Sign(dialog)) => crate::evm_sign::render(frame, dialog, &state.ui),
     }
 }
 

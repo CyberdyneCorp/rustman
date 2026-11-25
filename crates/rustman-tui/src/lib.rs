@@ -25,6 +25,9 @@ pub mod effects;
 #[cfg(test)]
 mod env_tests;
 pub mod evm_pane;
+pub mod evm_sign;
+#[cfg(test)]
+mod evm_sign_tests;
 #[cfg(test)]
 mod evm_tests;
 mod evm_view;
@@ -379,6 +382,12 @@ pub fn run_with(
     stop.cancel();
     let _ = reader.join();
     drop(guard);
+    // A transaction being signed was cancelled with the loop: before its
+    // signature nothing is sent, after it the audit entry is written
+    // (status `pending`). Wait for that before the runtime goes.
+    evm_sign::wait_for_pending(|| {
+        eprintln!("waiting for the transaction being signed to record its audit entry…");
+    });
     shut_down(rt);
     flush_spans();
     match result?.abort {
