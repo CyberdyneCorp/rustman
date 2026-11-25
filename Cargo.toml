@@ -7,41 +7,41 @@ members = ["crates/*"]
 exclude = ["crates/rustman-viz"]
 
 [workspace.package]
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 rust-version = "1.97"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/CyberdyneCorp/rustman"
 
 [workspace.dependencies]
-rustman-core = { path = "crates/rustman-core", version = "0.1.0" }
-rustman-http = { path = "crates/rustman-http", version = "0.1.0" }
-rustman-report = { path = "crates/rustman-report", version = "0.1.0" }
-rustman-import = { path = "crates/rustman-import", version = "0.1.0" }
-rustman-explore = { path = "crates/rustman-explore", version = "0.1.0" }
-rustman-graphql = { path = "crates/rustman-graphql", version = "0.1.0" }
-rustman-jsonrpc = { path = "crates/rustman-jsonrpc", version = "0.1.0" }
-rustman-grpc = { path = "crates/rustman-grpc", version = "0.1.0" }
-rustman-mcp = { path = "crates/rustman-mcp", version = "0.1.0" }
-rustman-realtime = { path = "crates/rustman-realtime", version = "0.1.0" }
+rustman-core = { path = "crates/rustman-core", version = "1.0.0" }
+rustman-http = { path = "crates/rustman-http", version = "1.0.0" }
+rustman-report = { path = "crates/rustman-report", version = "1.0.0" }
+rustman-import = { path = "crates/rustman-import", version = "1.0.0" }
+rustman-explore = { path = "crates/rustman-explore", version = "1.0.0" }
+rustman-graphql = { path = "crates/rustman-graphql", version = "1.0.0" }
+rustman-jsonrpc = { path = "crates/rustman-jsonrpc", version = "1.0.0" }
+rustman-grpc = { path = "crates/rustman-grpc", version = "1.0.0" }
+rustman-mcp = { path = "crates/rustman-mcp", version = "1.0.0" }
+rustman-realtime = { path = "crates/rustman-realtime", version = "1.0.0" }
 # Test servers shared by the integration tests; never published.
 rustman-test-support = { path = "crates/rustman-test-support" }
-rustman-tui = { path = "crates/rustman-tui", version = "0.1.0" }
-rustman-viz-protocol = { path = "crates/rustman-viz-protocol", version = "0.1.0" }
-rustman-viz-client = { path = "crates/rustman-viz-client", version = "0.1.0" }
-rustman-webhook = { path = "crates/rustman-webhook", version = "0.1.0" }
-rustman-mock = { path = "crates/rustman-mock", version = "0.1.0" }
-rustman-contract = { path = "crates/rustman-contract", version = "0.1.0" }
-rustman-bench = { path = "crates/rustman-bench", version = "0.1.0" }
-rustman-docs = { path = "crates/rustman-docs", version = "0.1.0" }
-rustman-monitor = { path = "crates/rustman-monitor", version = "0.1.0" }
-rustman-secrets = { path = "crates/rustman-secrets", version = "0.1.0" }
-rustman-plugin = { path = "crates/rustman-plugin", version = "0.1.0" }
+rustman-tui = { path = "crates/rustman-tui", version = "1.0.0" }
+rustman-viz-protocol = { path = "crates/rustman-viz-protocol", version = "1.0.0" }
+rustman-viz-client = { path = "crates/rustman-viz-client", version = "1.0.0" }
+rustman-webhook = { path = "crates/rustman-webhook", version = "1.0.0" }
+rustman-mock = { path = "crates/rustman-mock", version = "1.0.0" }
+rustman-contract = { path = "crates/rustman-contract", version = "1.0.0" }
+rustman-bench = { path = "crates/rustman-bench", version = "1.0.0" }
+rustman-docs = { path = "crates/rustman-docs", version = "1.0.0" }
+rustman-monitor = { path = "crates/rustman-monitor", version = "1.0.0" }
+rustman-secrets = { path = "crates/rustman-secrets", version = "1.0.0" }
+rustman-plugin = { path = "crates/rustman-plugin", version = "1.0.0" }
 rustman-plugin-sdk = { path = "crates/rustman-plugin-sdk", version = "1.0.0" }
-rustman-proxy = { path = "crates/rustman-proxy", version = "0.1.0" }
-rustman-messaging = { path = "crates/rustman-messaging", version = "0.1.0" }
-rustman-evm = { path = "crates/rustman-evm", version = "0.1.0" }
-rustman-evm-signing = { path = "crates/rustman-evm-signing", version = "0.1.0" }
+rustman-proxy = { path = "crates/rustman-proxy", version = "1.0.0" }
+rustman-messaging = { path = "crates/rustman-messaging", version = "1.0.0" }
+rustman-evm = { path = "crates/rustman-evm", version = "1.0.0" }
+rustman-evm-signing = { path = "crates/rustman-evm-signing", version = "1.0.0" }
 
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
