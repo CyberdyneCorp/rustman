@@ -86,8 +86,15 @@ const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
 #[cfg(windows)]
 const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
 
-/// On Windows, a final reparse point is opened itself, never followed, and
+/// On Windows, a final reparse point is opened itself, never followed. A
+/// link (a name-surrogate reparse point: a symbolic link, a junction) is
 /// refused: a path swapped for a link just for the open reads nothing.
+///
+/// Any other reparse point is an ordinary file a filter serves (a OneDrive
+/// or Cloud Files placeholder, a deduplicated file): it is opened again so
+/// the filter serves its data, and that second handle is kept only when it
+/// is the very file the first one opened (volume serial and file index),
+/// so a swap between the two opens is refused too.
 #[cfg(windows)]
 fn open_no_follow(path: &Path) -> io::Result<File> {
     use std::os::windows::fs::{MetadataExt as _, OpenOptionsExt as _};
@@ -95,13 +102,35 @@ fn open_no_follow(path: &Path) -> io::Result<File> {
         .read(true)
         .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
         .open(path)?;
-    if file.metadata()?.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+    // std reads the reparse tag from the handle: `is_symlink` is true for a
+    // name-surrogate tag only.
+    let metadata = file.metadata()?;
+    if metadata.file_type().is_symlink() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "is a symbolic link",
         ));
     }
-    Ok(file)
+    if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT == 0 {
+        return Ok(file);
+    }
+    let served = File::open(path)?;
+    if !same_handle(&file, &served)? {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "the path changed while it was read",
+        ));
+    }
+    Ok(served)
+}
+
+/// Whether two handles are the same file: the same volume serial number
+/// and file index.
+#[cfg(windows)]
+fn same_handle(a: &File, b: &File) -> io::Result<bool> {
+    use winapi_util::file::information;
+    let (a, b) = (information(a)?, information(b)?);
+    Ok(a.volume_serial_number() == b.volume_serial_number() && a.file_index() == b.file_index())
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -148,15 +177,13 @@ fn same_file(file: &File, path: &Path) -> io::Result<bool> {
 #[cfg(windows)]
 fn same_file(file: &File, path: &Path) -> io::Result<bool> {
     use std::os::windows::fs::OpenOptionsExt as _;
-    use winapi_util::file::information;
     /// Opens a folder too.
     const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
     let now = std::fs::OpenOptions::new()
         .access_mode(0)
         .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS)
         .open(path)?;
-    let (a, b) = (information(file)?, information(&now)?);
-    Ok(a.volume_serial_number() == b.volume_serial_number() && a.file_index() == b.file_index())
+    same_handle(file, &now)
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -391,5 +418,9 @@ mod tests {
         assert!(is_checked_file(&file, &path).unwrap());
         let same_length = open_regular(&other).unwrap();
         assert!(!is_checked_file(&same_length, &path).unwrap());
+        // Two handles of one file are that file; of two files, not.
+        let again = File::open(&path).unwrap();
+        assert!(same_handle(&file, &again).unwrap());
+        assert!(!same_handle(&file, &same_length).unwrap());
     }
 }

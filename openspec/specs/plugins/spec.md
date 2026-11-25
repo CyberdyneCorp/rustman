@@ -93,7 +93,7 @@ The CLI SHALL provide these commands:
 - **THEN** it SHALL fail with `plugin sources must use https` and exit code 2
 
 ### Requirement: Download address guard
-Downloads run before trust, so a URL source's host name SHALL NOT connect to an address that is not public (as the non-public address rule defines it), and redirects SHALL be followed only on `https` to the same host and port. A URL naming such an address or `localhost` itself SHALL be downloaded only by `plugin add`; `plugin verify` and loads SHALL refuse it before sending anything.
+Downloads run before trust, so a URL source's host name SHALL NOT connect to an address that is not public (as the non-public address rule defines it), and redirects SHALL be followed only on `https` to the same host and port. A URL naming such an address or `localhost` itself SHALL be downloaded only when the user asks for it (`plugin add`, `plugin verify --allow-local-sources`); otherwise it SHALL be refused before anything is sent.
 
 #### Scenario: Download URL resolving to a private address
 - **GIVEN** a declared URL source `https://plugins.example.com/p.wasm` whose host resolves to `169.254.169.254`
@@ -104,7 +104,8 @@ Downloads run before trust, so a URL source's host name SHALL NOT connect to an 
 - **GIVEN** a declared URL source `https://10.1.2.3/p.wasm` that is not cached
 - **WHEN** `rustman plugin verify` runs in the clone
 - **THEN** it SHALL fail with `10.1.2.3 is this machine or a private network, which a committed source may not name` and exit code 2, and no request SHALL be sent
-- **AND** `rustman plugin add https://10.1.2.3/p.wasm`, run by the user, SHALL download and cache it
+- **AND** `rustman plugin verify --allow-local-sources`, run by the user in the clone, SHALL download it, check it against its pin and cache it without changing `rustman.toml`
+- **AND** `rustman plugin add https://10.1.2.3/p.wasm` of an undeclared source, run by the user, SHALL download and cache it
 
 #### Scenario: Redirect to another host
 - **WHEN** a URL source redirects to another host
@@ -170,7 +171,7 @@ A plugin SHALL start with no access to the filesystem, network, environment vari
 
 #### Scenario: Path swapped and restored around the open
 - **GIVEN** `grants = ["fs:read:data"]`
-- **WHEN** a granted path is swapped for a symbolic link (or, on Windows, any reparse point) only while it is opened or listed, then restored
+- **WHEN** a granted path is swapped for a symbolic link (or, on Windows, a junction) only while it is opened or listed, then restored
 - **THEN** a read SHALL NOT return the file outside, being refused unless the open file is the one at the path (device and inode, or volume serial and file index)
 - **AND** a listing SHALL read the opened folder, checked the same way, never the entries of the folder outside
 

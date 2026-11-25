@@ -6,9 +6,11 @@
 //! repository commits must not reach this machine or a private network: a
 //! host name that resolves to an address that is not public is refused
 //! when the connection opens. A URL naming such an address (or
-//! `localhost`) itself is downloaded only by `rustman plugin add`, whose
-//! URL the user typed ([`FetchOptions::allow_local`]); a committed one
-//! (`plugin verify`, a headless load) is refused before anything is sent.
+//! `localhost`) itself is downloaded only when the user asks for it
+//! ([`FetchOptions::allow_local`]): `rustman plugin add`, whose URL they
+//! typed, or `rustman plugin verify --allow-local-sources`, which fills the
+//! cache of a clone. Otherwise (`plugin verify`, a headless load) it is
+//! refused before anything is sent.
 
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -34,9 +36,10 @@ pub struct FetchOptions {
     pub ca_bundle: Option<Vec<u8>>,
     pub timeout: Duration,
     /// Download from a URL that names this machine or a private network
-    /// (`localhost`, a literal non-public address). Only `plugin add`
-    /// turns it on: there the user typed the URL. Off, such a URL is
-    /// refused before any connection.
+    /// (`localhost`, a literal non-public address). Only the user turns it
+    /// on: `plugin add`, whose URL they typed, and `plugin verify
+    /// --allow-local-sources`. Off, such a URL is refused before any
+    /// connection.
     pub allow_local: bool,
 }
 
@@ -108,7 +111,8 @@ fn refuse_local(plugin: &str, url: &str, parsed: &url::Url) -> Result<(), LoadEr
     let bare = host.trim_start_matches('[').trim_end_matches(']');
     let message = format!(
         "{bare} is this machine or a private network, which a committed source \
-         may not name (`rustman plugin add` run by you downloads and caches it)"
+         may not name (if you trust this source, `rustman plugin verify \
+         --allow-local-sources` downloads and caches it)"
     );
     Err(failed(plugin, url, &message))
 }

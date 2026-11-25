@@ -11,6 +11,8 @@
 //! not kept either. Neither is a value derived from a secret that the
 //! secret store cannot give back (a captured value that held a secret).
 
+use std::borrow::Cow;
+use std::ops::Range;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -25,7 +27,7 @@ use crate::model::{
 use crate::redact::{Redactor, sensitive_header};
 use crate::secret::Secret;
 use crate::secrets::provider::{SecretProviders, SecretRef, resolve_with_secrets};
-use crate::url_secrets::{USERINFO_MARK, url_userinfo};
+use crate::url_secrets::{USERINFO_MARK, url_userinfos};
 use crate::vars::{
     Interpolator, Layer, Lookup, ResolveError, Resolved, ResolvedBody, ResolvedFile, ResolvedPair,
     ResolvedRequest, Resolver, SecretLookup, SecretSpan, TlsFiles, VarSource,
@@ -173,7 +175,11 @@ impl ReplayRequest {
             withheld: Vec::new(),
         };
         let url = builder.url(&request.url);
-        let query = request.query.iter().map(|p| builder.pair(p)).collect();
+        let query = request
+            .query
+            .iter()
+            .map(|p| builder.query_pair(p))
+            .collect();
         let headers = request.headers.iter().map(|p| builder.header(p)).collect();
         let body = builder.body(&request.body);
         let auth = request.auth.as_ref().map(|a| builder.auth(a));
@@ -305,33 +311,64 @@ impl Builder<'_> {
     /// kept only when it comes from secrets (`:` aside), else replaced by
     /// a marker and noted as withheld.
     fn url(&mut self, url: &Resolved) -> String {
-        let Some(info) = url_userinfo(&url.text).filter(|r| self.t.has_literal(url, r)) else {
-            return self.t.resolved(url);
+        let url = self.without_literal_userinfo(url);
+        self.t.resolved(&url)
+    }
+
+    /// A query parameter: its value may hold a URL too (`next=https://u:p@h`).
+    fn query_pair(&mut self, pair: &ResolvedPair) -> ReplayPair {
+        let value = self.without_literal_userinfo(&pair.value);
+        ReplayPair {
+            name: self.t.resolved(&pair.name),
+            value: self.t.resolved(&value),
+        }
+    }
+
+    /// `resolved` with the userinfo of each URL in it (the URL itself and
+    /// any nested in it) that holds literal text replaced by a marker, and
+    /// noted as withheld; userinfo from secrets alone is kept.
+    fn without_literal_userinfo<'r>(&mut self, resolved: &'r Resolved) -> Cow<'r, Resolved> {
+        let literal: Vec<Range<usize>> = url_userinfos(&resolved.text)
+            .into_iter()
+            .filter(|r| self.t.has_literal(resolved, r))
+            .collect();
+        if literal.is_empty() {
+            return Cow::Borrowed(resolved);
+        }
+        const LABEL: &str = "the URL's userinfo";
+        if !self.withheld.iter().any(|w| w == LABEL) {
+            self.withheld.push(LABEL.to_owned());
+        }
+        let mut text = String::with_capacity(resolved.text.len());
+        let mut copied = 0;
+        for info in &literal {
+            text.push_str(&resolved.text[copied..info.start]);
+            text.push_str(USERINFO_MARK);
+            copied = info.end;
+        }
+        text.push_str(&resolved.text[copied..]);
+        // Where byte `i` of the original text is now: shifted by every
+        // replaced range before it.
+        let moved = |i: usize| -> usize {
+            literal
+                .iter()
+                .take_while(|info| info.end <= i)
+                .fold(i, |at, info| at - info.len() + USERINFO_MARK.len())
         };
-        self.withheld.push("the URL's userinfo".to_owned());
-        let text = format!(
-            "{}{USERINFO_MARK}{}",
-            &url.text[..info.start],
-            &url.text[info.end..]
-        );
-        let moved = |i: usize| i - info.len() + USERINFO_MARK.len();
-        let secret_spans = url
+        let secret_spans = resolved
             .secret_spans
             .iter()
-            .filter_map(|s| {
-                if s.range.end <= info.start {
-                    Some(s.clone())
-                } else if s.range.start >= info.end {
-                    Some(SecretSpan {
-                        name: s.name.clone(),
-                        range: moved(s.range.start)..moved(s.range.end),
-                    })
-                } else {
-                    None
-                }
+            .filter(|s| {
+                !literal
+                    .iter()
+                    .any(|info| s.range.start < info.end && info.start < s.range.end)
+            })
+            .map(|s| SecretSpan {
+                name: s.name.clone(),
+                range: moved(s.range.start)..moved(s.range.end),
             })
             .collect();
-        self.t.resolved(&Resolved { text, secret_spans })
+        Cow::Owned(Resolved { text, secret_spans })
     }
 
     fn pair(&self, pair: &ResolvedPair) -> ReplayPair {

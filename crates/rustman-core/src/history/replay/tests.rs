@@ -152,6 +152,38 @@ fn literal_url_userinfo_is_withheld() {
     assert!(replay.withheld.is_empty(), "{:?}", replay.withheld);
 }
 
+/// A URL nested in the URL's query, or in a query parameter, holds a
+/// credential as well: its literal userinfo is withheld, the secrets
+/// after it keep their placeholders.
+#[test]
+fn nested_url_userinfo_is_withheld() {
+    let mut original = request(spanned("Bearer ", "s3cr3t"));
+    let text = "https://api.example/login?next=https://bob:hunter2@intranet.example/&t=s3cr3t";
+    original.url = Resolved {
+        text: text.into(),
+        secret_spans: vec![SecretSpan {
+            name: "token".into(),
+            range: text.len() - 6..text.len(),
+        }],
+    };
+    original.query = vec![pair(
+        "back",
+        Resolved::literal("wss://carol:pw2@other.example/"),
+    )];
+    let replay = ReplayRequest::new(&original, None);
+    assert_eq!(
+        replay.url,
+        "https://api.example/login?next=https://«redacted:userinfo»@intranet.example/&t={{token}}"
+    );
+    assert_eq!(
+        replay.query[0].value,
+        "wss://«redacted:userinfo»@other.example/"
+    );
+    assert_eq!(replay.withheld, ["the URL's userinfo"]);
+    let json = serde_json::to_string(&replay).unwrap();
+    assert!(!json.contains("hunter2") && !json.contains("pw2"), "{json}");
+}
+
 #[test]
 fn file_bodies_are_withheld() {
     let mut original = request(spanned("Bearer ", "s3cr3t"));
