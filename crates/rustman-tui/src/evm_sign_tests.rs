@@ -28,6 +28,14 @@ use crate::snapshot::{buffer_text, render};
 use crate::theme::ColorMode;
 
 fn summary(chain_id: u64, reverted: Option<&str>) -> Summary {
+    summary_calling(
+        chain_id,
+        reverted,
+        "transfer(to=0x2222222222222222222222222222222222222222, amount=10.00 USDC)\nchain  Mainnet",
+    )
+}
+
+fn summary_calling(chain_id: u64, reverted: Option<&str>, call: &str) -> Summary {
     let gwei = |n: u64| Fee {
         wei: U256::from(n) * U256::from(1_000_000_000_u64),
         suggested: true,
@@ -37,8 +45,7 @@ fn summary(chain_id: u64, reverted: Option<&str>) -> Summary {
         signer_id: "deployer".to_owned(),
         signer: Address::repeat_byte(0x11),
         to_name: Some("bob.eth".to_owned()),
-        call: "transfer(to=0x2222222222222222222222222222222222222222, amount=10.00 USDC)\nchain  Mainnet"
-            .to_owned(),
+        call: call.to_owned(),
         tx: UnsignedTx {
             chain_id,
             nonce: 7,
@@ -57,7 +64,11 @@ fn summary(chain_id: u64, reverted: Option<&str>) -> Summary {
 }
 
 fn draw(dialog: &SignDialog) -> String {
-    let mut terminal = Terminal::new(TestBackend::new(100, 26)).unwrap();
+    draw_on(dialog, 100, 26)
+}
+
+fn draw_on(dialog: &SignDialog, width: u16, height: u16) -> String {
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     terminal
         .draw(|frame| crate::evm_sign::render(frame, dialog, &UiOptions::default()))
         .unwrap();
@@ -159,6 +170,8 @@ fn console_answers(
                 continue;
             };
             stages.push(dialog.stage);
+            // Drawn, as the loop draws it before any key reaches it.
+            draw(&dialog);
             match answers.next() {
                 Some("Esc") | None => {
                     dialog.key(key("Esc"));
@@ -220,6 +233,115 @@ fn without_a_dialog_nothing_can_be_confirmed() {
     assert!(!console.interactive());
     assert_eq!(console.ask(QUESTION), None);
     assert_eq!(console.password("pw: ").unwrap(), None);
+}
+
+#[test]
+fn a_summary_taller_than_the_screen_scrolls_and_signs_only_once_read() {
+    // A multicall-sized calldata argument on an 80x24 terminal: the fields
+    // after `call` are below the dialog's room.
+    let call = format!("multicall(data=0x{})", "ab".repeat(1500));
+    let view = SummaryView::new(&summary_calling(11_155_111, None, &call), None);
+    let mut dialog = SignDialog::detached(Stage::Confirm, QUESTION, Some(view));
+    let text = draw_on(&dialog, 80, 24);
+    // The question, the choices and the hints stay on screen.
+    for expected in [
+        "[y/N]",
+        "Sign and send",
+        "Cancel",
+        "Esc cancel",
+        "more summary lines below",
+    ] {
+        assert!(text.contains(expected), "{expected}\n{text}");
+    }
+    assert!(!text.contains("max cost"), "{text}");
+    // Sign and Enter before the whole summary was shown: not signed, the
+    // next page is shown instead.
+    assert!(!dialog.key(key("Left")));
+    assert!(!dialog.key(key("Enter")));
+    assert!(!dialog.summary_read());
+    // A jump to the end skips rows: still not read.
+    let mut jumped = dialog.clone();
+    jumped.key(key("End"));
+    let text = draw_on(&jumped, 80, 24);
+    assert!(text.contains("max cost"), "{text}");
+    assert!(!jumped.summary_read());
+    assert!(!jumped.key(key("Enter")));
+    // Scrolled through page by page: every field was shown, Sign works.
+    let mut seen = String::new();
+    for _ in 0..200 {
+        seen.push_str(&draw_on(&dialog, 80, 24));
+        if dialog.summary_read() {
+            break;
+        }
+        dialog.key(key("PageDown"));
+    }
+    assert!(dialog.summary_read());
+    for expected in ["value", "gas", "nonce        7", "max cost"] {
+        assert!(seen.contains(expected), "{expected}");
+    }
+    assert_eq!(dialog.selected, 0);
+    assert!(dialog.key(key("Enter")), "Sign confirmed once read");
+}
+
+#[test]
+fn wide_characters_never_wrap_a_value_to_column_zero() {
+    // Fullwidth characters take two columns: cut by characters, a piece
+    // would overflow and the paragraph would wrap its tail to column 0,
+    // where it reads as a field of its own. Every summary row starts with
+    // a label or with the value column's indentation.
+    for (wide, ascii) in [(31, 15), (20, 3), (40, 0), (10, 30)] {
+        let call = format!(
+            "f(s={}{} chain        Sepolia (11155111) x {})",
+            "\u{ff21}".repeat(wide),
+            "a".repeat(ascii),
+            "\u{ff21}".repeat(wide),
+        );
+        let view = SummaryView::new(&summary_calling(1, None, &call), None);
+        let labels: Vec<&str> = view.fields.iter().map(|(l, _)| *l).collect();
+        let dialog = SignDialog::detached(Stage::Confirm, QUESTION, Some(view));
+        for width in [100, 80, 61] {
+            let text = draw_on(&dialog, width, 60);
+            let rows = text
+                .lines()
+                .skip_while(|l| !l.contains("Sign and send transaction"))
+                .skip(1)
+                .take_while(|l| !l.contains("[y/N]"));
+            for row in rows {
+                let Some((_, inner)) = row.split_once("│ ") else {
+                    continue;
+                };
+                let inner = inner.trim_end_matches(['│', ' ']);
+                let indented = inner.chars().take(13).all(|c| c == ' ');
+                assert!(
+                    inner.is_empty()
+                        || indented
+                        || labels
+                            .iter()
+                            .any(|l| format!("{inner:<13}").starts_with(&format!("{l:<13}"))),
+                    "{row:?}\n{text}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn the_confirmation_ignores_keys_until_armed() {
+    // Down and Enter typed for another widget as the dialog opens.
+    let view = SummaryView::new(&summary(8453, None), None);
+    let mut dialog = SignDialog::detached(Stage::Confirm, QUESTION, Some(view));
+    draw(&dialog);
+    dialog.opened_at(std::time::Instant::now());
+    for chord in ["Down", "Tab", "Left", "Right", "Enter"] {
+        assert!(!dialog.key(key(chord)), "{chord}");
+    }
+    assert_eq!(dialog.selected, 1, "Cancel is still selected");
+    // Esc always works.
+    assert!(dialog.clone().key(key("Esc")));
+    // Armed: the choice is taken.
+    dialog.opened_at(std::time::Instant::now() - crate::evm_sign::ARM);
+    assert!(!dialog.key(key("Left")));
+    assert!(dialog.key(key("Enter")));
 }
 
 // ---- the pane and the shared gate -----------------------------------------
@@ -340,6 +462,57 @@ fn the_sign_action_is_the_per_invocation_opt_in() {
         panic!("{effects:?}");
     };
     assert_eq!(job.sign, None);
+}
+
+#[test]
+fn one_transaction_is_signed_at_a_time() {
+    // Two gates at once would read the same pending nonce, and their
+    // dialogs would replace each other.
+    let tmp = workspace("http://127.0.0.1:9", true);
+    fs::copy(
+        tmp.path().join("ws/add.rman.yaml"),
+        tmp.path().join("ws/again.rman.yaml"),
+    )
+    .unwrap();
+    let mut state = shell(&tmp, "add.rman.yaml");
+    assert_eq!(crate::evm_sign::start(&mut state, false).len(), 1);
+    crate::workbench::open_path(&mut state, Path::new("again.rman.yaml"));
+    assert!(state.tabs.active().unwrap().in_flight.is_none());
+    assert!(crate::evm_sign::start(&mut state, false).is_empty());
+    assert!(state.tabs.active().unwrap().in_flight.is_none());
+    assert!(
+        state
+            .notifications
+            .log()
+            .any(|e| format!("{e:?}").contains(crate::evm_sign::BUSY_ELSEWHERE))
+    );
+    // A plain send from the other tab is not signing: it goes.
+    assert_eq!(crate::send::start(&mut state).len(), 1);
+}
+
+#[test]
+fn a_new_attempt_clears_the_previous_transaction() {
+    let tmp = workspace("http://127.0.0.1:9", true);
+    let mut state = shell(&tmp, "add.rman.yaml");
+    let editor = state.tabs.active_mut().unwrap().editor.evm_mut().unwrap();
+    editor.push_sign_line("sent 0xabc", false);
+    editor.set_result(&serde_json::json!({
+        "kind": "evm-tx", "status": "success", "chain": "Sepolia",
+        "chain_id": 11155111, "hash": "0xabc", "nonce": 0, "block": 3,
+        "gas_used": "43000", "explorer": null,
+    }));
+    assert_eq!(crate::evm_sign::start(&mut state, false).len(), 1);
+    let editor = state.tabs.active().unwrap().editor.evm().unwrap();
+    assert!(editor.result.is_none(), "the old audit view is gone");
+    assert!(editor.sign_log.is_empty());
+    let text = buffer_text(&render(&state, 240, 40));
+    assert!(!text.contains("hash = 0xabc"), "{text}");
+    // A refused second press keeps the running attempt's log.
+    let editor = state.tabs.active_mut().unwrap().editor.evm_mut().unwrap();
+    editor.push_sign_line("simulating", false);
+    assert!(crate::evm_sign::start(&mut state, false).is_empty());
+    let editor = state.tabs.active().unwrap().editor.evm().unwrap();
+    assert_eq!(editor.sign_log.len(), 1);
 }
 
 #[test]
@@ -497,35 +670,53 @@ impl Drop for Node {
     }
 }
 
+/// What the user does once the gate showed `sent 0x…` (during the receipt
+/// wait).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AfterSent {
+    /// Nothing: the receipt comes.
+    Wait,
+    /// `Esc` in the pane cancels the send.
+    Esc,
+    /// Quit: the loop cancels every send, then waits for the pending
+    /// signing jobs as `run_with` does; true once the audit entry was on
+    /// disk when that wait returned.
+    Quit,
+}
+
 /// Sign the open tab, answering each dialog with `answer`; returns the
-/// stages asked. The job runs as the effect runner runs it: on its own
-/// thread, its prompts reaching the loop as actions.
+/// stages asked.
 fn sign(
     state: &mut State,
     answer: impl FnMut(&State, &mut SignDialog) -> Vec<Chord>,
 ) -> Vec<Stage> {
-    sign_then(state, answer, false)
+    sign_then(state, answer, AfterSent::Wait, |_| {}).0
 }
 
-/// [`sign`]; with `esc_after_sent`, `Esc` cancels the send in the pane
-/// once the gate showed `sent 0x…` (during the receipt wait).
+/// [`sign`], then `after` once the transaction is out; `audited` is
+/// called right after the quit's wait. The job runs as the effect runner
+/// runs it: through [`crate::evm_sign::intercept`], on a blocking thread,
+/// its prompts reaching the loop as actions. Each dialog is drawn before
+/// it is answered, and the confirmation only after it is armed.
 fn sign_then(
     state: &mut State,
     mut answer: impl FnMut(&State, &mut SignDialog) -> Vec<Chord>,
-    esc_after_sent: bool,
-) -> Vec<Stage> {
+    after: AfterSent,
+    mut audited: impl FnMut(&State),
+) -> (Vec<Stage>, bool) {
     let mut effects = crate::evm_sign::start(state, false);
-    let Some(Effect::Send(job)) = effects.pop() else {
+    let Some(effect @ Effect::Send(_)) = effects.pop() else {
         panic!("expected a signing send");
     };
+    let runtime = tokio::runtime::Runtime::new().unwrap();
     let (tx, mut rx) = unbounded_channel();
-    let link = tx.clone();
-    let worker = std::thread::spawn(move || {
-        let done = crate::send::execute_with(&job, Some(&link));
-        let _ = link.send(done);
-    });
+    {
+        let _entered = runtime.enter();
+        assert!(crate::evm_sign::intercept(effect, &tx).is_none());
+    }
     drop(tx);
     let mut stages = Vec::new();
+    let mut quit = false;
     loop {
         let action = rx.blocking_recv().expect("the job ends with a completion");
         let finished = matches!(action, Action::SendFinished { .. });
@@ -538,20 +729,36 @@ fn sign_then(
             .active()
             .and_then(|t| t.editor.evm())
             .is_some_and(|e| e.sign_log.iter().any(|(l, _)| l.starts_with("sent ")));
-        if esc_after_sent && sent && state.tabs.active().is_some_and(|t| t.in_flight.is_some()) {
-            crate::commands::shell_key(state, key("Esc"));
+        let flying = state.tabs.active().is_some_and(|t| t.in_flight.is_some());
+        if sent && flying {
+            match after {
+                AfterSent::Wait => {}
+                AfterSent::Esc => {
+                    crate::commands::shell_key(state, key("Esc"));
+                }
+                AfterSent::Quit => {
+                    crate::workbench::cancel_all(state);
+                    crate::evm_sign::wait_for_pending(|| {});
+                    audited(state);
+                    quit = true;
+                }
+            }
         }
         let Some(Overlay::Sign(open)) = &state.overlay else {
             continue;
         };
         let mut dialog = (**open).clone();
         stages.push(dialog.stage);
+        render(state, 120, 40);
+        if dialog.stage == Stage::Confirm {
+            std::thread::sleep(crate::evm_sign::ARM);
+        }
         for chord in answer(state, &mut dialog) {
             crate::commands::shell_key(state, chord);
         }
     }
-    worker.join().unwrap();
-    stages
+    drop(runtime);
+    (stages, quit)
 }
 
 fn typed(text: &str) -> Vec<Chord> {
@@ -712,7 +919,8 @@ fn a_transaction_is_signed_in_the_tui_sent_mined_and_audited() {
             Stage::Password => typed(PASSWORD),
             _ => vec![key("Left"), key("Enter")],
         },
-        true,
+        AfterSent::Esc,
+        |_| {},
     );
     let audits = self::audits(&root);
     assert_eq!(audits.len(), 2, "{audits:?}");
@@ -734,6 +942,27 @@ fn a_transaction_is_signed_in_the_tui_sent_mined_and_audited() {
     );
     let text = buffer_text(&render(&state, 240, 40));
     assert!(text.contains("transaction pending"), "{text}");
+
+    // Quit during the receipt wait, through the effect runner's path: the
+    // loop cancels the send and waits for the signing job, which has
+    // written its `pending` audit entry by the time the wait returns.
+    let mut on_disk = 0;
+    let (_, quit) = sign_then(
+        &mut state,
+        |_, dialog| match dialog.stage {
+            Stage::Password => typed(PASSWORD),
+            _ => vec![key("Left"), key("Enter")],
+        },
+        AfterSent::Quit,
+        |_| {
+            on_disk = self::audits(&root)
+                .iter()
+                .filter(|a| a["record"]["evm"]["status"] == "pending")
+                .count();
+        },
+    );
+    assert!(quit, "the transaction was sent before the quit");
+    assert_eq!(on_disk, 2, "the quit waited for the pending audit entry");
 
     for entry in fs::read_dir(root.join(".rustman/history"))
         .unwrap()
