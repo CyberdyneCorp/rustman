@@ -154,6 +154,9 @@ async fn override_sources_are_logged() {
 
 const API: &str = "openapi: 3.1.0\ninfo: {title: t, version: '1'}\npaths:\n  /users:\n    post:\n      requestBody:\n        content:\n          application/json:\n            schema: {type: object}\n      responses:\n        '201':\n          description: ok\n          content:\n            application/json:\n              schema: {type: object, properties: {id: {type: integer}, name: {type: string}}}\n  /users/{id}:\n    get:\n      parameters:\n        - {name: id, in: path, required: true, schema: {type: integer}}\n      responses:\n        '200':\n          description: ok\n          content:\n            application/json:\n              schema: {type: object, properties: {id: {type: integer}, name: {type: string}}}\n";
 
+/// The operations of `API`: `POST /users` and `GET /users/{id}`.
+const API_OPERATIONS: usize = 2;
+
 const ORDERS: &str = "  /orders:\n    get:\n      responses:\n        '200':\n          description: ok\n          content:\n            application/json:\n              example: [{id: 7}]\n";
 
 /// A mock of `api.yaml` in `dir`, reloading on change.
@@ -185,7 +188,12 @@ async fn next_reload(events: &mut broadcast::Receiver<MockEvent>) -> MockEvent {
             .await
             .expect("no reload")
             .unwrap();
-        if !matches!(event, MockEvent::Request(_)) {
+        // A late file event for the test's first write (macOS FSEvents can
+        // deliver it after the watcher starts) reloads the unchanged `API`
+        // document. It is never the change a test is waiting for.
+        let stale =
+            matches!(event, MockEvent::Reloaded { operations, .. } if operations == API_OPERATIONS);
+        if !matches!(event, MockEvent::Request(_)) && !stale {
             return event;
         }
     }
