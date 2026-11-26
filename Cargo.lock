@@ -7005,7 +7005,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-bench"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "async-compression",
  "bytes",
@@ -7032,7 +7032,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-cli"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "alloy-primitives",
  "anstream",
@@ -7095,7 +7095,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-contract"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "bytes",
  "dunce",
@@ -7119,7 +7119,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-core"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "aho-corasick",
  "apple-native-keyring-store",
@@ -7158,7 +7158,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-docs"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "apollo-compiler",
  "bytes",
@@ -7187,7 +7187,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-evm"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "alloy-dyn-abi",
  "alloy-json-abi",
@@ -7216,7 +7216,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-evm-signing"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "alloy-json-abi",
  "alloy-primitives",
@@ -7237,7 +7237,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-explore"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "dunce",
  "futures-util",
@@ -7264,7 +7264,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-graphql"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "apollo-compiler",
  "apollo-parser",
@@ -7288,7 +7288,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-grpc"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "base64 0.23.1",
  "bytes",
@@ -7323,7 +7323,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-http"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "async-compression",
  "aws-credential-types",
@@ -7374,7 +7374,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-import"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "aho-corasick",
  "insta",
@@ -7389,7 +7389,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-jsonrpc"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "futures-util",
  "http",
@@ -7413,7 +7413,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-mcp"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "axum",
  "base64 0.23.1",
@@ -7458,7 +7458,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-messaging"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "apache-avro",
  "base64 0.23.1",
@@ -7491,7 +7491,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-mock"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "arc-swap",
  "base64 0.23.1",
@@ -7529,7 +7529,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-monitor"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "base64 0.23.1",
  "croner",
@@ -7553,7 +7553,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-plugin"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "bytes",
  "dunce",
@@ -7595,7 +7595,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-proxy"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "base64 0.23.1",
  "bytes",
@@ -7630,7 +7630,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-realtime"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "base64 0.23.1",
  "bytes",
@@ -7650,7 +7650,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-report"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anstyle",
  "insta",
@@ -7668,7 +7668,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-secrets"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "aes-gcm",
  "age",
@@ -7693,7 +7693,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-test-support"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "apollo-compiler",
  "async-compression",
@@ -7734,7 +7734,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-tui"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "alloy-primitives",
  "base64 0.23.1",
@@ -7789,7 +7789,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-viz-client"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "rustman-viz-protocol",
  "tempfile",
@@ -7798,7 +7798,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-viz-protocol"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "jsonschema",
  "serde",
@@ -7808,7 +7808,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-webhook"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "base64 0.23.1",
  "bytes",
