@@ -35,7 +35,7 @@ Every archive and `SHA256SUMS` carry a [build provenance attestation](https://do
 With the [GitHub CLI](https://cli.github.com) (2.49 or later):
 
 ```bash
-version=1.0.0                                  # the release you want
+version=1.0.1                                  # the release you want
 target=aarch64-apple-darwin                    # your platform, from the table above
 gh release download "v$version" --repo CyberdyneCorp/rustman \
   --pattern "rustman-$version-$target.tar.gz" --pattern SHA256SUMS
@@ -52,8 +52,8 @@ To tie the check to a release tag as well, add `--source-ref "refs/tags/v$versio
 On Windows (PowerShell):
 
 ```powershell
-gh attestation verify rustman-1.0.0-x86_64-pc-windows-msvc.zip --repo CyberdyneCorp/rustman
-(Get-FileHash rustman-1.0.0-x86_64-pc-windows-msvc.zip -Algorithm SHA256).Hash.ToLower()   # compare with SHA256SUMS
+gh attestation verify rustman-1.0.1-x86_64-pc-windows-msvc.zip --repo CyberdyneCorp/rustman
+(Get-FileHash rustman-1.0.1-x86_64-pc-windows-msvc.zip -Algorithm SHA256).Hash.ToLower()   # compare with SHA256SUMS
 ```
 
 ### Install
